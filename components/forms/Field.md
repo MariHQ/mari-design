@@ -3,7 +3,7 @@
 **Type:** Forms
 **Source:** [`Field.tsx`](./Field.tsx) (this repo)
 
-A labeled row for read-only key/value display inside a `Drawer` or detail panel — not a form input wrapper (despite the name, this console has no dedicated input-field component yet; see the gap noted below).
+A labeled row for read-only key/value display inside a `Drawer` or detail panel — not a form input wrapper. For an editable row (label + control + hint), see [`FormField`](./FormField.md) plus [`Input`/`Select`/`Textarea`](./Input.md).
 
 ## Props
 
@@ -25,4 +25,4 @@ import { Field } from "@mari-design/components";
 ## Notes
 
 - Each `Field` gets a hairline bottom border (`border-b border-ink/10`) except the last child in its container (`last:border-0`) — stack them directly, no manual `<hr>` or spacer divs between.
-- **Gap:** there is no dedicated text-input/select component in this library yet. Raw `<input>`/`<select>` elements in the console currently style themselves inline (see `DataTable`'s search box and facet `<select>` for the pattern to copy: `h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper ... focus-within:border-biscay-2`). If you're building a form-heavy screen, extract that pattern into a proper `Input`/`Select` component here before duplicating it a third time.
+- Shares its label styling with `FormField`/`SectionLabel` via the shared `SectionLabel` component, so the two row types stay visually consistent even though they serve different purposes (read-only vs. editable).

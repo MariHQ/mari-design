@@ -7,7 +7,12 @@
   "peerDependencies": {
     "react": "^18.3.1",
     "lucide-react": "^0.462.0",
-    "@radix-ui/react-tabs": "^1.1.12"
+    "@radix-ui/react-tabs": "^1.1.12",
+    "@radix-ui/react-dropdown-menu": "^2.1.15",
+    "@radix-ui/react-popover": "^1.1.14",
+    "@radix-ui/react-tooltip": "^1.2.7",
+    "@radix-ui/react-switch": "^1.2.5",
+    "@radix-ui/react-toast": "^1.2.14"
   },
   "devDependencies": {
     "@types/react": "^18.3.1",
