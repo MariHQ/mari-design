@@ -1,0 +1,40 @@
+import type { HTMLAttributes, ReactNode } from "react";
+import { card } from "../tokens/card";
+
+type CardVariant = "default" | "plain" | "flush";
+
+const PAD: Record<CardVariant, string> = {
+  default: "p-4",
+  plain: "p-5",
+  flush: "p-0",
+};
+
+export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
+  variant?: CardVariant;
+  title?: ReactNode;
+  eyebrow?: string;
+  icon?: ReactNode;
+  actions?: ReactNode;
+  hint?: ReactNode;
+  children?: ReactNode;
+};
+
+export function Card({ variant = "default", title, eyebrow, icon, actions, hint, className = "", children, ...rest }: CardProps) {
+  const headed = Boolean(title || eyebrow || icon || actions || hint);
+  return (
+    <section className={`${card} ${className}`.trim()} {...rest}>
+      {headed && (
+        <header className="flex items-center gap-3 px-4 pt-4 pb-3">
+          {icon}
+          <div className="min-w-0 flex-1">
+            {eyebrow && <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-0.5">{eyebrow}</span>}
+            {title && <h3 className="text-[15px] font-semibold text-ink truncate">{title}</h3>}
+          </div>
+          {hint && <span className="font-term text-[11px] text-ink/55 whitespace-nowrap">{hint}</span>}
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        </header>
+      )}
+      <div className={headed ? (variant === "flush" ? "" : `${PAD[variant]} pt-0`) : PAD[variant]}>{children}</div>
+    </section>
+  );
+}

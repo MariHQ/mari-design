@@ -37,3 +37,4 @@ import { Badge } from "@mari-design/components";
 
 - **Never invent a new tone name.** If a screen needs a status this scale doesn't cover, map it onto the closest one of the five — don't add a sixth color. The legacy aliases exist because older code used different words for the same five meanings; new code should use the canonical names (`ok`/`attention`/`blocked`/`info`/`neutral`) directly rather than adding to the alias table.
 - Text is always `font-term` (JetBrains Mono), 11px, uppercase-agnostic (the component doesn't force-uppercase — pass the casing you want in `label`).
+- `resolveTone`/`resolveToneKey` are exported alongside `Badge` so other components can share this exact tone scale rather than re-declaring it — [`Chip`](./Chip.md) is built on top of them.
