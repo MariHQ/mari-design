@@ -1,7 +1,7 @@
 # Shared tokens
 
 **Type:** Tokens (not components — building blocks the components above are made of)
-**Source:** `mari-cc/console/src/saas/components/ui/card.ts`, `ui/focusRing.ts`
+**Source:** [`card.ts`](./card.ts), [`focusRing.ts`](./focusRing.ts) (this repo)
 
 ## `card`
 

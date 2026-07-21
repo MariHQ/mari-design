@@ -1,7 +1,7 @@
 # Table
 
 **Type:** Data display
-**Source:** `mari-cc/console/src/saas/components/ui/Table.tsx`
+**Source:** [`Table.tsx`](./Table.tsx) (this repo)
 
 A static table shell — header row, hairline dividers, optional title/count/footer chrome. No sorting, search, or pagination. For an interactive table, use [`DataTable`](./DataTable.md) instead.
 
@@ -19,7 +19,8 @@ A static table shell — header row, hairline dividers, optional title/count/foo
 ## Usage
 
 ```tsx
-import { Table } from "../ui";
+import { Table } from "@mari-design/components";
+// or directly: from "./Table"
 
 <Table title="Word lists" count={lists.length} head={["Name", "Entries", "Updated"]}>
   {lists.map((l) => (

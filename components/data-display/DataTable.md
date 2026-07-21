@@ -1,7 +1,7 @@
 # DataTable
 
 **Type:** Data display
-**Source:** `mari-cc/console/src/saas/components/ui/DataTable.tsx`
+**Source:** [`DataTable.tsx`](./DataTable.tsx) (this repo)
 
 The interactive table: search, per-column sort, one facet filter, pagination, row click, and an empty state — all built in. Generic over the row type `T`.
 
@@ -37,7 +37,8 @@ The interactive table: search, per-column sort, one facet filter, pagination, ro
 ## Usage
 
 ```tsx
-import { DataTable, type Column } from "../ui";
+import { DataTable, type Column } from "@mari-design/components";
+// or directly: from "./DataTable"
 
 type Row = { id: string; name: string; hits: number; source: string };
 

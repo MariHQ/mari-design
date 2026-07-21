@@ -1,7 +1,7 @@
 # Field
 
 **Type:** Forms
-**Source:** `mari-cc/console/src/saas/components/ui/Field.tsx`
+**Source:** [`Field.tsx`](./Field.tsx) (this repo)
 
 A labeled row for read-only key/value display inside a `Drawer` or detail panel — not a form input wrapper (despite the name, this console has no dedicated input-field component yet; see the gap noted below).
 
@@ -15,7 +15,8 @@ A labeled row for read-only key/value display inside a `Drawer` or detail panel 
 ## Usage
 
 ```tsx
-import { Field } from "../ui";
+import { Field } from "@mari-design/components";
+// or directly: from "./Field"
 
 <Field label="Owner">{doc.owner}</Field>
 <Field label="Status"><Badge label={doc.status} tone="ok" /></Field>

@@ -1,7 +1,7 @@
 # Badge
 
 **Type:** Data display
-**Source:** `mari-cc/console/src/saas/components/ui/Badge.tsx`
+**Source:** [`Badge.tsx`](./Badge.tsx) (this repo)
 
 A small status pill. This is the single semantic tone scale for the whole console — see BRAND-STYLE-GUIDE.md §1 and §7.
 
@@ -25,7 +25,8 @@ A small status pill. This is the single semantic tone scale for the whole consol
 ## Usage
 
 ```tsx
-import { Badge } from "../ui";
+import { Badge } from "@mari-design/components";
+// or directly: from "./Badge"
 
 <Badge label="Synced" tone="ok" />
 <Badge label="3 issues" tone="blocked" />

@@ -1,7 +1,7 @@
 # Drawer
 
 **Type:** Layout (overlay)
-**Source:** `mari-cc/console/src/saas/components/ui/Drawer.tsx`
+**Source:** [`Drawer.tsx`](./Drawer.tsx) (this repo)
 
 Right-side slide-over for viewing/editing a single record without leaving the list behind it. Full focus-trap: traps Tab/Shift+Tab inside the panel, restores focus to the trigger on close, closes on Escape.
 
@@ -20,7 +20,8 @@ Right-side slide-over for viewing/editing a single record without leaving the li
 ## Usage
 
 ```tsx
-import { Drawer } from "../ui";
+import { Drawer } from "@mari-design/components";
+// or directly: from "./Drawer"
 
 <Drawer
   open={selected != null}

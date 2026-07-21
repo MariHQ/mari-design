@@ -1,7 +1,7 @@
 # Buttons
 
 **Type:** Actions
-**Source:** `mari-cc/console/src/saas/components/ui/buttons.ts`
+**Source:** [`buttons.ts`](./buttons.ts) (this repo)
 
 Three Tailwind class-string variants, not React components — apply directly to a `<button>` or `<a>`. Kept in one file since they're variants of a single concept, not three separate components (see `mari-design/README.md` conventions).
 
@@ -18,7 +18,8 @@ All three share: `h-9`, `rounded-[4px]`, `text-[13px]`, `inline-flex items-cente
 ## Usage
 
 ```tsx
-import { btn, btnPrimary, btnDanger } from "../ui";
+import { btn, btnPrimary, btnDanger } from "@mari-design/components";
+// or directly: from "./buttons"
 
 <button className={btn}>Cancel</button>
 <button className={btnPrimary}>Save changes</button>

@@ -1,7 +1,7 @@
 # Page
 
 **Type:** Layout
-**Source:** `mari-cc/console/src/saas/components/ui/Page.tsx`
+**Source:** [`Page.tsx`](./Page.tsx) (this repo)
 
 The top-level wrapper for every console screen. Provides the kicker/title/subtitle header block and a right-aligned actions slot; children render below.
 
@@ -18,7 +18,8 @@ The top-level wrapper for every console screen. Provides the kicker/title/subtit
 ## Usage
 
 ```tsx
-import { Page } from "../ui";
+import { Page } from "@mari-design/components";
+// or directly: from "./Page"
 
 <Page title="Localization" subtitle="Translation structure and staleness across common documentation layouts." kicker="docs">
   {/* screen body */}
