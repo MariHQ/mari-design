@@ -1,0 +1,87 @@
+import { useState } from "react";
+import { Eye, Columns2, Pencil } from "lucide-react";
+import { Button } from "../actions/Button";
+import { focusRing } from "../tokens/focusRing";
+import { MarkdownView } from "./MarkdownView";
+
+// A self-contained markdown editor: a monospace source pane and a live
+// blueprint preview, controlled by value + onChange. See the note in the
+// component-library summary for why this ships as source+preview rather than
+// a port of DocReview's contentEditable block editor.
+
+type Mode = "split" | "write" | "preview";
+
+const PANE = "min-h-0 overflow-auto";
+const SOURCE = `w-full h-full min-h-[240px] resize-none px-3.5 py-3 font-term text-[13px] leading-[1.6] text-ink bg-paper placeholder:text-ink/35 outline-none ${focusRing}`;
+
+export type MarkdownEditorProps = {
+  /** Controlled markdown source. */
+  value: string;
+  onChange: (value: string) => void;
+  /** Initial layout; user can switch with the toolbar. */
+  defaultMode?: Mode;
+  placeholder?: string;
+  className?: string;
+};
+
+const MODES: { mode: Mode; label: string; icon: typeof Eye }[] = [
+  { mode: "write", label: "Write", icon: Pencil },
+  { mode: "split", label: "Split", icon: Columns2 },
+  { mode: "preview", label: "Preview", icon: Eye },
+];
+
+/** Controlled markdown editor: monospace source + live styled preview. */
+export function MarkdownEditor({
+  value,
+  onChange,
+  defaultMode = "split",
+  placeholder = "Write markdown…",
+  className = "",
+}: MarkdownEditorProps) {
+  const [mode, setMode] = useState<Mode>(defaultMode);
+  const showSource = mode !== "preview";
+  const showPreview = mode !== "write";
+
+  return (
+    <div className={`flex flex-col rounded-md border border-ink/15 bg-paper overflow-hidden ${className}`.trim()}>
+      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-ink/12 bg-flysch/60">
+        <span className="font-term text-[11px] uppercase tracking-wide text-ink/50">Markdown</span>
+        <div className="flex items-center gap-1">
+          {MODES.map(({ mode: m, label, icon: Icon }) => (
+            <Button
+              key={m}
+              compact
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+              className={mode === m ? "border-biscay-2/50 text-ink bg-biscay-2/[0.06]" : ""}
+              title={label}
+            >
+              <Icon size={13} /> {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className={`grid ${showSource && showPreview ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} h-[360px] divide-ink/12 md:divide-x`}>
+        {showSource && (
+          <div className={PANE}>
+            <textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={placeholder}
+              spellCheck={false}
+              className={SOURCE}
+            />
+          </div>
+        )}
+        {showPreview && (
+          <div className={`${PANE} px-4 py-3`}>
+            {value.trim()
+              ? <MarkdownView>{value}</MarkdownView>
+              : <p className="font-term text-[13px] text-ink/35">Nothing to preview yet.</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,274 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, ShieldCheck, ExternalLink } from "lucide-react";
+import { focusRing } from "../tokens/focusRing";
+import { Dialog } from "../layout/Dialog";
+import { Stepper } from "../data-display/Stepper";
+import { Button } from "../actions/Button";
+import { Field } from "./Field";
+import { Input } from "./Input";
+import { Textarea } from "./Textarea";
+import { Spinner } from "../data-display/Spinner";
+import { Chip } from "../data-display/Chip";
+import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
+
+/* ConnectorWizard — a 3-step connect flow in a centered modal, ported from
+   pages/sources/ConnectorWizard.tsx: pick provider → configure credentials →
+   confirm/sync. The source's gql/useSyncStatus data layer is abstracted away —
+   the provider catalog, an optional test handler, and the live sync status all
+   arrive as props; the flow exposes onFinish(values). Built on Dialog +
+   Stepper + Field/Input + Button, reusing SyncPanel for the sync step. */
+
+export type ConnectorField = {
+  key: string;
+  label: string;
+  secret?: boolean;
+  placeholder?: string;
+  help?: string;
+  /** Render a multi-line textarea (e.g. a service-account JSON blob). */
+  multiline?: boolean;
+};
+
+export type WizardProvider = {
+  key: string;
+  name: string;
+  blurb: string;
+  /** Provider logo/mark; a letter tile is shown when omitted. */
+  mark?: ReactNode;
+  fields: ConnectorField[];
+  docsUrl?: string;
+  connected?: boolean;
+};
+
+export type ConnectTestResult = { ok: boolean; error?: string };
+
+type TestState = { busy: boolean; ok: boolean | null; error: string };
+const IDLE_TEST: TestState = { busy: false, ok: null, error: "" };
+
+export type ConnectorWizardProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  providers: WizardProvider[];
+  initialProvider?: string | null;
+  title?: string;
+  /** Optional "Test connection" handler — omit to hide the button. */
+  onTest?: (provider: string, config: Record<string, string>) => Promise<ConnectTestResult> | ConnectTestResult;
+  /** Fired when the user clicks Connect & sync; advances to the sync step. */
+  onFinish: (values: { provider: string; config: Record<string, string> }) => void;
+  /** Parent-driven live sync status for the final step (no hooks here). */
+  syncStatus?: SyncSource | null;
+  onRetrySync?: () => void;
+};
+
+function ProviderMark({ p, size = 24 }: { p: WizardProvider; size?: number }) {
+  if (p.mark) return <>{p.mark}</>;
+  return (
+    <span
+      className="grid place-items-center rounded-[5px] bg-biscay/10 text-biscay-2 font-display font-semibold"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }}
+    >
+      {p.name.charAt(0)}
+    </span>
+  );
+}
+
+export function ConnectorWizard({
+  open, onOpenChange, providers, initialProvider = null, title = "Connect a source",
+  onTest, onFinish, syncStatus = null, onRetrySync,
+}: ConnectorWizardProps) {
+  const [step, setStep] = useState(0);
+  const [provider, setProvider] = useState<string | null>(initialProvider);
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [test, setTest] = useState<TestState>(IDLE_TEST);
+
+  // Reset the flow each time the dialog is opened.
+  useEffect(() => {
+    if (!open) return;
+    setStep(initialProvider ? 1 : 0);
+    setProvider(initialProvider);
+    setConfig({});
+    setTest(IDLE_TEST);
+  }, [open, initialProvider]);
+
+  const chosen = providers.find((p) => p.key === provider) ?? null;
+  const stepLabels = ["Choose source", "Configure", "Sync"];
+  const filled = chosen ? chosen.fields.every((f) => (config[f.key] ?? "").trim().length > 0) : false;
+
+  const pick = (key: string) => {
+    setProvider(key);
+    setConfig({});
+    setTest(IDLE_TEST);
+  };
+  const setField = (key: string, value: string) => {
+    setConfig((c) => ({ ...c, [key]: value }));
+    setTest(IDLE_TEST);
+  };
+  const trimmed = () => Object.fromEntries(Object.entries(config).map(([k, v]) => [k, v.trim()]));
+
+  const runTest = async () => {
+    if (!provider || !onTest || test.busy) return;
+    setTest({ busy: true, ok: null, error: "" });
+    try {
+      const r = await onTest(provider, trimmed());
+      setTest({ busy: false, ok: r.ok, error: r.error ?? "" });
+    } catch {
+      setTest({ busy: false, ok: false, error: "The test handler threw an error." });
+    }
+  };
+
+  const connect = () => {
+    if (!provider) return;
+    onFinish({ provider, config: trimmed() });
+    setStep(2);
+  };
+
+  const body = () => {
+    if (step === 0) {
+      return (
+        <div>
+          <div className="text-[13px] text-ink/70 mb-3">
+            Pick the system to bring into your knowledge library.
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {providers.map((p) => {
+              const selected = provider === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => pick(p.key)}
+                  className={`flex flex-col items-start gap-1.5 text-left p-3 rounded-md border transition-colors ${focusRing} ${
+                    selected ? "border-biscay-2 bg-biscay/[0.04] ring-1 ring-biscay-2/40" : "border-ink/15 hover:border-ink/35"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 w-full">
+                    <ProviderMark p={p} size={22} />
+                    <span className="text-[13px] font-semibold text-ink truncate flex-1">{p.name}</span>
+                    {p.connected && <Chip label="Connected" tone="ok" caps className="shrink-0" />}
+                  </span>
+                  <span className="text-[11.5px] text-ink/55 leading-snug line-clamp-2">{p.blurb}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 1) {
+      if (!chosen) return null;
+      return (
+        <div>
+          <div className="text-[13px] text-ink/70 mb-1">
+            {chosen.blurb || "Credentials stay on the server and are never shown again."}
+          </div>
+          {chosen.docsUrl && (
+            <a className="inline-flex items-center gap-1 text-[12px] text-biscay-2 hover:underline" href={chosen.docsUrl} target="_blank" rel="noreferrer">
+              {chosen.name} setup docs <ExternalLink size={11} />
+            </a>
+          )}
+          {chosen.fields.length === 0 ? (
+            <div className="mt-3 text-[13px] text-ink/60">No credentials needed — connect to start the first sync.</div>
+          ) : (
+            <div className="mt-2">
+              {chosen.fields.map((f) => (
+                <Field key={f.key} label={f.label}>
+                  {f.multiline ? (
+                    <Textarea
+                      rows={5}
+                      className="font-term"
+                      autoComplete="off"
+                      placeholder={f.placeholder}
+                      value={config[f.key] ?? ""}
+                      onChange={(e) => setField(f.key, e.target.value)}
+                    />
+                  ) : (
+                    <Input
+                      className="w-full"
+                      type={f.secret ? "password" : "text"}
+                      autoComplete={f.secret ? "new-password" : "off"}
+                      placeholder={f.placeholder}
+                      value={config[f.key] ?? ""}
+                      onChange={(e) => setField(f.key, e.target.value)}
+                    />
+                  )}
+                  {f.help && <p className="mt-1 text-[11.5px] text-ink/55">{f.help}</p>}
+                </Field>
+              ))}
+            </div>
+          )}
+          {test.ok === true && (
+            <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
+              <CheckCircle2 size={14} /> Connection OK — credentials verified.
+            </div>
+          )}
+          {test.ok === false && (
+            <div className="mt-3 rounded-[4px] border border-espelette/30 bg-espelette/[0.05] px-3 py-2 text-[12.5px] text-espelette" role="alert">
+              {test.error || "Validation failed without details."}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <div className="text-[13px] text-ink/70 mb-3">
+          The initial sync runs on the server — closing this dialog won’t interrupt it.
+        </div>
+        {syncStatus ? (
+          <SyncPanel sources={[syncStatus]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />
+        ) : (
+          <div className="flex items-center gap-2 text-[13px] text-ink/70 py-4">
+            <Spinner size="sm" /> Starting sync for <b className="font-term">{chosen?.name}</b>…
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const footer = (
+    <div className="flex-1 flex items-center justify-between gap-2">
+      {step === 0 && (
+        <>
+          <Button disabled><ChevronLeft size={13} /> Back</Button>
+          <Button variant="primary" disabled={!chosen} onClick={() => setStep(1)}>
+            Next <ChevronRight size={13} />
+          </Button>
+        </>
+      )}
+      {step === 1 && (
+        <>
+          <Button onClick={() => setStep(0)}><ChevronLeft size={13} /> Back</Button>
+          <span className="flex items-center gap-2">
+            {onTest && chosen && chosen.fields.length > 0 && (
+              <Button disabled={!filled || test.busy} onClick={runTest}>
+                {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={13} /> Test connection</>}
+              </Button>
+            )}
+            <Button variant="primary" disabled={!chosen || (chosen.fields.length > 0 && !filled)} onClick={connect}>
+              Connect &amp; sync <ArrowRight size={14} />
+            </Button>
+          </span>
+        </>
+      )}
+      {step === 2 && (
+        <>
+          <span className="text-[12px] text-ink/55">Sync continues in the background.</span>
+          <Button variant="primary" onClick={() => onOpenChange(false)}>
+            Done <CheckCircle2 size={14} />
+          </Button>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} title={chosen ? `Connect ${chosen.name}` : title} width={640} footer={footer}>
+      <div className="mb-5">
+        <Stepper labels={stepLabels} current={step} ariaLabel="Connector setup progress" />
+      </div>
+      <div className="min-h-[240px]">{body()}</div>
+    </Dialog>
+  );
+}

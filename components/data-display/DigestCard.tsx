@@ -1,0 +1,82 @@
+import type { ReactNode } from "react";
+import { Shuffle } from "lucide-react";
+import { Card } from "../layout/Card";
+import { Chip } from "./Chip";
+import { EmptyState } from "./EmptyState";
+import { Spinner } from "./Spinner";
+import { Button } from "../actions/Button";
+
+/* DigestCard — Mari's weekly summary of what changed, surfaced on the Overview
+   dashboard. Each topic lists where it surfaced (source chips), a one-line
+   summary, and who/what it impacts. Ported from pages/overview/DigestCard.tsx;
+   the self-owned query is lifted out — data + a refresh callback come in as
+   props. Built on our base <Card>. */
+
+export type DigestWhere = { source: string; label: string; icon?: ReactNode };
+export type DigestImpact = { name: string; tone?: string };
+export type DigestTopic = {
+  title: string;
+  summary: string;
+  where: DigestWhere[];
+  impact: DigestImpact[];
+};
+
+export type DigestCardProps = {
+  topics: DigestTopic[];
+  title?: string;
+  loading?: boolean;
+  error?: boolean;
+  regenerating?: boolean;
+  onRefresh?: () => void;
+  className?: string;
+};
+
+export function DigestCard({
+  topics, title = "This week's digest", loading = false, error = false,
+  regenerating = false, onRefresh, className = "",
+}: DigestCardProps) {
+  return (
+    <Card
+      className={className}
+      title={title}
+      actions={onRefresh && (
+        <Button compact onClick={onRefresh} disabled={regenerating}>
+          <Shuffle size={14} /> {regenerating ? "Refreshing…" : "Refresh digest"}
+        </Button>
+      )}
+    >
+      {regenerating && (
+        <div className="mb-3 flex items-center gap-2 font-display italic text-[13px] text-moss">
+          <Spinner size="sm" /> Mari is re-reading the week…
+        </div>
+      )}
+      {loading ? (
+        <div className="grid place-items-center min-h-[90px]"><Spinner size="sm" /></div>
+      ) : error ? (
+        <EmptyState>API offline — the digest is unavailable.</EmptyState>
+      ) : topics.length === 0 ? (
+        <EmptyState>No digest yet — refresh to have Mari read the week.</EmptyState>
+      ) : (
+        <div className="flex flex-col divide-y divide-ink/10">
+          {topics.map((t) => (
+            <div key={t.title} className="py-3.5 first:pt-0 last:pb-0" style={{ opacity: regenerating ? 0.55 : 1 }}>
+              <h4 className="text-[13.5px] font-semibold text-ink">{t.title}</h4>
+              {t.where.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {t.where.map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+                </div>
+              )}
+              <p className="mt-2 text-[13px] leading-[1.5] text-ink/70">{t.summary}</p>
+              {t.impact.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 font-term text-[11px] uppercase tracking-[0.08em] text-ink/45">
+                  Impact
+                  {t.impact.map((i) => <Chip key={i.name} label={i.name} tone={i.tone ?? "neutral"} dot />)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}

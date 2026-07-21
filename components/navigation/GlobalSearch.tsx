@@ -1,0 +1,234 @@
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import * as RD from "@radix-ui/react-dialog";
+import { Search, Clock, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
+import { Kbd } from "./Kbd";
+
+/* GlobalSearch — the scoped, grouped search overlay. It's the higher-level
+   sibling of CommandPalette (navigation/CommandPalette.tsx): same Radix
+   Dialog shell + hand-rolled listbox with arrow-key nav, but it searches
+   ACROSS scopes (Docs, People, Sources, Actions…) and renders grouped
+   result sections with per-result icon / title / subtitle / meta, a scope
+   filter, and a recent-searches empty state. Grounded in the console's
+   CommandK (App.tsx) which debounces a hybrid `search` query and routes
+   Enter into Knowledge. Mount once; toggle `open` from a global ⌘K
+   listener and the header SearchField. */
+
+/** A search scope — the filterable buckets results are grouped into. */
+export type SearchScope = { id: string; label: string; icon?: ReactNode };
+
+/** A single result row. `scope` references a SearchScope id. */
+export type SearchResult = {
+  id: string;
+  scope: string;
+  title: string;
+  subtitle?: string;
+  /** Right-aligned meta — relative time, count, source label, etc. */
+  meta?: string;
+  icon?: ReactNode;
+};
+
+/** Results for one scope, in render order. */
+export type SearchResultGroup = { scope: SearchScope; results: SearchResult[] };
+
+export type GlobalSearchProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Scopes offered in the filter row. Defaults to the scopes present in `results`. */
+  scopes?: SearchScope[];
+  /**
+   * Static grouped results, filtered client-side by query text + active scope.
+   * Ignored when `onQuery` is provided.
+   */
+  results?: SearchResultGroup[];
+  /** Async/custom search — return grouped results for the query + active scope. */
+  onQuery?: (query: string, scope: string | null) => SearchResultGroup[];
+  onSelect: (result: SearchResult) => void;
+  /** Shown (as clickable chips) when the query is empty. */
+  recentSearches?: string[];
+  onRecentSelect?: (query: string) => void;
+  placeholder?: string;
+  value?: string;
+  onValueChange?: (query: string) => void;
+};
+
+export function GlobalSearch({
+  open, onOpenChange, scopes, results = [], onQuery, onSelect,
+  recentSearches = [], onRecentSelect,
+  placeholder = "Search knowledge, people, sources…",
+  value, onValueChange,
+}: GlobalSearchProps) {
+  const [internalQuery, setInternalQuery] = useState("");
+  const query = value ?? internalQuery;
+  const setQuery = (q: string) => { if (value === undefined) setInternalQuery(q); onValueChange?.(q); };
+
+  const [scope, setScope] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+
+  useEffect(() => { if (open) { if (value === undefined) setInternalQuery(""); setScope(null); setActive(0); } }, [open, value]);
+
+  // Scope chips: explicit prop, else derived from whichever scopes have results.
+  const scopeList = useMemo<SearchScope[]>(() => {
+    if (scopes) return scopes;
+    return results.map((g) => g.scope);
+  }, [scopes, results]);
+
+  // Grouped results after query + scope filtering.
+  const groups = useMemo<SearchResultGroup[]>(() => {
+    const raw = onQuery ? onQuery(query, scope) : filterGroups(results, query);
+    const byScope = scope ? raw.filter((g) => g.scope.id === scope) : raw;
+    return byScope.filter((g) => g.results.length > 0);
+  }, [onQuery, results, query, scope]);
+
+  // Flatten for keyboard navigation.
+  const flat = useMemo(() => groups.flatMap((g) => g.results), [groups]);
+  useEffect(() => { setActive(0); }, [query, scope]);
+  useEffect(() => { if (active > flat.length - 1) setActive(Math.max(0, flat.length - 1)); }, [flat.length, active]);
+
+  const select = (r: SearchResult) => { onOpenChange(false); onSelect(r); };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(flat.length - 1, a + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); const r = flat[active]; if (r) select(r); }
+  };
+
+  const hasQuery = query.trim().length > 0;
+  let flatIndex = -1;
+
+  return (
+    <RD.Root open={open} onOpenChange={onOpenChange}>
+      <RD.Portal>
+        <RD.Overlay className="fixed inset-0 z-[80] bg-ink/30" />
+        <RD.Content
+          className="fixed z-[80] left-1/2 top-[14%] -translate-x-1/2 w-[calc(100vw-2rem)] max-w-[640px] bg-paper rounded-md border border-ink/15 outline-none overflow-hidden flex flex-col max-h-[72vh]"
+          onKeyDown={onKeyDown}
+        >
+          <RD.Title className="sr-only">Global search</RD.Title>
+          <RD.Description className="sr-only">Search across docs, people, sources, and actions.</RD.Description>
+
+          {/* Input */}
+          <div className="flex items-center gap-2.5 px-4 h-12 border-b border-ink/10 shrink-0">
+            <Search size={16} className="text-ink/40 shrink-0" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={placeholder}
+              className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink/40 outline-none"
+            />
+            <Kbd keys="Esc" />
+          </div>
+
+          {/* Scope filter */}
+          {scopeList.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink/10 overflow-x-auto shrink-0">
+              <ScopeChip label="All" active={scope === null} onClick={() => setScope(null)} />
+              {scopeList.map((s) => (
+                <ScopeChip key={s.id} label={s.label} icon={s.icon} active={scope === s.id} onClick={() => setScope(s.id)} />
+              ))}
+            </div>
+          )}
+
+          {/* Body */}
+          <div role="listbox" className="flex-1 min-h-0 overflow-y-auto p-1.5">
+            {!hasQuery && recentSearches.length > 0 && (
+              <div>
+                <div className="px-2.5 pt-2 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/40">Recent</div>
+                {recentSearches.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => { onRecentSelect ? onRecentSelect(r) : setQuery(r); }}
+                    className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-[4px] text-[13px] text-ink/80 hover:bg-flysch text-left"
+                  >
+                    <Clock size={14} className="shrink-0 text-ink/40" />
+                    <span className="flex-1 min-w-0 truncate">{r}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!hasQuery && recentSearches.length === 0 && (
+              <div className="px-3 py-10 text-center text-[13px] text-ink/45">Type to search across {scopeList.length > 0 ? scopeList.map((s) => s.label).join(", ") : "everything"}.</div>
+            )}
+
+            {hasQuery && flat.length === 0 && (
+              <div className="px-3 py-10 text-center text-[13px] text-ink/45">
+                No results for <span className="text-ink/70">“{query.trim()}”</span>
+              </div>
+            )}
+
+            {hasQuery && groups.map((g) => (
+              <div key={g.scope.id}>
+                <div className="flex items-center gap-1.5 px-2.5 pt-2.5 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/40">
+                  {g.scope.icon && <span className="text-ink/40">{g.scope.icon}</span>}
+                  {g.scope.label}
+                  <span className="text-ink/30">{g.results.length}</span>
+                </div>
+                {g.results.map((r) => {
+                  flatIndex += 1;
+                  const i = flatIndex;
+                  return (
+                    <div
+                      key={r.id}
+                      role="option"
+                      aria-selected={i === active}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => select(r)}
+                      className={[
+                        "flex items-center gap-3 px-2.5 py-2 rounded-[4px] cursor-pointer",
+                        i === active ? "bg-flysch" : "",
+                      ].filter(Boolean).join(" ")}
+                    >
+                      {r.icon && <span className="shrink-0 text-ink/45 flex items-center">{r.icon}</span>}
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[13px] text-ink/90 truncate">{r.title}</span>
+                        {r.subtitle && <span className="block text-[11.5px] text-ink/50 truncate">{r.subtitle}</span>}
+                      </span>
+                      {r.meta && <span className="shrink-0 font-term text-[10.5px] text-ink/40">{r.meta}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center gap-4 px-4 h-9 border-t border-ink/10 font-term text-[10.5px] text-ink/45 shrink-0">
+            <span className="flex items-center gap-1.5"><ArrowUp size={11} /><ArrowDown size={11} />to navigate</span>
+            <span className="flex items-center gap-1.5"><CornerDownLeft size={11} />to open</span>
+            <span className="ml-auto">Hybrid search · BM25 + embeddings</span>
+          </div>
+        </RD.Content>
+      </RD.Portal>
+    </RD.Root>
+  );
+}
+
+function ScopeChip({ label, icon, active, onClick }: { label: string; icon?: ReactNode; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full text-[12px] border transition-colors",
+        active
+          ? "bg-biscay text-paper border-biscay"
+          : "bg-transparent text-ink/65 border-ink/15 hover:border-ink/30 hover:text-ink/85",
+      ].join(" ")}
+    >
+      {icon && <span className={active ? "text-paper/80" : "text-ink/45"}>{icon}</span>}
+      {label}
+    </button>
+  );
+}
+
+/** Client-side text filter over grouped results (title + subtitle substring). */
+function filterGroups(groups: SearchResultGroup[], query: string): SearchResultGroup[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return groups;
+  return groups.map((g) => ({
+    scope: g.scope,
+    results: g.results.filter(
+      (r) => r.title.toLowerCase().includes(q) || (r.subtitle?.toLowerCase().includes(q) ?? false),
+    ),
+  }));
+}
