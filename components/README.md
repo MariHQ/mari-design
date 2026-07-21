@@ -31,7 +31,7 @@ Written to the same brand system as `../BRAND-STYLE-GUIDE.md` — read that firs
 | Data display | [`Stepper.tsx`](./data-display/Stepper.tsx) | Numbered step progress | [Stepper.md](./data-display/Stepper.md) |
 | Data display | [`Stat.tsx`](./data-display/Stat.tsx) | Big-number stat card | [Stat.md](./data-display/Stat.md) |
 | Data display | [`IconRing.tsx`](./data-display/IconRing.tsx) | Circle around an icon | [IconRing.md](./data-display/IconRing.md) |
-| Data display | [`Avatar.tsx`](./data-display/Avatar.tsx) | Initials disc, deterministic tint | [Avatar.md](./data-display/Avatar.md) |
+| Data display | [`Avatar.tsx`](./data-display/Avatar.tsx) | Initials disc, one flat treatment | [Avatar.md](./data-display/Avatar.md) |
 | Data display | [`Swatch.tsx`](./data-display/Swatch.tsx) | Color chip | [Swatch.md](./data-display/Swatch.md) |
 | Data display | [`Sparkline.tsx`](./data-display/Sparkline.tsx) | Inline SVG trend line | [Sparkline.md](./data-display/Sparkline.md) |
 | Navigation | [`Tabs.tsx`](./navigation/Tabs.tsx) | Accessible tab switcher (Radix-based) | [Tabs.md](./navigation/Tabs.md) |
@@ -42,6 +42,14 @@ Written to the same brand system as `../BRAND-STYLE-GUIDE.md` — read that firs
 | Tokens | [`card.ts`](./tokens/card.ts), [`focusRing.ts`](./tokens/focusRing.ts), [`format.ts`](./tokens/format.ts) | Shared style-string tokens + date formatting | [shared-tokens.md](./tokens/shared-tokens.md) |
 
 `index.ts` re-exports everything as one barrel — this is now feature-complete against the `cloud.mari.guru` reference implementation's design-system surface (`mari/mari/web/src/components/ui`).
+
+## Where new components come from
+
+**`mari/web/web/src/saas/components/console-ui.tsx`** is the real, already-designed Brutalist Blueprint console primitives file (`Page`, `Avatar`, `Badge`, `Table`, `btn`/`btnPrimary`/`btnDanger`, `DataTable`, `Drawer`, `Field` — the same 8 this library started from). **Check there first** before designing a new component — if it already exists, port it faithfully; don't redesign it.
+
+**`cloud.mari.guru`** (`mari/mari/web/src/components/ui`) is useful for exactly one thing: a checklist of *which* components a full console needs (its production surface is broader than `console-ui.tsx`'s 8). It is **not** a design or API source — it's the pre-reskin production app, still on the deprecated cream/serif "Editorial Notebook" theme, built with a different styling methodology (`clsx` + BEM classes against a separate stylesheet) and its own one-off product decisions (e.g. its `PageHeader` defaults to a hand-drawn plant `Sprig` icon; its `Avatar` tints per person by name-hash). Copying its prop shapes, defaults, or behavior wholesale carries those decisions in without anyone deciding they belong here. `Avatar` briefly did exactly this (a name-hash 4-color tint) before being caught against `console-ui.tsx`'s real, deliberately-flat implementation — see `Avatar.md`'s notes.
+
+For anything past those 8 (no `console-ui.tsx` precedent exists yet), design from **BRAND-STYLE-GUIDE.md's rules plus this library's own established patterns** (`card`, `focusRing`, the `TONE` 5-scale, `thClass`, `DataTable`'s search/select treatment) — using `cloud.mari.guru` only to know the component needs to exist at all, never for how it should look or behave.
 
 ## Conventions every component follows
 

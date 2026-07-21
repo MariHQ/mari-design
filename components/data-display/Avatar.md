@@ -1,18 +1,16 @@
 # Avatar
 
 **Type:** Data display
-**Source:** [`Avatar.tsx`](./Avatar.tsx) (this repo)
+**Source:** [`Avatar.tsx`](./Avatar.tsx) — ported verbatim from `mari/web/web/src/saas/components/console-ui.tsx` (this repo's real, already-built console reference)
 
-Initials disc, tinted from four canonical brand colors (biscay, biscay-2, moss, clay). Tint derives deterministically from `name` when not given, so the same person is always the same color across the app.
+Initials disc. **One flat treatment for every avatar, deliberately** — not tinted per person. A `color` prop is accepted (so call sites that already pass one don't need to change) but intentionally unused.
 
 ## Props
 
 | Prop | Type | Required | Notes |
 |---|---|---|---|
-| `name` | `string` | yes | Used for initials (first letter of up to 2 words) and the default tint. Also becomes the `title` attribute. |
-| `initials` | `string` | no | Override the derived initials. |
-| `tint` | `1 \| 2 \| 3 \| 4` | no | Override the derived tint. |
-| `size` | `"sm" \| "md"` | no | Default `"md"`. |
+| `initials` | `string` | yes | Rendered as-is — compute initials from a name at the call site. |
+| `color` | `string` | no | Accepted, ignored. Kept for call-site compatibility, not for future use. |
 
 ## Usage
 
@@ -20,10 +18,10 @@ Initials disc, tinted from four canonical brand colors (biscay, biscay-2, moss, 
 import { Avatar } from "@mari-design/components";
 // or directly: from "./Avatar"
 
-<Avatar name="Priya Nair" />
-<Avatar name="Priya Nair" size="sm" />
+<Avatar initials="PN" />
 ```
 
 ## Notes
 
-- **Never tints espelette.** Espelette is the single hot accent per canvas (BRAND-STYLE-GUIDE.md) — a list of avatars is exactly the repeated-decorative-use case that rule exists to prevent, so the four tints deliberately skip it.
+- **Don't add a tint/color system back in.** An earlier draft of this component added a 4-color name-hash tint (borrowed from a different, unrelated reference implementation) — this was a mistake, reverted once checked against the actual designed console: `console-ui.tsx`'s own comment explains a per-owner color rainbow "added noise to each table without carrying meaning." One flat treatment is the considered choice, not a placeholder.
+- If a screen genuinely needs to visually distinguish people at a glance (not just label them), that's a case for a real product decision, not a prop on this component.
