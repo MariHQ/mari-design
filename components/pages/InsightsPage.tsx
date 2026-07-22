@@ -1,13 +1,12 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { Sparkles, Search, BookOpen, FileCheck } from "lucide-react";
+import { Sparkles, BookOpen, FileCheck } from "lucide-react";
 import { InsightsWidgets } from "../features/InsightsWidgets";
 import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFreshnessChart";
-import { Card } from "../layout/Card";
-import { IconRing } from "../data-display/IconRing";
 import type { ActivityItem } from "../data-display/ActivityFeed";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
+import { SkeletonCard, SkeletonStat } from "../data-display/Skeleton";
 
 /* Insights (pages/insights.md). Read-mostly dashboard proving the knowledge
    cloud is working: the headline stat row + evidence panels (readability,
@@ -65,18 +64,7 @@ const ACTIVE_ACTIVITY: ActivityItem[] = [
 
 const NO_FRESHNESS: Freshness[] = [];
 
-function LoadingCard({ icon, title, label }: { icon: React.ReactNode; title: string; label: string }) {
-  return (
-    <Card icon={<IconRing tone="info">{icon}</IconRing>} title={title}>
-      <div className="grid place-items-center py-10"><Spinner size="sm" label={label} /></div>
-    </Card>
-  );
-}
-
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading insights" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -96,15 +84,20 @@ function Body({ state }: { state: string }) {
     );
   }
 
-  // Per-widget loading: freshness resolved, the two evidence cards still scoring.
+  // Per-widget loading: freshness resolved, the stat strip + evidence cards
+  // still resolving — inline skeletons hold their place in the grid.
   if (state === "widgets-loading") {
     return (
       <div className="mt-2 space-y-5">
         <InsightsFreshnessChart />
-        <div className="grid items-start gap-5 lg:grid-cols-2">
-          <LoadingCard icon={<Search size={15} />} title="LLM readability" label="Scoring documents" />
-          <LoadingCard icon={<BookOpen size={15} />} title="Glossary health" label="Harvesting terms" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <SkeletonCard lines={5} footer />
+          <SkeletonCard lines={4} footer />
+        </div>
+        <SkeletonCard lines={4} />
       </div>
     );
   }
@@ -130,9 +123,13 @@ function Body({ state }: { state: string }) {
 function InsightsPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("insights")} title="Insights" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="dashboard" />
+      ) : (
+        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

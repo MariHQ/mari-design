@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DigestCard as DigestCardUI, type DigestTopic } from "../data-display/DigestCard";
+import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
 /* Overview — This week's digest ──────────────────────────────────────────
@@ -61,6 +62,27 @@ export function OverviewDigestCard({
 }: OverviewDigestCardProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [current, setCurrent] = useState<DigestTopic[]>(topics);
+
+  if (loading) {
+    return (
+      <div className={`rounded-md border border-ink/12 bg-paper p-4 ${className}`.trim()} aria-hidden="true">
+        <div className="mb-4 flex items-center gap-2.5">
+          <SkeletonCircle size={26} />
+          <SkeletonLine w="38%" h={13} />
+          <span className="ml-auto"><SkeletonChip w={104} /></span>
+        </div>
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2 border-t border-ink/[0.08] pt-3 first:border-0 first:pt-0">
+              <SkeletonLine w={i === 1 ? "72%" : "58%"} h={12} />
+              <SkeletonText lines={2} lastWidth="80%" />
+              <div className="flex gap-2 pt-0.5"><SkeletonChip w={56} /><SkeletonChip w={44} /></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const refresh = () => {
     if (regenerating) return; // guard re-entry

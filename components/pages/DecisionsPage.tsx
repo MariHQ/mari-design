@@ -10,7 +10,7 @@ import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Decisions (pages/decisions.md). A decision ledger — one decision, one record,
    ratified by the people accountable. The main column is a timeline of decision
@@ -146,9 +146,6 @@ function Ledger({ decisions, filter = "all" }: { decisions?: Decisions; filter?:
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading decisions" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -205,6 +202,13 @@ function Body({ state }: { state: string }) {
 }
 
 function DecisionsPage({ state = "default", mobile = false }: PageProps) {
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
+        <SkeletonPage variant="feed" />
+      </PageFrame>
+    );
+  }
   return (
     <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">

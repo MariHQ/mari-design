@@ -12,6 +12,7 @@ import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Tabs } from "../navigation/Tabs";
+import { SkeletonLine } from "../data-display/Skeleton";
 
 /* ————— ported diff helpers ————— */
 
@@ -55,9 +56,11 @@ const DEMO_CHANGES: Change[] = [
 export function DocReviewChangeQueue({
   changes: initialChanges = DEMO_CHANGES,
   body = DEMO_BODY,
+  loading = false,
 }: {
   changes?: Change[];
   body?: string;
+  loading?: boolean;
 }) {
   const [tab, setTab] = useState<ChangeTab>("review");
   const [changes, setChanges] = useState<Change[]>(initialChanges);
@@ -84,6 +87,31 @@ export function DocReviewChangeQueue({
     pending.forEach((c) => applyLocal(c.original, c.proposed));
     setChanges((cs) => cs.map((c) => (c.state === "pending" ? { ...c, state: "accepted" } : c)));
   };
+
+  if (loading) {
+    return (
+      <Card variant="flush" className="max-w-[720px]">
+        <div className="flex gap-4 px-4 pt-4" aria-hidden="true">
+          <SkeletonLine w={120} h={11} /><SkeletonLine w={90} h={11} />
+        </div>
+        <div className="grid grid-cols-[1fr_1fr_150px] gap-3 border-b border-ink/10 px-4 pb-1.5 pt-3" aria-hidden="true">
+          <SkeletonLine w={60} h={9} /><SkeletonLine w={68} h={9} /><span />
+        </div>
+        <div aria-hidden="true">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_150px] gap-3 border-b border-ink/8 px-4 py-3">
+              <div className="space-y-1.5"><SkeletonLine w="90%" h={10} /><SkeletonLine w="70%" h={10} /></div>
+              <div className="space-y-1.5"><SkeletonLine w="80%" h={10} /><SkeletonLine w="60%" h={10} /></div>
+              <div className="space-y-2"><SkeletonLine w="85%" h={9} /><SkeletonLine w={90} h={22} /></div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3 px-4 py-3" aria-hidden="true">
+          <SkeletonLine w={160} h={10} /><SkeletonLine w={130} h={28} />
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card variant="flush" className="max-w-[720px]">

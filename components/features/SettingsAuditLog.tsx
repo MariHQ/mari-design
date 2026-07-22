@@ -5,6 +5,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Avatar } from "../data-display/Avatar";
 import { EmptyState } from "../data-display/EmptyState";
+import { Skeleton, SkeletonLine, SkeletonTable } from "../data-display/Skeleton";
 import { fmtDateTime } from "../tokens/format";
 
 /* Settings — Audit log ────────────────────────────────────────────────────
@@ -32,9 +33,9 @@ function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export type SettingsAuditLogProps = { events?: AuditEvent[]; total?: number; className?: string };
+export type SettingsAuditLogProps = { events?: AuditEvent[]; total?: number; loading?: boolean; className?: string };
 
-export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.length, className = "" }: SettingsAuditLogProps) {
+export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.length, loading = false, className = "" }: SettingsAuditLogProps) {
   const [filter, setFilter] = useState("");
   const [nonce, setNonce] = useState(0);
 
@@ -43,6 +44,18 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
     if (!q) return events;
     return events.filter((e) => `${e.actor} ${e.verb} ${e.target} ${e.at}`.toLowerCase().includes(q));
   }, [events, filter]);
+
+  if (loading) {
+    return (
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2.5"><Skeleton width={150} height={20} /><SkeletonLine w={320} h={11} /></div>
+          <Skeleton width={190} height={32} rounded="rounded-[4px]" />
+        </div>
+        <SkeletonTable rows={6} cols={4} />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

@@ -12,6 +12,7 @@ import { Avatar } from "../data-display/Avatar";
 import { Progress } from "../data-display/Progress";
 import { Sparkline } from "../data-display/Sparkline";
 import { Skeleton } from "../data-display/Skeleton";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Spinner } from "../data-display/Spinner";
 import { EmptyState } from "../data-display/EmptyState";
 import { Alert } from "../feedback/Alert";
@@ -41,6 +42,7 @@ const STATES = [
   { id: "data-display", label: "Data display" },
   { id: "feedback", label: "Feedback" },
   { id: "icons", label: "Icons & art" },
+  { id: "loading", label: "Loading" },
 ] as const;
 
 function Exhibit({ title, rule, imp, children }: {
@@ -305,6 +307,13 @@ function Sections({ state }: { state: string }) {
 }
 
 function LookbookPage({ state = "all", mobile = false }: PageProps) {
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
+        <SkeletonPage variant="gallery" />
+      </PageFrame>
+    );
+  }
   return (
     <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
       <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">

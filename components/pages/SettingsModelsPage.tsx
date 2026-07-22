@@ -12,6 +12,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { Spinner } from "../data-display/Spinner";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PageHeader } from "../layout/PageHeader";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { SettingsModelsConfig } from "../features/SettingsModelsConfig";
 
 /* Settings → Models (pages/settings-models.md). Configure the embedding model,
@@ -164,9 +165,6 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
 const INLINE: ModelsVariant[] = ["editing-embedding", "editing-llm", "test-idle", "test-testing", "test-ok", "test-fail", "saved"];
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading model config" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -194,16 +192,20 @@ function Body({ state }: { state: string }) {
 function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Settings"
-          title="Models"
-          description="Which models embed, search, and answer for this workspace."
-        />
-        <div className="mt-5" />
-        <SettingsTabs active="models" />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="settings" />
+      ) : (
+        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+          <PageHeader
+            eyebrow="Settings"
+            title="Models"
+            description="Which models embed, search, and answer for this workspace."
+          />
+          <div className="mt-5" />
+          <SettingsTabs active="models" />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

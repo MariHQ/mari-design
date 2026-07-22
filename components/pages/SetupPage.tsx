@@ -7,6 +7,7 @@ import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { Alert } from "../feedback/Alert";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
    has no admin yet; renders OUTSIDE the console shell on the same full-bleed
@@ -107,6 +108,14 @@ function SetupPage({ state = "default", mobile = false }: PageProps) {
   const success = state === "success";
   const onAdmin = state === "admin" || saving || error;
   const step = success ? 2 : onAdmin ? 1 : 0;
+
+  if (saving) {
+    return (
+      <div className="relative h-full w-full overflow-y-auto bg-paper">
+        <SkeletonPage variant="auth" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full overflow-y-auto bg-paper">

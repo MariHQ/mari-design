@@ -17,7 +17,7 @@ import { TagChip } from "../data-display/TagChip";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { TokenReveal } from "../data-display/TokenReveal";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers } from "../features/PublishMcpServers";
 
@@ -345,7 +345,6 @@ function McpTokenCreated() {
 
 /* ── Page ──────────────────────────────────────────────────────────────────*/
 function Body({ state }: { state: string }): ReactNode {
-  if (state === "loading") return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading sites" /></div>;
   if (state === "error") return <div className="mt-6"><EmptyState title="API offline">Publishing is temporarily unavailable — releases and deploys can't be reached. Retrying…</EmptyState></div>;
   if (state === "empty") return <div className="mt-6"><EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState></div>;
 
@@ -363,6 +362,14 @@ function Body({ state }: { state: string }): ReactNode {
 function PublishPage({ state = "default", mobile = false }: PageProps) {
   const [tab, setTab] = useState<Tab>(tabForState(state));
   const bareState = state === "loading" || state === "error" || state === "empty";
+
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("publish")} title="Publish" mobile={mobile}>
+        <SkeletonPage variant="editor" />
+      </PageFrame>
+    );
+  }
 
   return (
     <PageFrame active={navFor("publish")} title="Publish" mobile={mobile}>

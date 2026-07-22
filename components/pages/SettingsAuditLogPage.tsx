@@ -10,7 +10,7 @@ import { Chip } from "../data-display/Chip";
 import { Avatar } from "../data-display/Avatar";
 import { Pagination } from "../data-display/Pagination";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { fmtDateTime } from "../tokens/format";
 import { SettingsAuditLog, type AuditEvent } from "../features/SettingsAuditLog";
 
@@ -152,9 +152,6 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
 const INLINE: AuditVariant[] = ["filtered-actor", "filtered-action", "filtered-date", "no-match", "expanded", "many"];
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading audit log" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -182,17 +179,21 @@ function Body({ state }: { state: string }) {
 function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Settings"
-          title="Audit log"
-          description="Every workspace change — actor, action, target, and time."
-          actions={<Button variant="default" icon><RefreshCw size={15} /> Refresh</Button>}
-        />
-        <div className="mt-5" />
-        <SettingsTabs active="audit" />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="settings" />
+      ) : (
+        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+          <PageHeader
+            eyebrow="Settings"
+            title="Audit log"
+            description="Every workspace change — actor, action, target, and time."
+            actions={<Button variant="default" icon><RefreshCw size={15} /> Refresh</Button>}
+          />
+          <div className="mt-5" />
+          <SettingsTabs active="audit" />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

@@ -6,6 +6,7 @@ import { Field } from "../forms/Field";
 import { SectionLabel } from "../forms/SectionLabel";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons";
+import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import {
   REL, EdgeSwatch, NodeGlyph, LgDrawerShell, SOURCE_LABELS,
   DEMO_NODES, DEMO_EDGES, nodeById,
@@ -29,11 +30,13 @@ export type LineageEdgeDrawerProps = {
   edgeId?: string;
   onSelectNode?: (id: string) => void;
   onClose?: () => void;
+  /** Render a content-shaped skeleton silhouette instead of the drawer body. */
+  loading?: boolean;
   className?: string;
 };
 
 export function LineageEdgeDrawer({
-  nodes = DEMO_NODES, edges = DEMO_EDGES, edgeId = "e3", onSelectNode, onClose, className = "",
+  nodes = DEMO_NODES, edges = DEMO_EDGES, edgeId = "e3", onSelectNode, onClose, loading = false, className = "",
 }: LineageEdgeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId] = useState(edgeId);
@@ -43,6 +46,22 @@ export function LineageEdgeDrawer({
   const s = REL[edge.rel];
   const confirmed = edge.meta?.status === "confirmed";
   const statusLabel = confirmed ? "Confirmed" : edge.llm ? "Derived by Mari" : "Observed";
+
+  if (loading) {
+    return (
+      <LgDrawerShell
+        className={className}
+        onClose={onClose}
+        icon={<SkeletonCircle size={19} />}
+        title={<SkeletonLine w="75%" h={14} />}
+        pills={<><SkeletonChip w={80} /><SkeletonChip w={64} /></>}
+      >
+        <div className="mb-3"><SkeletonLine w="40%" h={12} /></div>
+        <SkeletonText lines={3} />
+        <div className="mt-4"><SkeletonList rows={2} /></div>
+      </LgDrawerShell>
+    );
+  }
 
   return (
     <LgDrawerShell

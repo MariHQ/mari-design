@@ -3,7 +3,8 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { KnowledgeBrowser } from "../features/KnowledgeBrowser";
 import { KnowledgeInspector } from "../features/KnowledgeInspector";
-import { PageHeader, Card, EmptyState, Spinner } from "../index";
+import { PageHeader, Card, EmptyState } from "../index";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Knowledge search surface (pages/knowledge.md). A workspace that pairs the
    faceted results browser (filter rail + search + result cards + footer stats)
@@ -88,15 +89,6 @@ function resultsFor(state: string): Result[] {
 }
 
 function Feed({ state }: { state: string }) {
-  if (state === "loading") {
-    return (
-      <Card>
-        <div className="grid place-items-center py-24">
-          <Spinner size="md" label="Searching" />
-        </div>
-      </Card>
-    );
-  }
   if (state === "error") {
     return (
       <Card>
@@ -117,15 +109,11 @@ function Feed({ state }: { state: string }) {
 }
 
 function Inspector({ state }: { state: string }) {
-  if (state === "loading" || state === "no-selection") {
+  if (state === "no-selection") {
     return (
       <Card>
         <div className="grid place-items-center py-16">
-          {state === "loading" ? (
-            <Spinner size="sm" label="Loading document" />
-          ) : (
-            <EmptyState title="Nothing selected">Select a result to inspect it here.</EmptyState>
-          )}
+          <EmptyState title="Nothing selected">Select a result to inspect it here.</EmptyState>
         </div>
       </Card>
     );
@@ -146,6 +134,9 @@ function Inspector({ state }: { state: string }) {
 function KnowledgePage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("knowledge")} title="Knowledge" mobile={mobile}>
+      {state === "loading" ? (
+        <SkeletonPage variant="detail" />
+      ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader eyebrow="Knowledge" title="Search the knowledge base" />
         <div
@@ -163,6 +154,7 @@ function KnowledgePage({ state = "default", mobile = false }: PageProps) {
           </div>
         </div>
       </div>
+      )}
     </PageFrame>
   );
 }

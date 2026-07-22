@@ -1,4 +1,5 @@
 import { Chip, StatusChip, type ChipStatus } from "../data-display/Chip";
+import { SkeletonTable } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { fmtDateTime, type DateInput } from "../tokens/format";
 
@@ -69,11 +70,13 @@ export type RunHistoryProps = {
   /** Cap the number of rows shown. */
   limit?: number;
   title?: string;
+  /** Show a content-shaped table skeleton instead of rows. */
+  loading?: boolean;
   className?: string;
 };
 
 export function RunHistory({
-  runs, selectedId = null, onSelect, limit = 12, title = "Run history", className = "",
+  runs, selectedId = null, onSelect, limit = 12, title = "Run history", loading = false, className = "",
 }: RunHistoryProps) {
   const list = runs.slice(0, limit);
   return (
@@ -82,7 +85,11 @@ export function RunHistory({
         <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
         <div className="mt-0.5 text-[12px] text-ink/55">Durable and complete — every run, including tests. Select one to inspect its steps.</div>
       </div>
-      {list.length === 0 ? (
+      {loading ? (
+        <div className="px-4 pb-4">
+          <SkeletonTable rows={6} cols={6} className="border-0" />
+        </div>
+      ) : list.length === 0 ? (
         <div className="px-4 pb-4 text-[12.5px] text-ink/55">No runs yet — start the flow to see history here.</div>
       ) : (
         <div className="overflow-x-auto">

@@ -8,6 +8,7 @@ import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
+import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuItem, MenuSeparator } from "../navigation/Menu";
 
@@ -43,11 +44,29 @@ const CATEGORIES = ["All", "Engineering", "Operations", "Product", "Team", "Gove
 
 export type LibraryTemplatesPanelProps = {
   templates?: Template[];
+  loading?: boolean;
   className?: string;
 };
 
-export function LibraryTemplatesPanel({ templates = TEMPLATES, className = "" }: LibraryTemplatesPanelProps) {
+export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, className = "" }: LibraryTemplatesPanelProps) {
   const [rows, setRows] = useState<Template[]>(templates);
+
+  if (loading) {
+    return (
+      <div className={`rounded-md border border-ink/12 bg-paper ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
+          <SkeletonLine w={120} h={13} />
+          <SkeletonButton w={124} />
+        </div>
+        <div className="flex gap-2 px-4 pt-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} w={64} />)}
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} lines={2} footer />)}
+        </div>
+      </div>
+    );
+  }
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
   const [query, setQuery] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);

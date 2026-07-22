@@ -8,6 +8,7 @@ import { Checkbox } from "../forms/Checkbox";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Badge } from "../data-display/Badge";
 import { IconRing, type IconRingTone } from "../data-display/IconRing";
+import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonText } from "../data-display/Skeleton";
 
 /* LibraryGuidesPanel — the Library › Style guides tab.
    Pick a trusted built-in style pack as the project default, then layer
@@ -47,6 +48,7 @@ export type LibraryGuidesPanelProps = {
   guides?: Guide[];
   workspace?: string;
   defaultPack?: string;
+  loading?: boolean;
   className?: string;
 };
 
@@ -54,6 +56,7 @@ export function LibraryGuidesPanel({
   guides = GUIDES,
   workspace = "Northwind",
   defaultPack = "plain",
+  loading = false,
   className = "",
 }: LibraryGuidesPanelProps) {
   const [active, setActive] = useState(defaultPack);
@@ -65,6 +68,37 @@ export function LibraryGuidesPanel({
   const setField = <K extends keyof Layer>(k: K, v: Layer[K]) => { setLayer((l) => ({ ...l, [k]: v })); setSaved(false); };
 
   const save = () => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); };
+
+  if (loading) {
+    return (
+      <div className={`grid gap-4 lg:grid-cols-[1.4fr_1fr] items-start ${className}`.trim()} aria-hidden="true">
+        <div className="space-y-3 rounded-md border border-ink/12 bg-paper p-4">
+          <SkeletonLine w={150} h={13} />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex gap-3 rounded-[5px] border border-ink/12 p-3.5">
+              <SkeletonCircle size={30} />
+              <div className="flex-1 space-y-2">
+                <SkeletonLine w="42%" h={12} />
+                <SkeletonLine w="60%" h={9} />
+                <SkeletonText lines={1} lastWidth="88%" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-3 rounded-md border border-ink/12 bg-paper p-4">
+          <SkeletonLine w={130} h={13} />
+          <Skeleton height={64} />
+          <Skeleton height={64} />
+          <Skeleton height={38} />
+          <div className="space-y-2 pt-1">
+            <SkeletonLine w="70%" h={10} />
+            <SkeletonLine w="62%" h={10} />
+            <SkeletonLine w="66%" h={10} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`grid gap-4 lg:grid-cols-[1.4fr_1fr] items-start ${className}`.trim()}>

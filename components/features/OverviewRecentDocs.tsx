@@ -1,7 +1,7 @@
 import { Maximize2 } from "lucide-react";
 import { Card } from "../layout/Card";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
 import { fmtDate } from "../tokens/format";
@@ -64,7 +64,15 @@ export function OverviewRecentDocs({
       }
     >
       {loading ? (
-        <div className="grid place-items-center min-h-[60px]"><Spinner size="sm" /></div>
+        <div className="divide-y divide-ink/10" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-2.5 py-2.5">
+              <SkeletonCircle size={17} />
+              <span className="flex-1"><SkeletonLine w={["68%", "80%", "58%"][i]} h={11} /></span>
+              <SkeletonLine w={44} h={9} />
+            </div>
+          ))}
+        </div>
       ) : offline ? (
         <EmptyState>API offline — recent docs unavailable.</EmptyState>
       ) : rows.length === 0 ? (

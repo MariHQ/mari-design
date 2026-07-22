@@ -14,6 +14,7 @@ import { StatusChip } from "../data-display/Chip";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Tabs } from "../navigation/Tabs";
 import { fmtDate } from "../tokens/format";
+import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
 
 type Finding = { id: number; kind: string; severity: string; text: string; note: string };
 type Claim = { claim: string; source: string; status: string; verified: string };
@@ -52,9 +53,11 @@ const TASK_PRIS: [string, string][] = [
 export function DocReviewFindingsPanel({
   findings = DEMO_FINDINGS,
   claims = DEMO_CLAIMS,
+  loading = false,
 }: {
   findings?: Finding[];
   claims?: Claim[];
+  loading?: boolean;
 }) {
   const [tab, setTab] = useState<FactTab>("check");
   const [checking, setChecking] = useState(false);
@@ -90,6 +93,34 @@ export function DocReviewFindingsPanel({
   ];
 
   const pickBtn = "flex w-full items-center justify-between gap-2";
+
+  if (loading) {
+    return (
+      <Card variant="flush" className="max-w-[440px]">
+        <div className="flex gap-4 px-4 pt-4" aria-hidden="true">
+          <SkeletonLine w={70} h={11} /><SkeletonLine w={80} h={11} />
+        </div>
+        <div className="flex items-stretch border-b border-ink/10 px-4 py-3.5" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <Fragment key={i}>
+              {i > 0 && <span className="mx-3 w-px bg-ink/12" />}
+              <span className="flex-1 space-y-1.5"><SkeletonLine w="70%" h={10} /><Skeleton width={24} height={20} /></span>
+            </Fragment>
+          ))}
+        </div>
+        <div className="px-4 py-3" aria-hidden="true"><Skeleton height={34} rounded="rounded-[4px]" /></div>
+        <div className="space-y-3 px-4 pb-4" aria-hidden="true">
+          <div className="rounded-[6px] border border-ink/12 p-3 space-y-2.5">
+            <SkeletonLine w="45%" h={11} /><SkeletonText lines={2} /><SkeletonLine w="60%" h={10} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" />
+            <Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" />
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card variant="flush" className="max-w-[440px]">

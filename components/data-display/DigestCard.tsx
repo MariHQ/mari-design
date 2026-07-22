@@ -4,6 +4,7 @@ import { Card } from "../layout/Card";
 import { Chip } from "./Chip";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
+import { SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
 
 /* DigestCard — Mari's weekly summary of what changed, surfaced on the Overview
@@ -51,7 +52,15 @@ export function DigestCard({
         </div>
       )}
       {loading ? (
-        <div className="grid place-items-center min-h-[90px]"><Spinner size="sm" /></div>
+        <div className="flex flex-col divide-y divide-ink/10" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2 py-3.5 first:pt-0 last:pb-0">
+              <SkeletonLine w="46%" h={13} />
+              <div className="flex gap-1.5"><SkeletonChip w={64} /><SkeletonChip w={72} /></div>
+              <SkeletonText lines={2} lastWidth="55%" />
+            </div>
+          ))}
+        </div>
       ) : error ? (
         <EmptyState>API offline — the digest is unavailable.</EmptyState>
       ) : topics.length === 0 ? (

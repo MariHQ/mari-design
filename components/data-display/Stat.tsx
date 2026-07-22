@@ -1,6 +1,7 @@
 import type { MouseEventHandler, ReactNode } from "react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
+import { Skeleton, SkeletonCircle, SkeletonLine } from "./Skeleton";
 
 export type StatTone = "ok" | "attention" | "blocked" | "info" | "neutral";
 
@@ -15,7 +16,7 @@ const SUB_TONE: Record<StatTone, string> = {
 /* The one stat card — big display number + label + sub note. Pass onClick
    for the click-to-filter affordance (stat strips above a DataTable). */
 export function Stat({
-  value, label, sub, tone = "neutral", icon, onClick, className = "",
+  value, label, sub, tone = "neutral", icon, onClick, loading = false, className = "",
 }: {
   value: ReactNode;
   label: ReactNode;
@@ -25,8 +26,22 @@ export function Stat({
   /** Optional top-right icon. */
   icon?: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
+  /** Show a content-shaped skeleton instead of the value. */
+  loading?: boolean;
   className?: string;
 }) {
+  if (loading) {
+    return (
+      <div className={`${card} flex items-start justify-between gap-3 p-4 ${className}`.trim()} aria-hidden="true">
+        <span className="flex flex-col gap-2">
+          <Skeleton width={72} height={26} />
+          <SkeletonLine w={90} h={10} />
+          <SkeletonLine w={60} h={9} />
+        </span>
+        <SkeletonCircle size={26} />
+      </div>
+    );
+  }
   const body = (
     <>
       <span className="flex flex-col gap-0.5">

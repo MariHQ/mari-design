@@ -12,7 +12,7 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Flows (pages/flows.md). The automation surface — a single route that swaps
    between three surfaces held in local state: the list view (template gallery +
@@ -136,9 +136,6 @@ const TRIGGER_STATE: Record<string, TriggerKind> = {
 };
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading flows" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -199,17 +196,21 @@ function FlowsPage({ state = "default", mobile = false }: PageProps) {
   const editing = state === "pipeline-editor" || state === "pipeline-branch";
   return (
     <PageFrame active={navFor("flows")} title="Flows" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-        {!editing && (
-          <PageHeader
-            eyebrow="Flows"
-            title="Flows"
-            description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
-            actions={<Button variant="primary" icon={false}><Plus size={15} /> New flow</Button>}
-          />
-        )}
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="list" />
+      ) : (
+        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+          {!editing && (
+            <PageHeader
+              eyebrow="Flows"
+              title="Flows"
+              description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
+              actions={<Button variant="primary" icon={false}><Plus size={15} /> New flow</Button>}
+            />
+          )}
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

@@ -44,7 +44,11 @@ export { IconRing, type IconRingTone } from "./data-display/IconRing";
 export { Avatar } from "./data-display/Avatar";
 export { Swatch } from "./data-display/Swatch";
 export { Sparkline } from "./data-display/Sparkline";
-export { Skeleton } from "./data-display/Skeleton";
+export {
+  Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip, SkeletonButton,
+  SkeletonCard, SkeletonStat, SkeletonListRow, SkeletonList, SkeletonTable, SkeletonSwitch,
+} from "./data-display/Skeleton";
+export { SkeletonPage, type SkeletonPageVariant } from "./data-display/Skeletons";
 export { Progress, type ProgressTone } from "./data-display/Progress";
 export { Pagination } from "./data-display/Pagination";
 export { Accordion, type AccordionItemData, type AccordionProps } from "./data-display/Accordion";

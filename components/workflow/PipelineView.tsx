@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
+import { SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 
@@ -47,12 +48,38 @@ export type PipelineViewProps = {
   onSelect?: (id: string) => void;
   name?: string;
   description?: string;
+  /** Show a spine of step-block skeletons instead of the steps. */
+  loading?: boolean;
   className?: string;
 };
 
 export function PipelineView({
-  steps, selectedId = null, onSelect, name, description, className = "",
+  steps, selectedId = null, onSelect, name, description, loading = false, className = "",
 }: PipelineViewProps) {
+  if (loading) {
+    return (
+      <div className={className} aria-hidden="true">
+        <div className="relative pl-10">
+          <span className="pointer-events-none absolute left-[17px] top-4 bottom-4 border-l border-dashed border-ink/25" />
+          <ol className="flex flex-col gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <li key={i}>
+                <div className={`${card} relative block w-full px-3.5 py-3`}>
+                  <span className="absolute top-5 -left-[29px] h-2.5 w-2.5 rounded-full border-2 border-ink/20 bg-paper" />
+                  <div className="flex items-center gap-2">
+                    <SkeletonChip w={40} />
+                    <SkeletonLine w={`${40 + (i % 3) * 12}%`} h={13} />
+                  </div>
+                  <SkeletonLine w="70%" h={10} className="mt-2" />
+                  <SkeletonLine w="52%" h={10} className="mt-1.5" />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={className}>
       {(name || description) && (

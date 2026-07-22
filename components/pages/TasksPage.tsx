@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { PageHeader, Card, Button, Input, Select, Avatar, Pill, IconRing, Badge, Chip, EmptyState, Spinner } from "../index";
+import { PageHeader, Card, Button, Input, Select, Avatar, Pill, IconRing, Badge, Chip, EmptyState } from "../index";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -152,7 +153,6 @@ function Body({ state }: { state: string }) {
   };
   const clearDone = () => setTasks((ts) => ts.filter((t) => !t.done));
 
-  const loading = state === "loading";
   const offline = state === "error";
   const isEmpty = state === "empty";
 
@@ -160,7 +160,6 @@ function Body({ state }: { state: string }) {
   const done = isEmpty ? [] : tasks.filter((t) => t.done);
 
   const listBody = (rows: Task[], emptyText: string) => {
-    if (loading) return <div className="grid place-items-center py-10"><Spinner size="sm" label="Loading" /></div>;
     if (offline) return <div className="py-4"><EmptyState title="API offline">Tasks unavailable.</EmptyState></div>;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/50">{emptyText}</div>;
     return rows.map((t) => <TaskRow key={t.id} task={t} onToggle={toggle} />);
@@ -196,7 +195,7 @@ function Body({ state }: { state: string }) {
           tone="ok"
           count={done.length}
           action={
-            done.length > 0 && !loading && !offline ? (
+            done.length > 0 && !offline ? (
               <Button variant="link" compact onClick={clearDone}>
                 <Trash2 size={14} /> Clear done
               </Button>
@@ -213,12 +212,16 @@ function Body({ state }: { state: string }) {
 function TasksPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("tasks")} title="Tasks" mobile={mobile}>
+      {state === "loading" ? (
+        <SkeletonPage variant="board" />
+      ) : (
       <div className="mx-auto max-w-4xl px-5 py-6 sm:px-8">
         <PageHeader title="Tasks" backLink={{ href: "/", label: "Overview" }} />
         <div className="mt-6">
           <Body key={state} state={state} />
         </div>
       </div>
+      )}
     </PageFrame>
   );
 }

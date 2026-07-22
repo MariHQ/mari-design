@@ -3,7 +3,7 @@
 export default {
   content: [
     "./.preview/**/*.{ts,tsx,html}",
-    "./{actions,chat,data-display,feedback,forms,icons,layout,navigation,shell,workflow,tokens}/**/*.{ts,tsx}",
+    "./{actions,chat,data-display,feedback,forms,icons,layout,navigation,pages,features,shell,workflow,tokens}/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
@@ -18,6 +18,14 @@ export default {
       },
       fontFamily: {
         mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+      },
+      keyframes: {
+        shimmer: { "100%": { transform: "translateX(100%)" } },
+        "skeleton-fade": { "0%,100%": { opacity: "0.55" }, "50%": { opacity: "0.85" } },
+      },
+      animation: {
+        shimmer: "shimmer 1.6s ease-in-out infinite",
+        "skeleton-fade": "skeleton-fade 1.8s ease-in-out infinite",
       },
     },
   },

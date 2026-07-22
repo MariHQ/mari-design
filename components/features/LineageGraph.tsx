@@ -4,6 +4,7 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
+import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import {
   REL, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT,
   DEMO_NODES, DEMO_EDGES, nodeById,
@@ -39,6 +40,8 @@ export type LineageGraphProps = {
   trace?: { originId: string; direction: "down" | "up" } | null;
   onSelectNode?: (id: string) => void;
   onSelectEdge?: (id: string) => void;
+  /** Render a content-shaped skeleton silhouette instead of the graph. */
+  loading?: boolean;
   className?: string;
 };
 
@@ -71,7 +74,7 @@ function traceClosure(originId: string, dir: "down" | "up", edges: LEdge[]): Set
 
 export function LineageGraph({
   nodes = DEMO_NODES, edges = DEMO_EDGES, layout = "flow", lens = "source",
-  focalId = "n1", trace: traceProp = null, onSelectNode, onSelectEdge, className = "",
+  focalId = "n1", trace: traceProp = null, onSelectNode, onSelectEdge, loading = false, className = "",
 }: LineageGraphProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [sel, setSel] = useState<{ kind: "node" | "edge"; id: string } | null>(
@@ -88,6 +91,21 @@ export function LineageGraph({
 
   const px = (n: LNode) => ({ x: n.x * VB_W, y: n.y * VB_H });
   const dimmed = (id: string) => (closure ? !closure.has(id) : false);
+
+  if (loading) {
+    return (
+      <div className={`${card} overflow-hidden ${className}`.trim()} aria-hidden="true">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-ink/10 px-3.5 py-2">
+          <SkeletonLine w={70} h={10} />
+          <SkeletonChip w={96} /><SkeletonChip w={88} /><SkeletonChip w={104} />
+          <span className="ml-auto"><SkeletonLine w={64} h={10} /></span>
+        </div>
+        <div className="relative" style={{ aspectRatio: `${VB_W} / ${VB_H}` }}>
+          <Skeleton className="absolute inset-0 h-full w-full" rounded="rounded-none" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`${card} overflow-hidden font-display ${className}`.trim()}>

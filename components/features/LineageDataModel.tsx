@@ -4,6 +4,7 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
 import { SectionLabel } from "../forms/SectionLabel";
+import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage data model (feature: lineage-data-model)
@@ -362,11 +363,32 @@ function Dot({ color }: { color: string }) {
   return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />;
 }
 
-export type LineageDataModelProps = { className?: string };
+export type LineageDataModelProps = {
+  /** Render a content-shaped skeleton silhouette instead of the legend. */
+  loading?: boolean;
+  className?: string;
+};
 
 /** Legend / palette reference for the lineage model: relation types, source
     identities, staleness + health lenses, and impact severities. */
-export function LineageDataModel({ className = "" }: LineageDataModelProps) {
+export function LineageDataModel({ loading = false, className = "" }: LineageDataModelProps) {
+  if (loading) {
+    return (
+      <div className={`${card} max-w-[640px] p-5 ${className}`.trim()} aria-hidden="true">
+        <div className="mb-4 space-y-2"><Skeleton width={200} height={16} /><SkeletonLine w={320} h={10} /></div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <SkeletonLine w={90} h={9} />
+              {Array.from({ length: 4 }).map((_, j) => <SkeletonLine key={j} w={`${72 - j * 8}%`} h={11} />)}
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 border-t border-ink/10 pt-3"><SkeletonLine w="60%" h={10} /></div>
+      </div>
+    );
+  }
+
   return (
     <div className={`${card} max-w-[640px] p-5 font-display text-ink ${className}`.trim()}>
       <div className="mb-4">

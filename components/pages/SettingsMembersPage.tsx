@@ -12,7 +12,7 @@ import { Field } from "../forms/Field";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { SettingsMembersTable, type Member } from "../features/SettingsMembersTable";
 
@@ -165,9 +165,6 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading members" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -197,17 +194,21 @@ function Body({ state }: { state: string }) {
 function SettingsMembersPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Settings"
-          title="Members"
-          description="Manage workspace access, invitations, and provisioning."
-          actions={<Button variant="primary"><UserPlus size={15} /> Invite member</Button>}
-        />
-        <div className="mt-5" />
-        <SettingsTabs active="members" />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="settings" />
+      ) : (
+        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+          <PageHeader
+            eyebrow="Settings"
+            title="Members"
+            description="Manage workspace access, invitations, and provisioning."
+            actions={<Button variant="primary"><UserPlus size={15} /> Invite member</Button>}
+          />
+          <div className="mt-5" />
+          <SettingsTabs active="members" />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

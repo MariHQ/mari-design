@@ -1,10 +1,11 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { AnswerCard } from "../features/AnswerCard";
 import { AnswersHarvestWizard } from "../features/AnswersHarvestWizard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
@@ -118,13 +119,6 @@ function cardsFor(state: string): Answer[] {
 }
 
 function AnswersList({ state, filter }: { state: string; filter: Filter }) {
-  if (state === "loading") {
-    return (
-      <Card>
-        <div className="grid place-items-center py-20"><Spinner size="md" label="Loading answers" /></div>
-      </Card>
-    );
-  }
   if (state === "error") {
     return (
       <Card>
@@ -175,9 +169,7 @@ function CoverageCard({ state, extended = false }: { state: string; extended?: b
   return (
     <Card>
       <div className="mb-2 text-[14px] font-semibold text-ink">Coverage</div>
-      {state === "loading" ? (
-        <div className="grid place-items-center py-8"><Spinner size="sm" label="Loading coverage" /></div>
-      ) : state === "error" ? (
+      {state === "error" ? (
         <EmptyState title="API offline">Coverage unavailable.</EmptyState>
       ) : state === "empty" ? (
         <EmptyState title="All covered">No uncovered questions yet.</EmptyState>
@@ -332,8 +324,6 @@ function HarvestPreview({ state }: { state: string }) {
 
 function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const [filter, setFilter] = useState<Filter>(filterFor(state));
-  const loading = state === "loading";
-  const statVal = (v: string): ReactNode => (loading ? <Spinner size="sm" /> : v);
 
   const isHarvest = state.startsWith("harvest-");
   const isCoverage = state === "coverage";
@@ -341,9 +331,9 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   return (
     <>
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat value={statVal("128")} label="Approved" tone="ok" sub="serving verbatim" />
-        <Stat value={statVal("6")} label="Drafts" tone="attention" sub="awaiting review" />
-        <Stat value={statVal("2,410")} label="Served this week" tone="info" sub="+12% vs last week" />
+        <Stat value="128" label="Approved" tone="ok" sub="serving verbatim" />
+        <Stat value="6" label="Drafts" tone="attention" sub="awaiting review" />
+        <Stat value="2,410" label="Served this week" tone="info" sub="+12% vs last week" />
       </div>
 
       {isHarvest ? (
@@ -386,6 +376,9 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 function AnswersPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("answers")} title="Answers" mobile={mobile}>
+      {state === "loading" ? (
+        <SkeletonPage variant="list" />
+      ) : (
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Knowledge"
@@ -402,6 +395,7 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
         <AnswersHarvestWizard defaultOpen={false} />
         <Body key={state} state={state} mobile={mobile} />
       </div>
+      )}
     </PageFrame>
   );
 }

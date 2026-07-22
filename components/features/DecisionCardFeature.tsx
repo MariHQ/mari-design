@@ -4,6 +4,7 @@ import { DecisionCard as DecisionCardUI, type DecisionStatus } from "../data-dis
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
+import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 
 /* DecisionCardFeature — the Decisions ledger column: a timeline of decision
    cards, each composing the data-display <DecisionCard> (aliased DecisionCardUI)
@@ -93,10 +94,12 @@ const DEMO: Decision[] = [
 
 export type DecisionCardFeatureProps = {
   decisions?: Decision[];
+  /** Render a content-shaped skeleton timeline while the ledger loads. */
+  loading?: boolean;
   className?: string;
 };
 
-export function DecisionCardFeature({ decisions = DEMO, className = "" }: DecisionCardFeatureProps) {
+export function DecisionCardFeature({ decisions = DEMO, loading = false, className = "" }: DecisionCardFeatureProps) {
   const [items, setItems] = useState<Decision[]>(decisions);
   const [ratifying, setRatifying] = useState<number | null>(null);
 
@@ -127,6 +130,20 @@ export function DecisionCardFeature({ decisions = DEMO, className = "" }: Decisi
     if (!d.impact.docs || d.impact.tasksCreated) return;
     patchImpact(d.id, { tasksCreated: true });
   };
+
+  if (loading) {
+    return (
+      <div className={`max-w-[720px] ${className}`.trim()} aria-hidden="true">
+        <div className="mb-4 space-y-2">
+          <Skeleton width={170} height={19} />
+          <SkeletonLine w={420} h={11} />
+        </div>
+        {[0, 1, 2].map((i) => (
+          <DecisionCardUI key={i} loading spine={i < 2} statement="" status="proposed" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className={`max-w-[720px] ${className}`.trim()}>

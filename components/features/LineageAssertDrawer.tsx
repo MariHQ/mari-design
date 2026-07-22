@@ -6,6 +6,7 @@ import { Input } from "../forms/Input";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
+import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, SEVERITY_META, SOURCE_LABELS,
   type ImpactResult, type Severity,
@@ -51,10 +52,12 @@ export type LineageAssertDrawerProps = {
   /** Pre-loaded analysis result; pass null to show the pre-analysis empty state. */
   result?: ImpactResult | null;
   onClose?: () => void;
+  /** Render a content-shaped skeleton silhouette instead of the drawer body. */
+  loading?: boolean;
   className?: string;
 };
 
-export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, className = "" }: LineageAssertDrawerProps) {
+export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, loading = false, className = "" }: LineageAssertDrawerProps) {
   const [claim, setClaim] = useState(initial?.claim ?? "Free tier ends September 1");
   const [result, setResult] = useState<ImpactResult | null>(initial);
   const [running, setRunning] = useState(false);
@@ -97,6 +100,28 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, cl
 
   const taskLabel =
     taskState === "creating" ? "Creating tasks…" : taskState === "done" ? `Created ${taskCount} tasks ✓` : `Create ${taskCount} tasks`;
+
+  if (loading) {
+    return (
+      <LgDrawerShell
+        className={className}
+        onClose={onClose}
+        width={412}
+        icon={<SkeletonCircle size={19} />}
+        title={<SkeletonLine w="55%" h={14} />}
+      >
+        <Skeleton height={34} className="rounded-[4px]" />
+        <div className="mt-3"><Skeleton height={44} className="rounded-[4px]" /></div>
+        <div className="mt-3"><SkeletonText lines={2} /></div>
+        <div className="mt-4 space-y-1.5">
+          <Skeleton height={40} className="rounded-[4px]" />
+          <Skeleton height={40} className="rounded-[4px]" />
+          <Skeleton height={40} className="rounded-[4px]" />
+        </div>
+        <div className="mt-4"><SkeletonList rows={3} /></div>
+      </LgDrawerShell>
+    );
+  }
 
   return (
     <LgDrawerShell

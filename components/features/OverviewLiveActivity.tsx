@@ -4,7 +4,7 @@ import { Workflow, Send, ShieldCheck, Clipboard, RefreshCw, GitFork, Pencil } fr
 import { Card } from "../layout/Card";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { fmtDateTime } from "../tokens/format";
 
 /* Overview — Live activity feed ───────────────────────────────────────────
@@ -95,7 +95,15 @@ export function OverviewLiveActivity({
       hint="Runs & edits · refreshes every 10s"
     >
       {loading ? (
-        <div className="grid place-items-center min-h-[60px]"><Spinner size="sm" /></div>
+        <div className="space-y-3" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              <SkeletonCircle size={22} />
+              <span className="flex-1"><SkeletonLine w={["78%", "64%", "82%", "56%"][i]} h={11} /></span>
+              <SkeletonLine w={40} h={9} />
+            </div>
+          ))}
+        </div>
       ) : offline ? (
         <EmptyState>API offline — activity unavailable.</EmptyState>
       ) : rows.length === 0 ? (

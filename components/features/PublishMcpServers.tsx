@@ -11,6 +11,7 @@ import { Chip, CountChip } from "../data-display/Chip";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
+import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* Publish · MCP servers ───────────────────────────────────────────────────
@@ -69,9 +70,9 @@ function CapPicker({ selected, onToggle }: { selected: string[]; onToggle: (k: s
   );
 }
 
-export type PublishMcpServersProps = { servers?: McpServer[]; className?: string };
+export type PublishMcpServersProps = { servers?: McpServer[]; loading?: boolean; className?: string };
 
-export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, className = "" }: PublishMcpServersProps) {
+export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, loading = false, className = "" }: PublishMcpServersProps) {
   const [servers, setServers] = useState<McpServer[]>(initialServers);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -95,6 +96,23 @@ export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, clas
   const del = (id: number) => setServers((s) => s.filter((x) => x.id !== id));
   const saveCaps = (id: number, scope: "project" | "org", capabilities: string[]) =>
     setServers((s) => s.map((x) => (x.id === id ? { ...x, scope, capabilities } : x)));
+
+  if (loading) {
+    return (
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton width={160} height={20} />
+            <SkeletonLine w={300} h={10} />
+          </div>
+          <SkeletonButton w={120} />
+        </div>
+        <div className="flex flex-col gap-4">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} lines={2} footer />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

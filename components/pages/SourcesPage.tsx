@@ -5,7 +5,7 @@ import { Layers, ShieldCheck, CheckCircle2, ArrowRight, ExternalLink, UploadClou
 import { card } from "../tokens/card";
 import { PageHeader } from "../layout/PageHeader";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { Stepper } from "../data-display/Stepper";
 import { IconRing } from "../data-display/IconRing";
@@ -317,7 +317,6 @@ function parseConnect(state: string): { c: Connector; phase: "configure" | "sync
 }
 
 function Body({ state, tab }: { state: string; tab: Tab }): ReactNode {
-  if (state === "loading") return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading sources" /></div>;
   if (state === "error") return <div className="mt-6"><EmptyState title="API offline">The API didn't answer. If the server is still starting up, retry in a moment.</EmptyState></div>;
   if (state === "empty") return <div className="mt-6"><EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState></div>;
 
@@ -357,6 +356,14 @@ function SourcesPage({ state = "default", mobile = false }: PageProps) {
   const isSyncPhase = state.startsWith("sync-");
   const bareState = state === "loading" || state === "error" || state === "empty";
   const showTabs = !bareState;
+
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
+        <SkeletonPage variant="gallery" />
+      </PageFrame>
+    );
+  }
 
   return (
     <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>

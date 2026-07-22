@@ -8,7 +8,7 @@ import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
 import { Alert } from "../feedback/Alert";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Repository Audit (pages/audit.md). An onboarding / re-audit workflow: Mari
    scans a connected repo's docs, localization, authorship, tags and hygiene,
@@ -115,9 +115,6 @@ function withRail(main: ReactNode) {
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Scanning repository" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -167,6 +164,13 @@ function AuditPage({ state = "default", mobile = false }: PageProps) {
     state === "loading" ? "Scanning github · " + REPO + "…"
     : state === "empty" ? "Connect a repo to begin."
     : "github · " + REPO + " · last audit Jul 21, 9:04 AM · 8 findings, 1 fixed";
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
+        <SkeletonPage variant="list" />
+      </PageFrame>
+    );
+  }
   return (
     <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">

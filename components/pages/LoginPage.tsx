@@ -7,6 +7,7 @@ import { Button } from "../actions/Button";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { GithubMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
 
@@ -201,6 +202,13 @@ function heading(state: string): { title: string; sub: string } {
 
 function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
   const { title, sub } = heading(state);
+  if (state === "loading") {
+    return (
+      <div className="relative h-full w-full overflow-y-auto bg-paper">
+        <SkeletonPage variant="auth" />
+      </div>
+    );
+  }
   return (
     <div className="relative h-full w-full overflow-y-auto bg-paper">
       <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>

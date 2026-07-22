@@ -10,7 +10,7 @@ import { Input } from "../forms/Input";
 import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { TokenReveal } from "../data-display/TokenReveal";
 import { fmtDate } from "../tokens/format";
@@ -104,9 +104,6 @@ function KeysTable({ keys, confirmId }: { keys: ApiKey[]; confirmId?: number }) 
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading keys" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -170,17 +167,21 @@ function Body({ state }: { state: string }) {
 function SettingsApiKeysPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Settings"
-          title="API keys"
-          description="Programmatic access for CI, bots, and the MCP gateway."
-          actions={<Button variant="primary"><Plus size={15} /> Create key</Button>}
-        />
-        <div className="mt-5" />
-        <SettingsTabs active="api-keys" />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="settings" />
+      ) : (
+        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+          <PageHeader
+            eyebrow="Settings"
+            title="API keys"
+            description="Programmatic access for CI, bots, and the MCP gateway."
+            actions={<Button variant="primary"><Plus size={15} /> Create key</Button>}
+          />
+          <div className="mt-5" />
+          <SettingsTabs active="api-keys" />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

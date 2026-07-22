@@ -3,6 +3,7 @@ import { ChevronRight, Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import type { Column } from "./DataTable";
+import { SkeletonTable } from "./Skeleton";
 
 const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
 
@@ -11,7 +12,7 @@ const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] t
    `renderDetail(row)`. Multiple rows may be open unless `single` is set. */
 export function ExpandableTable<T>({
   rows, columns, rowKey, renderDetail, single = false, defaultExpanded = [],
-  minW = 720, empty = "No results", expandLabel = "Toggle details",
+  minW = 720, empty = "No results", expandLabel = "Toggle details", loading = false,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -23,6 +24,7 @@ export function ExpandableTable<T>({
   minW?: number;
   empty?: string;
   expandLabel?: string;
+  loading?: boolean;
 }) {
   const [open, setOpen] = useState<Set<string>>(new Set(defaultExpanded));
 
@@ -36,6 +38,14 @@ export function ExpandableTable<T>({
   };
 
   const colSpan = columns.length + 1;
+
+  if (loading) {
+    return (
+      <div className={`${card} mt-5 overflow-hidden`}>
+        <SkeletonTable rows={8} cols={columns.length + 1} className="border-0 rounded-none" />
+      </div>
+    );
+  }
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>

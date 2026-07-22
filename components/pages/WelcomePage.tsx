@@ -16,6 +16,7 @@ import { SourceMark, GithubMark } from "../icons/marks";
 import { WelcomeGuideStep } from "../features/WelcomeGuideStep";
 import { WelcomeGlossaryStep } from "../features/WelcomeGlossaryStep";
 import { WelcomeSyncPanel } from "../features/WelcomeSyncPanel";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { focusRing } from "../tokens/focusRing";
 
 /* Welcome — onboarding wizard (pages/welcome.md). Post-auth, renders OUTSIDE
@@ -436,6 +437,13 @@ function StepBody({ state }: { state: string }) {
 }
 
 function WelcomePage({ state = "default", mobile = false }: PageProps) {
+  if (state === "syncing") {
+    return (
+      <div className="h-full w-full overflow-y-auto bg-paper">
+        <SkeletonPage variant="auth" />
+      </div>
+    );
+  }
   const step = STEP[state] ?? 0;
   const last = LABELS.length - 1;
   const done = state === "done";

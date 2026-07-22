@@ -10,7 +10,7 @@ import { Card } from "../layout/Card";
 import { Table } from "../data-display/Table";
 import { Chip, StatusChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { fmtDate } from "../tokens/format";
 
@@ -128,9 +128,6 @@ function ReviewTaskAudit({ phase }: { phase: "creating" | "done" | "error" }) {
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading facts" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -237,6 +234,13 @@ function Body({ state }: { state: string }) {
 }
 
 function FactsPage({ state = "default", mobile = false }: PageProps) {
+  if (state === "loading") {
+    return (
+      <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
+        <SkeletonPage variant="table" />
+      </PageFrame>
+    );
+  }
   return (
     <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">

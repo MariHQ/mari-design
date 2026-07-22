@@ -9,7 +9,7 @@ import { OverviewSourcePulse } from "../features/OverviewSourcePulse";
 import { OverviewLiveActivity } from "../features/OverviewLiveActivity";
 import { OverviewWorkflowStrip } from "../features/OverviewWorkflowStrip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Overview dashboard (pages/overview.md). Composes the overview features into
    the two-track grid, inside the console frame. Demonstrates the per-card
@@ -35,11 +35,6 @@ function Greeting() {
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return (
-      <div className="grid place-items-center py-24"><Spinner size="md" label="Loading dashboard" /></div>
-    );
-  }
   if (state === "error") {
     return (
       <div className="mt-6"><EmptyState title="API offline">The dashboard is temporarily unavailable. Retrying…</EmptyState></div>
@@ -70,10 +65,14 @@ function Body({ state }: { state: string }) {
 function OverviewPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("overview")} title="Overview" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-        <Greeting />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="dashboard" />
+      ) : (
+        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+          <Greeting />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

@@ -15,7 +15,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { card } from "../tokens/card";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Product lineage (pages/lineage.md). The full-height graph "instrument":
    toolbar on top, the lineage canvas in the middle, the as-of time scrubber at
@@ -91,9 +91,6 @@ function Drawer({ state }: { state: string }) {
 }
 
 function Body({ state }: { state: string }) {
-  if (state === "loading") {
-    return <div className="grid place-items-center py-24"><Spinner size="md" label="Loading lineage" /></div>;
-  }
   if (state === "error") {
     return (
       <div className="mt-5">
@@ -138,15 +135,19 @@ function Body({ state }: { state: string }) {
 function LineagePage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("lineage")} title="Lineage" mobile={mobile}>
-      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Lineage"
-          title="Product lineage"
-          description="The document graph: provenance, impact, and drift across every source."
-          actions={<Button variant="default">Authentication API ↗</Button>}
-        />
-        <Body state={state} />
-      </div>
+      {state === "loading" ? (
+        <SkeletonPage variant="graph" />
+      ) : (
+        <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
+          <PageHeader
+            eyebrow="Lineage"
+            title="Product lineage"
+            description="The document graph: provenance, impact, and drift across every source."
+            actions={<Button variant="default">Authentication API ↗</Button>}
+          />
+          <Body state={state} />
+        </div>
+      )}
     </PageFrame>
   );
 }

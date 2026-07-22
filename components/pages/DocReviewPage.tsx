@@ -7,7 +7,8 @@ import { DocReviewOutlinePanel } from "../features/DocReviewOutlinePanel";
 import { DocReviewRefinePanel } from "../features/DocReviewRefinePanel";
 import { DocReviewChangeQueue } from "../features/DocReviewChangeQueue";
 import { DocReviewFindingsPanel } from "../features/DocReviewFindingsPanel";
-import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Spinner, Alert, TagChip } from "../index";
+import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
+import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Doc Review workspace (pages/doc-review.md). A multi-pane editor: outline +
    revisions on the left, the block editor in the centre, refine on the right,
@@ -125,15 +126,6 @@ function PanelFrame({ title, description, children }: { title: string; descripti
 }
 
 function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  if (state === "loading") {
-    return (
-      <Card>
-        <div className="grid place-items-center py-24">
-          <Spinner size="md" label="Loading document" />
-        </div>
-      </Card>
-    );
-  }
   if (state === "error") {
     return (
       <Card>
@@ -215,6 +207,9 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 function DocReviewPage({ state = "default", mobile = false }: PageProps) {
   return (
     <PageFrame active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
+      {state === "loading" ? (
+        <SkeletonPage variant="editor" />
+      ) : (
       <div className="mx-auto max-w-[1500px] px-5 py-6 sm:px-8">
         <PageHeader
           title="Billing proration runbook"
@@ -226,6 +221,7 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
           <Body state={state} mobile={mobile} />
         </div>
       </div>
+      )}
     </PageFrame>
   );
 }

@@ -5,6 +5,7 @@ import { Card } from "../layout/Card";
 import { Table } from "../data-display/Table";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { SkeletonTable } from "../data-display/Skeleton";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Facts verification audit — a client-side audit derived entirely from the
@@ -50,10 +51,12 @@ export type FactsVerificationAuditProps = {
   facts?: Fact[];
   /** Render the surrounding close affordance (the panel is toggled open). */
   onClose?: () => void;
+  /** Render a content-shaped skeleton while the audit is computing. */
+  loading?: boolean;
   className?: string;
 };
 
-export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, className = "" }: FactsVerificationAuditProps) {
+export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = false, className = "" }: FactsVerificationAuditProps) {
   const [taskState, setTaskState] = useState<Record<number, TaskState>>({});
 
   const auditRows = useMemo(() => {
@@ -82,6 +85,19 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, className 
       : staleCount === 0
         ? "None verified more than 60 days ago."
         : `${staleCount} verified more than 60 days ago — stale candidate${staleCount === 1 ? "" : "s"}.`;
+
+  if (loading) {
+    return (
+      <Card
+        className={className}
+        icon={<ShieldCheck size={17} className="text-moss" />}
+        title="Verification audit"
+        variant="flush"
+      >
+        <SkeletonTable rows={4} cols={4} />
+      </Card>
+    );
+  }
 
   return (
     <Card

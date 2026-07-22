@@ -6,7 +6,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
+import { SkeletonPage } from "../data-display/Skeletons";
 import { LibraryTagsPanel } from "../features/LibraryTagsPanel";
 import { LibraryRulesPanel } from "../features/LibraryRulesPanel";
 import { LibraryGlossaryPanel } from "../features/LibraryGlossaryPanel";
@@ -73,10 +73,16 @@ function Panel({ tab, state }: { tab: Tab; state: string }) {
 function LibraryPage({ state = "default", mobile = false }: PageProps) {
   const [tab, setTab] = useState<Tab>(tabForState(state));
 
-  let body;
   if (state === "loading") {
-    body = <div className="grid place-items-center py-24"><Spinner size="md" label="Loading library" /></div>;
-  } else if (state === "error") {
+    return (
+      <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
+        <SkeletonPage variant="list" />
+      </PageFrame>
+    );
+  }
+
+  let body;
+  if (state === "error") {
     body = <div className="mt-6"><EmptyState title="API offline">The library is temporarily unavailable. Retrying…</EmptyState></div>;
   } else if (state === "empty") {
     body = <div className="mt-6"><EmptyState title="Nothing here yet">Connect a source and add your first tags, rules, and terms to build the editorial system.</EmptyState></div>;

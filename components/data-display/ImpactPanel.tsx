@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { Chip } from "./Chip";
+import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
 
 /* ImpactPanel — the one impact-analysis rendering, shared by Facts and
@@ -40,14 +41,26 @@ export function ImpactPanel({
   className = "",
 }: ImpactPanelProps) {
   if (loading) {
+    const loadWrap = [
+      "text-[13px] leading-[1.45]",
+      boxed && "rounded-[10px] border border-ink/12 bg-flysch/60 px-3.5 py-2.5",
+      className,
+    ].filter(Boolean).join(" ");
     return (
-      <span className={`inline-flex items-center gap-2 font-display italic text-[13.5px] text-moss ${className}`.trim()}>
-        <span className="relative inline-flex w-2 h-2 shrink-0">
-          <span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" />
-          <span className="relative inline-flex w-2 h-2 rounded-full bg-moss" />
-        </span>
-        {loadingText}
-      </span>
+      <div className={loadWrap} aria-hidden="true">
+        <SkeletonLine w={130} h={13} />
+        <SkeletonText lines={2} className="mt-2" lastWidth="68%" />
+        <div className="mt-2 flex flex-col">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-2.5 border-t border-ink/10 py-[7px] first:border-t-0">
+              <SkeletonChip w={88} />
+              <SkeletonLine w={110} h={11} />
+              <SkeletonLine w={70} h={10} />
+              <span className="ml-auto"><Skeleton width={140} height={10} rounded="rounded-full" /></span>
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
   const wrap = [
