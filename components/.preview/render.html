@@ -5,12 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Render frame</title>
     <style>
-      /* Freeze animations/transitions so prerendered screenshots are stable. */
-      *, *::before, *::after {
-        animation: none !important;
-        transition: none !important;
-        caret-color: transparent !important;
-      }
+      /* Animation freeze for stable screenshots is injected by render.tsx only
+         when NOT in &full=1 mode, so the live full-screen view stays animated. */
       html, body, #root { height: 100%; margin: 0; }
       body { background: #fff; }
     </style>

@@ -35,6 +35,8 @@ function Canvas({ data }: { data: Manifest }) {
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [t, setT] = useState({ k: 0.18, x: 80, y: 60 });
   const drag = useRef<{ x: number; y: number } | null>(null);
+  const downAt = useRef({ x: 0, y: 0 });
+  const moved = useRef(false);
 
   // Bounds of all content, to frame the initial view.
   useLayoutEffect(() => {
@@ -67,6 +69,8 @@ function Canvas({ data }: { data: Manifest }) {
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     drag.current = { x: e.clientX, y: e.clientY };
+    downAt.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
     (e.target as Element).setPointerCapture?.(e.pointerId);
   }, []);
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -74,9 +78,18 @@ function Canvas({ data }: { data: Manifest }) {
     const dx = e.clientX - drag.current.x;
     const dy = e.clientY - drag.current.y;
     drag.current = { x: e.clientX, y: e.clientY };
+    if (Math.hypot(e.clientX - downAt.current.x, e.clientY - downAt.current.y) > 4) moved.current = true;
     setT((p) => ({ ...p, x: p.x + dx, y: p.y + dy }));
   }, []);
   const onPointerUp = useCallback(() => { drag.current = null; }, []);
+
+  // Open the live, full-screen standalone render of a frame — unless the
+  // pointer was dragging (panning the canvas).
+  const openFrame = useCallback((f: Frame) => {
+    if (moved.current) return;
+    const url = `./render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}&full=1`;
+    window.open(url, "_blank", "noopener");
+  }, []);
 
   const zoomTo = (k: number) => setT((p) => {
     const cx = vp.w / 2, cy = vp.h / 2;
@@ -122,9 +135,15 @@ function Canvas({ data }: { data: Manifest }) {
             <div style={{ font: "500 22px ui-monospace, monospace", color: "#10263B80", marginTop: 4 }}>{p.route}</div>
           </div>
         ))}
-        {/* Frames */}
+        {/* Frames — click to open the live full-screen page */}
         {visible.map((f) => (
-          <div key={f.file} style={{ position: "absolute", left: f.x, top: f.y, width: f.w, height: f.h }}>
+          <div
+            key={f.file}
+            className="frame-hit"
+            onClick={() => openFrame(f)}
+            title={`${f.pageTitle} · ${f.stateLabel} · ${f.view} — click to open full screen`}
+            style={{ position: "absolute", left: f.x, top: f.y, width: f.w, height: f.h, cursor: "pointer" }}
+          >
             <div style={{ position: "absolute", left: 0, top: -34, font: "600 20px ui-monospace, monospace", color: "#10263B99", whiteSpace: "nowrap" }}>
               {f.view === "mobile" ? "▯ " : "▭ "}{f.stateLabel}
             </div>
@@ -134,9 +153,11 @@ function Canvas({ data }: { data: Manifest }) {
               height={f.h}
               loading="lazy"
               decoding="async"
+              draggable={false}
               alt={`${f.pageTitle} · ${f.stateLabel} · ${f.view}`}
               style={{ display: "block", width: f.w, height: f.h, background: "#fff", borderRadius: 10, border: "1px solid #10263B26", boxShadow: "0 12px 40px -12px #10263B40" }}
             />
+            <span className="frame-open">Open ↗</span>
           </div>
         ))}
       </div>
