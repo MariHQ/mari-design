@@ -71,7 +71,18 @@ export function LineageTimeScrubber({
         <span className="ml-auto whitespace-nowrap font-term text-[11px] text-ink/65">{dates.length} events · {rangeLabel}</span>
       </div>
 
-      <ScrubberControl dates={dates} activity={activity} value={idx} onChange={setIdx} />
+      {/* The primitive's as-of marker is a 14px pill centred on the track
+          position, so at the rightmost ("All time") stop its outer half sits
+          7px past the track's own box. The track is the only child that may
+          overflow, so clip it there rather than letting it escape the card.
+          The real fix belongs in data-display/Scrubber.tsx (not owned here). */}
+      <ScrubberControl
+        dates={dates}
+        activity={activity}
+        value={idx}
+        onChange={setIdx}
+        className="[&>div.relative]:overflow-x-clip"
+      />
 
       <div className="mt-2 font-term text-[11px] text-ink/65">
         {effAsof

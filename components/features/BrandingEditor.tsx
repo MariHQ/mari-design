@@ -135,7 +135,7 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
         <SkeletonCard lines={1} />
         <div className="rounded-md border border-ink/12 bg-paper p-4">
           <SkeletonLine w="30%" h={12} className="mb-4" />
-          <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-2 border-b border-ink/10 py-2.5">
                 <Skeleton width={32} height={32} rounded="rounded-[4px]" />
@@ -179,18 +179,18 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
 
       {/* 2 — Brand palette */}
       <Card title="Brand palette">
-        <div className="grid gap-x-5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-3">
           {PALETTE_KEYS.map((p) => (
             <ColorField key={p.key} label={p.label} value={effectiveColor(draft, p.key)} explicit={isHexColor(draft[p.key])}
               onChange={(v) => patch({ [p.key]: v })} onAuto={() => clearKey(p.key)} />
           ))}
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Display font"><Input value={draft.displayFont ?? ""} onChange={(e) => patch({ displayFont: e.target.value })} placeholder="Playfair Display" className="w-full" /></Field>
           <Field label="Body font"><Input value={draft.bodyFont ?? ""} onChange={(e) => patch({ bodyFont: e.target.value })} placeholder="Lora" className="w-full" /></Field>
           <Field label="Font stylesheet URL"><Input type="url" value={draft.fontUrl ?? ""} onChange={(e) => patch({ fontUrl: e.target.value })} placeholder="https://fonts.googleapis.com/…" className="w-full font-term" /></Field>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Logo alt text"><Input value={draft.logoAlt ?? ""} onChange={(e) => patch({ logoAlt: e.target.value })} placeholder="Northwind Analytics" className="w-full" /></Field>
           <Field label="Logo"><input type="file" accept="image/*" className="text-[12.5px] text-ink/60 file:mr-2 file:rounded-[4px] file:border file:border-ink/20 file:bg-paper file:px-2.5 file:py-1 file:text-[12px] file:text-ink/80" onChange={() => patch({ logo: "demo" })} /></Field>
         </div>

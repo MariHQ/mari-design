@@ -9,6 +9,7 @@ import { Switch } from "../forms/Switch";
 import { Progress } from "../data-display/Progress";
 import { CountChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { Truncate } from "../data-display/Truncate";
 import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
 import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
@@ -153,12 +154,18 @@ export function AuditFindingsChecklist({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>
-      <PageHeader
-        eyebrow="Repository audit"
-        title="Findings"
-        description={`${provider} · ${repo} · last run ${ranAt}`}
-        actions={<Button variant="primary" disabled={scanning} onClick={reaudit}><RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}</Button>}
-      />
+      {/* `repo` is a raw remote identifier and can be arbitrarily long.
+          PageHeader renders `description` as a bare <p> with no truncation of
+          its own, so the ellipsis and the hover value are applied from here
+          (§12). The real fix belongs in layout/PageHeader.tsx. */}
+      <div className="min-w-0 [&_p]:truncate" title={`${provider} · ${repo} · last run ${ranAt}`}>
+        <PageHeader
+          eyebrow="Repository audit"
+          title="Findings"
+          description={`${provider} · ${repo} · last run ${ranAt}`}
+          actions={<Button variant="primary" disabled={scanning} onClick={reaudit}><RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}</Button>}
+        />
+      </div>
 
       {/* Summary strip */}
       <div className="flex flex-wrap gap-2">
@@ -217,8 +224,8 @@ export function AuditFindingsChecklist({
                         <li key={f.id} className="flex items-start gap-3 px-4 py-3">
                           <StatusMarker status={st} />
                           <div className="min-w-0 flex-1">
-                            <div className="text-[13.5px] font-medium text-ink">{f.title}</div>
-                            <div className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{f.detail}</div>
+                            <Truncate lines={2} className="text-[13.5px] font-medium text-ink">{f.title}</Truncate>
+                            <Truncate lines={2} className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{f.detail}</Truncate>
                             {st === "fixed" && <div className="mt-1 font-term text-[11.5px] text-moss">→ {ov && "summary" in ov ? ov.summary : summaryFor(f)}</div>}
                             {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/65">dismissed</div>}
                           </div>
@@ -281,9 +288,9 @@ function fixControl(
   }
   if (f.fixAction === "invite_member") {
     return (
-      <span className="flex items-center gap-1.5">
+      <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
         {/* A member picker is always a searchable combobox (CONVENTIONS §7). */}
-        <span className="w-[190px]">
+        <span className="w-[190px] max-w-full">
           <Combobox
             ariaLabel="Map to member"
             placeholder="Map to member"

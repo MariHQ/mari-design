@@ -14,6 +14,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons/marks";
+import { Truncate, TruncateInline } from "../data-display/Truncate";
 
 /* Settings — Members table & provisioning ────────────────────────────────
    Manage who can access the workspace: invite teammates, list members with
@@ -118,7 +119,7 @@ export function SettingsMembersTable({
         </div>
         <SkeletonCard lines={1} />
         <SkeletonTable rows={4} cols={6} />
-        <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <SkeletonCard lines={2} /><SkeletonCard lines={3} />
         </div>
       </div>
@@ -135,7 +136,7 @@ export function SettingsMembersTable({
 
       {inviting && (
         <Card title="Invite a teammate" hint="They appear below with an Invited chip until they sign in.">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Name"><Input value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Jordan Lee" className="w-full" /></Field>
             <Field label="Email"><Input type="email" value={invEmail} onChange={(e) => setInvEmail(e.target.value)} placeholder="jordan@team.com" className="w-full" /></Field>
             <Field label="Role"><Select value={invRole} onChange={(e) => setInvRole(e.target.value)} className="w-full">{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</Select></Field>
@@ -157,15 +158,19 @@ export function SettingsMembersTable({
       }>
         {editingName
           ? <Input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} className="w-full max-w-[360px]" />
-          : <div className="flex items-center gap-3"><span className="font-display text-[20px] font-semibold text-ink">{name}</span>{nameSaved && <span className="font-term text-[11.5px] text-moss">✓ Saved</span>}</div>}
+          : <div className="flex min-w-0 flex-wrap items-center gap-3"><Truncate className="min-w-0 flex-1 basis-[12rem] font-display text-[20px] font-semibold text-ink">{name}</Truncate>{nameSaved && <span className="shrink-0 font-term text-[11.5px] text-moss">✓ Saved</span>}</div>}
       </Card>
 
       <Card variant="flush" title="Members" hint={`${members.length} people`}>
         {members.length === 0 ? (
           <EmptyState title="No members yet">Send the first invite to bring someone into this workspace.</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse" style={{ minWidth: 760 }}>
+          /* table-fixed so the colgroup widths are binding: with auto layout a
+             single unbreakable email collapsed the address column to ~80px and
+             stacked it a character at a time. The table keeps its 760px floor
+             and scrolls inside this card instead. */
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
                 <col style={{ width: "24%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
                 <col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
@@ -187,12 +192,12 @@ export function SettingsMembersTable({
                     <td className={tdPad}>
                       <span className="flex items-start gap-2.5">
                         <Avatar initials={m.initials} />
-                        <span className="min-w-0 break-words text-[13px] font-medium text-ink">{m.name}</span>
+                        <Truncate className="min-w-0 flex-1 text-[13px] font-medium text-ink">{m.name}</Truncate>
                       </span>
                     </td>
-                    <td className={`${tdPad} break-all text-[13px] text-ink/70`}>{m.email}</td>
+                    <td className={tdPad}><Truncate className="text-[13px] text-ink/70">{m.email}</Truncate></td>
                     <td className={`${tdPad} text-center`}>
-                      <Select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8">
+                      <Select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8 w-full">
                         {roleOptions(m.role).map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                       </Select>
                     </td>
@@ -207,7 +212,7 @@ export function SettingsMembersTable({
         )}
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card icon={<GithubMark size={16} />} title="GitHub team sync" actions={
           ghEditing ? <><Button compact variant="primary" onClick={saveGh}>Save</Button><Button compact onClick={() => { setGhDraft(gh.team); setGhEditing(false); }}>Cancel</Button></>
             : <Button compact onClick={() => { setGhDraft(gh.team); setGhEditing(true); }}>Configure</Button>
@@ -215,8 +220,8 @@ export function SettingsMembersTable({
           {ghEditing ? (
             <Field label="Team slug"><Input value={ghDraft} onChange={(e) => setGhDraft(e.target.value)} placeholder="org/team" className="w-full font-term" /></Field>
           ) : (
-            <p className="text-[13px] text-ink/70">
-              {ghConnected ? <>Members of <span className="font-term text-ink">{gh.team}</span> are auto-provisioned as they sign in.</> : <span className="text-ink/70">Not connected. Configure a team to auto-provision members.</span>}
+            <p className="min-w-0 text-[13px] text-ink/70">
+              {ghConnected ? <>Members of <TruncateInline className="font-term text-ink">{gh.team}</TruncateInline> are auto-provisioned as they sign in.</> : <span className="text-ink/70">Not connected. Configure a team to auto-provision members.</span>}
             </p>
           )}
         </Card>

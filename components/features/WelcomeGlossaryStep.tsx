@@ -82,7 +82,7 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
   if (loading) {
     return (
       <div className={`${card} p-4 ${className}`.trim()} aria-hidden="true">
-        <div className="grid gap-1.5">
+        <div className="grid grid-cols-1 gap-1.5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
               <Skeleton width={14} height={14} rounded="rounded-[3px]" className="mt-1" />
@@ -145,7 +145,7 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
         )}
         {/* Same shape as "Pick a style guide": control on the LEFT, a check
             mark on the RIGHT once the row is on. */}
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {candidates.map((c) => {
             const on = checked.has(c.term);
             return (

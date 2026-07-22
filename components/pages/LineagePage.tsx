@@ -210,7 +210,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           )}
           drawer={sideCard}
         />
-        {mobile && sideCard}
+        {mobile && <div className="overflow-x-auto pb-1">{sideCard}</div>}
       </div>
     );
   }
@@ -241,7 +241,10 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
         )}
         drawer={<Drawer state={state} />}
       />
-      {mobile && <Drawer state={state} />}
+      {/* The lineage drawers are desktop-fixed (420/460px, §10). Below the
+          canvas on a phone they scroll sideways inside their own row rather
+          than spilling past the page gutter. */}
+      {mobile && <div className="overflow-x-auto pb-1"><Drawer state={state} /></div>}
     </div>
   );
 }

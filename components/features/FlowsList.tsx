@@ -5,6 +5,7 @@ import {
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Chip } from "../data-display/Chip";
+import { Truncate } from "../data-display/Truncate";
 import { EmptyState } from "../data-display/EmptyState";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Switch } from "../forms/Switch";
@@ -194,8 +195,8 @@ function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void })
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: flow.color }} aria-hidden />
         <span className="font-term text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink/70">Template</span>
       </div>
-      <div className="text-[14px] font-semibold text-ink">{outcome}</div>
-      <div className="text-[12px] leading-snug text-ink/70">{mechanism}</div>
+      <Truncate lines={2} className="text-[14px] font-semibold text-ink">{outcome}</Truncate>
+      <Truncate lines={2} className="text-[12px] leading-snug text-ink/70">{mechanism}</Truncate>
       <Button variant="link" className="mt-auto self-start" onClick={() => onUse(flow)}>Use template →</Button>
     </div>
   );
@@ -256,7 +257,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
         <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w={360} h={11} /></div>
         <div>
           <SkeletonLine w={160} h={10} className="mb-2" />
-          <div className="grid gap-4 grid-cols-4">
+          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
             <SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} />
           </div>
         </div>
@@ -277,7 +278,10 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
       {/* Template gallery */}
       <div>
         <div className="mb-2 font-term text-[11px] font-medium uppercase tracking-[0.1em] text-ink/65">Start from a template</div>
-        <div className="grid gap-4 grid-cols-4">
+        {/* Intrinsic track sizing, not a breakpoint (§10): four up on the
+            console, and a card never squeezes below 240px, which is what
+            crushed the outcome line to one character per line on a phone. */}
+        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {templates.map((f) => (
             <TemplateCard key={f.id} flow={f} onUse={(t) => setDraft({ from: t })} />
           ))}

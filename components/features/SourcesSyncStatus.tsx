@@ -93,7 +93,7 @@ export function SourcesSyncStatus({ animate = true, stuck = false, loading = fal
 
   if (loading) {
     return (
-      <div className={`grid gap-3 ${className}`.trim()} aria-hidden="true">
+      <div className={`grid grid-cols-1 gap-3 ${className}`.trim()} aria-hidden="true">
         <div className={`${card} p-4`}>
           <SkeletonLine w={80} h={10} />
           <div className="mt-3 flex flex-wrap gap-4">
@@ -133,7 +133,7 @@ export function SourcesSyncStatus({ animate = true, stuck = false, loading = fal
       };
 
   return (
-    <div className={`grid gap-3 ${className}`.trim()}>
+    <div className={`grid grid-cols-1 gap-3 ${className}`.trim()}>
       <div className={`${card} p-4`}>
         <SectionLabel>Sync phases</SectionLabel>
         <div className="mt-3">

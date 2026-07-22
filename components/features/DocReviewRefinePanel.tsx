@@ -113,7 +113,7 @@ export function DocReviewRefinePanel({
             <Fragment key={label}>
               {i > 0 && <span className="mx-3 w-px bg-ink/12" />}
               <span className="flex min-w-0 flex-1 flex-col items-center text-center">
-                <b className="font-display text-[19px] leading-tight" style={{ color }}>{n}</b>
+                <b title={String(n)} className="block max-w-full truncate font-display text-[19px] leading-tight" style={{ color }}>{n}</b>
                 <span className="truncate text-[11px] text-ink/70">{label}</span>
               </span>
             </Fragment>

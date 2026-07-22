@@ -33,15 +33,22 @@ const MAX_FRAME_PX = 16_000_000;
 
 const SIZES = { desktop: { w: 1440, h: 900 }, mobile: { w: 390, h: 844 } };
 
-// Canvas layout constants (native px on the plane).
-const FRAME_GAP = 72;
-const MOBILE_GAP = 140;
-const ROW_GAP = 220;
-const TOP_PAD = 140;
+// Canvas layout constants (native px on the plane). The board reads as a flow
+// diagram, so it is deliberately airy: tight packing made a branch look like
+// the next step in the same sequence.
+const FRAME_GAP = 120;
+const MOBILE_GAP = 220;
+const ROW_GAP = 420;
+const TOP_PAD = 180;
 // Vertical gap between the stacked lines inside one page block.
-const LINE_GAP = 150;
-// Extra room above a flow line, which carries its own caption.
-const FLOW_GAP = 210;
+const LINE_GAP = 240;
+// Extra room above a branch line, which carries its own caption and a
+// connector elbow drawn up to its decision point.
+const FLOW_GAP = 340;
+
+// Lifecycle states are variations on the current screen, not steps in the
+// journey, so they never count as the decision point a branch hangs off.
+const LIFECYCLE = new Set(["loading", "error", "empty", "overflow", "stress", "skeleton"]);
 
 /** "connect-github" -> "Connect github flow" caption for a stacked flow line. */
 function flowTitle(key) {
@@ -236,21 +243,57 @@ async function main() {
       const p = pages.find((pp) => pp.row === r);
       if (p) pagesOut.push({ ...p, y });
 
+      // The main line reads left to right as the journey: the entry screen
+      // first, then each subsequent step. Branch lines hang BELOW the step
+      // they branch from and start at that step's x, so the board reads like
+      // a flow chart instead of a wall of equally-weighted frames.
+      const mainDesktop = [];
+      let decisionX = 0, decisionY = y, decisionW = 0, decisionH = 0;
+
       for (const key of order) {
         const line = lines.get(key);
         line.sort((a, b) => (a.view === b.view ? 0 : a.view === "desktop" ? -1 : 1));
         const lineH = Math.max(...line.map((c) => c.h));
-        let x = 0; let prevView = null;
+
+        // Where does this line start? The main line starts at the left margin.
+        // A branch starts under the frame it most plausibly leaves from: the
+        // main-line step whose id is the longest prefix of the branch key,
+        // else the last real (non-lifecycle) step on the main line.
+        let startX = 0;
+        let origin = null;
+        if (key) {
+          origin =
+            mainDesktop.find((c) => key.startsWith(c.state)) ??
+            [...mainDesktop].reverse().find((c) => !LIFECYCLE.has(c.state)) ??
+            mainDesktop[0];
+          if (origin) startX = origin.x;
+        }
+
+        let x = startX; let prevView = null;
         for (const c of line) {
           if (prevView === "desktop" && c.view === "mobile") x += MOBILE_GAP;
           c.x = x; c.y = y;
           c.flow = key || null;
           c.flowLabel = key ? flowTitle(key) : null;
           x += c.w + FRAME_GAP; prevView = c.view;
+          if (!key && c.view === "desktop") mainDesktop.push(c);
         }
-        // Flow lines carry a caption, so give them a little more headroom.
+
+        // Record the elbow so the canvas can draw decision point -> branch.
+        if (key && origin) {
+          const first = line[0];
+          first.branchFrom = {
+            x: origin.x + Math.min(origin.w, 1440) / 2,
+            y: origin.y + origin.h,
+            toX: first.x + Math.min(first.w, 1440) / 2,
+            toY: first.y,
+          };
+        }
+
+        if (!key) { decisionX = startX; decisionY = y; decisionW = 0; decisionH = lineH; }
         y += lineH + (key ? FLOW_GAP : LINE_GAP);
       }
+      void decisionX; void decisionY; void decisionW; void decisionH;
       y += ROW_GAP - LINE_GAP;
     }
 

@@ -23,6 +23,7 @@ import { SourcesConnectorWizard } from "../features/SourcesConnectorWizard";
 import { SourcesSyncStatus, PhaseTracker } from "../features/SourcesSyncStatus";
 import { SourcesBots } from "../features/SourcesBots";
 import { Avatar } from "../data-display/Avatar";
+import { Truncate } from "../data-display/Truncate";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_DOC_TITLE, LONG_URL,
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER, MIXED_SCRIPT, MANY_INITIALS,
@@ -176,7 +177,7 @@ function ConfigureBody({ c }: { c: Connector }) {
         </div>
         <div className="mt-3">
           <SectionLabel>Selected files — {UPLOAD_FILES.length}</SectionLabel>
-          <ul className="mt-1.5 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {UPLOAD_FILES.map((f) => (
               <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
                 <FileText size={13} className="text-ink/65" /> {f}
@@ -232,11 +233,11 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
   return (
     <div className="min-w-0">
       <div className={`${card} p-5`}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <IconRing size={42}><SourceMark provider={c.key} size={22} /></IconRing>
-          <div className="min-w-0">
-            <h3 className="text-[16px] font-semibold text-ink">Connect {c.name}</h3>
-            <p className="truncate text-[12.5px] text-ink/60">{c.blurb}</p>
+          <div className="min-w-0 flex-1 basis-[14rem]">
+            <Truncate as="h3" className="text-[16px] font-semibold text-ink" title={`Connect ${c.name}`}>Connect {c.name}</Truncate>
+            <Truncate className="text-[12.5px] text-ink/60">{c.blurb}</Truncate>
           </div>
           <Chip className="ml-auto" label={configuring ? "Step 2 of 3" : phase === "done" ? "Synced" : "Syncing"} tone={phase === "done" ? "ok" : configuring ? "neutral" : "info"} dot />
         </div>
@@ -329,7 +330,7 @@ function SourcesStressBody({ stress }: { stress: boolean }) {
               <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
             ))}
           </div>
-          <span className="min-w-0 break-words font-term text-[11px] text-ink/65">{MIXED_SCRIPT}</span>
+          <Truncate className="min-w-0 flex-1 basis-[10rem] font-term text-[11px] text-ink/65">{MIXED_SCRIPT}</Truncate>
         </div>
       )}
 

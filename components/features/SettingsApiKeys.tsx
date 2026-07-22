@@ -11,6 +11,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-display/TokenReveal";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 import { fmtDate } from "../tokens/format";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
 
       {creating && (
         <Card title="New key" hint={TOKEN_REVEAL_WARNING}>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" className="w-full" /></Field>
             <Field label="Scopes"><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder="search:read ingest:write" className="w-full font-term" /></Field>
           </div>
@@ -115,11 +116,19 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
         {keys.length === 0 ? (
           <EmptyState icon={<KeyRound size={24} />} title="No keys yet">Create the first one above to give CI or an agent programmatic access.</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse" style={{ minWidth: 720 }}>
+          /* table-fixed so the colgroup widths hold: under auto layout a
+             100-character token let the Key column collapse to ~70px and wrap
+             one character per line. The table keeps its 720px floor and
+             scrolls inside this card. */
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 720 }}>
+              {/* Widths are binding under table-fixed, so the share is
+                  redistributed (not the table widened) to give the trailing
+                  columns room for their own one-word headers: "Created",
+                  "Status" and "Actions" cannot wrap. */}
               <colgroup>
-                <col style={{ width: "20%" }} /><col style={{ width: "18%" }} /><col style={{ width: "22%" }} />
-                <col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "9%" }} /><col style={{ width: "9%" }} />
+                <col style={{ width: "20%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} />
+                <col style={{ width: "11.5%" }} /><col style={{ width: "10%" }} /><col style={{ width: "11.5%" }} /><col style={{ width: "13%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -136,9 +145,11 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
               <tbody>
                 {sorted.map((k) => (
                   <tr key={k.id} className={`border-b border-ink/10 last:border-0 align-top ${k.revoked ? "bg-flysch/60" : ""}`}>
-                    <td className={`${tdPad} break-words text-[13px] font-medium text-ink`}>{k.name}</td>
-                    <td className={`${tdPad} break-all font-term text-[12px] text-ink/70`}>{k.prefix}</td>
-                    <td className={`${tdPad} break-words font-term text-[12px] text-ink/70`}>{k.scopes}</td>
+                    <td className={tdPad}><Truncate className="text-[13px] font-medium text-ink">{k.name}</Truncate></td>
+                    {/* A key is opaque: truncate with the full value on hover
+                        rather than wrapping a token down the column. */}
+                    <td className={tdPad}><Truncate className="font-term text-[12px] text-ink/70">{k.prefix}</Truncate></td>
+                    <td className={tdPad}><Truncate className="font-term text-[12px] text-ink/70">{k.scopes}</Truncate></td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(k.created)}</td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{k.lastUsed ? fmtDate(k.lastUsed) : "Never"}</td>
                     <td className={tdPad}><Chip label={k.revoked ? "Revoked" : "Active"} tone={k.revoked ? "blocked" : "ok"} dot caps /></td>

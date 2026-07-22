@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TruncateInline } from "../data-display/Truncate";
 
 /* Content-ordering primitives for cards, drawers, and inspector rails.
    CONVENTIONS.md §1 fixes the order; these components make it mechanical so
@@ -53,10 +54,14 @@ export function CardMeta({
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${className}`.trim()}>
       <div className="flex flex-wrap items-center gap-1.5">{source}{status}</div>
       {hasRight && (
-        <div className="ml-auto flex items-center gap-2 font-term text-[11px] text-ink/65 whitespace-nowrap">
-          {date}
-          {date && author && <span className="text-ink/30" aria-hidden>·</span>}
-          {author}
+        <div className="ml-auto flex min-w-0 items-center gap-2 font-term text-[11px] text-ink/65">
+          {date != null && <span className="shrink-0 whitespace-nowrap">{date}</span>}
+          {date && author && <span className="shrink-0 text-ink/30" aria-hidden>·</span>}
+          {author != null && (
+            typeof author === "string"
+              ? <TruncateInline className="min-w-0">{author}</TruncateInline>
+              : <span className="min-w-0 truncate">{author}</span>
+          )}
         </div>
       )}
     </div>

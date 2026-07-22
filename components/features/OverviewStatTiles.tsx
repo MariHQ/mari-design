@@ -59,8 +59,12 @@ export function OverviewStatTiles({
 
   if (loading) {
     return (
-      /* Desktop-first, fixed three-up. No sm:/lg: stacking (CONVENTIONS.md §10). */
-      <div className={`grid grid-cols-3 gap-3 ${className}`.trim()} aria-hidden="true">
+      /* Three-up on the console via intrinsic track sizing, not a breakpoint
+         (CONVENTIONS.md §10). A Stat cannot render below ~200px: at
+         grid-cols-3 on a 390px phone each tile got 103px and the number,
+         label and icon ran 97px past the tile. auto-fit collapses the empty
+         tracks, so three tiles still fill the row exactly on desktop. */
+      <div className={`grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3 ${className}`.trim()} aria-hidden="true">
         <SkeletonStat /><SkeletonStat /><SkeletonStat />
       </div>
     );
@@ -74,7 +78,7 @@ export function OverviewStatTiles({
   ];
 
   return (
-    <div className={`grid grid-cols-3 gap-3 ${className}`.trim()}>
+    <div className={`grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3 ${className}`.trim()}>
       {tiles.map((t) => {
         /* Six- and seven-figure counts need thousands separators to stay
            readable at 24px: 1284905 reads as noise, 1,284,905 reads as a number. */

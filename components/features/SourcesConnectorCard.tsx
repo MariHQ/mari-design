@@ -6,6 +6,7 @@ import { Spinner } from "../data-display/Spinner";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { Button } from "../actions/Button";
 import { SourceMark } from "../icons/marks";
+import { Truncate } from "../data-display/Truncate";
 import { fmtDateTime } from "../tokens/format";
 
 /* SourcesConnectorCard — the Sources page "Connectors" grid: one pulse card per
@@ -104,7 +105,7 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
 
   if (loading) {
     return (
-      <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
+      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="space-y-3 rounded-md border border-ink/12 bg-paper p-4">
             <div className="flex items-center gap-2.5">
@@ -158,9 +159,9 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
     }
     if (s.state === "failed") {
       return (
-        <span className="min-w-0 break-words text-espelette" title={s.lastError}>
+        <Truncate lines={2} className="text-espelette" title={`Sync failed. ${s.lastError ?? "No details were reported."}`}>
           Sync failed. {s.lastError ?? "No details were reported."}
-        </span>
+        </Truncate>
       );
     }
     if (s.tier === "legacy" && !s.lastSyncAt) return null; // never fabricate a last-sync
@@ -178,7 +179,7 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
   }
 
   return (
-    <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
+    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
       {items.map((s) => {
         const isBusy = Boolean(busy[s.id]);
         const running = s.state === "running";

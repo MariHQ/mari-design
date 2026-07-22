@@ -38,7 +38,7 @@ export function PageHeader({ title, eyebrow, description, icon, actions, backLin
             </div>
           )}
           <h3 className="text-[22px] font-bold leading-tight tracking-[-0.015em] text-ink [overflow-wrap:anywhere]">{title}</h3>
-          {description && <p className="text-[13px] text-ink/70 mt-1 max-w-[680px]">{description}</p>}
+          {description && <p className="mt-1 max-w-[680px] text-[13px] text-ink/70 [overflow-wrap:anywhere]">{description}</p>}
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

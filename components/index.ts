@@ -139,6 +139,7 @@ export { RulesPanel, type RulesPanelProps, type RuleRow, type RuleSeverity, type
 // Generic primitives
 export { CopyButton, type CopyButtonProps } from "./actions/CopyButton";
 export { CodeBlock, type CodeBlockProps } from "./data-display/CodeBlock";
+export { Truncate, TruncateInline, type TruncateProps } from "./data-display/Truncate";
 export { Timeline, type TimelineProps, type TimelineItem } from "./data-display/Timeline";
 export { AvatarGroup, type AvatarGroupProps } from "./data-display/AvatarGroup";
 

@@ -19,6 +19,7 @@ import { WelcomeGlossaryStep } from "../features/WelcomeGlossaryStep";
 import { WelcomeSyncPanel } from "../features/WelcomeSyncPanel";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { AvatarGroup } from "../data-display/AvatarGroup";
+import { Truncate } from "../data-display/Truncate";
 import { focusRing } from "../tokens/focusRing";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_SOURCE, LONG_URL, UNBREAKABLE,
@@ -106,7 +107,7 @@ function Hero() {
     "Seed a glossary from documents you already have.",
   ];
   return (
-    <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Let’s set up your workspace</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-ink/70">
@@ -253,16 +254,16 @@ function GithubConnect() {
     <div className="space-y-4">
       <ConnectorHeader provider="github" name="GitHub" blurb="Pick a repository from your token’s scope, then narrow to a paths glob." />
       <BackToConnectors />
-      <div role="radiogroup" aria-label="Repositories" className="grid gap-1.5">
+      <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5">
         {REPOS.map((r) => {
           const active = r.name === selected;
           return (
             <label key={r.name}
-              className={`flex items-center gap-2.5 rounded-md border p-2.5 ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15"}`}>
-              <input type="radio" name="repo" className="accent-biscay" defaultChecked={active} readOnly />
+              className={`flex min-w-0 items-center gap-2.5 rounded-md border p-2.5 ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15"}`}>
+              <input type="radio" name="repo" className="accent-biscay shrink-0" defaultChecked={active} readOnly />
               <GitFork size={14} className="shrink-0 text-ink/65" />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-1.5">
                   <b className="truncate text-[13px] font-semibold text-ink">{r.name}</b>
                   {r.priv && <Chip label="Private" tone="neutral" icon={<Lock size={10} />} />}
                 </span>
@@ -340,7 +341,7 @@ function UploadConnect() {
       </div>
       <div>
         <p className="text-[12.5px] text-ink/70">3 files ingested · 214 chunks · 189 embedded <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
-        <div className="mt-2 grid gap-1.5">
+        <div className="mt-2 grid grid-cols-1 gap-1.5">
           {[
             { name: "pricing.md", n: "88 chunks · 88 embedded" },
             { name: "onboarding.md", n: "71 chunks · 71 embedded" },
@@ -460,16 +461,18 @@ function DoneStep() {
    glossary surface is exercised without driving the feature's internal scan. */
 function GlossaryPreview({ items }: { items: { term: string; def: string; ev: string }[] }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid grid-cols-1 gap-1.5">
       {items.map((c) => (
-        <div key={c.term} className="flex items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
+        <div key={c.term} className="flex min-w-0 items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
           <BookOpen size={14} className="mt-0.5 shrink-0 text-ink/65" />
           <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-2">
-              <b className="break-words text-[13px] font-semibold text-ink">{c.term}</b>
+            <span className="flex min-w-0 flex-wrap items-center gap-2">
+              {/* A term is an arbitrary-length value: ellipsis, not wrap (§12). */}
+              <Truncate as="b" className="min-w-0 flex-1 basis-[8rem] text-[13px] font-semibold text-ink">{c.term}</Truncate>
               <Chip label={c.ev} tone="neutral" icon={<FileText size={10} />} />
             </span>
-            <span className="mt-0.5 block break-words text-[12.5px] text-ink/65">{c.def}</span>
+            {/* The definition is prose, so it wraps, clamped to three lines. */}
+            <Truncate lines={3} className="mt-0.5 text-[12.5px] text-ink/65">{c.def}</Truncate>
           </span>
         </div>
       ))}
@@ -534,16 +537,17 @@ function StressStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="break-words font-display text-[20px] font-semibold text-ink">{MIXED_SCRIPT}</h2>
-        <code className="mt-1 block break-all font-term text-[12px] text-biscay-2">{UNBREAKABLE}</code>
-        <p className="mt-2 break-words text-[13.5px] text-ink/65">{LONG_URL}</p>
+        {/* Title, token and URL are all values, so all three truncate (§12). */}
+        <Truncate as="h2" className="font-display text-[20px] font-semibold text-ink">{MIXED_SCRIPT}</Truncate>
+        <Truncate as="code" className="mt-1 font-term text-[12px] text-biscay-2">{UNBREAKABLE}</Truncate>
+        <Truncate className="mt-2 text-[13.5px] text-ink/65">{LONG_URL}</Truncate>
       </div>
       <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
         {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-4">
         <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-        <span className="font-term text-[12px] text-ink/65">{HUGE_NUMBER_STR} members</span>
+        <Truncate className="min-w-0 flex-1 basis-[8rem] font-term text-[12px] text-ink/65">{`${HUGE_NUMBER_STR} members`}</Truncate>
       </div>
       <ConnectGrid tiles={tiles} />
       <GlossaryPreview items={glossary} />

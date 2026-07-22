@@ -356,7 +356,11 @@ export function LineageGraph({
                   onMouseEnter={() => setHover(n.id)}
                   onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
                   style={{
-                    left: `${p.x * 100}%`,
+                    // The card is 152px wide and centred on its position, so
+                    // its centre is held at least half a card inside the
+                    // canvas. Without this the rightmost timeline column hung
+                    // 26px past the canvas on a narrow console.
+                    left: `clamp(76px, ${p.x * 100}%, calc(100% - 76px))`,
                     top: `${p.y * 100}%`,
                     transform: "translate(-50%, -50%)",
                     opacity: dim ? 0.22 : 1,
@@ -428,7 +432,7 @@ export function LineageGraph({
           return (
             <div
               className="pointer-events-none absolute z-20 max-w-[240px] -translate-x-1/2 rounded-[4px] border border-ink/20 bg-paper px-2.5 py-1.5"
-              style={{ left: `${p.x * 100}%`, top: `calc(${p.y * 100}% - 48px)` }}
+              style={{ left: `clamp(76px, ${p.x * 100}%, calc(100% - 76px))`, top: `calc(${p.y * 100}% - 48px)` }}
             >
               <div className="text-[12px] font-semibold text-ink">{n.title}</div>
               <div className="font-term text-[10.5px] text-ink/70">

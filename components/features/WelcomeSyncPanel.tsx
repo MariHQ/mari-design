@@ -10,6 +10,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SyncStatusLine, type SyncSource } from "../feedback/SyncPanel";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark, GithubMark } from "../icons/marks";
+import { Truncate } from "../data-display/Truncate";
 import { fmtAgo } from "../tokens/format";
 
 /* WelcomeSyncPanel — the Welcome wizard's live sync read-out for just-connected
@@ -107,7 +108,7 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
 
   if (loading) {
     return (
-      <div className={`grid gap-2 ${className}`.trim()} aria-hidden="true">
+      <div className={`grid grid-cols-1 gap-2 ${className}`.trim()} aria-hidden="true">
         <div className="flex items-center justify-between">
           <SkeletonLine w={90} h={10} />
           <SkeletonLine w={130} h={10} />
@@ -129,7 +130,7 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
   }
 
   return (
-    <div className={`grid gap-2 ${className}`.trim()}>
+    <div className={`grid grid-cols-1 gap-2 ${className}`.trim()}>
       <div className="flex items-center justify-between">
         <SectionLabel>Initial sync</SectionLabel>
         <SyncStatusLine sources={items} />
@@ -165,11 +166,11 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
                 <tr key={s.id} className="border-t border-ink/10 align-top">
                   <td className={tdPad}>
                     <span className="flex items-start gap-2">
-                      {s.mark && <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center">{s.mark}</span>}
-                      <span className="min-w-0 break-all text-[13px] font-medium text-ink">{s.name}</span>
+                      {s.mark && <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center overflow-hidden">{s.mark}</span>}
+                      <Truncate className="flex-1 text-[13px] font-medium text-ink">{s.name}</Truncate>
                     </span>
                     {s.state === "error" && (
-                      <span className="mt-1 block break-all text-[12px] text-espelette">{s.error || "The server reported an error without details."}</span>
+                      <Truncate lines={2} className="mt-1 text-[12px] text-espelette">{s.error || "The server reported an error without details."}</Truncate>
                     )}
                   </td>
                   <td className={`${tdPad} text-center`}>

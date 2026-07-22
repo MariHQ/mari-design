@@ -7,6 +7,7 @@ import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
+import { Truncate } from "../data-display/Truncate";
 import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
@@ -50,10 +51,13 @@ const CATEGORIES = ["All", "Engineering", "Operations", "Product", "Team", "Gove
 export type LibraryTemplatesPanelProps = {
   templates?: Template[];
   loading?: boolean;
+  /** Narrow-column composition: the find field moves out of the card header
+      onto its own row (CONVENTIONS.md §10 — the page owns mobile). */
+  compact?: boolean;
   className?: string;
 };
 
-export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, className = "" }: LibraryTemplatesPanelProps) {
+export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, compact = false, className = "" }: LibraryTemplatesPanelProps) {
   // Every hook runs on every render: these used to sit AFTER the `loading`
   // early return, so a panel that started life loading and then resolved
   // mounted a different number of hooks and React threw.
@@ -83,7 +87,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
         <div className="flex gap-2 px-4 pt-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} w={64} />)}
         </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} lines={2} footer />)}
         </div>
       </div>
@@ -103,16 +107,20 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
   const use = (id: string) => { setUsedId(id); window.setTimeout(() => setUsedId((cur) => (cur === id ? null : cur)), 2400); };
   const del = (id: string) => setRows((prev) => prev.filter((t) => t.id !== id));
 
+  const findField = (
+    <label className="flex min-w-0 items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
+      <Search size={14} className="shrink-0" />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a template" className={`${compact ? "w-full" : "w-32"} min-w-0 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65`} />
+    </label>
+  );
+
   return (
     <Card
       variant="flush"
       title="Templates"
       actions={
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
-            <Search size={14} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a template" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65" />
-          </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {!compact && findField}
           <Button variant="primary" compact onClick={() => setComposerOpen((v) => !v)}><Plus size={13} /> New template</Button>
         </div>
       }
@@ -121,6 +129,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
       <div className="border-t border-ink/10">
         {/* Header summary sits on its own line under the header + search +
             new-template row, not squeezed between them. */}
+        {compact && <div className="px-4 pt-3">{findField}</div>}
         <div className="px-4 pt-3 text-[12.5px] text-ink/70">
           Shared scaffolds for the editor, chat, workflows, and the GitHub bot. {rows.length} available, {rows.filter((t) => !t.standard).length} custom.
         </div>
@@ -157,7 +166,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
         {visible.length === 0 ? (
           <EmptyState icon={<FileText size={20} />}>No templates match these filters.</EmptyState>
         ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible.map((t) => {
               const Icon = t.icon;
               const open = previewId === t.id;
@@ -167,8 +176,8 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
                   <div className="flex items-start gap-2.5">
                     <span className="grid place-items-center w-8 h-8 rounded-[5px] bg-flysch border border-ink/12 text-ink/70"><Icon size={16} /></span>
                     <div className="min-w-0 flex-1">
-                      <div className="font-term text-[10.5px] uppercase tracking-[0.08em] text-biscay-2">{t.category}</div>
-                      <h4 className="text-[14px] font-semibold text-ink">{t.name}</h4>
+                      <Truncate className="font-term text-[10.5px] uppercase tracking-[0.08em] text-biscay-2">{t.category}</Truncate>
+                      <Truncate as="h4" className="text-[14px] font-semibold text-ink">{t.name}</Truncate>
                     </div>
                     <Menu trigger={<Button icon compact aria-label="More"><MoreVertical size={15} /></Button>}>
                       <MenuItem icon={<Eye size={14} />} onSelect={() => setPreviewId(open ? null : t.id)}>{open ? "Hide sections" : "Preview sections"}</MenuItem>
@@ -176,11 +185,11 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
                     </Menu>
                   </div>
 
-                  <p className="mt-2 text-[12.5px] text-ink/70 flex-1">{t.description}</p>
+                  <Truncate as="p" lines={3} className="mt-2 text-[12.5px] text-ink/70 flex-1">{t.description}</Truncate>
 
                   {open && (
                     <ol className="mt-2.5 flex flex-col gap-1 list-decimal list-inside">
-                      {t.sections.map((s) => <li key={s} className="text-[12px] text-ink/70 marker:text-ink/65 marker:font-term">{s}</li>)}
+                      {t.sections.map((s) => <li key={s} title={s} className="truncate text-[12px] text-ink/70 marker:text-ink/65 marker:font-term">{s}</li>)}
                     </ol>
                   )}
 

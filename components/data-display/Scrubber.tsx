@@ -98,7 +98,9 @@ export function Scrubber({
         {!empty && (
           <div
             className="pointer-events-none absolute bottom-[7px] h-1.5 rounded-full bg-biscay-2/25 ring-1 ring-inset ring-biscay-2/40"
-            style={{ left: `${(effIdx / Math.max(1, lastIdx)) * 100}%`, width: 14, transform: "translateX(-50%)" }}
+            // clamp: at the first/last stop a 14px centred marker would sit half
+            // outside the track and read as an overflow.
+            style={{ left: `clamp(7px, ${(effIdx / Math.max(1, lastIdx)) * 100}%, calc(100% - 7px))`, width: 14, transform: "translateX(-50%)" }}
           />
         )}
         <input

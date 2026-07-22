@@ -4,6 +4,7 @@ import { card } from "../tokens/card";
 import { fmtAgo, type DateInput } from "../tokens/format";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonList } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 import { Chip, type ChipTone } from "../data-display/Chip";
 import { Progress, type ProgressTone } from "../data-display/Progress";
 import { Button } from "../actions/Button";
@@ -77,7 +78,7 @@ function SyncRow({ s, onRetry }: { s: SyncSource; onRetry?: (id: string) => void
             tone={meta.tone}
             icon={running ? <Spinner size="sm" /> : meta.icon}
             dot={queued}
-            className="shrink-0"
+            className="min-w-0 shrink"
           />
           {s.lastSyncAt != null && s.lastSyncAt !== "" && (
             <span className="ml-auto shrink-0 font-term text-[11px] text-ink/65">{fmtAgo(s.lastSyncAt)}</span>
@@ -101,7 +102,10 @@ function SyncRow({ s, onRetry }: { s: SyncSource; onRetry?: (id: string) => void
 
         {s.state === "error" && (
           <div className="mt-2 rounded-[4px] border border-espelette/30 bg-espelette/[0.05] px-3 py-2 text-[12.5px] text-espelette" role="alert">
-            <b className="font-semibold">Sync failed.</b> {s.error || "The server reported an error without details."}
+            <b className="font-semibold">Sync failed.</b>{" "}
+            <Truncate lines={2} className="inline align-bottom" title={s.error || undefined}>
+              {s.error || "The server reported an error without details."}
+            </Truncate>
             {onRetry && (
               <div className="mt-2">
                 <Button compact onClick={() => onRetry(s.id)}>

@@ -6,6 +6,7 @@ import {
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { DryChip } from "../data-display/Chip";
+import { Truncate } from "../data-display/Truncate";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
@@ -181,7 +182,7 @@ export function FlowsPipelineEditor({
         <div className={`${card} space-y-2 px-5 py-4`}>
           <Skeleton width="45%" height={26} /><SkeletonLine w="70%" h={11} />
         </div>
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={64} className="rounded-md" />)}
           </div>
@@ -219,7 +220,7 @@ export function FlowsPipelineEditor({
       </div>
 
       {/* Editor grid */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Pipeline spine */}
         <div className="relative pl-10">
           <span aria-hidden className="pointer-events-none absolute left-[17px] top-4 bottom-8 border-l border-dashed border-ink/25" />
@@ -250,8 +251,8 @@ export function FlowsPipelineEditor({
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex shrink-0 items-center rounded-[4px] border px-1.5 py-[2px] font-term text-[9px] font-bold uppercase tracking-[0.12em] ${SECTION_CHIP[sec]}`}>{SECTION_TITLE[sec]}</span>
                         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[14px] font-semibold text-ink">
-                          <span className="text-ink/70">{meta.icon}</span>
-                          <span className="truncate">{s.label}</span>
+                          <span className="shrink-0 text-ink/70">{meta.icon}</span>
+                          <Truncate>{s.label}</Truncate>
                         </span>
                         {i > 0 && (
                           <span className="flex shrink-0 items-center gap-0.5">
@@ -266,7 +267,7 @@ export function FlowsPipelineEditor({
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-[12px] leading-snug text-ink/70">{stepSummary(s)}</div>
+                      <Truncate lines={2} className="mt-1 text-[12px] leading-snug text-ink/70">{stepSummary(s)}</Truncate>
                       {meta.llm && (
                         <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-clay/35 bg-clay/[0.07] px-2 py-[2px] font-term text-[10px] font-medium tracking-[0.06em] text-clay">
                           <Sparkles size={10} /> LLM: runs the local model, slower

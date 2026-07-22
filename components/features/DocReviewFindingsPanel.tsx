@@ -16,6 +16,7 @@ import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Tabs } from "../navigation/Tabs";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 
 type Finding = { id: number; kind: string; severity: string; text: string; note: string };
 type Claim = { claim: string; source: string; status: string; verified: string };
@@ -181,7 +182,7 @@ export function DocReviewFindingsPanel({
                   {t.icon}
                   <span className="truncate">{t.label}</span>
                 </span>
-                <b className="block font-display text-[20px] leading-tight text-ink">{t.n}</b>
+                <Truncate as="b" className="font-display text-[20px] leading-tight text-ink">{t.n}</Truncate>
               </button>
             </Fragment>
           );

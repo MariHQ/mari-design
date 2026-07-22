@@ -22,6 +22,7 @@ import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 
 /* ————— ported local helpers (browser-only; use the DOM) ————— */
 
@@ -158,10 +159,15 @@ export function DocReviewEditor({
   body = DEMO_MD,
   findings = DEMO_FINDINGS,
   loading = false,
+  compact = false,
 }: {
   body?: string;
   findings?: Finding[];
   loading?: boolean;
+  /** Narrow-column composition: the margin annotations drop below the prose
+      instead of holding a 190px gutter. The page owns this decision
+      (CONVENTIONS.md §10) — the editor never breakpoints itself. */
+  compact?: boolean;
 }) {
   const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdown(body));
   const [focusedId, setFocusedId] = useState<number | null>(() => blocks[0]?.id ?? null);
@@ -344,7 +350,7 @@ export function DocReviewEditor({
           <SkeletonChip w={44} /><SkeletonChip w={28} /><SkeletonChip w={28} /><SkeletonChip w={28} />
           <span className="ml-auto"><SkeletonChip w={28} /></span>
         </div>
-        <div className="grid grid-cols-[1fr_190px] gap-4 p-5" aria-hidden="true">
+        <div className="grid grid-cols-[minmax(0,1fr)_190px] gap-4 p-5" aria-hidden="true">
           <div className="space-y-3">
             <Skeleton width="55%" height={24} />
             <SkeletonText lines={4} /><SkeletonText lines={3} /><SkeletonText lines={5} />
@@ -412,7 +418,7 @@ export function DocReviewEditor({
       </div>
 
       {/* prose + margin */}
-      <div className="grid grid-cols-[1fr_190px] gap-4 p-5">
+      <div className={`grid gap-4 p-5 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_190px]"}`}>
         <div
           ref={editorRef}
           className={`relative min-w-0 ${MARKED}`}
@@ -444,19 +450,19 @@ export function DocReviewEditor({
         {/* The annotations are absolutely positioned, so the rail needs an
             explicit height or the last chips spill out through the card. */}
         <div
-          className="relative border-l border-ink/10"
-          style={{ minHeight: annots.length ? annots[annots.length - 1].top + 56 : 0 }}
+          className={compact ? "flex flex-col gap-3 border-t border-ink/10 pt-3" : "relative border-l border-ink/10"}
+          style={compact ? undefined : { minHeight: annots.length ? annots[annots.length - 1].top + 56 : 0 }}
         >
           {annots.map((a) => (
             <button
               key={a.fid}
               type="button"
-              className="absolute left-3 right-0 text-left group"
-              style={{ top: a.top }}
+              className={compact ? "min-w-0 text-left group" : "absolute left-3 right-0 text-left group"}
+              style={compact ? undefined : { top: a.top }}
               onClick={() => jumpToFinding(a.fid)}
             >
               <Chip label={a.rule} tone={a.tone} dot />
-              <span className="mt-1.5 block text-[11.5px] leading-snug text-ink/70 group-hover:text-ink line-clamp-2">{a.quote}</span>
+              <Truncate lines={2} className="mt-1.5 text-[11.5px] leading-snug text-ink/70 group-hover:text-ink">{a.quote}</Truncate>
             </button>
           ))}
         </div>

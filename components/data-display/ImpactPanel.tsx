@@ -4,6 +4,7 @@ import { Chip } from "./Chip";
 import { SortHeader, useSort, tdPad } from "./sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
+import { Truncate } from "./Truncate";
 
 /* ImpactPanel: the one impact-analysis rendering, shared by Facts and
    Decisions in the console (it was duplicated inline on both pages). A short
@@ -105,9 +106,9 @@ export function ImpactPanel({
               the table nor squeeze its neighbours to a letter per line. */}
           <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 480 }}>
             <colgroup>
-              <col style={{ width: "31%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "32%" }} />
+              <col style={{ width: "30%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "29%" }} />
               {/* wide enough for the longest severity chip, "Update required" */}
               <col style={{ width: "24%" }} />
             </colgroup>
@@ -129,7 +130,9 @@ export function ImpactPanel({
                         token stops widening the table until the severity
                         column falls off the panel. */}
                     <td className={`${tdPad} font-display text-[13px] font-semibold text-ink align-top ${WRAP}`}>{doc.title}</td>
-                    <td className={`${tdPad} text-center font-term text-[11.5px] text-ink/65 align-top whitespace-nowrap`}>{doc.source}</td>
+                    <td className={`${tdPad} align-top text-center font-term text-[11.5px] text-ink/65`}>
+                      <Truncate title={doc.source}>{doc.source}</Truncate>
+                    </td>
                     <td className={`${tdPad} text-[12.5px] leading-[1.4] text-ink/70 align-top ${WRAP}`}>{doc.reason}</td>
                     <td className={`${tdPad} align-top`}><Chip label={s.label} tone={s.tone} caps /></td>
                   </tr>

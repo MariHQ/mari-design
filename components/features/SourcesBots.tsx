@@ -9,6 +9,7 @@ import { Spinner } from "../data-display/Spinner";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton, SkeletonText } from "../data-display/Skeleton";
 import { IconRing } from "../data-display/IconRing";
 import { CodeBlock } from "../data-display/CodeBlock";
+import { Truncate } from "../data-display/Truncate";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { SectionLabel } from "../forms/SectionLabel";
@@ -88,13 +89,13 @@ function SlackDrawer({
 
   const body = () => {
     if (step === 0) return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest". It pre-fills scopes and the events URL.</p>
         <CodeBlock code={SLACK_MANIFEST} title="app-manifest.yml" />
       </div>
     );
     if (step === 1) return (
-      <div className="grid gap-1">
+      <div className="grid grid-cols-1 gap-1">
         <p className="text-[13px] text-ink/70 mb-1">Paste the credentials from your Slack app's settings.</p>
         <Field label="Bot token">
           <Input className="w-full font-term" type="password" placeholder="xoxb-…" value={token} onChange={(e) => { setToken(e.target.value); setSaved(false); }} />
@@ -111,7 +112,7 @@ function SlackDrawer({
       </div>
     );
     if (step === 2) return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <p className="text-[13px] text-ink/70">Run Slack's <code>auth.test</code> to confirm the token works.</p>
         <div>
           <Button compact onClick={() => setTested("ok")}><RefreshCw size={13} /> Test connection</Button>
@@ -125,9 +126,9 @@ function SlackDrawer({
       </div>
     );
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <p className="text-[13px] text-ink/70">Invite the bot and ask it anything:</p>
-        <ul className="text-[13px] text-ink/70 list-disc pl-5 grid gap-1">
+        <ul className="text-[13px] text-ink/70 list-disc pl-5 grid grid-cols-1 gap-1">
           <li><code>/invite @Mari</code> in a channel</li>
           <li>@mention <b>@Mari</b> with a question</li>
           <li>DM <b>Mari</b> directly</li>
@@ -172,15 +173,15 @@ function GithubDrawer({
 
   const body = () => {
     if (step === 0) return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <p className="text-[13px] text-ink/70">In the repo's <b>Settings → Webhooks → Add webhook</b>, use:</p>
-        <Field label="Payload URL"><span className="font-term text-[12.5px] break-all">{payloadUrl}</span></Field>
+        <Field label="Payload URL"><Truncate className="font-term text-[12.5px]">{payloadUrl}</Truncate></Field>
         <Field label="Content type"><span className="font-term text-[12.5px]">application/json</span></Field>
         <Field label="Events"><span className="text-[13px]">Just the <b>push</b> event</span></Field>
       </div>
     );
     if (step === 1) return (
-      <div className="grid gap-1">
+      <div className="grid grid-cols-1 gap-1">
         <p className="text-[13px] text-ink/70 mb-1">Set a webhook secret so Mari can verify deliveries.</p>
         <Field label="Webhook secret">
           <div className="flex items-center gap-2">
@@ -197,7 +198,7 @@ function GithubDrawer({
       </div>
     );
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         {status.lastDeliveryAt ? (
           <div className="flex items-center gap-2">
             <StatusChip status="approved" /> <span className="text-[12.5px] text-ink/70">Delivery received {fmtDateTime(status.lastDeliveryAt)}.</span>
@@ -253,7 +254,7 @@ export function SourcesBots({
 
   if (loading) {
     return (
-      <div className={`grid gap-3 sm:grid-cols-2 ${className}`.trim()} aria-hidden="true">
+      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${className}`.trim()} aria-hidden="true">
         {[0, 1].map((i) => (
           <div key={i} className={`${card} flex flex-col gap-3 p-4`}>
             <div className="flex items-center gap-3">
@@ -272,15 +273,15 @@ export function SourcesBots({
   }
 
   return (
-    <div className={`grid gap-3 sm:grid-cols-2 ${className}`.trim()}>
+    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${className}`.trim()}>
       <div className={`${card} p-4 flex flex-col gap-3`}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <IconRing size={31}><SlackMark size={18} /></IconRing>
-          <b className="text-[14px] font-semibold text-ink flex-1">Slack bot</b>
+          <b className="min-w-0 flex-1 basis-[7rem] truncate text-[14px] font-semibold text-ink">Slack bot</b>
           {botChip(slackState(slack))}
         </div>
         <p className="text-[12.5px] text-ink/65">Answers @mentions and DMs from your knowledge base.</p>
-        <Field label="Workspace"><span className="break-words text-[13px]">{slack.teamName ?? "Not connected"}</span></Field>
+        <Field label="Workspace"><Truncate className="text-[13px]">{slack.teamName ?? "Not connected"}</Truncate></Field>
         <Field label="Last event"><span className="font-term text-[12px] text-ink/70">{slack.lastEventAt ? fmtDateTime(slack.lastEventAt) : "none yet"}</span></Field>
         <Button variant="primary" compact className="self-start" onClick={() => setDrawer("slack")}>
           <Slack size={14} /> {slack.configured ? "Manage setup" : "Set up Slack bot"}
@@ -288,13 +289,13 @@ export function SourcesBots({
       </div>
 
       <div className={`${card} p-4 flex flex-col gap-3`}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <IconRing size={31}><GithubMark size={18} /></IconRing>
-          <b className="text-[14px] font-semibold text-ink flex-1">GitHub webhook</b>
+          <b className="min-w-0 flex-1 basis-[7rem] truncate text-[14px] font-semibold text-ink">GitHub webhook</b>
           {botChip(githubState(github))}
         </div>
         <p className="text-[12.5px] text-ink/65">Re-syncs a repo the instant you push a commit.</p>
-        <Field label="Payload URL"><span className="font-term text-[12px] text-ink/70 break-all">{origin}/webhooks/github</span></Field>
+        <Field label="Payload URL"><Truncate className="font-term text-[12px] text-ink/70" title={`${origin}/webhooks/github`}>{origin}/webhooks/github</Truncate></Field>
         <Field label="Repositories">
           <div className="flex flex-wrap gap-1.5">
             {github.repos.length > 0

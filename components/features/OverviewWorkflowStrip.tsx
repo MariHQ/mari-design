@@ -8,6 +8,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { CardSection } from "../layout/CardShell";
+import { Truncate } from "../data-display/Truncate";
 import { Button } from "../actions/Button";
 import { fmtDateTime } from "../tokens/format";
 
@@ -79,9 +80,9 @@ function StepStrip({ steps, max = 4 }: { steps: WfStep[]; max?: number }) {
               </span>
               {/* The bubble column is a fixed 68px. Without an explicit break
                   a long unbreakable step name overprints its neighbours. */}
-              <span className="w-full break-words font-term text-[10.5px] leading-tight text-ink/70">
+              <Truncate lines={2} className="w-full font-term text-[10.5px] leading-tight text-ink/70">
                 {s.label}
-              </span>
+              </Truncate>
             </div>
             {i < shown.length - 1 && (
               <span className="mt-4 border-t border-dotted border-ink/30 min-w-[14px] flex-1 self-start" aria-hidden />
@@ -213,13 +214,16 @@ export function OverviewWorkflowStrip({
 
           <div className="mt-4 border-t border-ink/10 pt-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="min-w-0 break-words text-[13.5px] font-semibold text-ink">{flow.name}</span>
+              <Truncate className="text-[13.5px] font-semibold text-ink">{flow.name}</Truncate>
               <StatusChip status={flow.status === "active" ? "running" : "paused"} />
             </div>
             <div className="mt-1.5 flex items-center justify-between gap-3">
-              <span className="font-term text-[11.5px] text-ink/65">
+              {/* `started` is free text from the API and can be arbitrarily
+                  long, so the line ellipsises rather than pushing the strip
+                  past the card (§12). */}
+              <Truncate className="font-term text-[11.5px] text-ink/65">
                 {run ? `Last run: ${fmtDateTime(run.started)}` : runsLoading ? "Loading runs…" : "Never run"}
-              </span>
+              </Truncate>
               {run && <OutcomeChip outcome={run.outcome} />}
             </div>
           </div>
@@ -229,7 +233,7 @@ export function OverviewWorkflowStrip({
               <ul className="flex flex-col gap-1.5">
                 {checks.map((s) => (
                   <li key={s.label} className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 break-words text-[13px] text-ink/70">{s.label}</span>
+                    <Truncate className="text-[13px] text-ink/70">{s.label}</Truncate>
                     <StatusChip status={s.state!} />
                   </li>
                 ))}
@@ -241,7 +245,7 @@ export function OverviewWorkflowStrip({
             <CardSection label="Settings" className="mt-4 border-t border-ink/10 pt-3">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
                 <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">Trigger</dt>
-                <dd className="min-w-0 break-words text-ink/70">{flow.nodes[0]?.label ?? "Manual"}</dd>
+                <Truncate as="dd" className="text-ink/70">{flow.nodes[0]?.label ?? "Manual"}</Truncate>
                 <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">Steps</dt>
                 <dd className="text-ink/70">
                   {flow.nodes.length} steps, {flow.nodes.filter((n) => n.state).length} checked

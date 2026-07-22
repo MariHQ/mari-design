@@ -159,7 +159,7 @@ function resultsFor(state: string): Result[] {
   }
 }
 
-function Feed({ state }: { state: string }) {
+function Feed({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
     return (
       <Card>
@@ -176,7 +176,7 @@ function Feed({ state }: { state: string }) {
       </Card>
     );
   }
-  return <KnowledgeBrowser key={state} results={resultsFor(state)} />;
+  return <KnowledgeBrowser key={state} results={resultsFor(state)} stacked={mobile} />;
 }
 
 function Inspector({ state }: { state: string }) {
@@ -228,7 +228,7 @@ function KnowledgePage({ state = "default", mobile = false }: PageProps) {
           }
         >
           <div className="min-w-0">
-            <Feed state={state} />
+            <Feed state={state} mobile={mobile} />
           </div>
           <div className={mobile ? "min-w-0" : "min-w-0 sticky top-6 self-start"}>
             <Inspector state={state} />

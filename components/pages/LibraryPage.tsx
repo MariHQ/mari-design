@@ -88,7 +88,7 @@ const STRESS_TEMPLATES = [
   { id: "s2", name: LONG_WORD, category: "Engineering", description: MIXED_SCRIPT, sections: MANY_TAGS, standard: false, icon: FileText },
 ];
 
-function StressBody({ variant }: { variant: "overflow" | "stress" }) {
+function StressBody({ variant, mobile }: { variant: "overflow" | "stress"; mobile: boolean }) {
   const stress = variant === "stress";
   return (
     <div className="mt-6 flex flex-col gap-5">
@@ -106,9 +106,9 @@ function StressBody({ variant }: { variant: "overflow" | "stress" }) {
           />
         </div>
       </Card>
-      <LibraryTagsPanel tags={stress ? STRESS_TAGS : OVERFLOW_TAGS} />
+      <LibraryTagsPanel compact={mobile} tags={stress ? STRESS_TAGS : OVERFLOW_TAGS} />
       <LibraryGlossaryPanel terms={stress ? STRESS_TERMS : OVERFLOW_TERMS} />
-      <LibraryTemplatesPanel templates={stress ? STRESS_TEMPLATES : OVERFLOW_TEMPLATES} />
+      <LibraryTemplatesPanel compact={mobile} templates={stress ? STRESS_TEMPLATES : OVERFLOW_TEMPLATES} />
     </div>
   );
 }
@@ -123,15 +123,15 @@ function tabForState(state: string): Tab {
 }
 
 /** Render the active tab; `state` may request the empty (unpopulated) variant. */
-function Panel({ tab, state }: { tab: Tab; state: string }) {
+function Panel({ tab, state, mobile }: { tab: Tab; state: string; mobile: boolean }) {
   const emptyTab = state.endsWith("-empty");
   switch (tab) {
     case "rules": return <LibraryRulesPanel />;
     case "glossary": return emptyTab ? <LibraryGlossaryPanel terms={[]} /> : <LibraryGlossaryPanel />;
     case "guides": return emptyTab ? <LibraryGuidesPanel guides={[]} /> : <LibraryGuidesPanel />;
-    case "templates": return emptyTab ? <LibraryTemplatesPanel templates={[]} /> : <LibraryTemplatesPanel />;
+    case "templates": return emptyTab ? <LibraryTemplatesPanel compact={mobile} templates={[]} /> : <LibraryTemplatesPanel compact={mobile} />;
     case "tags":
-    default: return emptyTab ? <LibraryTagsPanel tags={[]} /> : <LibraryTagsPanel />;
+    default: return emptyTab ? <LibraryTagsPanel compact={mobile} tags={[]} /> : <LibraryTagsPanel compact={mobile} />;
   }
 }
 
@@ -164,12 +164,12 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
       </div>
     );
   } else if (state === "overflow" || state === "stress") {
-    body = <StressBody variant={state} />;
+    body = <StressBody variant={state} mobile={mobile} />;
   } else {
     body = (
       <div className="mt-6 flex flex-col gap-5">
         <Tabs<Tab> ariaLabel="Library sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={setTab} />
-        <Panel tab={tab} state={state} />
+        <Panel tab={tab} state={state} mobile={mobile} />
       </div>
     );
   }

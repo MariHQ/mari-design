@@ -115,7 +115,7 @@ export function SettingsModelsConfig({
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
         <div className="space-y-2.5"><Skeleton width={130} height={20} /><SkeletonLine w={340} h={11} /></div>
-        <div className="grid gap-5 lg:grid-cols-2"><SkeletonCard lines={2} /><SkeletonCard lines={2} /></div>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2"><SkeletonCard lines={2} /><SkeletonCard lines={2} /></div>
         <SkeletonCard lines={3} />
         <SkeletonTable rows={3} cols={4} />
       </div>
@@ -126,7 +126,7 @@ export function SettingsModelsConfig({
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
       {!embedded && <PageHeader title="Models" description="Choose which models embed, search, and answer for this workspace" />}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint={`${dims} dims`}>
           <Field label="Model">
             <Select value={emb} onChange={(e) => setEmb(e.target.value)} className="w-full">
@@ -147,7 +147,7 @@ export function SettingsModelsConfig({
       </div>
 
       <Card icon={<KeyRound size={16} className="text-biscay-2" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
               <Input type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} className="w-full font-term" />

@@ -10,6 +10,7 @@ import { DocReviewFindingsPanel } from "../features/DocReviewFindingsPanel";
 import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { fmtDate } from "../tokens/format";
+import { Truncate } from "../data-display/Truncate";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_URL,
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT,
@@ -207,7 +208,7 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
           <DocReviewOutlinePanel {...(data ? { body: data.outlineBody, revisions: data.revisions } : {})} />
         </div>
         <div className="min-w-0">
-          <DocReviewEditor {...(data ? { body: data.editorBody, findings: data.editorFindings } : {})} />
+          <DocReviewEditor compact={mobile} {...(data ? { body: data.editorBody, findings: data.editorFindings } : {})} />
         </div>
         <div className="flex min-w-0 flex-col gap-5">
           <DocReviewRefinePanel {...(data ? data.refine : {})} />
@@ -225,7 +226,7 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
           ]}
         />
         {tab === "changes"
-          ? <DocReviewChangeQueue {...(data ? { changes: data.changes, body: data.changeBody } : {})} />
+          ? <DocReviewChangeQueue compact={mobile} {...(data ? { changes: data.changes, body: data.changeBody } : {})} />
           : <DocReviewFindingsPanel {...(data ? { findings: data.findings, claims: data.claims } : {})} />}
       </div>
     </>
@@ -275,14 +276,14 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "editor") {
     return (
       <PanelFrame title="Block editor" description="Content-editable blocks with inline finding underlines and margin annotations.">
-        <DocReviewEditor />
+        <DocReviewEditor compact={mobile} />
       </PanelFrame>
     );
   }
   if (state === "change-queue") {
     return (
       <PanelFrame title="Change queue" description="Proposed edits as a word-level diff: accept to rewrite the body, reject to dismiss.">
-        <DocReviewChangeQueue />
+        <DocReviewChangeQueue compact={mobile} />
       </PanelFrame>
     );
   }
@@ -327,18 +328,22 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
         <SkeletonPage variant="editor" />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
+        {/* The owner/verified line is a value, not prose: it carries a name and
+            can carry a URL, so it truncates with the full text on hover
+            (CONVENTIONS.md §12). PageHeader's own `description` slot wraps
+            instead, which is what pushed the stress URL past the header. */}
         <PageHeader
           title={state === "overflow" ? LONG_TITLE : state === "stress" ? `${UNBREAKABLE} ${MIXED_SCRIPT}` : "Billing proration runbook"}
           backLink={{ href: "/knowledge", label: "Library" }}
-          description={
-            state === "overflow"
-              ? `Owner: ${LONG_NAME} · Last verified across every service, region, and team`
-              : state === "stress"
-                ? `${MIXED_SCRIPT} · ${LONG_URL}`
-                : `Owner: Maya M. · Last verified ${fmtDate("2024-05-13")}`
-          }
           actions={mobile ? undefined : actions}
         />
+        <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">
+          {state === "overflow"
+            ? `Owner: ${LONG_NAME} · Last verified across every service, region, and team`
+            : state === "stress"
+              ? `${MIXED_SCRIPT} · ${LONG_URL}`
+              : `Owner: Maya M. · Last verified ${fmtDate("2024-05-13")}`}
+        </Truncate>
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <div className="mt-6 flex flex-col gap-5">
           <Body state={state} mobile={mobile} />

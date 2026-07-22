@@ -363,7 +363,9 @@ export function ConnectionRow({
   onFocus?: () => void;
 }) {
   return (
-    <div className={`group flex items-center gap-2.5 rounded-[4px] border border-transparent px-2 py-1.5 -mx-2 hover:border-ink/12 hover:bg-flysch/60 ${onSelect ? "cursor-pointer" : ""}`}>
+    /* No negative margins: a `-mx-2` bleed pushed the row 8px past the
+       drawer's content edge on every list in every drawer. */
+    <div className={`group flex items-center gap-2.5 rounded-[4px] border border-transparent px-2 py-1.5 hover:border-ink/12 hover:bg-flysch/60 ${onSelect ? "cursor-pointer" : ""}`}>
       <EdgeSwatch rel={rel} dashed={dashed} />
       <button
         type="button"
@@ -428,7 +430,7 @@ export function LgDrawerShell({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink active:bg-ink/10 ${focusRing}`}
+            className={`grid h-7 w-7 shrink-0 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink active:bg-ink/10 ${focusRing}`}
           >
             ✕
           </button>

@@ -222,12 +222,14 @@ export function DecisionCardFeature({ decisions = DEMO, loading = false, classNa
               Show impact analysis
             </Button>
           ) : im.count > 0 ? (
-            <div className="flex items-center gap-2 text-[12.5px] text-ink/70">
+            /* flex-wrap + shrink-0: in a narrow card the summary squeezed the
+               "Re-run" link to one character per line. */
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-ink/70">
               <Layers size={14} className="shrink-0 text-biscay-2" />
-              <span>
+              <span className="min-w-0 flex-1">
                 <b className="text-ink">{im.count} documents affected</b> · {im.summary}
               </span>
-              <Button variant="link" className="ml-1" onClick={() => runImpact(d)}>
+              <Button variant="link" className="shrink-0" onClick={() => runImpact(d)}>
                 Re-run
               </Button>
             </div>
@@ -240,6 +242,11 @@ export function DecisionCardFeature({ decisions = DEMO, loading = false, classNa
         return (
           <DecisionCardUI
             key={d.id}
+            /* Every nowrap box in the card (the source chip, the date/owner
+               group) has to be allowed to shrink, or one long source label
+               pins the meta row at its full width and the card spills past
+               its own border. The chips ellipsize once they can shrink. */
+            className="[&_.gap-x-3>div]:min-w-0 [&_.whitespace-nowrap]:min-w-0 [&_.whitespace-nowrap]:overflow-hidden"
             statement={d.statement}
             context={d.context}
             status={d.status}

@@ -12,6 +12,7 @@ import { Menu, MenuRadioGroup, MenuRadioItem, MenuLabel } from "../navigation/Me
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 
 /* KnowledgeBrowser — the filter rail + results feed of the Knowledge page.
    A faceted filter rail, a debounced search box, result-type tabs, sort, and
@@ -132,13 +133,21 @@ const STATUS_ROWS: { key: string; label: string }[] = [
 export type KnowledgeBrowserProps = {
   results?: Result[];
   loading?: boolean;
+  /** Stack the facet rail above the results instead of beside them. Pages own
+      this (CONVENTIONS.md §10) — the component never breakpoints itself. */
+  stacked?: boolean;
   className?: string;
 };
 
+/* One grid for the browser and its skeleton: a fixed 220px facet rail beside
+   the results, or a single column when the page asks for the stacked layout. */
+const shell = (stacked: boolean, className: string) =>
+  `grid gap-4 items-start ${stacked ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[220px_minmax(0,1fr)]"} ${className}`.replace(/\s+/g, " ").trim();
+
 /** Content-shaped skeleton for the browser: filter rail + search + result cards. */
-function KnowledgeBrowserSkeleton({ className = "" }: { className?: string }) {
+function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked?: boolean; className?: string }) {
   return (
-    <div className={`grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] items-start ${className}`.trim()} aria-hidden="true">
+    <div className={shell(stacked, className)} aria-hidden="true">
       <Card className="flex flex-col gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="space-y-2">
@@ -169,7 +178,7 @@ function KnowledgeBrowserSkeleton({ className = "" }: { className?: string }) {
   );
 }
 
-export function KnowledgeBrowser({ results = DEMO, loading = false, className = "" }: KnowledgeBrowserProps) {
+export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = false, className = "" }: KnowledgeBrowserProps) {
   const [q, setQ] = useState("");
   const [srcSel, setSrcSel] = useState<Set<string>>(new Set());
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
@@ -218,10 +227,10 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
   const owners = [...KNOWN_OWNERS, "Other people"];
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Best match";
 
-  if (loading) return <KnowledgeBrowserSkeleton className={className} />;
+  if (loading) return <KnowledgeBrowserSkeleton stacked={stacked} className={className} />;
 
   return (
-    <div className={`grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] items-start ${className}`.trim()}>
+    <div className={shell(stacked, className)}>
       {/* Filter rail */}
       <Card className="flex flex-col gap-4">
         <FacetGroup name="Source" rows={SOURCE_LABELS.map((s) => ({ label: s.label, icon: <SourceMark provider={s.key} size={15} />, count: count((r) => r.source === s.key), active: srcSel.has(s.key), onToggle: () => toggle(srcSel, setSrcSel, s.key) }))} />
@@ -242,6 +251,10 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          {/* min-w-0 + its own scroll box: without it the 5-tab row sets the
+              min-content width of the whole results column and pushes the feed
+              past the card edge on a narrow viewport. */}
+          <div className="min-w-0 flex-1 overflow-x-auto">
           <Tabs
             ariaLabel="Result type"
             variant="underline"
@@ -255,7 +268,8 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
               { id: "prs", label: "PRs", count: count((r) => r.kind === "pr") },
             ]}
           />
-          <div className="ml-auto">
+          </div>
+          <div className="ml-auto shrink-0">
             <Menu trigger={<Button compact>Sort: {sortLabel} <ChevronDown size={13} /></Button>}>
               <MenuLabel>Sort by</MenuLabel>
               <MenuRadioGroup value={sort} onValueChange={setSort}>
@@ -291,8 +305,8 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
                     <div className="flex items-start gap-3">
                       <CardTitleBlock
                         className="flex-1"
-                        title={<span className="hover:text-biscay-2">{r.title}</span>}
-                        summary={r.snippet}
+                        title={<Truncate className="hover:text-biscay-2">{r.title}</Truncate>}
+                        summary={<Truncate lines={2}>{r.snippet}</Truncate>}
                       />
                       <button
                         type="button"
@@ -304,8 +318,15 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
                       </button>
                     </div>
                     <CardMeta
+                      /* The date/author group is whitespace-nowrap and carries no
+                         min-width of its own, so a long author name pinned the
+                         row at full width and the card spilled past its border.
+                         Letting the nowrap boxes shrink is what makes the
+                         truncation fire (CONVENTIONS.md §12). */
+                      className="min-w-0 [&>div]:min-w-0 [&_.whitespace-nowrap]:min-w-0"
                       source={
                         <Chip
+                          className="min-w-0"
                           label={SOURCE_LABELS.find((s) => s.key === r.source)?.label ?? r.source}
                           tone="neutral"
                           icon={<SourceMark provider={r.source} size={13} />}
@@ -319,12 +340,16 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
                       }
                       date={fmtDate(r.date)}
                       author={
+                        /* min-w-0 + truncate: the meta line is whitespace-nowrap,
+                           so an unbreakable author name or a 7-digit message
+                           count set the row's min-content width and dragged the
+                           card past its own border. */
                         slack ? (
-                          <span>{r.messageCount} messages · {r.participantCount} participants</span>
+                          <span className="min-w-0 truncate">{r.messageCount} messages · {r.participantCount} participants</span>
                         ) : (
-                          <span className="flex items-center gap-1.5">
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <Avatar initials={r.author.split(" ").map((w) => w[0]).slice(0, 2).join("")} />
-                            <span className="text-[12px] text-ink/70">{r.author}</span>
+                            <span className="min-w-0 truncate text-[12px] text-ink/70">{r.author}</span>
                           </span>
                         )
                       }

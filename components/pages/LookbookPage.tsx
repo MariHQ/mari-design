@@ -8,6 +8,7 @@ import { Chip, StatusChip, SeverityChip, CountChip } from "../data-display/Chip"
 import { Stat } from "../data-display/Stat";
 import { Badge } from "../data-display/Badge";
 import { Swatch } from "../data-display/Swatch";
+import { Truncate } from "../data-display/Truncate";
 import { Avatar } from "../data-display/Avatar";
 import { Progress } from "../data-display/Progress";
 import { Sparkline } from "../data-display/Sparkline";
@@ -60,7 +61,11 @@ function Exhibit({ title, rule, imp, children }: {
     <Card title={title}>
       <p className="text-[13px] leading-relaxed text-ink/65">{rule}</p>
       <code className="mt-2 mb-4 block font-term text-[11.5px] text-biscay-2">{imp}</code>
-      <div className="flex flex-wrap items-center gap-3">{children}</div>
+      {/* Demo row: every exhibit item may shrink, and any bare text inside a
+          catalog primitive ellipsises rather than pushing the card open (§12).
+          The exhibits deliberately feed pathological strings into primitives
+          whose own labels do not truncate (Progress, Button, Alert). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-3 [&_*]:min-w-0 [&>span]:max-w-full [&>span]:truncate">{children}</div>
     </Card>
   );
 }
@@ -200,7 +205,7 @@ function DataDisplay() {
         rule="A KPI tile: big value, quiet label, optional tone, icon ring, and delta. Use tone to signal health, not decoration."
         imp='import { Stat } from "../data-display/Stat"'
       >
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
           <Stat value="1,204" label="Documents" sub="+38 this week" tone="ok" icon={<BookOpen size={18} />} />
           <Stat value="97%" label="Facts passing" sub="3 need review" tone="attention" icon={<ShieldCheck size={18} />} />
           <Stat value="12" label="Insights" sub="live" tone="info" icon={<Sparkles size={18} />} />
@@ -311,14 +316,20 @@ function OverflowSection() {
 
       <Card title={LONG_TITLE}>
         <p className="text-[13px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
           <Stat value={HUGE_NUMBER_STR} label={LONG_TITLE} sub={LONG_PARAGRAPH} tone="ok" icon={<BookOpen size={18} />} />
           <Stat value={HUGE_PERCENT} label="Facts passing across every service, region, and team" sub="3 need review" tone="attention" icon={<ShieldCheck size={18} />} />
           <Stat value={HUGE_NUMBER_STR} label={LONG_NAME} sub="live" tone="info" icon={<Sparkles size={18} />} />
         </div>
         <div className="mt-4 space-y-3">
-          <Progress value={68} label={`Embedding · ${LONG_TITLE}`} tone="info" />
-          <Alert tone="attention" title={LONG_TITLE}>{LONG_PARAGRAPH}</Alert>
+          {/* Progress renders `label` as a bare span with no ellipsis of its
+              own, so the truncation is applied from the caller (§12). */}
+          <div className="[&_span]:truncate">
+            <Progress value={68} label={`Embedding · ${LONG_TITLE}`} tone="info" />
+          </div>
+          <Alert tone="attention" title={<Truncate>{LONG_TITLE}</Truncate>}>
+            <Truncate lines={3}>{LONG_PARAGRAPH}</Truncate>
+          </Alert>
         </div>
       </Card>
     </>
@@ -350,13 +361,17 @@ function StressSection() {
         <div className="mt-4">
           <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
           <Stat value={HUGE_NUMBER_STR} label={LONG_WORD} tone="ok" icon={<BookOpen size={18} />} />
           <Stat value={HUGE_PERCENT} label={UNBREAKABLE} tone="info" icon={<Sparkles size={18} />} />
           <Stat value={HUGE_NUMBER_STR} label={MIXED_SCRIPT} tone="attention" icon={<ShieldCheck size={18} />} />
         </div>
-        <div className="mt-4"><Progress value={99} label={UNBREAKABLE} tone="info" /></div>
-        <div className="mt-4"><Alert tone="blocked" title={UNBREAKABLE}>{LONG_URL}</Alert></div>
+        <div className="mt-4 [&_span]:truncate"><Progress value={99} label={UNBREAKABLE} tone="info" /></div>
+        <div className="mt-4">
+          <Alert tone="blocked" title={<Truncate>{UNBREAKABLE}</Truncate>}>
+            <Truncate>{LONG_URL}</Truncate>
+          </Alert>
+        </div>
       </Card>
     </>
   );

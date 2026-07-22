@@ -161,3 +161,32 @@ line up both horizontally and vertically. Not a single stacked column.
 **Mobile.** Pages receive a `mobile` prop. Mobile collapses the grid to one
 column and drops rails below the main content. Components themselves stay
 desktop fixed-width (§10); mobile is composed at the page level.
+
+## 12. Long text: truncate, don't pack
+
+**Default to an ellipsis with the full value on hover.** Do not try to fit every
+long string on screen by wrapping it.
+
+The console is dense and largely tabular. Wrapping a long document title, URL,
+API key, email, or claim reflows its row, breaks the alignment of every
+neighbouring column, and in the worst case squeezes a column until it wraps one
+character per line and grows a panel to thousands of pixels tall. An ellipsis
+keeps the row one line tall, keeps every border plumb, and keeps the value
+reachable.
+
+Use `<Truncate>` / `<TruncateInline>` from `data-display/Truncate.tsx`:
+
+    <Truncate>{doc.title}</Truncate>
+    <Truncate as="td" lines={2}>{claim.text}</Truncate>
+
+Rules:
+- Any value that can be arbitrarily long (titles, URLs, tokens, keys, emails,
+  file paths, claim text, owner names) truncates. The `title` attribute carries
+  the full value, so it is available on hover and to assistive tech.
+- The truncating element needs `min-w-0` on itself and on its flex/grid
+  ancestors, or the ellipsis never engages and the text escapes instead.
+- Prose blocks (a card's body paragraph, a summary) may wrap normally, and may
+  use `lines={2}` or `lines={3}` to clamp.
+- Reach for `[overflow-wrap:anywhere]` only where the full value genuinely must
+  stay visible; it is the exception, not the default.
+- Never widen a column, a card, or a page to accommodate a long value.

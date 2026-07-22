@@ -64,10 +64,14 @@ const TOTAL_DOCS = 420;
 export type LibraryTagsPanelProps = {
   tags?: TagDef[];
   loading?: boolean;
+  /** Narrow-column composition: the filter field moves out of the card header
+      onto its own row, so the action cluster still fits (CONVENTIONS.md §10 —
+      pages own mobile, the panel just takes the instruction). */
+  compact?: boolean;
   className?: string;
 };
 
-export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className = "" }: LibraryTagsPanelProps) {
+export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
   const [rows, setRows] = useState<TagDef[]>(tags);
   const [query, setQuery] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -159,6 +163,13 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
     );
   }
 
+  const filterField = (
+    <label className="flex min-w-0 items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
+      <Search size={14} className="shrink-0" />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tags" className={`${compact ? "w-full" : "w-32"} min-w-0 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65`} />
+    </label>
+  );
+
   return (
     <div className={`flex flex-col gap-4 ${className}`.trim()}>
       {/* Stats strip */}
@@ -174,17 +185,15 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
         title="Tag definitions"
         hint={`${rows.length} tags`}
         actions={
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
-              <Search size={14} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tags" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65" />
-            </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {!compact && filterField}
             <Button compact onClick={() => setAnalyzing((v) => !v)}><Sparkles size={13} /> Analyze documents</Button>
             <Button variant="primary" compact onClick={() => openComposer()}><Plus size={13} /> New tag</Button>
           </div>
         }
       >
         <div className="border-t border-ink/10">
+          {compact && <div className="px-4 pt-3">{filterField}</div>}
           {/* Analyze panel */}
           {analyzing && (
             <div className="px-4 py-3.5 bg-ink/[0.015] border-b border-ink/10">
@@ -280,7 +289,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
                           <button
                             type="button"
                             onClick={() => { setWeightEditId(t.id); setWeightVal(String(t.weight)); }}
-                            className="rounded-[3px] border border-ink/15 px-1.5 py-0.5 font-term text-[12px] text-ink/80 hover:border-ink/40"
+                            className="max-w-full truncate rounded-[3px] border border-ink/15 px-1.5 py-0.5 font-term text-[12px] text-ink/80 hover:border-ink/40"
                           >
                             ×{t.weight.toFixed(2)}
                           </button>

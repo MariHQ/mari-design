@@ -58,12 +58,17 @@ export function DocReviewChangeQueue({
   body = DEMO_BODY,
   defaultTab = "review",
   loading = false,
+  compact = false,
 }: {
   changes?: Change[];
   body?: string;
   /** Which tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: ChangeTab;
   loading?: boolean;
+  /** Narrow-column composition: original and proposed stack instead of sitting
+      in two side-by-side columns that would each be a few characters wide.
+      Pages own this (CONVENTIONS.md §10). */
+  compact?: boolean;
 }) {
   const [tab, setTab] = useState<ChangeTab>(defaultTab);
   const [changes, setChanges] = useState<Change[]>(initialChanges);
@@ -131,8 +136,8 @@ export function DocReviewChangeQueue({
         />
       </div>
 
-      {visible.length > 0 && (
-        <div className="grid grid-cols-[1fr_1fr_150px] gap-3 px-4 pt-3 pb-1.5 border-b border-ink/10">
+      {visible.length > 0 && !compact && (
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px] gap-3 px-4 pt-3 pb-1.5 border-b border-ink/10">
           <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>
           <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Proposed</span>
           <span />
@@ -146,13 +151,15 @@ export function DocReviewChangeQueue({
           return (
             <div
               key={c.id}
-              className={`grid grid-cols-[1fr_1fr_150px] gap-3 px-4 py-3 border-b border-ink/8 ${c.state === "rejected" ? "opacity-50" : ""}`}
+              className={`grid gap-3 px-4 py-3 border-b border-ink/8 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px]"} ${c.state === "rejected" ? "opacity-50" : ""}`}
             >
+              {compact && <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>}
               <div className="min-w-0 break-words font-term text-[12.5px] leading-[1.55] text-ink/70">
                 {d.pre && <>{d.pre} </>}
                 {d.delA && <s className="text-espelette/80 decoration-espelette/60">{d.delA}</s>}
                 {d.suf && <> {d.suf}</>}
               </div>
+              {compact && <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Proposed</span>}
               <div className={`font-term text-[12.5px] leading-[1.55] ${c.state === "accepted" ? "text-moss" : "text-ink/70"} min-w-0 break-words`}>
                 {d.pre && <>{d.pre} </>}
                 {d.delB && <b className="text-moss">{d.delB}</b>}

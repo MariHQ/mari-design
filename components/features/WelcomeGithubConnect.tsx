@@ -42,7 +42,7 @@ function RepoPicker({
       {shown.length === 0 ? (
         <p className="text-[12.5px] text-ink/70 py-3">No repositories match "{filter}".</p>
       ) : (
-        <div role="radiogroup" aria-label="Repositories" className="grid gap-1.5 max-h-[300px] overflow-y-auto">
+        <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5 max-h-[300px] overflow-y-auto">
           {shown.map((r) => {
             const active = selected === r.fullName;
             return (

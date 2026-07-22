@@ -7,6 +7,7 @@ import { IconRing } from "../data-display/IconRing";
 import { GradeChip } from "../data-display/GradeChip";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
+import { Truncate } from "../data-display/Truncate";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
 import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-display/Skeleton";
 import { PageHeader } from "../layout/PageHeader";
@@ -91,7 +92,8 @@ export function InsightsWidgets({
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
-        <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w={340} h={11} /></div>
+        {/* Percentage, not 340px: a fixed skeleton line overran a phone column. */}
+        <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w="88%" h={11} /></div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
@@ -175,11 +177,14 @@ export function InsightsWidgets({
             <ul className="flex flex-col divide-y divide-ink/10">
               {candidates.map((c) => (
                 <li key={c.id} className="flex items-start gap-3 py-3 first:pt-0">
+                  {/* Glossary terms are user data and can be a single opaque
+                      token; wrapping them drove the card 615px past its
+                      column, so they ellipsise with the value on hover (§12). */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="break-words text-[13.5px] font-semibold text-ink">{c.term}</span>
+                    <div className="flex min-w-0 items-baseline gap-x-2">
+                      <Truncate className="text-[13.5px] font-semibold text-ink">{c.term}</Truncate>
                     </div>
-                    <p className="mt-0.5 break-words text-[12.5px] leading-snug text-ink/70">{c.definition}</p>
+                    <Truncate as="p" lines={2} className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{c.definition}</Truncate>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Button variant="success" compact onClick={() => resolve(c)}>Accept</Button>

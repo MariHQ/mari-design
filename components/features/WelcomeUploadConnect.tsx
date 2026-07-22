@@ -100,7 +100,7 @@ function UploadResultList({ result }: { result: UploadResult }) {
           {totalEmbedded < totalChunks && <span className="text-ink/65"> (unchanged chunks skipped by content hash)</span>}.
         </p>
       </div>
-      <div className="mt-2 grid gap-1.5">
+      <div className="mt-2 grid grid-cols-1 gap-1.5">
         {result.files.map((f, i) => (
           <div key={i} className="flex items-center gap-2 p-2 rounded-md border border-ink/12">
             <FileText size={14} className="text-ink/65 shrink-0" />

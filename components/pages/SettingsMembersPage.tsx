@@ -139,8 +139,10 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
             <tbody>
               {ROSTER.map((m) => {
                 const roleCell = variant === "role-change" && m.id === 2 ? (
-                  <div className="relative inline-block">
-                    <button className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-biscay-2 bg-paper text-[13px] text-ink">
+                  /* w-32 matches the menu below it, so the open menu sits inside
+                     the cell's own box instead of spilling out of the table. */
+                  <div className="relative inline-block w-32">
+                    <button className="inline-flex w-full items-center justify-between gap-1.5 h-8 px-2.5 rounded-[4px] border border-biscay-2 bg-paper text-[13px] text-ink">
                       {m.role} <ChevronDown size={13} className="text-ink/65" />
                     </button>
                     {/* inline (non-portal) menu depiction */}

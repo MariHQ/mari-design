@@ -162,7 +162,7 @@ export function FlowsRunHistory({ runs = DEMO_RUNS, limit = 12, loading = false,
     return (
       <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
         <Skeleton height={44} className="rounded-md" />
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <SkeletonTable rows={7} cols={4} />
           <SkeletonCard lines={6} footer />
         </div>
@@ -187,7 +187,7 @@ export function FlowsRunHistory({ runs = DEMO_RUNS, limit = 12, loading = false,
         </span>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_380px]">
         <FlowRunsTable runs={runs} limit={limit} selectedId={selId} onSelect={(r) => setSelId(r.id)} />
         <div className="lg:sticky lg:top-4">
           <RunInspector run={selected} onClose={() => setSelId(null)} />

@@ -16,6 +16,8 @@ type Frame = {
       page's main line (e.g. "connect-github"). Null on the main line. */
   flow?: string | null;
   flowLabel?: string | null;
+  /** On the first frame of a branch: the elbow back to its decision point. */
+  branchFrom?: { x: number; y: number; toX: number; toY: number } | null;
 };
 type PageRow = { id: string; title: string; route: string; row: number; y: number };
 type Manifest = { generatedFrames: number; pages: PageRow[]; frames: Frame[] };
@@ -23,15 +25,15 @@ type Manifest = { generatedFrames: number; pages: PageRow[]; frames: Frame[] };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** One caption per stacked alternative-flow line. */
-type FlowLine = { page: string; flow: string; flowLabel: string; y: number; count: number };
+type FlowLine = { page: string; flow: string; flowLabel: string; x: number; y: number; count: number };
 function flowLinesOf(frames: Frame[]): FlowLine[] {
   const byKey = new Map<string, FlowLine>();
   for (const f of frames) {
     if (!f.flow || !f.flowLabel) continue;
     const key = `${f.page}:${f.flow}:${f.y}`;
     const e = byKey.get(key);
-    if (e) { if (f.view === "desktop") e.count++; continue; }
-    byKey.set(key, { page: f.page, flow: f.flow, flowLabel: f.flowLabel, y: f.y, count: f.view === "desktop" ? 1 : 0 });
+    if (e) { if (f.view === "desktop") e.count++; e.x = Math.min(e.x, f.x); continue; }
+    byKey.set(key, { page: f.page, flow: f.flow, flowLabel: f.flowLabel, x: f.x, y: f.y, count: f.view === "desktop" ? 1 : 0 });
   }
   return [...byKey.values()];
 }
@@ -173,10 +175,43 @@ function Canvas({ data }: { data: Manifest }) {
             <div style={{ font: "500 22px ui-monospace, monospace", color: "#10263B80", marginTop: 4 }}>{p.route}</div>
           </div>
         ))}
+        {/* Branch connectors: an elbow from the decision point down to the
+            first frame of the branch, so the split is obvious at any zoom. */}
+        <svg
+          style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
+          width={1}
+          height={1}
+          aria-hidden
+        >
+          {visible.filter((f) => f.branchFrom).map((f) => {
+            const b = f.branchFrom!;
+            const midY = b.y + (b.toY - b.y) / 2;
+            return (
+              <g key={`b:${f.file}`}>
+                <path
+                  d={`M ${b.x} ${b.y} L ${b.x} ${midY} L ${b.toX} ${midY} L ${b.toX} ${b.toY}`}
+                  fill="none"
+                  stroke="#1E6FA8"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="18 14"
+                  opacity={0.55}
+                />
+                <circle cx={b.x} cy={b.y} r={12} fill="#1E6FA8" opacity={0.75} />
+                <path
+                  d={`M ${b.toX - 14} ${b.toY - 22} L ${b.toX} ${b.toY - 4} L ${b.toX + 14} ${b.toY - 22}`}
+                  fill="none" stroke="#1E6FA8" strokeWidth={6}
+                  strokeLinecap="round" strokeLinejoin="round" opacity={0.75}
+                />
+              </g>
+            );
+          })}
+        </svg>
         {/* Captions for the alternative-flow lines stacked under each page.
             One per (page, flow, line-y), drawn to the left of the first frame. */}
         {flowLines.map((l) => (
-          <div key={`${l.page}:${l.flow}:${l.y}`} style={{ position: "absolute", left: 0, top: l.y - 92, width: 1400 }}>
+          <div key={`${l.page}:${l.flow}:${l.y}`} style={{ position: "absolute", left: l.x, top: l.y - 96, width: 1400 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <span style={{ font: "700 26px ui-monospace, monospace", color: "#1E6FA8" }}>↳</span>
               <span style={{ font: "700 26px ui-sans-serif, system-ui", color: "#1E6FA8" }}>{l.flowLabel}</span>

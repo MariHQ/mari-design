@@ -8,6 +8,7 @@ import { Textarea } from "../forms/Textarea";
 import { StatusChip, Chip, type ChipStatus } from "../data-display/Chip";
 import { Avatar } from "../data-display/Avatar";
 import { Sparkline } from "../data-display/Sparkline";
+import { Truncate } from "../data-display/Truncate";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
@@ -140,10 +141,14 @@ export function AnswerCard({ answer: initial = DEMO, loading = false, className 
 
         {/* 4 + 5 — title and summary of the content */}
         <CardTitleBlock
-          title={a.question}
+          title={<Truncate>{a.question}</Truncate>}
           summary={(
             <>
-              <span className={long && !expanded ? "line-clamp-2 block" : "block"}>{a.answer}</span>
+              {long && !expanded
+                ? <Truncate lines={2}>{a.answer}</Truncate>
+                /* Expanded on request: the reader asked for the whole value, so
+                   it wraps rather than truncates (CONVENTIONS.md §12). */
+                : <span className="block [overflow-wrap:anywhere]">{a.answer}</span>}
               {long && (
                 <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-1 inline-flex items-center gap-1 font-term text-[11.5px] text-biscay-2 hover:text-ink">
                   {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}{expanded ? "Show less" : "Show more"}
@@ -155,13 +160,21 @@ export function AnswerCard({ answer: initial = DEMO, loading = false, className 
 
         {/* 6 + 7 — source and status on the left, date and author on the right */}
         <CardMeta
-          source={a.sources[0] ? <Chip label={a.sources[0].source} tone="neutral" icon={<SourceMark provider={a.sources[0].source} size={13} />} /> : undefined}
+          /* The right-hand date/author group is whitespace-nowrap and has no
+             min-width of its own, so a long owner name pinned the row at its
+             full width. Letting every nowrap box in the row shrink is what
+             makes the truncation below actually fire. */
+          className="min-w-0 [&_.whitespace-nowrap]:min-w-0"
+          source={a.sources[0] ? <Chip className="min-w-0" label={a.sources[0].source} tone="neutral" icon={<SourceMark provider={a.sources[0].source} size={13} />} /> : undefined}
           status={<StatusChip status={chipStatus} />}
-          date={<span>Updated {fmtDate(a.updated)}</span>}
+          date={<span className="shrink-0">Updated {fmtDate(a.updated)}</span>}
           author={(
-            <span className="inline-flex items-center gap-1.5">
+            /* The meta line is whitespace-nowrap, so the owner name has to be
+               allowed to shrink and ellipsize; otherwise a long name sets the
+               row's width and drags the card past its own border. */
+            <span className="flex min-w-0 items-center gap-1.5">
               <Avatar initials={initials(a.owner)} />
-              <span className="text-[12px] text-ink/70">{a.owner}</span>
+              <span className="min-w-0 truncate text-[12px] text-ink/70">{a.owner}</span>
             </span>
           )}
         />
@@ -199,9 +212,9 @@ export function AnswerCard({ answer: initial = DEMO, loading = false, className 
 
         {/* 10 — owners */}
         <CardSection label="Owners">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Avatar initials={initials(a.owner)} />
-            <span className="text-[12.5px] text-ink/80">{a.owner}</span>
+            <span className="min-w-0 truncate text-[12.5px] text-ink/80">{a.owner}</span>
           </span>
         </CardSection>
 

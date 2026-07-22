@@ -4,6 +4,7 @@ import { Button } from "../actions/Button";
 import { Spinner } from "../data-display/Spinner";
 import { StatusChip, DryChip, type ChipStatus } from "../data-display/Chip";
 import { SkeletonList, SkeletonCard, SkeletonLine } from "../data-display/Skeleton";
+import { Truncate } from "../data-display/Truncate";
 import { type RunStatus, type WorkflowRun } from "../workflow/RunHistory";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -164,10 +165,13 @@ export function RunInspector({
       </div>
 
       <div className="px-5 py-4">
-        <div className="font-term text-[11.5px] text-ink/70">
+        <Truncate
+          className="font-term text-[11.5px] text-ink/70"
+          title={`${run.workflowName} · started ${fmtDateTime(run.started)}${run.duration ? ` · ${run.duration}` : ""}${run.dry ? " · no side effects were written" : ""}`}
+        >
           {run.workflowName} · started {fmtDateTime(run.started)}{run.duration ? ` · ${run.duration}` : ""}
           {run.dry && " · no side effects were written"}
-        </div>
+        </Truncate>
         {run.triggeredBy && (
           <div className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-moss">
             <Bell size={12} /> {run.triggeredBy}
@@ -182,11 +186,11 @@ export function RunInspector({
                   <TimelineIcon status={r.status} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
-                    <span className={`text-[13.5px] font-medium ${r.status === "skipped" ? "text-ink/65" : "text-ink"}`}>{r.step}</span>
-                    {r.duration && <span className="font-term text-[10.5px] text-ink/65">{r.duration}</span>}
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <Truncate className={`text-[13.5px] font-medium ${r.status === "skipped" ? "text-ink/65" : "text-ink"}`}>{r.step}</Truncate>
+                    {r.duration && <span className="shrink-0 font-term text-[10.5px] text-ink/65">{r.duration}</span>}
                   </span>
-                  <div className="text-[12px] leading-snug text-ink/70">{r.detail || "Not recorded"}</div>
+                  <Truncate lines={2} className="text-[12px] leading-snug text-ink/70">{r.detail || "Not recorded"}</Truncate>
                 </span>
               </li>
             ))}
@@ -203,9 +207,12 @@ export function RunInspector({
             style={{ gridTemplateColumns: `repeat(${Math.min(4, run.stats.length)}, minmax(0,1fr))` }}
           >
             {run.stats.map((s) => (
-              <div key={s.label} className="bg-paper px-3 py-2.5">
-                <div className="font-term text-[10px] uppercase tracking-[0.08em] text-ink/65">{s.label}</div>
-                <div className={`text-[20px] font-bold leading-tight ${s.bad ? "text-espelette" : "text-ink"}`}>{s.value}</div>
+              <div key={s.label} className="min-w-0 bg-paper px-3 py-2.5">
+                {/* A mono uppercase label with letter-spacing has a wide
+                    min-content: in a quarter-width tile "Contradictions" alone
+                    ran 38px past its cell, so it ellipsises (§12). */}
+                <Truncate className="font-term text-[10px] uppercase tracking-[0.08em] text-ink/65">{s.label}</Truncate>
+                <Truncate className={`text-[20px] font-bold leading-tight ${s.bad ? "text-espelette" : "text-ink"}`} title={String(s.value)}>{s.value}</Truncate>
               </div>
             ))}
           </div>
@@ -287,7 +294,7 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading =
 
   if (loading) {
     return (
-      <div className={`grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`} aria-hidden="true">
+      <div className={`grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`} aria-hidden="true">
         <SkeletonList rows={5} />
         <SkeletonCard lines={6} footer />
       </div>
@@ -295,7 +302,7 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading =
   }
 
   return (
-    <div className={`grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`}>
+    <div className={`grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`}>
       {/* Faux live list behind the panel */}
       <div className={`${card} overflow-hidden`}>
         <div className="border-b border-ink/10 px-4 py-3">
