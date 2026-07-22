@@ -50,10 +50,15 @@ function Frame() {
     return <div style={{ padding: 24, fontFamily: "monospace" }}>Unknown page: {pageId || "(none)"}</div>;
   }
   const Cmp = mod.component;
-  // Fixed width, min-height = device height, but allowed to grow taller so the
-  // full page is captured (see prerender.mjs fullPage screenshot).
+  // Fixed device width, min-height = device height but free to grow taller so
+  // the full page is captured (see prerender.mjs fullPage screenshot).
+  // overflowX:"clip" keeps the frame exactly device-width — like a real
+  // fixed-width window / Figma frame — so horizontal overflow shows as content
+  // cut off at the edge instead of widening (and squishing) the screenshot.
+  // (`clip` on x with default-visible y does NOT create a vertical scroll
+  // container, so the full-height capture still works.)
   return (
-    <div style={{ width: w, minHeight: h }} className="bg-paper text-ink">
+    <div style={{ width: w, minHeight: h, overflowX: "clip" }} className="bg-paper text-ink">
       <Cmp state={stateId} mobile={view === "mobile"} />
     </div>
   );
