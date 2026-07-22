@@ -62,7 +62,15 @@ async function main() {
   try {
     await waitForServer(`${BASE}/render.html`);
     const browser = await chromium.launch();
-    const ctx = await browser.newContext({ deviceScaleFactor: 1 });
+    // Desktop at 1x (its tall frames would blow past browser image-size limits
+    // at 2x); mobile at 2x DPR so the small 390px frames stay crisp when zoomed
+    // in on the canvas (manifest stays CSS px — the image just carries 2x
+    // pixels, i.e. retina).
+    const ctxByView = {
+      desktop: await browser.newContext({ deviceScaleFactor: 1 }),
+      mobile: await browser.newContext({ deviceScaleFactor: 2 }),
+    };
+    const ctx = ctxByView.desktop;
 
     // Enumerate frames from the registry.
     const listPage = await ctx.newPage();
@@ -82,11 +90,16 @@ async function main() {
     let cursor = 0;
     let done = 0;
     async function worker() {
-      const p = await ctx.newPage();
+      // One page per view (each from its own DPR context).
+      const pageByView = {
+        desktop: await ctxByView.desktop.newPage(),
+        mobile: await ctxByView.mobile.newPage(),
+      };
       for (;;) {
         const i = cursor++;
         if (i >= ordered.length) break;
         const f = ordered[i];
+        const p = pageByView[f.view];
         const { w, h: devH } = SIZES[f.view];
         const file = `${f.page}__${f.state}__${f.view}.jpg`;
         const url = `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}`;
@@ -105,7 +118,8 @@ async function main() {
         done++;
         if (done % 25 === 0) process.stdout.write(`${done}/${ordered.length} `);
       }
-      await p.close();
+      await pageByView.desktop.close();
+      await pageByView.mobile.close();
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     process.stdout.write("\n");
