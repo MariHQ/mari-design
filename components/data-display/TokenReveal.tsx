@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Key, X, Eye, EyeOff, Copy, Check } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
-import { Skeleton, SkeletonLine, SkeletonButton } from "./Skeleton";
 
 /* TokenReveal — one-time secret reveal (API keys, MCP tokens): a clay dashed
    card that keeps the secret masked until you reveal it, a copy button, and a
@@ -24,34 +23,16 @@ export type TokenRevealProps = {
   masked?: boolean;
   warning?: ReactNode;
   onDismiss?: () => void;
-  /** Render a content-shaped skeleton while the token is being minted. */
-  loading?: boolean;
   className?: string;
 };
 
 export function TokenReveal({
   token, title = "Your new token", masked = true,
   warning = "You won't see this again — store it somewhere safe before dismissing.",
-  onDismiss, loading = false, className = "",
+  onDismiss, className = "",
 }: TokenRevealProps) {
   const [revealed, setRevealed] = useState(!masked);
   const [copied, setCopied] = useState(false);
-
-  if (loading) {
-    return (
-      <Card
-        className={`border-clay/50 border-dashed bg-clay/[0.06] ${className}`.trim()}
-        icon={<Key size={16} className="text-clay" />}
-        title={title}
-      >
-        <div className="flex items-center gap-2.5">
-          <Skeleton height={32} className="flex-1" rounded="rounded-[3px]" />
-          <SkeletonButton w={84} />
-        </div>
-        <SkeletonLine w="72%" h={11} className="mt-2.5" />
-      </Card>
-    );
-  }
 
   const copy = async () => {
     try {

@@ -2,7 +2,7 @@ import { Sparkles, ChevronRight } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { EmptyState } from "../data-display/EmptyState";
-import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
+import { Spinner } from "../data-display/Spinner";
 import { SourceMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
 
@@ -105,19 +105,7 @@ export function OverviewSourcePulse({
       hint="Last 7 days"
     >
       {loading ? (
-        <div className="grid gap-2.5 sm:grid-cols-2" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-3 rounded-md border border-ink/12 p-3">
-              <SkeletonCircle size={26} />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <SkeletonLine w="55%" h={11} />
-                <SkeletonLine w="38%" h={9} />
-              </div>
-              <Skeleton width={56} height={22} rounded="rounded-[3px]" />
-              <SkeletonLine w={48} h={9} />
-            </div>
-          ))}
-        </div>
+        <div className="grid place-items-center min-h-[120px]"><Spinner size="sm" /></div>
       ) : offline ? (
         <EmptyState>API offline — source pulse unavailable.</EmptyState>
       ) : (

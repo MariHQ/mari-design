@@ -9,7 +9,6 @@ import { Select } from "../forms/Select";
 import { Field } from "../forms/Field";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
 import { GithubMark } from "../icons/marks";
 
 /* Settings — Members table & provisioning ────────────────────────────────
@@ -46,7 +45,6 @@ export type SettingsMembersTableProps = {
   members?: Member[];
   workspaceName?: string;
   githubTeam?: { connected: boolean; team: string };
-  loading?: boolean;
   className?: string;
 };
 
@@ -54,7 +52,6 @@ export function SettingsMembersTable({
   members: initialMembers = DEMO_MEMBERS,
   workspaceName = "Acme Data Platform",
   githubTeam = { connected: true, team: "acme/data-eng" },
-  loading = false,
   className = "",
 }: SettingsMembersTableProps) {
   const [members, setMembers] = useState<Member[]>(initialMembers);
@@ -91,22 +88,6 @@ export function SettingsMembersTable({
   const saveGh = () => { setGh({ connected: true, team: ghDraft }); setGhEditing(false); };
 
   const roleOptions = (r: Role): Role[] => (ROLES.includes(r as never) ? [...ROLES] : [r, ...ROLES]);
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5"><Skeleton width={180} height={20} /><SkeletonLine w={280} h={11} /></div>
-          <SkeletonButton w={130} />
-        </div>
-        <SkeletonCard lines={1} />
-        <SkeletonTable rows={4} cols={6} />
-        <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
-          <SkeletonCard lines={2} /><SkeletonCard lines={3} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { SectionLabel } from "../forms/SectionLabel";
 import { SyncPanel, SyncStatusLine, type SyncSource } from "../feedback/SyncPanel";
-import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark, GithubMark } from "../icons/marks";
 
 /* WelcomeSyncPanel — the Welcome wizard's live sync read-out for just-connected
@@ -32,35 +31,11 @@ const DEMO: SyncSource[] = [
 
 export type WelcomeSyncPanelProps = {
   sources?: SyncSource[];
-  loading?: boolean;
   className?: string;
 };
 
-export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = "" }: WelcomeSyncPanelProps) {
+export function WelcomeSyncPanel({ sources = DEMO, className = "" }: WelcomeSyncPanelProps) {
   const [items, setItems] = useState<SyncSource[]>(sources);
-
-  if (loading) {
-    return (
-      <div className={`grid gap-2 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-center justify-between">
-          <SkeletonLine w={90} h={10} />
-          <SkeletonLine w={130} h={10} />
-        </div>
-        <div className="divide-y divide-ink/[0.08] overflow-hidden rounded-md border border-ink/12 bg-paper">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 p-3">
-              <SkeletonCircle size={30} />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <SkeletonLine w="45%" h={11} />
-                <Skeleton height={6} rounded="rounded-full" />
-              </div>
-              <SkeletonChip w={64} />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   const retry = (id: string) => {
     setItems((xs) => xs.map((s) => (s.id === id ? { ...s, state: "syncing", phase: "Fetching", done: 0, total: 200, error: undefined } : s)));

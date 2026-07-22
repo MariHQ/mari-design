@@ -11,7 +11,6 @@ import { Chip } from "../data-display/Chip";
 import { TagChip } from "../data-display/TagChip";
 import { Progress } from "../data-display/Progress";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../data-display/Skeleton";
 
 /* LibraryTagsPanel — the Library › Tags tab (default tab).
    The single source of truth for the project's tag vocabulary: one
@@ -56,11 +55,10 @@ const TOTAL_DOCS = 420;
 
 export type LibraryTagsPanelProps = {
   tags?: TagDef[];
-  loading?: boolean;
   className?: string;
 };
 
-export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className = "" }: LibraryTagsPanelProps) {
+export function LibraryTagsPanel({ tags = DEMO_TAGS, className = "" }: LibraryTagsPanelProps) {
   const [rows, setRows] = useState<TagDef[]>(tags);
   const [query, setQuery] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -111,38 +109,6 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
 
   const maxUsage = Math.max(1, ...rows.map((t) => t.usage));
   const untagged = Math.max(0, TOTAL_DOCS - Math.round(tagged / 1.4));
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-4 ${className}`.trim()} aria-hidden="true">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
-        </div>
-        <div className="rounded-md border border-ink/12 bg-paper">
-          <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-            <SkeletonLine w={120} h={13} />
-            <div className="flex gap-2"><SkeletonButton w={120} /><SkeletonButton w={88} /></div>
-          </div>
-          <div className="divide-y divide-ink/10">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="grid items-start gap-3 px-4 py-3.5 md:grid-cols-[1.4fr_1.2fr_1fr_auto]">
-                <div className="space-y-2">
-                  <SkeletonChip w={92} />
-                  <SkeletonLine w="80%" h={9} />
-                </div>
-                <div className="flex flex-wrap gap-1.5"><SkeletonChip w={64} /><SkeletonChip w={52} /></div>
-                <div className="space-y-2">
-                  <SkeletonLine w="55%" h={9} />
-                  <SkeletonChip w={72} />
-                </div>
-                <div className="flex justify-end gap-1.5"><SkeletonButton w={30} /></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-4 ${className}`.trim()}>

@@ -9,7 +9,6 @@ import { Switch } from "../forms/Switch";
 import { Progress } from "../data-display/Progress";
 import { CountChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
 import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -67,15 +66,13 @@ export type AuditFindingsChecklistProps = {
   provider?: string;
   repo?: string;
   ranAt?: string;
-  /** Render a content-shaped skeleton while the scan runs. */
-  loading?: boolean;
   className?: string;
 };
 
 export function AuditFindingsChecklist({
   findings = DEMO_FINDINGS, members = DEMO_MEMBERS,
   provider = "github", repo = "acme/product-docs", ranAt = "Jul 21, 9:04 AM",
-  loading = false, className = "",
+  className = "",
 }: AuditFindingsChecklistProps) {
   const [overrides, setOverrides] = useState<Record<number, Override>>({});
   const [hideHandled, setHideHandled] = useState(false);
@@ -119,25 +116,6 @@ export function AuditFindingsChecklist({
   const reaudit = () => { setScanning(true); setOverrides({}); setTimeout(() => setScanning(false), 700); };
 
   const toggle = (k: Kind) => setCollapsed((c) => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); return n; });
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
-        <div className="space-y-2">
-          <SkeletonLine w={130} h={10} />
-          <Skeleton width={140} height={20} />
-          <SkeletonLine w={280} h={10} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[110, 92, 118, 96, 104].map((w, i) => <Skeleton key={i} width={w} height={38} rounded="rounded-[6px]" />)}
-        </div>
-        <Skeleton height={58} className="rounded-md" />
-        <SkeletonCard lines={2} />
-        <SkeletonCard lines={3} />
-        <SkeletonCard lines={2} />
-      </div>
-    );
-  }
 
   if (findings.length === 0) {
     return (

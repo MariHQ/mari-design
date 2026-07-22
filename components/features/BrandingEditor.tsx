@@ -11,7 +11,6 @@ import { SectionLabel } from "../forms/SectionLabel";
 import { Chip } from "../data-display/Chip";
 import { Swatch } from "../data-display/Swatch";
 import { Spinner } from "../data-display/Spinner";
-import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* Branding editor (bring-your-own-branding) ───────────────────────────────
@@ -91,9 +90,9 @@ function ColorField({ label, value, onChange, onAuto, explicit }: { label: strin
   );
 }
 
-export type BrandingEditorProps = { branding?: Branding; loading?: boolean; className?: string };
+export type BrandingEditorProps = { branding?: Branding; className?: string };
 
-export function BrandingEditor({ branding = {}, loading = false, className = "" }: BrandingEditorProps) {
+export function BrandingEditor({ branding = {}, className = "" }: BrandingEditorProps) {
   const [draft, setDraft] = useState<Branding>(branding);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -127,28 +126,6 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
     ["--b-gold"]: effectiveColor(draft, "gold"),
     ...(draft.bodyFont ? { fontFamily: `"${draft.bodyFont}", serif` } : {}),
   } as CSSProperties;
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="space-y-2.5"><Skeleton width={140} height={20} /><SkeletonLine w={360} h={11} /></div>
-        <SkeletonCard lines={1} />
-        <div className="rounded-md border border-ink/12 bg-paper p-4">
-          <SkeletonLine w="30%" h={12} className="mb-4" />
-          <div className="grid gap-x-5 gap-y-3 sm:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-2 border-b border-ink/10 py-2.5">
-                <Skeleton width={32} height={32} rounded="rounded-[4px]" />
-                <SkeletonLine w={70} h={10} />
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex gap-3"><Skeleton width={130} height={34} rounded="rounded-[4px]" /><Skeleton width={150} height={34} rounded="rounded-[4px]" /></div>
-        </div>
-        <SkeletonCard lines={3} media />
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

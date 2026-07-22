@@ -3,7 +3,6 @@ import { CheckCircle2, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { card } from "../tokens/card";
 import { fmtAgo, type DateInput } from "../tokens/format";
 import { Spinner } from "../data-display/Spinner";
-import { SkeletonList } from "../data-display/Skeleton";
 import { Chip, type ChipTone } from "../data-display/Chip";
 import { Progress, type ProgressTone } from "../data-display/Progress";
 import { Button } from "../actions/Button";
@@ -120,15 +119,10 @@ export type SyncPanelProps = {
   sources: SyncSource[];
   /** Retry handler for failed sources; hides the retry button when omitted. */
   onRetry?: (id: string) => void;
-  /** Render skeleton rows while the sync state is still loading. */
-  loading?: boolean;
   className?: string;
 };
 
-export function SyncPanel({ sources, onRetry, loading = false, className = "" }: SyncPanelProps) {
-  if (loading) {
-    return <SkeletonList rows={sources.length || 3} className={className} />;
-  }
+export function SyncPanel({ sources, onRetry, className = "" }: SyncPanelProps) {
   if (sources.length === 0) {
     return (
       <div className={`${card} px-4 py-6 text-center text-[13px] text-ink/55 ${className}`.trim()}>

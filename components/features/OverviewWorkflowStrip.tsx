@@ -5,7 +5,7 @@ import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
+import { Spinner } from "../data-display/Spinner";
 import { Button } from "../actions/Button";
 
 /* Overview — Workflow strip ───────────────────────────────────────────────
@@ -123,23 +123,7 @@ export function OverviewWorkflowStrip({
       actions={configure}
     >
       {loading ? (
-        <div aria-hidden="true">
-          <div className="flex flex-wrap items-start gap-1">
-            {[0, 1, 2, 3].map((i) => (
-              <Fragment key={i}>
-                <div className="flex w-[68px] flex-col items-center gap-1.5">
-                  <SkeletonCircle size={36} />
-                  <SkeletonLine w="80%" h={9} />
-                </div>
-                {i < 3 && <span className="mt-4 min-w-[14px] flex-1 self-start border-t border-dotted border-ink/20" />}
-              </Fragment>
-            ))}
-          </div>
-          <div className="mt-4 space-y-2 border-t border-ink/10 pt-3">
-            <div className="flex items-center justify-between"><SkeletonLine w="40%" h={12} /><SkeletonLine w={54} h={10} /></div>
-            <div className="flex items-center justify-between"><SkeletonLine w="30%" h={10} /><SkeletonLine w={44} h={16} /></div>
-          </div>
-        </div>
+        <div className="grid place-items-center min-h-[120px]"><Spinner size="sm" /></div>
       ) : offline ? (
         <EmptyState>API offline — flows unavailable.</EmptyState>
       ) : !flow ? (

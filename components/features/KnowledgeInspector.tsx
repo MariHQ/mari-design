@@ -8,7 +8,6 @@ import { Tabs } from "../navigation/Tabs";
 import { CountChip } from "../data-display/Chip";
 import { Pill } from "../data-display/Pill";
 import { SourceMark } from "../icons/marks";
-import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 
 /* KnowledgeInspector — the sticky right-rail describing the selected search
    result: title/source, editable tags, a two-tab view (Document summary vs.
@@ -67,30 +66,12 @@ type InsTab = "document" | "inspector";
 
 export type KnowledgeInspectorProps = {
   doc?: Doc;
-  loading?: boolean;
   className?: string;
 };
 
-export function KnowledgeInspector({ doc = DEMO, loading = false, className = "" }: KnowledgeInspectorProps) {
+export function KnowledgeInspector({ doc = DEMO, className = "" }: KnowledgeInspectorProps) {
   const [insTab, setInsTab] = useState<InsTab>("document");
   const [tags, setTags] = useState<string[]>(doc.tags);
-
-  if (loading) {
-    return (
-      <Card variant="flush" className={`sticky top-4 ${className}`.trim()}>
-        <div className="flex gap-4 border-b border-ink/10 px-4 pb-2.5 pt-3" aria-hidden="true">
-          <SkeletonLine w={70} h={11} /><SkeletonLine w={64} h={11} />
-        </div>
-        <div className="space-y-4 p-4" aria-hidden="true">
-          <div className="flex items-start gap-2.5"><SkeletonCircle size={20} /><SkeletonLine w="75%" h={15} /></div>
-          <div className="flex gap-2"><SkeletonChip w={72} /><SkeletonChip w={54} /></div>
-          <div className="space-y-2"><SkeletonLine w="40%" h={9} /><SkeletonText lines={3} /></div>
-          <div className="space-y-2"><SkeletonLine w="40%" h={9} /><SkeletonText lines={4} /></div>
-          <div className="space-y-2"><SkeletonLine w="40%" h={9} /><SkeletonText lines={3} /></div>
-        </div>
-      </Card>
-    );
-  }
 
   const metaRow = (label: string, value: React.ReactNode) => (
     <div className="flex items-baseline justify-between gap-4 py-2 border-b border-ink/10 last:border-0">

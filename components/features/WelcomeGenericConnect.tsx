@@ -4,7 +4,6 @@ import { ConnectDrawer } from "../forms/ConnectDrawer";
 import { type ConnectorField, type ConnectTestResult } from "../forms/ConnectorWizard";
 import { type SyncSource } from "../feedback/SyncPanel";
 import { Button } from "../actions/Button";
-import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonButton } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
 /* WelcomeGenericConnect — the Welcome wizard's Step 1 sub-flow for any catalog
@@ -27,7 +26,6 @@ export type WelcomeGenericConnectProps = {
   fields?: ConnectorField[];
   docsUrl?: string;
   defaultOpen?: boolean;
-  loading?: boolean;
   className?: string;
 };
 
@@ -38,7 +36,6 @@ export function WelcomeGenericConnect({
   fields = SLACK_FIELDS,
   docsUrl = "https://api.slack.com/authentication/token-types",
   defaultOpen = true,
-  loading = false,
   className = "",
 }: WelcomeGenericConnectProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -59,8 +56,6 @@ export function WelcomeGenericConnect({
     }), 1600);
   };
 
-  if (loading) return <ConnectPanelSkeleton rows={Math.max(1, fields.length)} className={className} />;
-
   return (
     <div className={className}>
       <Button variant="primary" onClick={() => { setSync(null); setOpen(true); }}>Connect {providerName}</Button>
@@ -80,35 +75,6 @@ export function WelcomeGenericConnect({
         syncStatus={sync}
         onRetrySync={() => setSync((s) => (s ? { ...s, state: "syncing" } : s))}
       />
-    </div>
-  );
-}
-
-/* Loading silhouette that mirrors a connector setup panel: provider header
-   (mark + title + blurb) over a stack of credential field rows and the
-   Connect & sync footer. Shared by the Welcome connect features. */
-export function ConnectPanelSkeleton({ rows = 3, className = "" }: { rows?: number; className?: string }) {
-  return (
-    <div className={className} aria-hidden="true">
-      <div className="flex items-start gap-3">
-        <SkeletonCircle size={44} />
-        <div className="min-w-0 flex-1 space-y-2 pt-1">
-          <SkeletonLine w="45%" h={14} />
-          <SkeletonLine w="72%" h={10} />
-        </div>
-      </div>
-      <div className="mt-5 space-y-4">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="space-y-1.5">
-            <SkeletonLine w={90} h={10} />
-            <Skeleton height={38} />
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
-        <SkeletonLine w="40%" h={10} />
-        <span className="ml-auto"><SkeletonButton w={130} /></span>
-      </div>
     </div>
   );
 }

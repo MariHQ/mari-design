@@ -6,7 +6,7 @@ import { Avatar } from "../data-display/Avatar";
 import { Pill } from "../data-display/Pill";
 import { CountChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonLine, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
+import { Spinner } from "../data-display/Spinner";
 import { focusRing } from "../tokens/focusRing";
 
 /* Overview — Today's review (task inbox) ──────────────────────────────────
@@ -91,16 +91,7 @@ export function OverviewTodayReview({
       title="Today's review"
     >
       {loading ? (
-        <div className="divide-y divide-ink/10" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-2.5 py-2">
-              <SkeletonCircle size={18} />
-              <span className="flex-1"><SkeletonLine w={["82%", "68%", "76%", "60%"][i]} h={11} /></span>
-              <SkeletonCircle size={22} />
-              <SkeletonChip w={68} />
-            </div>
-          ))}
-        </div>
+        <div className="grid place-items-center min-h-[120px]"><Spinner size="sm" /></div>
       ) : offline ? (
         <EmptyState>API offline — tasks unavailable.</EmptyState>
       ) : (

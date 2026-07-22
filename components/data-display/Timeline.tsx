@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { ChipTone } from "./Chip";
-import { SkeletonLine } from "./Skeleton";
 
 /* Timeline — a vertical event timeline: a hairline rail with tone-colored
    nodes, each carrying a title, optional time, description and icon. Distinct
@@ -29,34 +28,9 @@ export type TimelineItem = {
 export type TimelineProps = {
   items: TimelineItem[];
   className?: string;
-  loading?: boolean;
 };
 
-const titleWidths = ["58%", "44%", "66%", "50%"];
-
-export function Timeline({ items, className = "", loading = false }: TimelineProps) {
-  if (loading) {
-    return (
-      <ol className={`relative ${className}`.trim()} aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => {
-          const last = i === 3;
-          return (
-            <li key={i} className="relative flex gap-3 pb-5 last:pb-0">
-              {!last && <span className="absolute left-[8px] top-5 bottom-0 w-px bg-ink/12" />}
-              <span className="relative z-10 shrink-0 mt-0.5 grid place-items-center w-[17px] h-[17px]">
-                <span className="w-2.5 h-2.5 rounded-full ring-2 ring-paper bg-ink/25" />
-              </span>
-              <div className="min-w-0 flex-1 -mt-px space-y-1.5">
-                <SkeletonLine w={titleWidths[i % titleWidths.length]} h={12} />
-                {i % 2 === 0 && <SkeletonLine w="82%" h={10} />}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    );
-  }
-
+export function Timeline({ items, className = "" }: TimelineProps) {
   return (
     <ol className={`relative ${className}`.trim()}>
       {items.map((it, i) => {

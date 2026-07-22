@@ -6,7 +6,6 @@ import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { Logo } from "../shell/Logo";
 import { GithubMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
@@ -40,11 +39,10 @@ export type AuthSessionProps = {
   initialUser?: AuthUser | null;
   bypassEnabled?: boolean;
   oauth?: { github: boolean; google: boolean };
-  loading?: boolean;
   className?: string;
 };
 
-export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = { github: true, google: false }, loading = false, className = "" }: AuthSessionProps) {
+export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = { github: true, google: false }, className = "" }: AuthSessionProps) {
   const [user, setUser] = useState<AuthUser | null>(initialUser);
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const [name, setName] = useState("");
@@ -68,33 +66,6 @@ export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = 
     if (!email.trim() || !password.trim() || (mode === "register" && !name.trim())) { setError("Please fill in every field."); return; }
     signIn("password");
   };
-
-  if (loading) {
-    return (
-      <div className={`mx-auto max-w-[380px] ${className}`.trim()} aria-hidden="true">
-        <Card>
-          <div className="flex flex-col items-center gap-2 pt-2 pb-4">
-            <SkeletonCircle size={40} />
-            <SkeletonLine w={120} h={16} />
-            <SkeletonLine w={180} h={10} />
-          </div>
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-1.5">
-                <SkeletonLine w={72} h={10} />
-                <Skeleton height={38} />
-              </div>
-            ))}
-            <Skeleton height={38} className="mt-1" />
-          </div>
-          <div className="my-3.5"><SkeletonLine w="100%" h={9} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <Skeleton height={36} /><Skeleton height={36} />
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   if (user) {
     return (

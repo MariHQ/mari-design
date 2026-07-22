@@ -8,7 +8,6 @@ import { Stepper } from "../data-display/Stepper";
 import { Chip } from "../data-display/Chip";
 import { Spinner } from "../data-display/Spinner";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonButton } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* AnswersHarvestWizard — the LLM-driven "question harvest" wizard opened from
@@ -59,11 +58,10 @@ function SourcePickerItem({ icon, label, description, checked, onChange }: { ico
 
 export type AnswersHarvestWizardProps = {
   defaultOpen?: boolean;
-  loading?: boolean;
   className?: string;
 };
 
-export function AnswersHarvestWizard({ defaultOpen = false, loading = false, className = "" }: AnswersHarvestWizardProps) {
+export function AnswersHarvestWizard({ defaultOpen = false, className = "" }: AnswersHarvestWizardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState<Set<SourceId>>(new Set(["slack", "docs", "chat"]));
@@ -135,14 +133,6 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
       </>
     );
   })();
-
-  if (loading) {
-    return (
-      <div className={className} aria-hidden="true">
-        <SkeletonButton w={150} />
-      </div>
-    );
-  }
 
   return (
     <div className={className}>

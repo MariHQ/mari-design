@@ -3,7 +3,6 @@ import { Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import type { Column } from "./DataTable";
-import { SkeletonTable } from "./Skeleton";
 
 const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
 
@@ -29,7 +28,7 @@ function Check({ checked, indeterminate = false, onChange, label }: {
    bar rendered from `bulkActions(selectedRows)`. */
 export function SelectableTable<T>({
   rows, columns, rowKey, onRowClick, bulkActions, onSelectionChange,
-  minW = 720, empty = "No results", selectAllLabel = "Select all rows", loading = false,
+  minW = 720, empty = "No results", selectAllLabel = "Select all rows",
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -41,7 +40,6 @@ export function SelectableTable<T>({
   minW?: number;
   empty?: string;
   selectAllLabel?: string;
-  loading?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -63,14 +61,6 @@ export function SelectableTable<T>({
   };
 
   const colSpan = columns.length + 1;
-
-  if (loading) {
-    return (
-      <div className={`${card} mt-5 overflow-hidden`}>
-        <SkeletonTable rows={8} cols={columns.length + 1} className="border-0 rounded-none" />
-      </div>
-    );
-  }
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>

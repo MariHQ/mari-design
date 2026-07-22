@@ -18,7 +18,6 @@ import { MarkdownView } from "../data-display/MarkdownView";
 import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
 import { Badge } from "../data-display/Badge";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 
 /* ————— ported doc-specific helpers (not in the shared lib module) ————— */
 
@@ -178,11 +177,9 @@ const MARKED =
 export function DocReviewMarkdown({
   markdown = DEMO_MD,
   findings = DEMO_FINDINGS,
-  loading = false,
 }: {
   markdown?: string;
   findings?: Finding[];
-  loading?: boolean;
 }) {
   const [tab, setTab] = useState<EngineTab>("blocks");
 
@@ -196,34 +193,6 @@ export function DocReviewMarkdown({
   }, [blocks, findings]);
 
   const diff = useMemo(() => diffChange(cleanText(DIFF_SAMPLE.original), cleanText(DIFF_SAMPLE.proposed)), []);
-
-  if (loading) {
-    return (
-      <Card variant="flush" className="max-w-[860px]">
-        <div className="space-y-2 border-b border-ink/12 px-4 pb-3 pt-4" aria-hidden="true">
-          <div className="flex items-center gap-2"><SkeletonLine w={150} h={14} /><SkeletonChip w={72} /></div>
-          <SkeletonLine w="70%" h={10} />
-        </div>
-        <div className="flex gap-4 px-4 pt-3" aria-hidden="true">
-          <SkeletonLine w={54} h={11} /><SkeletonLine w={64} h={11} /><SkeletonLine w={70} h={11} /><SkeletonLine w={64} h={11} />
-        </div>
-        <div className="space-y-1.5 p-4" aria-hidden="true">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex items-start gap-3 rounded-[4px] border border-ink/10 bg-paper px-2.5 py-2">
-              <SkeletonChip w={34} />
-              <span className="min-w-0 flex-1"><SkeletonLine w={`${88 - (i % 3) * 14}%`} h={10} /></span>
-            </div>
-          ))}
-        </div>
-        <div className="px-4 pb-4" aria-hidden="true">
-          <div className="rounded-[6px] border border-ink/12 bg-paper p-4">
-            <Skeleton width="50%" height={20} className="mb-3" />
-            <SkeletonText lines={4} />
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   return (
     <Card

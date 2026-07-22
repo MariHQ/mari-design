@@ -7,7 +7,6 @@ import {
 } from "../forms/ConnectorWizard";
 import { type SyncSource } from "../feedback/SyncPanel";
 import { Button } from "../actions/Button";
-import { SkeletonButton } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
 /* SourcesConnectorWizard — the Sources page "Add source" flow: choose a
@@ -90,12 +89,11 @@ export type SourcesConnectorWizardProps = {
   providers?: WizardProvider[];
   /** Open the wizard on mount so it shows in a static gallery. */
   defaultOpen?: boolean;
-  loading?: boolean;
   className?: string;
 };
 
 export function SourcesConnectorWizard({
-  providers = CATALOG, defaultOpen = true, loading = false, className = "",
+  providers = CATALOG, defaultOpen = true, className = "",
 }: SourcesConnectorWizardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [sync, setSync] = useState<SyncSource | null>(null);
@@ -119,10 +117,6 @@ export function SourcesConnectorWizard({
       });
     }, 1600);
   };
-
-  if (loading) {
-    return <div className={className} aria-hidden="true"><SkeletonButton w={124} /></div>;
-  }
 
   return (
     <div className={className}>

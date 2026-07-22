@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { ICONS, type IconName } from "../icons/ui";
 import { SourceMark, PROVIDERS, PROVIDER_NAME } from "../icons/marks";
 import { TagChip, TAG_OPTIONS } from "../data-display/TagChip";
-import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 
 /* GlobalIconsArt — the shared visual-primitive showcase: the full bespoke
    line-art icon set (from the icons/ module's ICONS registry), the brand-
@@ -193,39 +192,9 @@ function Cell({ label, children }: { label: string; children: ReactNode }) {
 
 const ICON_NAMES = Object.keys(ICONS) as IconName[];
 
-export type GlobalIconsArtProps = { loading?: boolean; className?: string };
+export type GlobalIconsArtProps = { className?: string };
 
-/* Loading silhouette mirroring the showcase: a title block over sectioned
-   grids of icon/mark cells. */
-function IconsArtSkeleton({ className = "" }: { className?: string }) {
-  const cell = (key: string | number) => (
-    <div key={key} className="flex flex-col items-center gap-1.5 rounded-[6px] border border-ink/10 bg-paper px-2 py-3">
-      <Skeleton width={22} height={22} />
-      <SkeletonLine w={40} h={8} />
-    </div>
-  );
-  return (
-    <div className={`max-w-[880px] ${className}`.trim()} aria-hidden="true">
-      <div className="mb-5 space-y-2">
-        <SkeletonLine w={260} h={18} />
-        <SkeletonLine w="70%" h={10} />
-      </div>
-      <div className="flex flex-col gap-7">
-        {[0, 1].map((s) => (
-          <section key={s}>
-            <div className="mb-3 border-b border-ink/10 pb-1.5"><SkeletonLine w={180} h={13} /></div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-1.5">
-              {Array.from({ length: 12 }).map((_, i) => cell(i))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function GlobalIconsArt({ loading = false, className = "" }: GlobalIconsArtProps) {
-  if (loading) return <IconsArtSkeleton className={className} />;
+export function GlobalIconsArt({ className = "" }: GlobalIconsArtProps) {
   return (
     <div className={`max-w-[880px] ${className}`.trim()}>
       <SketchDefs />

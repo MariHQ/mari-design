@@ -1,6 +1,5 @@
 import { Fragment, type ReactNode } from "react";
 import { parseMarkdown, type Block } from "./markdown";
-import { SkeletonLine, SkeletonText } from "./Skeleton";
 
 // Blueprint prose styling: display font for headings, ink body text, a flysch
 // tint behind code, biscay-2 for inline code accents. Inline HTML (**bold**,
@@ -73,23 +72,11 @@ function renderBlocks(blocks: Block[]): ReactNode[] {
 export type MarkdownViewProps = {
   /** Raw markdown source. */
   children: string;
-  /** Show a prose-shaped skeleton instead of parsing/rendering. */
-  loading?: boolean;
   className?: string;
 };
 
 /** Render trusted markdown as styled blueprint prose (headings, lists, code, inline marks). */
-export function MarkdownView({ children, loading = false, className = "" }: MarkdownViewProps) {
-  if (loading) {
-    return (
-      <div className={`text-ink ${className}`.trim()} aria-hidden="true">
-        <SkeletonLine w="55%" h={22} className="mb-4" />
-        <SkeletonText lines={3} className="mb-4" lastWidth="70%" />
-        <SkeletonText lines={3} className="mb-4" lastWidth="45%" />
-        <SkeletonText lines={2} lastWidth="60%" />
-      </div>
-    );
-  }
+export function MarkdownView({ children, className = "" }: MarkdownViewProps) {
   const blocks = parseMarkdown(children ?? "");
   return <div className={`text-ink ${className}`.trim()}>{renderBlocks(blocks)}</div>;
 }

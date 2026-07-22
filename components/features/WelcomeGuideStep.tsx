@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Feather, Pencil, CheckCircle2 } from "lucide-react";
 import { Button } from "../actions/Button";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* WelcomeGuideStep — the Welcome wizard's Step 2 style-guide picker: a
@@ -33,35 +32,16 @@ export function guideName(id: string | null): string | null {
 export type WelcomeGuideStepProps = {
   guide?: string | null;
   saving?: boolean;
-  loading?: boolean;
   onPick?: (id: string) => void;
   packs?: GuidePack[];
   className?: string;
 };
 
 export function WelcomeGuideStep({
-  guide, saving = false, loading = false, onPick, packs = GUIDE_PACKS, className = "",
+  guide, saving = false, onPick, packs = GUIDE_PACKS, className = "",
 }: WelcomeGuideStepProps) {
   const [selected, setSelected] = useState<string | null>(guide ?? "plain");
   const pick = (id: string) => { setSelected(id); onPick?.(id); };
-
-  if (loading) {
-    return (
-      <div className={`grid gap-2 ${className}`.trim()} aria-hidden="true">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-md border border-ink/15 p-3">
-            <SkeletonCircle size={16} />
-            <SkeletonCircle size={32} />
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <SkeletonLine w="38%" h={12} />
-              <SkeletonLine w="66%" h={9} />
-            </div>
-            <SkeletonLine w={52} h={9} />
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   if (packs.length === 0) {
     return (

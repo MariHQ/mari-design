@@ -9,7 +9,6 @@ import { Avatar } from "../data-display/Avatar";
 import { Sparkline } from "../data-display/Sparkline";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 
 /* AnswerCard — the unit of the Answers ledger: one curated, human-approved
    answer that bots serve verbatim. Shows the question, the answer body
@@ -53,11 +52,10 @@ function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(
 
 export type AnswerCardProps = {
   answer?: Answer;
-  loading?: boolean;
   className?: string;
 };
 
-export function AnswerCard({ answer: initial = DEMO, loading = false, className = "" }: AnswerCardProps) {
+export function AnswerCard({ answer: initial = DEMO, className = "" }: AnswerCardProps) {
   const [a, setA] = useState<Answer>(initial);
   const [editing, setEditing] = useState(false);
   const [editQ, setEditQ] = useState(a.question);
@@ -86,30 +84,6 @@ export function AnswerCard({ answer: initial = DEMO, loading = false, className 
 
   const chipStatus: ChipStatus = approved ? "approved" : a.status === "retired" ? "retired" : "draft";
   const anyBusy = busy !== null;
-
-  if (loading) {
-    return (
-      <Card className={className}>
-        <div className="flex gap-4" aria-hidden="true">
-          <div className="min-w-0 flex-1 space-y-2.5">
-            <SkeletonLine w="70%" h={15} />
-            <SkeletonText lines={2} />
-            <div className="flex items-center gap-2.5">
-              <SkeletonChip w={72} /><SkeletonCircle size={22} /><SkeletonLine w={90} h={9} />
-            </div>
-            <div className="flex items-center gap-2"><SkeletonLine w={64} h={9} /><SkeletonChip w={80} /><SkeletonChip w={92} /></div>
-          </div>
-          <div className="flex w-40 shrink-0 flex-col items-end gap-3 border-l border-ink/10 pl-4">
-            <SkeletonLine w={110} h={11} />
-            <Skeleton width={120} height={26} />
-            <div className="w-full space-y-2">
-              <Skeleton height={30} rounded="rounded-[4px]" /><Skeleton height={30} rounded="rounded-[4px]" />
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   if (editing) {
     return (

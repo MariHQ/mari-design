@@ -7,7 +7,6 @@ import { Input } from "./Input";
 import { Textarea } from "./Textarea";
 import { Spinner } from "../data-display/Spinner";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import type { ConnectorField, ConnectTestResult } from "./ConnectorWizard";
 
@@ -37,13 +36,11 @@ export type ConnectDrawerProps = {
   /** When present, the drawer shows live sync instead of the form. */
   syncStatus?: SyncSource | null;
   onRetrySync?: () => void;
-  /** Render a skeleton form while credentials/config load. */
-  loading?: boolean;
 };
 
 export function ConnectDrawer({
   open, onClose, providerName, blurb, icon, fields, docsUrl,
-  onConnect, onTest, note, syncStatus = null, onRetrySync, loading = false,
+  onConnect, onTest, note, syncStatus = null, onRetrySync,
 }: ConnectDrawerProps) {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [test, setTest] = useState<{ busy: boolean; ok: boolean | null; error: string }>({ busy: false, ok: null, error: "" });
@@ -95,17 +92,7 @@ export function ConnectDrawer({
       icon={icon}
       footer={footer}
     >
-      {loading ? (
-        <div className="space-y-4" aria-hidden="true">
-          <SkeletonLine w="80%" h={11} />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="space-y-2">
-              <SkeletonLine w={100} h={10} />
-              <Skeleton height={38} />
-            </div>
-          ))}
-        </div>
-      ) : connected ? (
+      {connected ? (
         <>
           <p className="text-[13px] text-ink/70 mb-3">The initial sync runs on the server — live status below.</p>
           <SyncPanel sources={[syncStatus!]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />

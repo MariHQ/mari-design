@@ -9,7 +9,6 @@ import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
-import { Skeleton, SkeletonLine, SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
@@ -42,9 +41,9 @@ function randomSecret(): string {
   return `mk_live_${hex}`;
 }
 
-export type SettingsApiKeysProps = { keys?: ApiKey[]; loading?: boolean; className?: string };
+export type SettingsApiKeysProps = { keys?: ApiKey[]; className?: string };
 
-export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false, className = "" }: SettingsApiKeysProps) {
+export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, className = "" }: SettingsApiKeysProps) {
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -65,18 +64,6 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
   };
 
   const revoke = (id: number) => setKeys((k) => k.map((x) => (x.id === id ? { ...x, revoked: true } : x)));
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5"><Skeleton width={150} height={20} /><SkeletonLine w={300} h={11} /></div>
-          <SkeletonButton w={110} />
-        </div>
-        <SkeletonTable rows={4} cols={7} />
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

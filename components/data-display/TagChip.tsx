@@ -1,5 +1,4 @@
 import { Chip } from "./Chip";
-import { SkeletonChip } from "./Skeleton";
 
 /* TagChip — a knowledge-tag preset over <Chip>: each tag maps to a label, a
    tone (from our 5-tone scale) and a status dot. Selectable and removable.
@@ -46,14 +45,12 @@ export type TagChipProps = {
   onRemove?: () => void;
   selected?: boolean;
   onClick?: () => void;
-  loading?: boolean;
   className?: string;
 };
 
 export function TagChip({
-  tag, label, tone, removable = false, onRemove, selected = false, onClick, loading = false, className,
+  tag, label, tone, removable = false, onRemove, selected = false, onClick, className,
 }: TagChipProps) {
-  if (loading) return <SkeletonChip className={className} />;
   return (
     <Chip
       label={label ?? TAG_LABEL[tag] ?? tag}

@@ -3,7 +3,6 @@ import { card } from "../tokens/card";
 import { Scrubber as ScrubberControl } from "../data-display/Scrubber";
 import { fmtDate } from "../tokens/format";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import { DEMO_DATES, DEMO_ACTIVITY } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -27,13 +26,11 @@ export type LineageTimeScrubberProps = {
   activity?: { date: string; count: number }[];
   /** Initial selected index, or null = all time / live. */
   value?: number | null;
-  /** Render a content-shaped skeleton silhouette instead of the scrubber. */
-  loading?: boolean;
   className?: string;
 };
 
 export function LineageTimeScrubber({
-  dates = DEMO_DATES, activity = DEMO_ACTIVITY, value = null, loading = false, className = "",
+  dates = DEMO_DATES, activity = DEMO_ACTIVITY, value = null, className = "",
 }: LineageTimeScrubberProps) {
   const [idx, setIdx] = useState<number | null>(value);
   const lastIdx = Math.max(0, dates.length - 1);
@@ -44,19 +41,6 @@ export function LineageTimeScrubber({
     () => (dates.length ? `${fmtDate(dates[0])} – ${fmtDate(dates[lastIdx])}` : "No events"),
     [dates, lastIdx],
   );
-
-  if (loading) {
-    return (
-      <div className={`${card} p-3 ${className}`.trim()} aria-hidden="true">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2"><SkeletonLine w={70} h={10} /><SkeletonChip w={92} /></div>
-          <SkeletonLine w={160} h={10} />
-        </div>
-        <Skeleton height={38} className="rounded-md" />
-        <SkeletonLine w="72%" h={10} className="mt-2" />
-      </div>
-    );
-  }
 
   return (
     <div className={`${card} p-3 font-display ${className}`.trim()}>

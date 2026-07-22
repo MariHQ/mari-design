@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { GlossaryPanel as GlossaryPanelUI, type GlossaryEntry } from "../data-display/GlossaryPanel";
-import { SkeletonLine, SkeletonText, SkeletonButton } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
 
 /* LibraryGlossaryPanel — the Library › Glossary tab.
@@ -27,36 +26,11 @@ const DEMO_TERMS: Term[] = [
 
 export type LibraryGlossaryPanelProps = {
   terms?: Term[];
-  loading?: boolean;
   className?: string;
 };
 
-export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, className }: LibraryGlossaryPanelProps) {
+export function LibraryGlossaryPanel({ terms = DEMO_TERMS, className }: LibraryGlossaryPanelProps) {
   const [rows, setRows] = useState<Term[]>(terms);
-
-  if (loading) {
-    return (
-      <div className={className}>
-        <div className="rounded-md border border-ink/12 bg-paper" aria-hidden="true">
-          <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-            <div className="space-y-2">
-              <SkeletonLine w={100} h={13} />
-              <SkeletonLine w={220} h={9} />
-            </div>
-            <SkeletonButton w={96} />
-          </div>
-          <div className="divide-y divide-ink/[0.08] px-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="space-y-2 py-3.5">
-                <SkeletonLine w="28%" h={12} />
-                <SkeletonText lines={2} lastWidth="70%" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const entries: GlossaryEntry[] = rows.map((r) => ({
     id: r.id,

@@ -3,7 +3,6 @@ import { Sparkles, ShieldCheck } from "lucide-react";
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
 import { StatusChip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
-import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { fmtAgo } from "../tokens/format";
 
@@ -22,8 +21,6 @@ export type ImpactPanelFeatureProps = {
   docs?: ImpactDoc[];
   /** Start with the impact strip already resolved (skip the run affordance). */
   analyzed?: boolean;
-  /** Render a content-shaped skeleton while the fact context loads. */
-  loading?: boolean;
   className?: string;
 };
 
@@ -43,7 +40,6 @@ export function ImpactPanelFeature({
   summary = DEMO_SUMMARY,
   docs = DEMO_DOCS,
   analyzed = false,
-  loading = false,
   className = "",
 }: ImpactPanelFeatureProps) {
   type Phase = "idle" | "loading" | "done";
@@ -53,29 +49,6 @@ export function ImpactPanelFeature({
     setPhase("loading");
     setTimeout(() => setPhase("done"), 1100);
   };
-
-  if (loading) {
-    return (
-      <div className={`max-w-[720px] ${className}`.trim()}>
-        <article className={`${card} p-4`} aria-hidden="true">
-          <div className="flex items-start gap-3">
-            <SkeletonCircle size={18} />
-            <div className="min-w-0 flex-1 space-y-2.5">
-              <SkeletonLine w="82%" h={14} />
-              <div className="flex flex-wrap items-center gap-3">
-                <SkeletonChip w={70} />
-                <SkeletonLine w={130} h={10} />
-                <SkeletonLine w={90} h={10} />
-              </div>
-            </div>
-          </div>
-          <div className="mt-3.5 border-t border-ink/10 pt-3.5">
-            <SkeletonButton w={150} />
-          </div>
-        </article>
-      </div>
-    );
-  }
 
   return (
     <div className={`max-w-[720px] ${className}`.trim()}>

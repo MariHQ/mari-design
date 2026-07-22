@@ -20,7 +20,6 @@ import {
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 
 /* ————— ported local helpers (browser-only; use the DOM) ————— */
 
@@ -147,11 +146,9 @@ type Annot = { fid: number; rule: string; red: boolean; quote: string; top: numb
 export function DocReviewEditor({
   body = DEMO_MD,
   findings = DEMO_FINDINGS,
-  loading = false,
 }: {
   body?: string;
   findings?: Finding[];
-  loading?: boolean;
 }) {
   const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdown(body));
   const [focusedId, setFocusedId] = useState<number | null>(() => blocks[0]?.id ?? null);
@@ -320,28 +317,6 @@ export function DocReviewEditor({
   const typeValue = focusedBlock && focusedBlock.type in TYPE_LABELS ? focusedBlock.type : "";
   const toolBtn = (active: boolean) =>
     `border ${active ? "border-biscay-2/50 bg-biscay-2/[0.08] text-ink" : "border-ink/15 text-ink/70 hover:text-ink hover:border-ink/40"}`;
-
-  if (loading) {
-    return (
-      <Card variant="flush" className="max-w-[860px]">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink/12 px-3 py-2" aria-hidden="true">
-          <SkeletonChip w={44} /><SkeletonChip w={28} /><SkeletonChip w={28} /><SkeletonChip w={28} />
-          <span className="ml-auto"><SkeletonChip w={28} /></span>
-        </div>
-        <div className="grid grid-cols-[1fr_190px] gap-4 p-5" aria-hidden="true">
-          <div className="space-y-3">
-            <Skeleton width="55%" height={24} />
-            <SkeletonText lines={4} /><SkeletonText lines={3} /><SkeletonText lines={5} />
-          </div>
-          <div className="space-y-6 border-l border-ink/10 pl-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-1.5"><SkeletonLine w="55%" h={9} /><SkeletonLine w="90%" h={9} /></div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   return (
     <Card variant="flush" className="max-w-[860px]">

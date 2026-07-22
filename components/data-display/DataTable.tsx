@@ -2,7 +2,6 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, Inbox, Search } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
-import { SkeletonTable } from "./Skeleton";
 
 const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
 
@@ -19,7 +18,7 @@ export type Column<T> = {
 /* ── DataTable: search, sort, filter, paginate, empty state ────────────── */
 export function DataTable<T>({
   title, count, rows, columns, rowKey, search, searchPlaceholder = "Search…",
-  facet, onRowClick, pageSize = 8, minW = 720, empty = "No results", loading = false,
+  facet, onRowClick, pageSize = 8, minW = 720, empty = "No results",
 }: {
   title?: string;
   count?: number;
@@ -33,7 +32,6 @@ export function DataTable<T>({
   pageSize?: number;
   minW?: number;
   empty?: string;
-  loading?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [facetVal, setFacetVal] = useState("");
@@ -68,22 +66,6 @@ export function DataTable<T>({
     else { setSortKey(key); setSortDir("asc"); }
     setPage(0);
   };
-
-  if (loading) {
-    return (
-      <div className={`${card} mt-5 overflow-hidden`}>
-        {title && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ink/10">
-            <div className="flex items-center gap-2 mr-1">
-              <h4 className="text-[15px] font-semibold text-ink">{title}</h4>
-              {count != null && <span className="font-term text-[11px] font-medium text-ink/60 bg-flysch border border-ink/10 rounded-[3px] px-1.5 py-0.5">{count}</span>}
-            </div>
-          </div>
-        )}
-        <SkeletonTable rows={8} cols={columns.length || 4} className="border-0 rounded-none" />
-      </div>
-    );
-  }
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>

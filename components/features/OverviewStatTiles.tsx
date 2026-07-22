@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Clipboard, CheckCircle2, Play } from "lucide-react";
 import { Stat, type StatTone } from "../data-display/Stat";
 import { IconRing, type IconRingTone } from "../data-display/IconRing";
-import { SkeletonStat } from "../data-display/Skeleton";
+import { Spinner } from "../data-display/Spinner";
 
 /* Overview — Headline stat tiles ─────────────────────────────────────────
    Three big-number tiles summarizing the week: changes, facts to review,
@@ -84,14 +84,6 @@ export function OverviewStatTiles({
   const [area, setArea] = useState<string | null>(null);
   const go = (a: string) => { setArea(a); onNavigate?.(a); };
 
-  if (loading) {
-    return (
-      <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
-        <SkeletonStat /><SkeletonStat /><SkeletonStat />
-      </div>
-    );
-  }
-
   const live = !loading && !offline && stats;
   const tiles: Tile[] = [
     { key: "clipboard", label: "changes", tone: "green", num: live ? stats!.changes : null, sub: live ? "this week" : null },
@@ -102,8 +94,8 @@ export function OverviewStatTiles({
   return (
     <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
       {tiles.map((t) => {
-        const value = t.num ?? "—";
-        const sub = t.sub ?? "API offline";
+        const value = t.num ?? (loading ? <Spinner size="sm" /> : "—");
+        const sub = t.sub ?? (loading ? "loading" : "API offline");
         const swatchStyle: CSSProperties = { position: "absolute", inset: "0 auto 0 0", width: 8, borderRadius: "6px 0 0 6px", overflow: "hidden" };
         return (
           <div key={t.key} className="relative">

@@ -4,7 +4,6 @@ import { Popover } from "../navigation/Popover";
 import { Button } from "../actions/Button";
 import { focusRing } from "../tokens/focusRing";
 import { TagChip, TAG_OPTIONS } from "../data-display/TagChip";
-import { Skeleton, SkeletonChip } from "../data-display/Skeleton";
 
 /* TagPicker — a popover checklist for applying knowledge tags to a document.
    Ported from components/TagPicker.tsx; the react-router "Manage definitions"
@@ -19,13 +18,11 @@ export type TagPickerProps = {
   options?: string[];
   /** "Manage definitions" affordance in the footer. */
   onManage?: () => void;
-  /** Show skeleton rows while the tag vocabulary loads. */
-  loading?: boolean;
   className?: string;
 };
 
 export function TagPicker({
-  tags, onChange, compact = false, options = TAG_OPTIONS, onManage, loading = false, className = "",
+  tags, onChange, compact = false, options = TAG_OPTIONS, onManage, className = "",
 }: TagPickerProps) {
   const toggle = (tag: string) =>
     onChange(tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]);
@@ -45,14 +42,7 @@ export function TagPicker({
         <small className="font-term text-[11px] text-ink/50">{tags.length} applied</small>
       </div>
       <div className="p-1.5 flex flex-col gap-0.5 max-h-64 overflow-y-auto">
-        {loading ? (
-          Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2.5 px-2 py-1.5" aria-hidden="true">
-              <Skeleton width={16} height={16} rounded="rounded-[3px]" />
-              <SkeletonChip w={92} />
-            </div>
-          ))
-        ) : options.map((tag) => {
+        {options.map((tag) => {
           const checked = tags.includes(tag);
           return (
             <button

@@ -13,7 +13,6 @@ import { Drawer } from "../layout/Drawer";
 import { Menu, MenuItem, MenuSeparator } from "../navigation/Menu";
 import { PageHeader } from "../layout/PageHeader";
 import { RunStatusChip, type RunStatus } from "../workflow/RunHistory";
-import { Skeleton, SkeletonLine, SkeletonCard, SkeletonList } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { fmtDateTime, type DateInput } from "../tokens/format";
@@ -180,12 +179,10 @@ function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void })
 export type FlowsListProps = {
   flows?: Flow[];
   sources?: SourceRef[];
-  /** Render a content-shaped skeleton silhouette instead of the list. */
-  loading?: boolean;
   className?: string;
 };
 
-export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading = false, className = "" }: FlowsListProps) {
+export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, className = "" }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(null);
 
@@ -193,21 +190,6 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
 
   const toggleStatus = (f: Flow) =>
     setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: r.status === "active" ? "paused" : "active" } : r)));
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-6 ${className}`} aria-hidden="true">
-        <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w={360} h={11} /></div>
-        <div>
-          <SkeletonLine w={160} h={10} className="mb-2" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} />
-          </div>
-        </div>
-        <SkeletonList rows={5} />
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-6 ${className}`}>

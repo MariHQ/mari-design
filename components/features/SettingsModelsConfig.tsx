@@ -7,7 +7,6 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
 
 /* Settings — Models configuration ─────────────────────────────────────────
    Choose which models embed, search, and answer for the workspace: the
@@ -44,7 +43,6 @@ export type SettingsModelsConfigProps = {
   llm?: string;
   dims?: number;
   chunking?: ChunkRow[];
-  loading?: boolean;
   className?: string;
 };
 
@@ -53,7 +51,6 @@ export function SettingsModelsConfig({
   llm = LLM_OPTIONS[0],
   dims = 1536,
   chunking: initialChunking = DEMO_CHUNKING,
-  loading = false,
   className = "",
 }: SettingsModelsConfigProps) {
   const [emb, setEmb] = useState(embedding);
@@ -75,17 +72,6 @@ export function SettingsModelsConfig({
 
   const embOpts = EMB_OPTIONS.includes(emb) ? EMB_OPTIONS : [emb, ...EMB_OPTIONS];
   const llmOpts = LLM_OPTIONS.includes(llmSel) ? LLM_OPTIONS : [llmSel, ...LLM_OPTIONS];
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="space-y-2.5"><Skeleton width={130} height={20} /><SkeletonLine w={340} h={11} /></div>
-        <div className="grid gap-5 lg:grid-cols-2"><SkeletonCard lines={2} /><SkeletonCard lines={2} /></div>
-        <SkeletonCard lines={3} />
-        <SkeletonTable rows={3} cols={4} />
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

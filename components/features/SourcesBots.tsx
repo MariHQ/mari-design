@@ -6,7 +6,6 @@ import { Drawer } from "../layout/Drawer";
 import { Stepper } from "../data-display/Stepper";
 import { Chip, StatusChip } from "../data-display/Chip";
 import { Spinner } from "../data-display/Spinner";
-import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton, SkeletonText } from "../data-display/Skeleton";
 import { IconRing } from "../data-display/IconRing";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { Field } from "../forms/Field";
@@ -242,34 +241,13 @@ export type SourcesBotsProps = {
   github?: GithubStatus;
   /** Which setup drawer opens on mount (so it shows in a static gallery). */
   defaultOpen?: "slack" | "github" | null;
-  loading?: boolean;
   className?: string;
 };
 
 export function SourcesBots({
-  slack = SLACK_DEMO, github = GITHUB_DEMO, defaultOpen = "slack", loading = false, className = "",
+  slack = SLACK_DEMO, github = GITHUB_DEMO, defaultOpen = "slack", className = "",
 }: SourcesBotsProps) {
   const [drawer, setDrawer] = useState<"slack" | "github" | null>(defaultOpen);
-
-  if (loading) {
-    return (
-      <div className={`grid gap-3 sm:grid-cols-2 ${className}`.trim()} aria-hidden="true">
-        {[0, 1].map((i) => (
-          <div key={i} className={`${card} flex flex-col gap-3 p-4`}>
-            <div className="flex items-center gap-3">
-              <SkeletonCircle size={31} />
-              <SkeletonLine w="40%" h={13} />
-              <span className="ml-auto"><SkeletonChip w={84} /></span>
-            </div>
-            <SkeletonText lines={1} lastWidth="82%" />
-            <SkeletonLine w="50%" h={10} />
-            <SkeletonLine w="60%" h={10} />
-            <SkeletonButton w={140} />
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className={`grid gap-3 sm:grid-cols-2 ${className}`.trim()}>

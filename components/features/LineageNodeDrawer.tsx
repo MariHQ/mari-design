@@ -9,7 +9,6 @@ import { Field } from "../forms/Field";
 import { SectionLabel } from "../forms/SectionLabel";
 import { EmptyState } from "../data-display/EmptyState";
 import { Timeline } from "../data-display/Timeline";
-import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
 import {
   REL, staleColor, NodeGlyph, LgDrawerShell, ConnectionRow, SOURCE_LABELS,
@@ -41,13 +40,11 @@ export type LineageNodeDrawerProps = {
   /** Which node to open. */
   nodeId?: string;
   onClose?: () => void;
-  /** Render a content-shaped skeleton silhouette instead of the drawer body. */
-  loading?: boolean;
   className?: string;
 };
 
 export function LineageNodeDrawer({
-  nodes = DEMO_NODES, edges = DEMO_EDGES, nodeId = "n4", onClose, loading = false, className = "",
+  nodes = DEMO_NODES, edges = DEMO_EDGES, nodeId = "n4", onClose, className = "",
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
@@ -73,22 +70,6 @@ export function LineageNodeDrawer({
   const metaParts = node.meta.split("·").map((s) => s.trim()).filter(Boolean);
 
   const copyLink = () => { setCopied(true); setTimeout(() => setCopied(false), 1600); };
-
-  if (loading) {
-    return (
-      <LgDrawerShell
-        className={className}
-        onClose={onClose}
-        icon={<SkeletonCircle size={19} />}
-        title={<SkeletonLine w="70%" h={14} />}
-        pills={<><SkeletonChip w={72} /><SkeletonChip w={56} /></>}
-      >
-        <div className="mb-3"><SkeletonLine w="55%" h={12} /></div>
-        <SkeletonText lines={4} />
-        <div className="mt-4"><SkeletonList rows={4} /></div>
-      </LgDrawerShell>
-    );
-  }
 
   return (
     <LgDrawerShell

@@ -8,7 +8,6 @@ import { GradeChip } from "../data-display/GradeChip";
 import { Table } from "../data-display/Table";
 import { EmptyState } from "../data-display/EmptyState";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
-import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-display/Skeleton";
 import { PageHeader } from "../layout/PageHeader";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
@@ -62,14 +61,12 @@ export type InsightsWidgetsProps = {
   glossary?: GlossRow[];
   activity?: ActivityItem[];
   since?: string;
-  /** Render a content-shaped skeleton silhouette instead of the widgets. */
-  loading?: boolean;
   className?: string;
 };
 
 export function InsightsWidgets({
   stats = DEMO_STATS, readability = DEMO_READABILITY, glossary = DEMO_GLOSSARY,
-  activity = DEMO_ACTIVITY, since = "2026-01-01", loading = false, className = "",
+  activity = DEMO_ACTIVITY, since = "2026-01-01", className = "",
 }: InsightsWidgetsProps) {
   const [scoring, setScoring] = useState(false);
   const [harvesting, setHarvesting] = useState(false);
@@ -78,21 +75,6 @@ export function InsightsWidgets({
   const candidates = glossary.filter((c) => !hidden.includes(c.id));
 
   const resolve = (c: GlossRow) => setHidden((h) => [...h, c.id]);
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
-        <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w={340} h={11} /></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
-        </div>
-        <div className="grid items-start gap-5 lg:grid-cols-2">
-          <SkeletonCard lines={6} /><SkeletonCard lines={5} />
-        </div>
-        <SkeletonCard lines={4} />
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>

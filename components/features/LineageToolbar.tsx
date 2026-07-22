@@ -6,7 +6,6 @@ import { btn } from "../actions/buttons";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
-import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
 import {
   REL, REL_ORDER, SOURCE_ORDER, SOURCE_LABELS, LENSES, NodeGlyph,
   DEMO_NODES, type LNode, type Lens, type LayoutMode, type RelKey,
@@ -30,12 +29,10 @@ function filterLabel(all: number, on: number) {
 
 export type LineageToolbarProps = {
   nodes?: LNode[];
-  /** Render a content-shaped skeleton silhouette instead of the controls. */
-  loading?: boolean;
   className?: string;
 };
 
-export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className = "" }: LineageToolbarProps) {
+export function LineageToolbar({ nodes = DEMO_NODES, className = "" }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
 
@@ -80,16 +77,6 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
       {label} <ChevronDown size={13} className="text-ink/40" />
     </button>
   );
-
-  if (loading) {
-    return (
-      <div className={`${card} flex flex-wrap items-center gap-2 p-2 ${className}`.trim()} aria-hidden="true">
-        <Skeleton width={236} height={32} rounded="rounded-[4px]" />
-        {Array.from({ length: 6 }).map((_, i) => <SkeletonButton key={i} w={90} />)}
-        <span className="ml-auto"><Skeleton width={150} height={32} rounded="rounded-[4px]" /></span>
-      </div>
-    );
-  }
 
   return (
     <div className={`${card} flex flex-wrap items-center gap-2 p-2 font-display ${className}`.trim()}>

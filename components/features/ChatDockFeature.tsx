@@ -4,7 +4,6 @@ import { ChatDock as ChatDockUI } from "../chat/ChatDock";
 import type { ChatMessageData, ToolCallData } from "../chat/types";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuLabel } from "../navigation/Menu";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* ChatDockFeature — the persistent Mari-agent dock in its app context. Wraps
@@ -51,11 +50,10 @@ const DEMO_SESSIONS = [
 export type ChatDockFeatureProps = {
   /** Start with the dock open (default true so it renders visibly standalone). */
   defaultOpen?: boolean;
-  loading?: boolean;
   className?: string;
 };
 
-export function ChatDockFeature({ defaultOpen = true, loading = false, className = "" }: ChatDockFeatureProps) {
+export function ChatDockFeature({ defaultOpen = true, className = "" }: ChatDockFeatureProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [messages, setMessages] = useState<ChatMessageData[]>(seedTranscript);
   const [streaming, setStreaming] = useState(false);
@@ -159,31 +157,6 @@ export function ChatDockFeature({ defaultOpen = true, loading = false, className
   );
 
   const title = sessionId ? `Mari agent · #${sessionId}` : "Mari agent";
-
-  if (loading) {
-    return (
-      <div className={`relative h-[560px] overflow-hidden rounded-md border border-ink/15 bg-flysch/40 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-center gap-2 border-b border-ink/12 bg-paper px-4 py-2.5">
-          <SkeletonLine w={70} h={12} /><SkeletonLine w={60} h={9} />
-          <span className="ml-auto"><Skeleton width={32} height={32} rounded="rounded-[4px]" /></span>
-        </div>
-        <aside className="absolute bottom-0 right-0 top-[49px] flex w-[360px] max-w-full flex-col gap-4 border-l border-ink/15 bg-paper p-4">
-          <div className="flex gap-2">
-            <SkeletonCircle size={26} />
-            <div className="flex-1 space-y-2"><SkeletonLine w="80%" /><SkeletonText lines={2} /></div>
-          </div>
-          <div className="flex justify-end">
-            <div className="w-[70%] space-y-2 rounded-md bg-ink/[0.04] p-3"><SkeletonLine w="90%" /><SkeletonLine w="60%" /></div>
-          </div>
-          <div className="flex gap-2">
-            <SkeletonCircle size={26} />
-            <div className="flex-1 space-y-2"><SkeletonText lines={3} /></div>
-          </div>
-          <div className="mt-auto"><Skeleton height={40} rounded="rounded-md" /></div>
-        </aside>
-      </div>
-    );
-  }
 
   return (
     <div className={`relative h-[560px] overflow-hidden rounded-md border border-ink/15 bg-flysch/40 ${className}`.trim()}>

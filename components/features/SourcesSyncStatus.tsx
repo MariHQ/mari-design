@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, Clock } from "lucide-react";
 import { card } from "../tokens/card";
 import { Spinner } from "../data-display/Spinner";
-import { SkeletonLine, SkeletonCircle, SkeletonList } from "../data-display/Skeleton";
 import { SectionLabel } from "../forms/SectionLabel";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark } from "../icons/marks";
@@ -61,11 +60,10 @@ export function PhaseTracker({
 export type SourcesSyncStatusProps = {
   /** Stop the self-advancing demo animation. */
   animate?: boolean;
-  loading?: boolean;
   className?: string;
 };
 
-export function SourcesSyncStatus({ animate = true, loading = false, className = "" }: SourcesSyncStatusProps) {
+export function SourcesSyncStatus({ animate = true, className = "" }: SourcesSyncStatusProps) {
   const [idx, setIdx] = useState(3); // start mid-run on "embedding"
 
   useEffect(() => {
@@ -73,25 +71,6 @@ export function SourcesSyncStatus({ animate = true, loading = false, className =
     const t = window.setInterval(() => setIdx((i) => (i >= PHASES.length ? 3 : i + 1)), 1600);
     return () => window.clearInterval(t);
   }, [animate]);
-
-  if (loading) {
-    return (
-      <div className={`grid gap-3 ${className}`.trim()} aria-hidden="true">
-        <div className={`${card} p-4`}>
-          <SkeletonLine w={80} h={10} />
-          <div className="mt-3 flex flex-wrap gap-4">
-            {Array.from({ length: PHASES.length }).map((_, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <SkeletonCircle size={18} />
-                <SkeletonLine w={54} h={9} />
-              </div>
-            ))}
-          </div>
-        </div>
-        <SkeletonList rows={1} />
-      </div>
-    );
-  }
 
   const done = idx >= PHASES.length;
   const perPhase = 100;

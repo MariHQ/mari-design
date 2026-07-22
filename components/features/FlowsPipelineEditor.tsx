@@ -9,7 +9,6 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Switch } from "../forms/Switch";
 import { RunHistory, type WorkflowRun } from "../workflow/RunHistory";
-import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 
@@ -108,8 +107,6 @@ export type FlowsPipelineEditorProps = {
   description?: string;
   steps?: EditorStep[];
   runs?: WorkflowRun[];
-  /** Render a content-shaped skeleton silhouette instead of the editor. */
-  loading?: boolean;
   className?: string;
 };
 
@@ -118,7 +115,6 @@ export function FlowsPipelineEditor({
   description = "Fact-checks every changed doc before it can ship.",
   steps: initialSteps = DEMO_STEPS,
   runs = DEMO_RUNS,
-  loading = false,
   className = "",
 }: FlowsPipelineEditorProps) {
   const [flowName, setFlowName] = useState(name);
@@ -166,27 +162,6 @@ export function FlowsPipelineEditor({
     }
     return null;
   };
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
-        <div className="flex flex-wrap items-center gap-2">
-          <SkeletonLine w={70} h={12} />
-          <span className="flex-1" />
-          <SkeletonButton w={96} /><SkeletonButton w={90} />
-        </div>
-        <div className={`${card} space-y-2 px-5 py-4`}>
-          <Skeleton width="45%" height={26} /><SkeletonLine w="70%" h={11} />
-        </div>
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={64} className="rounded-md" />)}
-          </div>
-          <SkeletonCard lines={5} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>

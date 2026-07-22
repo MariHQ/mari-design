@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { Clock } from "lucide-react";
 import { ConnectorCard as ConnectorCardUI, type ConnectorHealth } from "../data-display/ConnectorCard";
 import { Spinner } from "../data-display/Spinner";
-import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { Button } from "../actions/Button";
 import { SourceMark } from "../icons/marks";
 import { fmtDateTime } from "../tokens/format";
@@ -93,31 +92,11 @@ function counts(s: Source): ReactNode {
 export type SourcesConnectorCardProps = {
   /** Override the baked-in demo sources. */
   sources?: Source[];
-  loading?: boolean;
   className?: string;
 };
 
-export function SourcesConnectorCard({ sources = DEMO, loading = false, className = "" }: SourcesConnectorCardProps) {
+export function SourcesConnectorCard({ sources = DEMO, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
-
-  if (loading) {
-    return (
-      <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-md border border-ink/12 bg-paper p-4">
-            <div className="flex items-center gap-2.5">
-              <SkeletonCircle size={26} />
-              <SkeletonLine w="45%" h={12} />
-              <span className="ml-auto"><SkeletonChip w={56} /></span>
-            </div>
-            <SkeletonLine w="82%" h={9} />
-            <SkeletonLine w="55%" h={9} />
-            <div className="flex gap-2 pt-1"><SkeletonButton w={76} /><SkeletonButton w={76} /></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const patch = (id: string, next: Partial<Source>) =>

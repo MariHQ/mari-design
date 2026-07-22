@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { RunHistory, RunStatusChip, type WorkflowRun } from "../workflow/RunHistory";
 import { RunPanel } from "../workflow/RunPanel";
-import { Skeleton, SkeletonTable, SkeletonCard } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 
 /* Flows run history — the durable, complete run-history table: every run,
@@ -38,26 +37,12 @@ export type FlowsRunHistoryProps = {
   runs?: WorkflowRun[];
   /** Cap on rows, newest first. */
   limit?: number;
-  /** Render a content-shaped skeleton silhouette instead of the history. */
-  loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunHistory({ runs = DEMO_RUNS, limit = 12, loading = false, className = "" }: FlowsRunHistoryProps) {
+export function FlowsRunHistory({ runs = DEMO_RUNS, limit = 12, className = "" }: FlowsRunHistoryProps) {
   const [selId, setSelId] = useState<string | null>(runs[0]?.id ?? null);
   const selected = selId ? runs.find((r) => r.id === selId) ?? null : null;
-
-  if (loading) {
-    return (
-      <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
-        <Skeleton height={44} className="rounded-md" />
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <SkeletonTable rows={7} cols={4} />
-          <SkeletonCard lines={6} footer />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>
