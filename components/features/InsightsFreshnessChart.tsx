@@ -3,6 +3,7 @@ import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { FreshBar, LegendSwatch } from "../data-display/FreshBar";
 import { EmptyState } from "../data-display/EmptyState";
+import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
 /* Insights freshness chart — a per-source stacked bar of document freshness
@@ -32,11 +33,34 @@ const DEMO_FRESHNESS: Freshness[] = [
 
 export type InsightsFreshnessChartProps = {
   freshness?: Freshness[];
+  /** Render a content-shaped skeleton silhouette instead of the chart. */
+  loading?: boolean;
   className?: string;
 };
 
-export function InsightsFreshnessChart({ freshness = DEMO_FRESHNESS, className = "" }: InsightsFreshnessChartProps) {
+export function InsightsFreshnessChart({ freshness = DEMO_FRESHNESS, loading = false, className = "" }: InsightsFreshnessChartProps) {
   const grandTotal = freshness.reduce((n, r) => n + r.fresh + r.aging + r.stale, 0);
+
+  if (loading) {
+    return (
+      <Card
+        className={className}
+        icon={<SkeletonCircle size={30} />}
+        title={<SkeletonLine w={180} h={13} />}
+        hint={<SkeletonLine w={54} h={10} />}
+      >
+        <div className="flex flex-col gap-3.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)_auto] items-center gap-3">
+              <span className="flex min-w-0 items-center gap-2"><SkeletonCircle size={16} /><SkeletonLine w="70%" h={11} /></span>
+              <Skeleton height={12} rounded="rounded-full" />
+              <SkeletonLine w={48} h={10} />
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card

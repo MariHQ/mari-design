@@ -9,6 +9,7 @@ import { Input } from "./Input";
 import { Textarea } from "./Textarea";
 import { Spinner } from "../data-display/Spinner";
 import { Chip } from "../data-display/Chip";
+import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 
 /* ConnectorWizard — a 3-step connect flow in a centered modal, ported from
@@ -57,7 +58,23 @@ export type ConnectorWizardProps = {
   /** Parent-driven live sync status for the final step (no hooks here). */
   syncStatus?: SyncSource | null;
   onRetrySync?: () => void;
+  /** Render a skeleton in the dialog body while the catalog/form loads. */
+  loading?: boolean;
 };
+
+function WizardSkeleton() {
+  return (
+    <div className="space-y-4" aria-hidden="true">
+      <SkeletonLine w="72%" h={11} />
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <SkeletonLine w={100} h={10} />
+          <Skeleton height={38} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function ProviderMark({ p, size = 24 }: { p: WizardProvider; size?: number }) {
   if (p.mark) return <>{p.mark}</>;
@@ -73,7 +90,7 @@ function ProviderMark({ p, size = 24 }: { p: WizardProvider; size?: number }) {
 
 export function ConnectorWizard({
   open, onOpenChange, providers, initialProvider = null, title = "Connect a source",
-  onTest, onFinish, syncStatus = null, onRetrySync,
+  onTest, onFinish, syncStatus = null, onRetrySync, loading = false,
 }: ConnectorWizardProps) {
   const [step, setStep] = useState(0);
   const [provider, setProvider] = useState<string | null>(initialProvider);
@@ -268,7 +285,7 @@ export function ConnectorWizard({
       <div className="mb-5">
         <Stepper labels={stepLabels} current={step} ariaLabel="Connector setup progress" />
       </div>
-      <div className="min-h-[240px]">{body()}</div>
+      <div className="min-h-[240px]">{loading ? <WizardSkeleton /> : body()}</div>
     </Dialog>
   );
 }

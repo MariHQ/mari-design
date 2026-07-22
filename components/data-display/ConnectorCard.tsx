@@ -5,6 +5,7 @@ import { Chip } from "./Chip";
 import { Sparkline } from "./Sparkline";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem } from "../navigation/Menu";
+import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip } from "./Skeleton";
 
 /* ConnectorCard — one connected-source pulse card: provider mark, name, a
    health chip, document counts, a live sync line, and a mini activity
@@ -46,14 +47,33 @@ export type ConnectorCardProps = {
   onFullResync?: () => void;
   onPause?: () => void;
   onResume?: () => void;
+  /** Render a content-shaped skeleton placeholder instead of the card. */
+  loading?: boolean;
   className?: string;
 };
 
 export function ConnectorCard({
   name, mark, health = "Healthy", counts, sync, bars,
   busy = false, running = false, paused = false, canResync = false,
-  onSyncNow, onFullResync, onPause, onResume, className = "",
+  onSyncNow, onFullResync, onPause, onResume, loading = false, className = "",
 }: ConnectorCardProps) {
+  if (loading) {
+    return (
+      <div className={`${card} p-4 ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-center gap-3">
+          <SkeletonCircle size={26} />
+          <span className="min-w-0 flex-1 flex flex-col gap-1.5">
+            <SkeletonLine w="55%" h={13} />
+            <SkeletonChip w={72} />
+          </span>
+          <SkeletonCircle size={28} />
+        </div>
+        <SkeletonLine w="42%" h={10} className="mt-3" />
+        <SkeletonLine w="60%" h={11} className="mt-2" />
+        <Skeleton width={150} height={20} className="mt-3" />
+      </div>
+    );
+  }
   const h = HEALTH[health];
   const hasMenu = Boolean(onSyncNow || onFullResync || onPause || onResume);
   return (

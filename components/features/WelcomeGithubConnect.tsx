@@ -5,6 +5,7 @@ import { Button } from "../actions/Button";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
+import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { GithubMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
@@ -74,10 +75,48 @@ function RepoPicker({
 export type WelcomeGithubConnectProps = {
   repos?: Repo[];
   defaultOpen?: boolean;
+  loading?: boolean;
   className?: string;
 };
 
-export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, className = "" }: WelcomeGithubConnectProps) {
+/* Loading silhouette mirroring the GitHub connect panel: provider header, a
+   filter field, the repo radio list, and a paths-glob field. */
+function GithubConnectSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={className} aria-hidden="true">
+      <div className="flex items-start gap-3">
+        <SkeletonCircle size={44} />
+        <div className="min-w-0 flex-1 space-y-2 pt-1">
+          <SkeletonLine w="42%" h={14} />
+          <SkeletonLine w="70%" h={10} />
+        </div>
+      </div>
+      <div className="mt-5 space-y-2">
+        <Skeleton height={34} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2.5 rounded-md border border-ink/15 p-2.5">
+            <SkeletonCircle size={14} />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <SkeletonLine w="45%" h={11} />
+              <SkeletonLine w="68%" h={9} />
+            </div>
+            <SkeletonChip w={48} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 space-y-1.5">
+        <SkeletonLine w={110} h={10} />
+        <Skeleton height={38} />
+      </div>
+      <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
+        <SkeletonLine w="40%" h={10} />
+        <span className="ml-auto"><SkeletonButton w={130} /></span>
+      </div>
+    </div>
+  );
+}
+
+export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, loading = false, className = "" }: WelcomeGithubConnectProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [repo, setRepo] = useState<string | null>(null);
   const [paths, setPaths] = useState(DEFAULT_PATHS);
@@ -110,6 +149,8 @@ export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, classN
       <Button variant="primary" disabled={!repo} onClick={connect}>Connect &amp; sync <ArrowRight size={14} /></Button>
     </div>
   );
+
+  if (loading) return <GithubConnectSkeleton className={className} />;
 
   return (
     <div className={className}>

@@ -10,6 +10,7 @@ import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuRadioGroup, MenuRadioItem, MenuLabel } from "../navigation/Menu";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
+import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 
 /* KnowledgeBrowser — the filter rail + results feed of the Knowledge page.
    A faceted filter rail, a debounced search box, result-type tabs, sort, and
@@ -122,10 +123,45 @@ const STATUS_ROWS = ["canonical", "verified", "needs-review", "stale"];
 
 export type KnowledgeBrowserProps = {
   results?: Result[];
+  loading?: boolean;
   className?: string;
 };
 
-export function KnowledgeBrowser({ results = DEMO, className = "" }: KnowledgeBrowserProps) {
+/** Content-shaped skeleton for the browser: filter rail + search + result cards. */
+function KnowledgeBrowserSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`grid gap-4 lg:grid-cols-[220px_1fr] items-start ${className}`.trim()} aria-hidden="true">
+      <Card className="flex flex-col gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <SkeletonLine w="50%" h={9} />
+            <SkeletonLine w="82%" /><SkeletonLine w="66%" /><SkeletonLine w="74%" />
+          </div>
+        ))}
+      </Card>
+      <div className="flex flex-col gap-3">
+        <Skeleton height={36} rounded="rounded-md" />
+        <SkeletonLine w={120} h={10} />
+        <div className="flex flex-col gap-2.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} variant="flush" className="p-4">
+              <div className="flex gap-3">
+                <SkeletonCircle size={28} />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <SkeletonLine w="68%" h={13} />
+                  <SkeletonText lines={2} />
+                  <div className="flex gap-2"><SkeletonChip w={60} /><SkeletonChip w={48} /></div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function KnowledgeBrowser({ results = DEMO, loading = false, className = "" }: KnowledgeBrowserProps) {
   const [q, setQ] = useState("");
   const [srcSel, setSrcSel] = useState<Set<string>>(new Set());
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
@@ -173,6 +209,8 @@ export function KnowledgeBrowser({ results = DEMO, className = "" }: KnowledgeBr
 
   const owners = [...KNOWN_OWNERS, "Other people"];
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Best match";
+
+  if (loading) return <KnowledgeBrowserSkeleton className={className} />;
 
   return (
     <div className={`grid gap-4 lg:grid-cols-[220px_1fr] items-start ${className}`.trim()}>

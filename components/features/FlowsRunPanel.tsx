@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { RunPanel } from "../workflow/RunPanel";
 import { RunStatusChip, type WorkflowRun } from "../workflow/RunHistory";
+import { SkeletonList, SkeletonCard } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 
@@ -72,10 +73,12 @@ export type FlowsRunPanelProps = {
   runs?: WorkflowRun[];
   /** Run number to open by default. */
   openNumber?: number;
+  /** Render a content-shaped skeleton silhouette instead of the panel. */
+  loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, className = "" }: FlowsRunPanelProps) {
+export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading = false, className = "" }: FlowsRunPanelProps) {
   const [runs, setRuns] = useState<WorkflowRun[]>(initial);
   const [openId, setOpenId] = useState<string | null>(
     (openNumber != null ? runs.find((r) => r.number === openNumber) : runs[0])?.id ?? null,
@@ -105,6 +108,15 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, className
     setOpenId(fresh.id);
     setNote(`Started run #${nextNumber}${dry ? " as a test" : ""} — this panel is now showing it.`);
   };
+
+  if (loading) {
+    return (
+      <div className={`grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`} aria-hidden="true">
+        <SkeletonList rows={5} />
+        <SkeletonCard lines={6} footer />
+      </div>
+    );
+  }
 
   return (
     <div className={`grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`}>

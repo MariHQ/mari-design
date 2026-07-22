@@ -4,6 +4,7 @@ import { Drawer } from "../layout/Drawer";
 import { Button } from "../actions/Button";
 import { Spinner } from "../data-display/Spinner";
 import { Chip } from "../data-display/Chip";
+import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonButton } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* WelcomeUploadConnect — the Welcome wizard's Upload sub-flow: drag-and-drop or
@@ -95,10 +96,41 @@ function UploadResultList({ result }: { result: UploadResult }) {
 
 export type WelcomeUploadConnectProps = {
   defaultOpen?: boolean;
+  loading?: boolean;
   className?: string;
 };
 
-export function WelcomeUploadConnect({ defaultOpen = true, className = "" }: WelcomeUploadConnectProps) {
+/* Loading silhouette mirroring the Upload connect panel: provider header, the
+   drag-and-drop dropzone, and a couple of ingested-file result rows. */
+function UploadConnectSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={className} aria-hidden="true">
+      <div className="flex items-start gap-3">
+        <SkeletonCircle size={44} />
+        <div className="min-w-0 flex-1 space-y-2 pt-1">
+          <SkeletonLine w="40%" h={14} />
+          <SkeletonLine w="72%" h={10} />
+        </div>
+      </div>
+      <Skeleton height={110} className="mt-5" />
+      <div className="mt-3 space-y-1.5">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-md border border-ink/12 p-2">
+            <SkeletonCircle size={14} />
+            <SkeletonLine w="35%" h={11} />
+            <span className="ml-auto"><SkeletonLine w={120} h={9} /></span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
+        <SkeletonLine w="40%" h={10} />
+        <span className="ml-auto"><SkeletonButton w={96} /></span>
+      </div>
+    </div>
+  );
+}
+
+export function WelcomeUploadConnect({ defaultOpen = true, loading = false, className = "" }: WelcomeUploadConnectProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -125,6 +157,8 @@ export function WelcomeUploadConnect({ defaultOpen = true, className = "" }: Wel
       </Button>
     </div>
   );
+
+  if (loading) return <UploadConnectSkeleton className={className} />;
 
   return (
     <div className={className}>

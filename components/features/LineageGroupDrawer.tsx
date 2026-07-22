@@ -6,6 +6,7 @@ import { Field } from "../forms/Field";
 import { SectionLabel } from "../forms/SectionLabel";
 import { GithubMark } from "../icons";
 import { fmtDate } from "../tokens/format";
+import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import {
   LgDrawerShell, ConnectionRow, groupParts, groupKindWord,
   DEMO_EDGES, type LNode, type LEdge,
@@ -30,6 +31,8 @@ export type LineageGroupDrawerProps = {
   edges?: LEdge[];
   onSelectMember?: (id: string) => void;
   onClose?: () => void;
+  /** Render a content-shaped skeleton silhouette instead of the drawer body. */
+  loading?: boolean;
   className?: string;
 };
 
@@ -45,7 +48,7 @@ const DEMO_MEMBERS: LNode[] = [
 
 export function LineageGroupDrawer({
   groupId = "gh:MariHQ/web:commits", totalMembers = 42, members = DEMO_MEMBERS,
-  edges = DEMO_EDGES, onSelectMember, onClose, className = "",
+  edges = DEMO_EDGES, onSelectMember, onClose, loading = false, className = "",
 }: LineageGroupDrawerProps) {
   const { repo, kind } = groupParts(groupId);
   const [isOpen, setIsOpen] = useState(false);
@@ -65,6 +68,22 @@ export function LineageGroupDrawer({
   );
   const visibleCount = members.length; // in the demo, all listed members pass filters
   const kindWord = groupKindWord(kind, totalMembers);
+
+  if (loading) {
+    return (
+      <LgDrawerShell
+        className={className}
+        onClose={onClose}
+        icon={<SkeletonCircle size={19} />}
+        title={<SkeletonLine w="60%" h={14} />}
+        pills={<><SkeletonChip w={90} /><SkeletonChip w={72} /></>}
+      >
+        <div className="mb-3"><SkeletonLine w="45%" h={12} /></div>
+        <SkeletonText lines={3} />
+        <div className="mt-4"><SkeletonList rows={5} /></div>
+      </LgDrawerShell>
+    );
+  }
 
   return (
     <LgDrawerShell

@@ -10,6 +10,7 @@ import { Chip } from "../data-display/Chip";
 import { Swatch } from "../data-display/Swatch";
 import { Stepper } from "../data-display/Stepper";
 import { TagChip } from "../data-display/TagChip";
+import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 
 /* Publish · Site editor ───────────────────────────────────────────────────
@@ -77,9 +78,9 @@ const TABS: { id: EditorTab; label: string }[] = [
   { id: "content", label: "Content" }, { id: "nav", label: "Nav" }, { id: "theme", label: "Theme" }, { id: "deploy", label: "Deploy" },
 ];
 
-export type PublishSiteEditorProps = { site?: Site; className?: string };
+export type PublishSiteEditorProps = { site?: Site; loading?: boolean; className?: string };
 
-export function PublishSiteEditor({ site = DEMO_SITE, className = "" }: PublishSiteEditorProps) {
+export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className = "" }: PublishSiteEditorProps) {
   const [tab, setTab] = useState<EditorTab>("theme");
   const [theme, setTheme] = useState(THEMES[0]);
   const [accent, setAccent] = useState(THEMES[0].accent);
@@ -119,6 +120,24 @@ export function PublishSiteEditor({ site = DEMO_SITE, className = "" }: PublishS
       ))}
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton width={180} height={20} />
+            <SkeletonLine w={220} h={10} />
+          </div>
+          <div className="flex gap-2"><SkeletonChip w={60} /><SkeletonButton w={90} /></div>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <SkeletonCard lines={5} footer />
+          <SkeletonCard lines={2} media />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>

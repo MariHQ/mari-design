@@ -12,6 +12,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
+import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 
 /* ————— ported helpers ————— */
 
@@ -59,10 +60,12 @@ export function DocReviewOutlinePanel({
   body = DEMO_MD,
   revisions = DEMO_REVS,
   onJump,
+  loading = false,
 }: {
   body?: string;
   revisions?: Rev[];
   onJump?: (id: number) => void;
+  loading?: boolean;
 }) {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -87,6 +90,30 @@ export function DocReviewOutlinePanel({
 
   const jump = (id: number) => { setActiveId(id); onJump?.(id); };
   const visibleRevs = showAll ? revisions : revisions.slice(0, 4);
+
+  if (loading) {
+    return (
+      <div className="flex max-w-[300px] flex-col gap-4" aria-hidden="true">
+        <Card title="Document outline">
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <SkeletonLine key={i} w={`${88 - (i % 3) * 16}%`} h={11} className={i % 2 ? "ml-4" : ""} />
+            ))}
+          </div>
+        </Card>
+        <Card title="Revision history">
+          <div className="space-y-3">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <SkeletonCircle size={26} />
+                <div className="flex-1 space-y-1.5"><SkeletonLine w="55%" h={11} /><SkeletonLine w="75%" h={9} /></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex max-w-[300px] flex-col gap-4">

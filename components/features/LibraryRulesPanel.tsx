@@ -9,6 +9,7 @@ import { SectionLabel } from "../forms/SectionLabel";
 import { Chip } from "../data-display/Chip";
 import { Stat } from "../data-display/Stat";
 import { EmptyState } from "../data-display/EmptyState";
+import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skeleton";
 import { RulesPanel as RulesPanelUI, type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
 
 /* LibraryRulesPanel — the Library › Rules tab.
@@ -126,10 +127,11 @@ const SEV_TONE: Record<RuleSeverity, string> = { error: "blocked", warn: "attent
 
 export type LibraryRulesPanelProps = {
   workspace?: string;
+  loading?: boolean;
   className?: string;
 };
 
-export function LibraryRulesPanel({ workspace = "Northwind", className = "" }: LibraryRulesPanelProps) {
+export function LibraryRulesPanel({ workspace = "Northwind", loading = false, className = "" }: LibraryRulesPanelProps) {
   const [pack, setPack] = useState("plain");
   const [grammar, setGrammar] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -171,6 +173,19 @@ export function LibraryRulesPanel({ workspace = "Northwind", className = "" }: L
   const bandTone = score < 12 ? "text-moss" : score < 30 ? "text-clay" : "text-espelette" ;
 
   const ruleName = (id: string) => RULES.find((r) => r.id === id)?.id ?? id;
+
+  if (loading) {
+    return (
+      <div className={`flex flex-col gap-4 ${className}`.trim()} aria-hidden="true">
+        <SkeletonCard lines={1} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
+        </div>
+        <SkeletonTable rows={6} cols={4} />
+        <SkeletonCard lines={4} />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col gap-4 ${className}`.trim()}>

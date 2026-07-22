@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import * as RA from "@radix-ui/react-accordion";
 import { ChevronDown } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
+import { Skeleton, SkeletonLine } from "./Skeleton";
 
 export type AccordionItemData = { value: string; title: ReactNode; content: ReactNode };
 
@@ -27,11 +28,23 @@ function Items({ items }: { items: AccordionItemData[] }) {
 }
 
 export type AccordionProps =
-  | { type?: "single"; items: AccordionItemData[]; defaultValue?: string; collapsible?: boolean }
-  | { type: "multiple"; items: AccordionItemData[]; defaultValue?: string[] };
+  | { type?: "single"; items: AccordionItemData[]; defaultValue?: string; collapsible?: boolean; loading?: boolean }
+  | { type: "multiple"; items: AccordionItemData[]; defaultValue?: string[]; loading?: boolean };
 
 /** Disclosure sections — a settings page's grouped panels, an FAQ list. */
 export function Accordion(props: AccordionProps) {
+  if (props.loading) {
+    return (
+      <div className={ROOT_CLASS} aria-hidden="true">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 border-b border-ink/10 px-4 py-3 last:border-0">
+            <SkeletonLine w={`${52 - i * 6}%`} h={12} />
+            <Skeleton width={15} height={15} rounded="rounded-[3px]" />
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (props.type === "multiple") {
     return (
       <RA.Root type="multiple" defaultValue={props.defaultValue} className={ROOT_CLASS}>

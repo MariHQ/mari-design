@@ -5,6 +5,7 @@ import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
 import { Spinner } from "../data-display/Spinner";
 import { EmptyState } from "../data-display/EmptyState";
+import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 
 /* WelcomeGlossaryStep — the Welcome wizard's optional glossary-seeding step:
    scan the user's own docs for term candidates (grounded in real docs, nothing
@@ -29,10 +30,11 @@ export type WelcomeGlossaryStepProps = {
   candidates?: Candidate[];
   /** Simulate the "LLM unavailable" deterministic fallback. */
   llm?: boolean;
+  loading?: boolean;
   className?: string;
 };
 
-export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, className = "" }: WelcomeGlossaryStepProps) {
+export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, loading = false, className = "" }: WelcomeGlossaryStepProps) {
   const [mode, setMode] = useState<Mode>("start");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -73,6 +75,27 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
     };
     window.setTimeout(step, 350);
   };
+
+  if (loading) {
+    return (
+      <div className={`${card} p-4 ${className}`.trim()} aria-hidden="true">
+        <div className="grid gap-1.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
+              <Skeleton width={14} height={14} rounded="rounded-[3px]" className="mt-1" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex items-center gap-2"><SkeletonLine w={90} h={11} /><SkeletonChip w={84} /></div>
+                <SkeletonLine w="85%" h={9} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <SkeletonButton w={110} /><SkeletonButton w={96} />
+        </div>
+      </div>
+    );
+  }
 
   if (mode === "scanning") {
     return (

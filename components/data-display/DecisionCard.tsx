@@ -6,6 +6,7 @@ import { Chip } from "./Chip";
 import { Avatar } from "./Avatar";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem } from "../navigation/Menu";
+import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip, SkeletonButton } from "./Skeleton";
 
 /* DecisionCard — one row in the decision ledger's timeline: a node marker on a
    spine, then the decision card (statement, context, a superseded-by line, and
@@ -60,14 +61,39 @@ export type DecisionCardProps = {
   impact?: ReactNode;
   /** Draws the connecting timeline spine below the node (for stacked lists). */
   spine?: boolean;
+  /** Render a content-shaped skeleton placeholder instead of the card. */
+  loading?: boolean;
   className?: string;
 };
 
 export function DecisionCard({
   statement, context, status, fresh = false, sourceLabel, sourceIcon,
   owners = [], decidedOn, supersededByStatement, ratifying = false,
-  onRatify, onSupersede, actions, impact, spine = true, className = "",
+  onRatify, onSupersede, actions, impact, spine = true, loading = false, className = "",
 }: DecisionCardProps) {
+  if (loading) {
+    return (
+      <div className={`relative flex gap-4 ${className}`.trim()} aria-hidden="true">
+        <div className="relative flex flex-col items-center">
+          {spine && <span className="absolute top-6 bottom-0 w-px bg-ink/12" />}
+          <SkeletonCircle size={24} />
+        </div>
+        <div className={`${card} min-w-0 flex-1 p-4 mb-4`}>
+          <div className="flex items-start gap-3">
+            <SkeletonLine w="68%" h={14} />
+            <span className="ml-auto"><SkeletonChip w={64} /></span>
+          </div>
+          <SkeletonText lines={2} className="mt-2.5" lastWidth="72%" />
+          <div className="mt-3 flex items-center gap-3">
+            <SkeletonChip w={92} />
+            <SkeletonCircle size={20} />
+            <SkeletonCircle size={20} />
+            <span className="ml-auto"><SkeletonButton w={82} /></span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const superseded = status === "superseded";
   return (
     <div className={`relative flex gap-4 ${className}`.trim()}>

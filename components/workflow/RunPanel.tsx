@@ -1,6 +1,7 @@
 import { Check, X, Clock, CornerDownRight, RefreshCw, Eye, Bell } from "lucide-react";
 import { Button } from "../actions/Button";
 import { Spinner } from "../data-display/Spinner";
+import { SkeletonLine, SkeletonList } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { fmtDateTime } from "../tokens/format";
 import { RunStatusChip, type RunStatus, type WorkflowRun } from "./RunHistory";
@@ -37,10 +38,34 @@ export type RunPanelProps = {
   busy?: boolean;
   /** Transient status line under the actions (e.g. "Approved — resuming."). */
   note?: string | null;
+  /** Show a content-shaped skeleton while the run loads. */
+  loading?: boolean;
   className?: string;
 };
 
-export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note, className = "" }: RunPanelProps) {
+export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note, loading = false, className = "" }: RunPanelProps) {
+  if (loading) {
+    return (
+      <div className={`${card} overflow-hidden ${className}`} aria-hidden="true">
+        <div className="flex items-center gap-2 border-b border-ink/10 px-5 py-3.5">
+          <SkeletonLine w={96} h={16} />
+          <SkeletonLine w={64} h={18} />
+        </div>
+        <div className="px-5 py-4">
+          <SkeletonLine w="60%" h={11} />
+          <SkeletonList rows={4} className="mt-4 border-0 px-0" />
+          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-[6px] border border-ink/10 bg-ink/10">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-paper px-3 py-2.5">
+                <SkeletonLine w="70%" h={9} />
+                <SkeletonLine w={40} h={18} className="mt-2" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!run) {
     return (
       <div className={`${card} flex items-center gap-2 px-5 py-6 text-[13px] text-ink/55 ${className}`}>
