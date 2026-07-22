@@ -189,7 +189,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "verified") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
         <FactsTable facts={FACTS.filter((f) => f.status === "Verified")} />
       </div>
@@ -197,7 +197,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "review") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="review" onChange={() => {}} />
         <FactsTable facts={FACTS.filter((f) => f.status === "Needs review")} />
       </div>
@@ -205,7 +205,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "contradicted") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="contradicted" onChange={() => {}} />
         <Alert tone="blocked" title="1 fact is contradicted by a newer source">
           A more recent document conflicts with this claim. Re-verify or supersede it.
@@ -216,7 +216,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "stale") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
         <FactsVerificationAudit />
       </div>
@@ -224,7 +224,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "impact") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
         <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
           <ImpactPanelFeature />
@@ -234,7 +234,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "impact-analyzed") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
         <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
           <ImpactPanelFeature analyzed />
@@ -245,7 +245,7 @@ function Body({ state }: { state: string }) {
   if (state === "task-creating" || state === "task-done" || state === "task-error") {
     const phase = state === "task-creating" ? "creating" : state === "task-done" ? "done" : "error";
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
         <ReviewTaskAudit phase={phase} />
       </div>
@@ -253,7 +253,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "overflow") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <StressExtras mode="overflow" />
         <FactsTable facts={OVERFLOW_FACTS} />
@@ -263,7 +263,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "stress") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <StressExtras mode="stress" />
         <FactsTable facts={STRESS_FACTS} />
@@ -273,7 +273,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "single") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <FactsTable facts={[FACTS[0]]} />
       </div>
@@ -281,14 +281,14 @@ function Body({ state }: { state: string }) {
   }
   if (state === "many") {
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <FactsTable facts={MANY} />
       </div>
     );
   }
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 flex flex-col gap-5">
       <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
       <FactsTable facts={FACTS} />
       <FactsVerificationAudit />
@@ -313,7 +313,7 @@ function FactsPage({ state = "default", mobile = false }: PageProps) {
   );
   return (
     <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
           eyebrow="Verification"

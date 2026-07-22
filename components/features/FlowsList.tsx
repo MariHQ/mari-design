@@ -256,7 +256,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
         <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w={360} h={11} /></div>
         <div>
           <SkeletonLine w={160} h={10} className="mb-2" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 grid-cols-4">
             <SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} />
           </div>
         </div>
@@ -277,7 +277,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
       {/* Template gallery */}
       <div>
         <div className="mb-2 font-term text-[11px] font-medium uppercase tracking-[0.1em] text-ink/65">Start from a template</div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-4">
           {templates.map((f) => (
             <TemplateCard key={f.id} flow={f} onUse={(t) => setDraft({ from: t })} />
           ))}
@@ -300,7 +300,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left" style={{ minWidth: 900 }}>
+            <table className="w-full border-collapse text-left" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
                   <SortHeader label="On" sortKey="enabled" sort={sort} onSort={onSort} />

@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { ScrollText, RefreshCw, Search, ChevronDown, X } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
@@ -7,6 +7,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
+import { PropertyList } from "../data-display/PropertyList";
 import { Avatar } from "../data-display/Avatar";
 import { Pagination } from "../data-display/Pagination";
 import { EmptyState } from "../data-display/EmptyState";
@@ -50,7 +51,7 @@ const SETTINGS_TABS: TabOption<SettingsTab>[] = [
   { id: "models", label: "Models" },
   { id: "sources", label: "Sources" },
   { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Audit log" },
+  { id: "audit", label: "Access log" },
   { id: "design", label: "Design & brand" },
 ];
 
@@ -63,8 +64,21 @@ function SettingsTabs({ active }: { active: SettingsTab }) {
       options={SETTINGS_TABS}
       value={value}
       onChange={setValue}
-      className="mb-5"
     />
+  );
+}
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Shared verbatim with the other four Settings pages: one container width, one
+   main/rail split, one form-field grid. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+
+function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
   );
 }
 
@@ -175,8 +189,8 @@ function StressAudit({ extreme }: { extreme: boolean }) {
         at: "2025-07-20T15:42:00",
       }), 6);
   return (
-    <div className="flex flex-col gap-5">
-      <SettingsAuditLog events={events} total={extreme ? 987654321 : 214} />
+    <>
+      <SettingsAuditLog embedded events={events} total={extreme ? 987654321 : 214} />
       <Card title={extreme ? UNBREAKABLE : "Everyone who touched the workspace this quarter"} hint={extreme ? MIXED_SCRIPT : LONG_PARAGRAPH}>
         <div className="flex items-center gap-3">
           <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
@@ -186,7 +200,31 @@ function StressAudit({ extreme }: { extreme: boolean }) {
           {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
         </div>
       </Card>
-    </div>
+    </>
+  );
+}
+
+/* Supporting rail (§11, 320px) — matches the other four Settings rails. */
+function AuditRail() {
+  return (
+    <>
+      <Card title="At a glance" hint="Read only">
+        <PropertyList
+          items={[
+            { label: "Events, 30 days", value: "214" },
+            { label: "Retention", value: "90 days" },
+            { label: "Actors", value: "6 people, 1 system" },
+            { label: "Last event", value: "Jul 20, 2025" },
+          ]}
+        />
+      </Card>
+      <Card title="Reading the log">
+        <p className="text-[12.5px] leading-relaxed text-ink/70">
+          Entries are immutable. Filter by actor, action, or date, then expand a
+          row for the before and after values, the request ID, and the source IP.
+        </p>
+      </Card>
+    </>
   );
 }
 
@@ -194,26 +232,22 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") return <StressAudit extreme={state === "stress"} />;
   if (state === "error") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<ScrollText size={22} />} title="API offline">
-          The audit log is temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <EmptyState icon={<ScrollText size={22} />} title="API offline">
+        The audit log is temporarily unavailable. Retrying…
+      </EmptyState>
     );
   }
   if (state === "empty") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<ScrollText size={22} />} title="No events yet">
-          Workspace changes will show up here as they happen.
-        </EmptyState>
-      </div>
+      <EmptyState icon={<ScrollText size={22} />} title="No events yet">
+        Workspace changes will show up here as they happen.
+      </EmptyState>
     );
   }
   if ((INLINE as string[]).includes(state)) {
     return <AuditInline variant={state as AuditVariant} />;
   }
-  return <SettingsAuditLog />;
+  return <SettingsAuditLog embedded />;
 }
 
 function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) {
@@ -222,16 +256,17 @@ function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) 
       {state === "loading" ? (
         <SkeletonPage variant="settings" />
       ) : (
-        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+        <div className={PAGE}>
           <PageHeader
             eyebrow="Settings"
-            title="Audit log"
+            title="Access log"
             description="Every workspace change: actor, action, target, and time."
-            actions={<Button variant="default" icon><RefreshCw size={15} /> Refresh</Button>}
+            actions={<Button variant="default"><RefreshCw size={15} /> Refresh</Button>}
           />
-          <div className="mt-5" />
-          <SettingsTabs active="audit" />
-          <Body state={state} />
+          <div className="mt-5"><SettingsTabs active="audit" /></div>
+          <SettingsBody mobile={mobile} rail={<AuditRail />}>
+            <Body state={state} />
+          </SettingsBody>
         </div>
       )}
     </PageFrame>
@@ -240,7 +275,7 @@ function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) 
 
 export const page: PageModule = {
   id: "settings-audit-log",
-  title: "Settings · Audit log",
+  title: "Settings · Access log",
   route: "/settings/audit",
   component: SettingsAuditLogPage,
   states: STATES.map((s) => ({ ...s })),

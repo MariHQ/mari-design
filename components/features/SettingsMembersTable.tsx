@@ -49,6 +49,8 @@ const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager",
 const roleLabel = (r: Role) => ROLE_LABEL[r] ?? (String(r).charAt(0).toUpperCase() + String(r).slice(1));
 
 export type SettingsMembersTableProps = {
+  /** Hide the internal PageHeader when the host page already renders one. */
+  embedded?: boolean;
   members?: Member[];
   workspaceName?: string;
   githubTeam?: { connected: boolean; team: string };
@@ -61,6 +63,7 @@ export function SettingsMembersTable({
   workspaceName = "Acme Data Platform",
   githubTeam = { connected: true, team: "acme/data-eng" },
   loading = false,
+  embedded = false,
   className = "",
 }: SettingsMembersTableProps) {
   const [members, setMembers] = useState<Member[]>(initialMembers);
@@ -124,11 +127,11 @@ export function SettingsMembersTable({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Admin"
         description={`Manage who can reach ${name}, and how they get in`}
         actions={<Button variant="primary" onClick={() => setInviting((v) => !v)}><UserPlus size={15} /> Invite member</Button>}
-      />
+      />}
 
       {inviting && (
         <Card title="Invite a teammate" hint="They appear below with an Invited chip until they sign in.">
@@ -195,7 +198,7 @@ export function SettingsMembersTable({
                     </td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(m.joined)}</td>
                     <td className={tdPad}><Chip label={m.status === "invited" ? "Invited" : "Active"} tone={m.status === "invited" ? "attention" : "ok"} dot caps /></td>
-                    <td className={tdPad}><ConfirmButton compact confirmLabel="Remove?" onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
+                    <td className={`${tdPad} whitespace-nowrap`}><ConfirmButton compact confirmLabel="Remove?" onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
                   </tr>
                 ))}
               </tbody>

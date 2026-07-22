@@ -223,7 +223,7 @@ export function AuditFindingsChecklist({
                             {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/65">dismissed</div>}
                           </div>
                           {st === "open" && (
-                            <div className="flex shrink-0 items-center gap-1.5">
+                            <div className="flex max-w-[45%] shrink-0 flex-wrap items-center justify-end gap-1.5 [&_*]:max-w-full [&_button]:[overflow-wrap:anywhere]">
                               {fixControl(f, members, pick[f.id] ?? "", (v) => setPick((p) => ({ ...p, [f.id]: v })), fixFinding)}
                               <button type="button" aria-label="Dismiss finding" title="Dismiss" onClick={() => dismiss(f)} className={`grid h-7 w-7 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink ${focusRing}`}>
                                 <X size={14} />

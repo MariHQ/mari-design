@@ -32,9 +32,11 @@ function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export type SettingsAuditLogProps = { events?: AuditEvent[]; total?: number; loading?: boolean; className?: string };
+export type SettingsAuditLogProps = {
+  /** Hide the internal PageHeader when the host page already renders one. */
+  embedded?: boolean; events?: AuditEvent[]; total?: number; loading?: boolean; className?: string };
 
-export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.length, loading = false, className = "" }: SettingsAuditLogProps) {
+export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.length, loading = false, embedded = false, className = "" }: SettingsAuditLogProps) {
   const [filter, setFilter] = useState("");
   const [nonce, setNonce] = useState(0);
 
@@ -65,11 +67,11 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Access log"
         description="Every change in the workspace, who made it, and when"
         actions={<Button onClick={() => setNonce((n) => n + 1)}><RefreshCw size={14} /> Refresh{nonce > 0 ? ` (${nonce})` : ""}</Button>}
-      />
+      />}
 
       <Card variant="flush" title="Events" hint={`${shown.length} of ${total} events (last 50)`} actions={
         <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">

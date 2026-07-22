@@ -93,7 +93,7 @@ export function DocReviewChangeQueue({
 
   if (loading) {
     return (
-      <Card variant="flush" className="max-w-[720px]">
+      <Card variant="flush" className="w-full">
         <div className="flex gap-4 px-4 pt-4" aria-hidden="true">
           <SkeletonLine w={120} h={11} /><SkeletonLine w={90} h={11} />
         </div>
@@ -117,7 +117,7 @@ export function DocReviewChangeQueue({
   }
 
   return (
-    <Card variant="flush" className="max-w-[720px]">
+    <Card variant="flush" className="w-full">
       <div className="px-4 pt-4">
         <Tabs<ChangeTab>
           value={tab}

@@ -10,6 +10,7 @@ import { Tabs, type TabOption } from "../navigation/Tabs";
 import { Stepper } from "../data-display/Stepper";
 import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
+import { PropertyList } from "../data-display/PropertyList";
 import { Button } from "../actions/Button";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
@@ -44,6 +45,21 @@ const TAB_OPTIONS: TabOption<Tab>[] = [
   { id: "connectors", label: "Connectors" },
   { id: "bots", label: "Bots" },
 ];
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Same container and main/rail split as the five Settings tabs, so the outer
+   border does not move when you cross from Sources into Settings. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+
+function SplitBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
+  );
+}
 
 /* ── Inline connector catalog ──────────────────────────────────────────────
    Sample-filled credential fields so the configure screenshot reads populated;
@@ -160,7 +176,7 @@ function ConfigureBody({ c }: { c: Connector }) {
         </div>
         <div className="mt-3">
           <SectionLabel>Selected files — {UPLOAD_FILES.length}</SectionLabel>
-          <ul className="mt-1.5 grid gap-1">
+          <ul className="mt-1.5 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {UPLOAD_FILES.map((f) => (
               <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
                 <FileText size={13} className="text-ink/65" /> {f}
@@ -175,7 +191,7 @@ function ConfigureBody({ c }: { c: Connector }) {
     <div>
       <p className="mb-1 text-[13px] text-ink/70">{c.blurb} Credentials stay on the server and are never shown again.</p>
       <DocsLink c={c} />
-      <div className="mt-2 grid gap-1">
+      <div className={`mt-3 ${FORM_GRID}`}>
         {c.fields.map((f) => (
           <Field key={f.label} label={f.label}>
             {f.multiline ? (
@@ -214,7 +230,7 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
   const stepIdx = phase === "configure" ? 1 : 2;
   const configuring = phase === "configure";
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="min-w-0">
       <div className={`${card} p-5`}>
         <div className="flex items-center gap-3">
           <IconRing size={42}><SourceMark provider={c.key} size={22} /></IconRing>
@@ -228,29 +244,23 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
         <div className="mt-5"><Stepper labels={["Choose source", "Configure", "Sync"]} current={stepIdx} ariaLabel="Connector setup progress" /></div>
 
         <div className="mt-5 min-h-[200px]">
-          {configuring ? (
-            <ConfigureBody c={c} />
-          ) : (
-            <div className="grid gap-3">
-              <div className={`${card} p-4`}>
-                <SectionLabel>Sync phases</SectionLabel>
-                <div className="mt-3"><PhaseTracker current={phase === "done" ? 5 : 3} /></div>
-              </div>
-              <SyncPanel sources={[connectorSyncSource(c, phase)]} />
-            </div>
-          )}
+          {/* Phase tracker lives in the 320px rail (§11) so the panel below can
+              run the full width of the main column. */}
+          {configuring ? <ConfigureBody c={c} /> : <SyncPanel sources={[connectorSyncSource(c, phase)]} />}
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-2 border-t border-ink/10 pt-4">
-          <Button disabled={configuring}>Back</Button>
+        {/* Primary bottom LEFT, secondaries to its right (§2). */}
+        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-4">
           {configuring ? (
-            <span className="flex items-center gap-2">
-              <Button><ShieldCheck size={13} /> Test connection</Button>
+            <>
               <Button variant="primary">Connect &amp; sync <ArrowRight size={14} /></Button>
-            </span>
+              <Button><ShieldCheck size={13} /> Test connection</Button>
+            </>
           ) : phase === "done" ? (
             <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
-          ) : (
+          ) : null}
+          <Button disabled={configuring}>Back</Button>
+          {!configuring && phase !== "done" && (
             <span className="text-[12px] text-ink/65">Sync continues in the background.</span>
           )}
         </div>
@@ -311,7 +321,7 @@ const STATES = [
    connector grid, the SyncPanel row, and an inline connect flow. */
 function SourcesStressBody({ stress }: { stress: boolean }) {
   return (
-    <div className="mt-6 flex flex-col gap-6">
+    <>
       {stress && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex -space-x-2">
@@ -364,7 +374,7 @@ function SourcesStressBody({ stress }: { stress: boolean }) {
         }
         phase="configure"
       />
-    </div>
+    </>
   );
 }
 
@@ -386,32 +396,78 @@ function parseConnect(state: string): { c: Connector; phase: "configure" | "sync
   return { c, phase: p };
 }
 
-function Body({ state, tab }: { state: string; tab: Tab }): ReactNode {
-  if (state === "error") return <div className="mt-6"><EmptyState title="API offline">The API didn't answer. If the server is still starting up, retry in a moment.</EmptyState></div>;
-  if (state === "empty") return <div className="mt-6"><EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState></div>;
-  if (state === "overflow" || state === "stress") return <SourcesStressBody stress={state === "stress"} />;
-
+/* Supporting rail (§11, 320px). Same shape as the Settings rails: one
+   read-only summary card plus one explanatory card. The connect and first-sync
+   states swap the summary for the live phase tracker, which is what used to
+   sit above the panel and force a half-width body. */
+function SourcesRail({ state }: { state: string }) {
   const connect = parseConnect(state);
-  if (connect) return <div className="mt-6"><ConnectFlow c={connect.c} phase={connect.phase} /></div>;
+  const syncPhase = state.startsWith("sync-") ? state.slice("sync-".length) : null;
 
-  if (state.startsWith("sync-")) {
-    const phase = state.slice("sync-".length) as "queued" | "syncing" | "done" | "error";
+  if (connect || syncPhase) {
+    const current = connect
+      ? (connect.phase === "configure" ? 0 : connect.phase === "done" ? 5 : 3)
+      : syncPhase === "queued" ? 0 : syncPhase === "done" ? 5 : 2;
     return (
-      <div className="mt-6 mx-auto max-w-2xl grid gap-3">
+      <>
         <div className={`${card} p-4`}>
-          <SectionLabel>First-sync status</SectionLabel>
-          <div className="mt-3"><PhaseTracker current={phase === "queued" ? 0 : phase === "done" ? 5 : 2} failed={phase === "error"} /></div>
+          <SectionLabel>{connect ? "Sync phases" : "First-sync status"}</SectionLabel>
+          <div className="mt-3"><PhaseTracker current={current} failed={syncPhase === "error"} /></div>
         </div>
-        <SyncPanel sources={[syncPhaseSource(phase)]} onRetry={() => {}} />
-      </div>
+        <div className={`${card} p-4`}>
+          <SectionLabel>What happens next</SectionLabel>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-ink/70">
+            Sync runs on the server. Documents are fetched, chunked, embedded,
+            and indexed; unchanged chunks are skipped by content hash.
+          </p>
+        </div>
+      </>
     );
   }
 
-  if (tab === "bots") return <div className="mt-6"><SourcesBots defaultOpen={null} /></div>;
+  return (
+    <>
+      <div className={`${card} p-4`}>
+        <SectionLabel>At a glance</SectionLabel>
+        <PropertyList
+          className="mt-3"
+          items={[
+            { label: "Connected sources", value: "6 of 14" },
+            { label: "Documents", value: "12,480" },
+            { label: "Chunks embedded", value: "12,201" },
+            { label: "Last sync", value: "Jul 21, 2026" },
+          ]}
+        />
+      </div>
+      <div className={`${card} p-4`}>
+        <SectionLabel>Credentials</SectionLabel>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink/70">
+          Tokens are stored server-side and never shown again. Read-only scopes
+          are enough for every connector here.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function Body({ state, tab }: { state: string; tab: Tab }): ReactNode {
+  if (state === "error") return <EmptyState title="API offline">The API didn't answer. If the server is still starting up, retry in a moment.</EmptyState>;
+  if (state === "empty") return <EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState>;
+  if (state === "overflow" || state === "stress") return <SourcesStressBody stress={state === "stress"} />;
+
+  const connect = parseConnect(state);
+  if (connect) return <ConnectFlow c={connect.c} phase={connect.phase} />;
+
+  if (state.startsWith("sync-")) {
+    const phase = state.slice("sync-".length) as "queued" | "syncing" | "done" | "error";
+    return <SyncPanel sources={[syncPhaseSource(phase)]} onRetry={() => {}} />;
+  }
+
+  if (tab === "bots") return <SourcesBots defaultOpen={null} />;
 
   // default / adding → connectors grid
   return (
-    <div className="mt-6 space-y-6">
+    <div className="flex flex-col gap-5">
       <div className="flex justify-end">
         <SourcesConnectorWizard defaultOpen={state === "adding"} />
       </div>
@@ -438,7 +494,7 @@ function SourcesPage({ state = "default", mobile = false }: PageProps) {
 
   return (
     <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className={PAGE}>
         <PageHeader
           eyebrow="Settings"
           title="Sources & connectors"
@@ -450,7 +506,11 @@ function SourcesPage({ state = "default", mobile = false }: PageProps) {
             <Tabs<Tab> ariaLabel="Sources sections" variant="underline" options={TAB_OPTIONS} value={isConnect || isSyncPhase ? "connectors" : tab} onChange={setTab} />
           </div>
         )}
-        <Body state={state} tab={tab} />
+        <div className="mt-6">
+          <SplitBody mobile={mobile} rail={<SourcesRail state={state} />}>
+            <Body state={state} tab={tab} />
+          </SplitBody>
+        </div>
       </div>
     </PageFrame>
   );

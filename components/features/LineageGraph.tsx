@@ -222,7 +222,7 @@ export function LineageGraph({
 
   if (loading) {
     return (
-      <div className={`${card} min-w-[720px] overflow-hidden ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} min-w-[560px] overflow-hidden ${className}`.trim()} aria-hidden="true">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-ink/10 px-3.5 py-2">
           <SkeletonLine w={70} h={10} />
           <SkeletonChip w={96} /><SkeletonChip w={88} /><SkeletonChip w={104} />
@@ -238,7 +238,7 @@ export function LineageGraph({
   const hiddenCount = nodes.length - visibleNodes.length;
 
   return (
-    <div className={`${card} min-w-[720px] overflow-hidden font-display ${className}`.trim()}>
+    <div className={`${card} min-w-[560px] overflow-hidden font-display ${className}`.trim()}>
       {/* legend: color + dash + code, three channels per relation */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-ink/10 px-3.5 py-2">
         <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Relations</span>

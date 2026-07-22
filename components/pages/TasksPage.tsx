@@ -194,7 +194,7 @@ function StressStrip({ pathological }: { pathological: boolean }) {
   );
 }
 
-function Body({ state }: { state: string }) {
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const composerOpen = state === "composer-open";
   const saving = state === "saving";
   const [tasks, setTasks] = useState<Task[]>(() => seedFor(state));
@@ -227,7 +227,7 @@ function Body({ state }: { state: string }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5">
       {/* Fields first, primary action bottom LEFT (§2). */}
       <Card className={composerOpen || saving ? "ring-1 ring-biscay-2/40" : ""}>
         <div className="flex items-center gap-3">
@@ -255,7 +255,9 @@ function Body({ state }: { state: string }) {
 
       {(state === "overflow" || state === "stress") && <StressStrip pathological={state === "stress"} />}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Two equal columns at every desktop width (§11); mobile collapses to
+          one column at the page level, not via a component breakpoint (§10). */}
+      <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-2 gap-5"}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
           {listBody(open, "Nothing open: all caught up.")}
         </Column>
@@ -285,7 +287,7 @@ function TasksPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="board" />
       ) : (
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Tasks"
           title="Tasks"
@@ -293,7 +295,7 @@ function TasksPage({ state = "default", mobile = false }: PageProps) {
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
-          <Body key={state} state={state} />
+          <Body key={state} state={state} mobile={mobile} />
         </div>
       </div>
       )}

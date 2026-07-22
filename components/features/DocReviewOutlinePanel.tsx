@@ -95,7 +95,7 @@ export function DocReviewOutlinePanel({
 
   if (loading) {
     return (
-      <div className="flex max-w-[300px] flex-col gap-4" aria-hidden="true">
+      <div className="flex w-full flex-col gap-4" aria-hidden="true">
         <Card title="Document outline">
           <div className="space-y-2">
             {[0, 1, 2, 3, 4].map((i) => (
@@ -118,7 +118,7 @@ export function DocReviewOutlinePanel({
   }
 
   return (
-    <div className="flex max-w-[300px] flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <Card title="Document outline">
         <div className="space-y-0.5">
           {outline.map((o) => (

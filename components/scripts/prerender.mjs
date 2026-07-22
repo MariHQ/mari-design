@@ -26,6 +26,10 @@ const PORT = 4318;
 const BASE = `http://localhost:${PORT}`;
 const CONCURRENCY = Math.max(2, Math.min(8, (os.cpus()?.length || 4) - 1));
 const JPEG_QUALITY = 88;
+// Decoded-pixel budget per frame. Browsers subsample bitmaps past their decode
+// limits, which renders on the canvas as a squished frame; staying under this
+// keeps every frame pixel-exact.
+const MAX_FRAME_PX = 16_000_000;
 
 const SIZES = { desktop: { w: 1440, h: 900 }, mobile: { w: 390, h: 844 } };
 
@@ -69,6 +73,11 @@ async function main() {
     const ctxByView = {
       desktop: await browser.newContext({ deviceScaleFactor: 1 }),
       mobile: await browser.newContext({ deviceScaleFactor: 2 }),
+      // Fallback for very tall mobile frames: past roughly 16MP a browser
+      // subsamples the decoded bitmap, which shows up on the canvas as a
+      // squished/blurry frame. Those frames are captured at 1x instead, so
+      // they stay geometrically correct (just not retina).
+      mobile1x: await browser.newContext({ deviceScaleFactor: 1 }),
     };
     const ctx = ctxByView.desktop;
 
@@ -94,6 +103,7 @@ async function main() {
       const pageByView = {
         desktop: await ctxByView.desktop.newPage(),
         mobile: await ctxByView.mobile.newPage(),
+        mobile1x: await ctxByView.mobile1x.newPage(),
       };
       for (;;) {
         const i = cursor++;
@@ -107,10 +117,24 @@ async function main() {
         await p.goto(url, { waitUntil: "load" });
         await p.waitForSelector("body[data-ready]", { timeout: 15000 }).catch(() => {});
         await p.waitForTimeout(120);
-        const fullH = Math.max(devH, await p.evaluate(() =>
+        let fullH = Math.max(devH, await p.evaluate(() =>
           Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
         ));
-        await p.screenshot({ path: resolve(OUT_DIR, file), fullPage: true, type: "jpeg", quality: JPEG_QUALITY });
+
+        // Re-shoot oversized retina mobile frames at 1x so the browser never
+        // subsamples them (see MAX_FRAME_PX).
+        let shooter = p;
+        if (f.view === "mobile" && w * fullH * 4 > MAX_FRAME_PX) {
+          shooter = pageByView.mobile1x;
+          await shooter.setViewportSize({ width: w, height: devH });
+          await shooter.goto(url, { waitUntil: "load" });
+          await shooter.waitForSelector("body[data-ready]", { timeout: 15000 }).catch(() => {});
+          await shooter.waitForTimeout(120);
+          fullH = Math.max(devH, await shooter.evaluate(() =>
+            Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+          ));
+        }
+        await shooter.screenshot({ path: resolve(OUT_DIR, file), fullPage: true, type: "jpeg", quality: JPEG_QUALITY });
         results[i] = {
           file, page: f.page, pageTitle: f.pageTitle, row: f.row,
           state: f.state, stateLabel: f.stateLabel, view: f.view, w, h: fullH,
@@ -120,6 +144,7 @@ async function main() {
       }
       await pageByView.desktop.close();
       await pageByView.mobile.close();
+      await pageByView.mobile1x.close();
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     process.stdout.write("\n");

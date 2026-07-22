@@ -339,7 +339,7 @@ export function DocReviewEditor({
 
   if (loading) {
     return (
-      <Card variant="flush" className="max-w-[860px]">
+      <Card variant="flush" className="w-full">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-ink/12 px-3 py-2" aria-hidden="true">
           <SkeletonChip w={44} /><SkeletonChip w={28} /><SkeletonChip w={28} /><SkeletonChip w={28} />
           <span className="ml-auto"><SkeletonChip w={28} /></span>
@@ -360,7 +360,7 @@ export function DocReviewEditor({
   }
 
   return (
-    <Card variant="flush" className="max-w-[860px]">
+    <Card variant="flush" className="w-full">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-ink/12">
         <Menu

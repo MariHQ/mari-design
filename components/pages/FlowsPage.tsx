@@ -229,7 +229,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 
   const triggerKind = TRIGGER_STATE[state];
   if (triggerKind) {
-    /* Fixed 420px editor rail beside the list on desktop (§10: no
+    /* Standard 320px supporting rail beside the list on desktop (§11; §10: no
        flex-col/lg:flex-row); on mobile the rail stacks under the list. */
     if (mobile) {
       return (
@@ -240,9 +240,9 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
       );
     }
     return (
-      <div className="flex gap-5">
-        <div className="min-w-0 flex-1"><FlowsList /></div>
-        <div className="w-[420px] shrink-0"><TriggerEditorPreview kind={triggerKind} /></div>
+      <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5">
+        <div className="min-w-0"><FlowsList /></div>
+        <div className="min-w-0"><TriggerEditorPreview kind={triggerKind} /></div>
       </div>
     );
   }
@@ -258,7 +258,7 @@ function FlowsPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="list" />
       ) : (
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+        <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           {showHeader && (
             <PageHeader
               eyebrow="Flows"
@@ -266,7 +266,7 @@ function FlowsPage({ state = "default", mobile = false }: PageProps) {
               description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
             />
           )}
-          <div className={`flex flex-col gap-5 ${showHeader ? "mt-6" : ""}`}>
+          <div className={`flex flex-col gap-5 [&>*]:min-w-0 ${showHeader ? "mt-6" : ""}`}>
             <Body state={state} mobile={mobile} />
           </div>
         </div>

@@ -124,7 +124,7 @@ export function OverviewSourcePulse({
       hint="Last 7 days"
     >
       {loading ? (
-        <div className="grid grid-cols-[repeat(2,minmax(250px,1fr))] gap-2.5" aria-hidden="true">
+        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5" aria-hidden="true">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-3 rounded-md border border-ink/12 p-3">
               <SkeletonCircle size={26} />
@@ -143,7 +143,7 @@ export function OverviewSourcePulse({
       ) : tiles.length === 0 ? (
         <EmptyState>No sources connected yet. Connect one in Sources.</EmptyState>
       ) : (
-        <div className="grid grid-cols-[repeat(2,minmax(250px,1fr))] items-stretch gap-2.5">
+        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] items-stretch gap-2.5">
           {visible.map((t) => <PulseTile key={t.key} tile={t} />)}
         </div>
       )}

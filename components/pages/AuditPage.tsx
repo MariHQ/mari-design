@@ -120,7 +120,7 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
 
 function HistoryRail() {
   return (
-    <aside className="w-80 shrink-0 space-y-4">
+    <aside className="flex min-w-0 flex-col gap-5">
       <Card variant="plain" title="Audit history">
         <ul className="space-y-1.5 text-[12.5px]">
           <li className="rounded-[5px] border border-biscay/30 bg-flysch px-3 py-2">
@@ -152,9 +152,17 @@ function HistoryRail() {
 
 function withRail(main: ReactNode, mobile: boolean) {
   return (
-    <div className="mt-6 flex items-start gap-6">
-      <div className="min-w-0 flex-1">{main}</div>
-      {!mobile && <HistoryRail />}
+    /* §11 two-column split: main column minmax(0,1fr) + standard 320px rail.
+       Mobile collapses to one column with the rail below the main content. */
+    <div
+      className={
+        mobile
+          ? "mt-6 flex flex-col gap-5"
+          : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5"
+      }
+    >
+      <div className="min-w-0">{main}</div>
+      <HistoryRail />
     </div>
   );
 }
@@ -194,7 +202,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "many") return withRailM(<AuditFindingsChecklist repo={REPO} findings={MANY} />);
   if (state === "hide-resolved") {
     return withRailM(
-      <div className="space-y-4">
+      <div className="flex flex-col gap-5">
         <Alert tone="info" title="Hide resolved is on">
           Fixed and dismissed findings are collapsed: only what still needs attention shows.
         </Alert>
@@ -204,7 +212,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   }
   if (state === "overflow") {
     return withRailM(
-      <div className="space-y-4">
+      <div className="flex flex-col gap-5">
         <StressExtras mode="overflow" />
         <AuditFindingsChecklist repo={LONG_SOURCE} findings={OVERFLOW_FINDINGS} />
       </div>,
@@ -212,7 +220,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   }
   if (state === "stress") {
     return withRailM(
-      <div className="space-y-4">
+      <div className="flex flex-col gap-5">
         <StressExtras mode="stress" />
         <AuditFindingsChecklist repo={UNBREAKABLE} findings={STRESS_FINDINGS} />
       </div>,
@@ -236,7 +244,7 @@ function AuditPage({ state = "default", mobile = false }: PageProps) {
   }
   return (
     <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
           eyebrow="Onboarding"

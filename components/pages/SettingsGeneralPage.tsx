@@ -67,8 +67,23 @@ function SettingsTabs({ active }: { active: SettingsTab }) {
       options={SETTINGS_TABS}
       value={value}
       onChange={setValue}
-      className="mb-5"
     />
+  );
+}
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Every Settings page shares these three constants so the container edge, the
+   main/rail plumb line, and the form-field width are identical on all five
+   tabs. Do not localise them per page. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+
+function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
   );
 }
 
@@ -81,7 +96,9 @@ function LinkCard({ icon, title, blurb, cta }: { icon: ReactNode; title: string;
           <div className="text-[14px] font-semibold text-ink">{title}</div>
           <p className="mt-1 text-[13px] text-ink/60">{blurb}</p>
         </div>
-        <Button variant="default" compact icon>
+      </div>
+      <div className="mt-3">
+        <Button variant="default" compact>
           <ArrowRight size={15} /> {cta}
         </Button>
       </div>
@@ -96,7 +113,7 @@ function WorkspaceForm({ mode }: { mode: FormMode }) {
   const dirty = mode === "editing" || mode === "saving" || mode === "invalid";
   return (
     <Card title="Workspace" eyebrow="Identity" hint="Workspace identity and language.">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className={FORM_GRID}>
         <Field label="Workspace name">
           <Input defaultValue={dirty ? "Acme Data Platform (US)" : "Acme Data Platform"} className="w-full" />
         </Field>
@@ -177,9 +194,9 @@ function StressGeneral({ extreme }: { extreme: boolean }) {
   const long = extreme ? UNBREAKABLE : LONG_NAME;
   const blurb = extreme ? `${LONG_WORD} ${MIXED_SCRIPT}` : LONG_PARAGRAPH;
   return (
-    <div className="space-y-4">
+    <>
       <Card title={extreme ? UNBREAKABLE : LONG_TITLE} eyebrow="Identity" hint={extreme ? MIXED_SCRIPT : LONG_PARAGRAPH}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className={FORM_GRID}>
           <Field label="Workspace name"><Input defaultValue={long} className="w-full" /></Field>
           <Field label="Slug"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
           <Field label="Primary URL"><Input defaultValue={extreme ? UNBREAKABLE : LONG_URL} className="w-full font-term" /></Field>
@@ -194,10 +211,6 @@ function StressGeneral({ extreme }: { extreme: boolean }) {
           ]}
         />
       </Card>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <LinkCard icon={<Tag size={18} />} title={extreme ? UNBREAKABLE : LONG_TITLE} blurb={blurb} cta={extreme ? LONG_WORD : "Open the very long editorial library destination"} />
-        <LinkCard icon={<Clock size={18} />} title={extreme ? MIXED_SCRIPT : LONG_NAME} blurb={blurb} cta={extreme ? UNBREAKABLE : "Open Flows"} />
-      </div>
       <Card title={extreme ? UNBREAKABLE : "Everyone with access and every label applied"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
         <div className="flex items-center gap-3">
           <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
@@ -207,7 +220,29 @@ function StressGeneral({ extreme }: { extreme: boolean }) {
           {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
         </div>
       </Card>
-    </div>
+    </>
+  );
+}
+
+/* Supporting rail (§11, 320px). Carries the read-only summary plus the two
+   sign-post cards for features that moved out of Settings, so the main column
+   is a single full-width form instead of a half-empty one. */
+function GeneralRail() {
+  return (
+    <>
+      <Card title="At a glance" hint="Read only">
+        <PropertyList
+          items={[
+            { label: "Plan", value: "Team" },
+            { label: "Members", value: "24 active, 2 invited" },
+            { label: "Region", value: "US West (us-west-2)" },
+            { label: "Created", value: "Nov 3, 2024" },
+          ]}
+        />
+      </Card>
+      <LinkCard icon={<Tag size={18} />} title="Editorial library" blurb="Tags, glossary, and style guides now live in the Library." cta="Open Library" />
+      <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Flows (cross-cluster runs)." cta="Open Flows" />
+    </>
   );
 }
 
@@ -215,11 +250,9 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") return <StressGeneral extreme={state === "stress"} />;
   if (state === "error") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Settings size={22} />} title="API offline">
-          Workspace settings are temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Settings size={22} />} title="API offline">
+        Workspace settings are temporarily unavailable. Retrying…
+      </EmptyState>
     );
   }
   if (state === "branding") {
@@ -232,15 +265,11 @@ function Body({ state }: { state: string }) {
     : state === "invalid" ? "invalid"
     : "view";
   return (
-    <div className="space-y-4">
+    <>
       {state === "saved" && <Alert tone="ok" title="Workspace saved">Your identity changes are live for all members.</Alert>}
       <WorkspaceForm mode={mode} />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <LinkCard icon={<Tag size={18} />} title="Editorial library" blurb="Tags, glossary, and style guides now live in the Library." cta="Open Library" />
-        <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Flows (cross-cluster runs)." cta="Open Flows" />
-      </div>
       {state === "danger" && <DangerZone />}
-    </div>
+    </>
   );
 }
 
@@ -250,11 +279,12 @@ function SettingsGeneralPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="settings" />
       ) : (
-        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+        <div className={PAGE}>
           <PageHeader eyebrow="Settings" title="Workspace" description="Workspace identity and language." />
-          <div className="mt-5" />
-          <SettingsTabs active="general" />
-          <Body state={state} />
+          <div className="mt-5"><SettingsTabs active="general" /></div>
+          <SettingsBody mobile={mobile} rail={<GeneralRail />}>
+            <Body state={state} />
+          </SettingsBody>
         </div>
       )}
     </PageFrame>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { KeyRound, Plus } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
@@ -9,6 +9,7 @@ import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
 import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
+import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
@@ -64,8 +65,22 @@ function SettingsTabs({ active }: { active: SettingsTab }) {
       options={SETTINGS_TABS}
       value={value}
       onChange={setValue}
-      className="mb-5"
     />
+  );
+}
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Shared verbatim with the other four Settings pages: one container width, one
+   main/rail split, one form-field grid. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+
+function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
   );
 }
 
@@ -131,8 +146,8 @@ function StressKeys({ extreme }: { extreme: boolean }) {
         revoked: i % 3 === 0,
       }), 4);
   return (
-    <div className="flex flex-col gap-5">
-      <SettingsApiKeys keys={keys} />
+    <>
+      <SettingsApiKeys embedded keys={keys} />
       <Card title={extreme ? UNBREAKABLE : "Scopes granted across every key in this workspace"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
         <div className="flex items-center gap-3">
           <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
@@ -142,7 +157,33 @@ function StressKeys({ extreme }: { extreme: boolean }) {
           {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
         </div>
       </Card>
-    </div>
+    </>
+  );
+}
+
+/* Supporting rail (§11, 320px) — matches the other four Settings rails. */
+function KeysRail() {
+  return (
+    <>
+      <Card title="At a glance" hint="Read only">
+        <PropertyList
+          items={[
+            { label: "Active keys", value: "2" },
+            { label: "Revoked keys", value: "1" },
+            { label: "Requests, 30 days", value: "184,220" },
+            { label: "Oldest key", value: "Dec 1, 2024" },
+          ]}
+        />
+      </Card>
+      <Card title="Scopes">
+        <ul className="flex flex-col gap-2 font-term text-[12px] text-ink/70">
+          <li><b className="text-ink">search:read</b> query the index</li>
+          <li><b className="text-ink">ingest:write</b> push documents</li>
+          <li><b className="text-ink">facts:read</b> read verified facts</li>
+          <li><b className="text-ink">metrics:read</b> export usage</li>
+        </ul>
+      </Card>
+    </>
   );
 }
 
@@ -150,62 +191,58 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") return <StressKeys extreme={state === "stress"} />;
   if (state === "error") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<KeyRound size={22} />} title="API offline">
-          Your API keys are temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <EmptyState icon={<KeyRound size={22} />} title="API offline">
+        Your API keys are temporarily unavailable. Retrying…
+      </EmptyState>
     );
   }
   if (state === "empty") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<KeyRound size={22} />} title="No keys yet">
-          Create a key to authenticate CI, bots, and the MCP gateway.
-        </EmptyState>
-      </div>
+      <EmptyState icon={<KeyRound size={22} />} title="No keys yet">
+        Create a key to authenticate CI, bots, and the MCP gateway.
+      </EmptyState>
     );
   }
-  if (state === "single") return <SettingsApiKeys keys={[DEMO_KEYS[0]]} />;
-  if (state === "many") return <SettingsApiKeys keys={MANY_KEYS} />;
+  if (state === "single") return <SettingsApiKeys embedded keys={[DEMO_KEYS[0]]} />;
+  if (state === "many") return <SettingsApiKeys embedded keys={MANY_KEYS} />;
   if (state === "revoked") return <KeysTable keys={MANY_KEYS} />;
 
   if (state === "create-key") {
     return (
-      <div className="flex flex-col gap-5">
+      <>
         <Card title="New key" hint="Scopes are space-separated, e.g. search:read ingest:write">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={FORM_GRID}>
             <Field label="Name"><Input defaultValue="Nightly export bot" placeholder="CI pipeline" className="w-full" /></Field>
             <Field label="Scopes"><Input defaultValue="search:read ingest:write" className="w-full font-term" /></Field>
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-5 flex items-center gap-2 border-t border-ink/10 pt-4">
             <Button variant="primary"><Plus size={15} /> Create key</Button>
             <Button>Cancel</Button>
           </div>
         </Card>
         <KeysTable keys={DEMO_KEYS} />
-      </div>
+      </>
     );
   }
   if (state === "key-created") {
     return (
-      <div className="flex flex-col gap-5">
+      <>
         <TokenReveal token="mk_live_9f2ac0d18b7e4a3c1d5e6f708192a3b4" title="Your new key" masked={false} onDismiss={() => {}} />
         <KeysTable keys={[{ id: 99, name: "Nightly export bot", prefix: "mk_live_9f2a…", scopes: "search:read ingest:write", created: "2026-07-21", lastUsed: null, revoked: false }, ...DEMO_KEYS]} />
-      </div>
+      </>
     );
   }
   if (state === "revoke-confirm") {
     return (
-      <div className="flex flex-col gap-5">
+      <>
         <Alert tone="attention" title="Revoke MCP gateway?" action={<span className="inline-flex gap-2"><Button compact variant="danger">Revoke now</Button><Button compact>Cancel</Button></span>}>
           Revocation is immediate and cannot be undone. Any service using this key will start receiving 401s.
         </Alert>
         <KeysTable keys={DEMO_KEYS} confirmId={2} />
-      </div>
+      </>
     );
   }
-  return <SettingsApiKeys />;
+  return <SettingsApiKeys embedded />;
 }
 
 function SettingsApiKeysPage({ state = "default", mobile = false }: PageProps) {
@@ -214,16 +251,17 @@ function SettingsApiKeysPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="settings" />
       ) : (
-        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+        <div className={PAGE}>
           <PageHeader
             eyebrow="Settings"
             title="API keys"
             description="Programmatic access for CI, bots, and the MCP gateway."
             actions={<Button variant="primary"><Plus size={15} /> Create key</Button>}
           />
-          <div className="mt-5" />
-          <SettingsTabs active="api-keys" />
-          <Body state={state} />
+          <div className="mt-5"><SettingsTabs active="api-keys" /></div>
+          <SettingsBody mobile={mobile} rail={<KeysRail />}>
+            <Body state={state} />
+          </SettingsBody>
         </div>
       )}
     </PageFrame>

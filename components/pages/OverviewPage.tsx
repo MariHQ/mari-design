@@ -28,9 +28,27 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/* §11 dashboard grid. Every widget is a direct child of one
+   `grid grid-cols-3 gap-5`, so tile edges line up horizontally and vertically
+   and the body fills the whole 1400px container. Mobile collapses to one
+   column at the page level (§11), never via component breakpoints (§10). */
+function DashGrid({ mobile, children }: { mobile: boolean; children: React.ReactNode }) {
+  return (
+    <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-3 gap-5"}>
+      {children}
+    </div>
+  );
+}
+
+/** A dashboard cell. `span` is ignored on mobile (single column). */
+function Cell({ mobile, span = 1, children }: { mobile: boolean; span?: 1 | 2 | 3; children: React.ReactNode }) {
+  const cls = mobile ? "min-w-0" : span === 3 ? "col-span-3 min-w-0" : span === 2 ? "col-span-2 min-w-0" : "col-span-1 min-w-0";
+  return <div className={cls}>{children}</div>;
+}
+
 /* Stress states — drive every overview feature from its data props with
    overflow (long natural text) / stress (pathological) content. */
-function StressBody({ extreme }: { extreme: boolean }) {
+function StressBody({ extreme, mobile }: { extreme: boolean; mobile: boolean }) {
   const digest = extreme
     ? repeat((i) => ({
         title: `${UNBREAKABLE} ${MIXED_SCRIPT}`,
@@ -74,19 +92,15 @@ function StressBody({ extreme }: { extreme: boolean }) {
   const stats = { changes: HUGE_NUMBER, factsReview: HUGE_NUMBER, flowsRunning: HUGE_NUMBER };
 
   return (
-    <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div className="lg:col-span-2"><OverviewStatTiles stats={stats} /></div>
-      <div className="space-y-4">
-        <OverviewDigestCard topics={digest} />
-        <OverviewTodayReview tasks={tasks} />
-        <OverviewLiveActivity items={feed} pollMs={0} />
-        <OverviewWorkflowStrip flow={flow} run={{ started: extreme ? UNBREAKABLE : LONG_SOURCE, outcome: extreme ? MIXED_SCRIPT : "Passed after a very long retry loop" }} />
-      </div>
-      <div className="space-y-4">
-        <OverviewRecentDocs docs={docs} />
-        <OverviewSourcePulse tiles={tiles} />
-      </div>
-    </div>
+    <DashGrid mobile={mobile}>
+      <Cell mobile={mobile} span={3}><OverviewStatTiles stats={stats} /></Cell>
+      <Cell mobile={mobile}><OverviewDigestCard topics={digest} /></Cell>
+      <Cell mobile={mobile} span={2}><OverviewTodayReview tasks={tasks} /></Cell>
+      <Cell mobile={mobile}><OverviewLiveActivity items={feed} pollMs={0} /></Cell>
+      <Cell mobile={mobile} span={2}><OverviewRecentDocs docs={docs} /></Cell>
+      <Cell mobile={mobile} span={3}><OverviewWorkflowStrip flow={flow} run={{ started: extreme ? UNBREAKABLE : LONG_SOURCE, outcome: extreme ? MIXED_SCRIPT : "Passed after a very long retry loop" }} /></Cell>
+      <Cell mobile={mobile} span={3}><OverviewSourcePulse tiles={tiles} /></Cell>
+    </DashGrid>
   );
 }
 
@@ -102,32 +116,29 @@ function Greeting() {
   );
 }
 
-function Body({ state }: { state: string }) {
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
-    return (
-      <div className="mt-6"><EmptyState title="API offline">The dashboard is temporarily unavailable. Retrying…</EmptyState></div>
-    );
+    return <EmptyState title="API offline">The dashboard is temporarily unavailable. Retrying…</EmptyState>;
   }
   if (state === "empty") {
-    return (
-      <div className="mt-6"><EmptyState title="Nothing here yet">Connect a source to start building your knowledge base.</EmptyState></div>
-    );
+    return <EmptyState title="Nothing here yet">Connect a source to start building your knowledge base.</EmptyState>;
   }
-  if (state === "overflow" || state === "stress") return <StressBody extreme={state === "stress"} />;
+  if (state === "overflow" || state === "stress") return <StressBody extreme={state === "stress"} mobile={mobile} />;
   return (
-    <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div className="lg:col-span-2"><OverviewStatTiles /></div>
-      <div className="space-y-4">
-        <OverviewDigestCard />
-        <OverviewTodayReview />
-        <OverviewLiveActivity />
-        <OverviewWorkflowStrip />
-      </div>
-      <div className="space-y-4">
-        <OverviewRecentDocs />
-        <OverviewSourcePulse />
-      </div>
-    </div>
+    <DashGrid mobile={mobile}>
+      {/* Spans follow each widget's own minimum width. The two table widgets
+          take two columns (their title column alone is min-w-[200px] plus four
+          no-wrap columns); Source pulse packs a 2 x 250px tile grid and the
+          workflow strip a row of 86px nodes, so both take all three. The
+          one-column slots hold the two prose widgets, which reflow. */}
+      <Cell mobile={mobile} span={3}><OverviewStatTiles /></Cell>
+      <Cell mobile={mobile}><OverviewDigestCard /></Cell>
+      <Cell mobile={mobile} span={2}><OverviewTodayReview /></Cell>
+      <Cell mobile={mobile}><OverviewLiveActivity /></Cell>
+      <Cell mobile={mobile} span={2}><OverviewRecentDocs /></Cell>
+      <Cell mobile={mobile} span={3}><OverviewWorkflowStrip /></Cell>
+      <Cell mobile={mobile} span={3}><OverviewSourcePulse /></Cell>
+    </DashGrid>
   );
 }
 
@@ -137,9 +148,11 @@ function OverviewPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="dashboard" />
       ) : (
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+        <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <Greeting />
-          <Body state={state} />
+          <div className="mt-6">
+            <Body state={state} mobile={mobile} />
+          </div>
         </div>
       )}
     </PageFrame>

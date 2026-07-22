@@ -91,7 +91,7 @@ const STRESS_TEMPLATES = [
 function StressBody({ variant }: { variant: "overflow" | "stress" }) {
   const stress = variant === "stress";
   return (
-    <div className="mt-6 flex flex-col gap-6">
+    <div className="mt-6 flex flex-col gap-5">
       <Card variant="plain" title="Contributors & labels">
         <div className="space-y-3">
           <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
@@ -148,19 +148,29 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
 
   let body;
   if (state === "error") {
-    body = <div className="mt-6"><EmptyState title="API offline">The library is temporarily unavailable. Retrying…</EmptyState></div>;
+    body = (
+      <div className="mt-6">
+        <Card>
+          <EmptyState title="API offline">The library is temporarily unavailable. Retrying…</EmptyState>
+        </Card>
+      </div>
+    );
   } else if (state === "empty") {
-    body = <div className="mt-6"><EmptyState title="Nothing here yet">Connect a source and add your first tags, rules, and terms to build the editorial system.</EmptyState></div>;
+    body = (
+      <div className="mt-6">
+        <Card>
+          <EmptyState title="Nothing here yet">Connect a source and add your first tags, rules, and terms to build the editorial system.</EmptyState>
+        </Card>
+      </div>
+    );
   } else if (state === "overflow" || state === "stress") {
     body = <StressBody variant={state} />;
   } else {
     body = (
-      <>
-        <div className="mt-6">
-          <Tabs<Tab> ariaLabel="Library sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={setTab} />
-        </div>
-        <div className="mt-5"><Panel tab={tab} state={state} /></div>
-      </>
+      <div className="mt-6 flex flex-col gap-5">
+        <Tabs<Tab> ariaLabel="Library sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={setTab} />
+        <Panel tab={tab} state={state} />
+      </div>
     );
   }
 
@@ -168,7 +178,7 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
 
   return (
     <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Editorial system"
           title="Library"

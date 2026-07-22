@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Layers, Sparkles, KeyRound, Eye, EyeOff } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
@@ -66,8 +66,22 @@ function SettingsTabs({ active }: { active: SettingsTab }) {
       options={SETTINGS_TABS}
       value={value}
       onChange={setValue}
-      className="mb-5"
     />
+  );
+}
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Shared verbatim with the other four Settings pages: one container width, one
+   main/rail split, one form-field grid. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+
+function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
   );
 }
 
@@ -107,43 +121,43 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
   const embDirty = variant === "editing-embedding";
   const llmDirty = variant === "editing-llm";
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint="1536 dims">
-          <Field label="Model">
+    <>
+      <Card icon={<Layers size={16} className="text-biscay-2" />} title="Models" hint="Embedding + generation">
+        <div className={FORM_GRID}>
+          <Field label="Embedding model">
             <Select
               defaultValue={embDirty ? EMB_OPTIONS[1] : EMB_OPTIONS[0]}
               className={`w-full ${embDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
             >
               {EMB_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </Select>
+            {embDirty && <p className="mt-1 text-[11.5px] text-ink/65">Re-indexes all documents</p>}
           </Field>
-          <div className="mt-3 flex items-center gap-3">
-            <Button variant="primary" compact disabled={!embDirty}>Save</Button>
-            {embDirty && <span className="text-[11.5px] text-ink/65">Re-indexes all documents</span>}
-            {variant === "saved" && <SavedNote />}
-          </div>
-        </Card>
-
-        <Card icon={<Sparkles size={16} className="text-clay" />} title="LLM provider">
-          <Field label="Model">
+          <Field label="LLM provider">
             <Select
               defaultValue={llmDirty ? LLM_OPTIONS[1] : LLM_OPTIONS[0]}
               className={`w-full ${llmDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
             >
               {LLM_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </Select>
+            {llmDirty && <p className="mt-1 text-[11.5px] text-ink/65">Unsaved changes</p>}
           </Field>
-          <div className="mt-3 flex items-center gap-3">
-            <Button variant="primary" compact disabled={!llmDirty}>Save</Button>
-            {llmDirty && <span className="text-[11.5px] text-ink/65">Unsaved changes</span>}
-            {variant === "saved" && <SavedNote />}
-          </div>
-        </Card>
-      </div>
+          <Field label="Embedding dimensions">
+            <Select defaultValue="1536" className="w-full">
+              <option value="768">768</option>
+              <option value="1536">1536</option>
+              <option value="3072">3072</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-5 flex items-center gap-3 border-t border-ink/10 pt-4">
+          <Button variant="primary" disabled={!embDirty && !llmDirty}>Save changes</Button>
+          {variant === "saved" && <SavedNote />}
+        </div>
+      </Card>
 
-      <Card icon={<KeyRound size={16} className="text-biscay-2" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <Card icon={<KeyRound size={16} className="text-clay" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
+        <div className={FORM_GRID}>
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
               <Input type="password" defaultValue="sk-proj-9f2ac0d18b7e4a3c" className="w-full font-term" />
@@ -157,16 +171,16 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
             </div>
           </Field>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button variant="primary" compact disabled={variant === "saved"}>Save changes</Button>
-          <Button compact disabled={variant === "test-testing"}>
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-ink/10 pt-4">
+          <Button variant="primary" disabled={variant === "saved"}>Save changes</Button>
+          <Button disabled={variant === "test-testing"}>
             {variant === "test-testing" ? "Testing…" : "Test connection"}
           </Button>
           <TestResult variant={variant} />
           {variant === "saved" && <SavedNote />}
         </div>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -175,21 +189,22 @@ const INLINE: ModelsVariant[] = ["editing-embedding", "editing-llm", "test-idle"
 function StressModels({ extreme }: { extreme: boolean }) {
   const opt = extreme ? UNBREAKABLE : LONG_SOURCE;
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card icon={<Layers size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : LONG_TITLE} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+    <>
+      <Card icon={<Layers size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : LONG_TITLE} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className={FORM_GRID}>
           <Field label="Model">
             <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
           </Field>
-        </Card>
-        <Card icon={<Sparkles size={16} className="text-clay" />} title={extreme ? MIXED_SCRIPT : LONG_TITLE} hint={extreme ? UNBREAKABLE : LONG_PARAGRAPH}>
           <Field label="Provider">
             <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
           </Field>
-        </Card>
-      </div>
-      <Card icon={<KeyRound size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : "Provider keys, endpoints, and every model label"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
-        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={extreme ? UNBREAKABLE : LONG_TITLE}>
+            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
+          </Field>
+        </div>
+      </Card>
+      <Card icon={<KeyRound size={16} className="text-clay" />} title={extreme ? UNBREAKABLE : "Provider keys, endpoints, and every model label"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className={FORM_GRID}>
           <Field label="OpenAI (sk-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
           <Field label="Anthropic (sk-ant-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
         </div>
@@ -211,7 +226,32 @@ function StressModels({ extreme }: { extreme: boolean }) {
           {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
         </div>
       </Card>
-    </div>
+    </>
+  );
+}
+
+/* Supporting rail (§11, 320px) — matches the other four Settings rails. */
+function ModelsRail() {
+  return (
+    <>
+      <Card title="At a glance" hint="Read only">
+        <PropertyList
+          items={[
+            { label: "Documents embedded", value: "12,201 of 12,480" },
+            { label: "Vector dimensions", value: "1536" },
+            { label: "Tokens per day", value: "1.4M" },
+            { label: "Last re-index", value: "Jul 18, 2026" },
+          ]}
+        />
+      </Card>
+      <Card title="Changing a model">
+        <p className="text-[12.5px] leading-relaxed text-ink/70">
+          Switching the embedding model re-indexes every document, so search is
+          degraded until the run finishes. Changing the LLM provider takes effect
+          on the next answer.
+        </p>
+      </Card>
+    </>
   );
 }
 
@@ -219,26 +259,22 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") return <StressModels extreme={state === "stress"} />;
   if (state === "error") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Layers size={22} />} title="API offline">
-          Model configuration is temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Layers size={22} />} title="API offline">
+        Model configuration is temporarily unavailable. Retrying…
+      </EmptyState>
     );
   }
   if (state === "empty") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Layers size={22} />} title="No models configured">
-          Choose an embedding model and LLM provider to start indexing.
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Layers size={22} />} title="No models configured">
+        Choose an embedding model and LLM provider to start indexing.
+      </EmptyState>
     );
   }
   if ((INLINE as string[]).includes(state)) {
     return <ModelsInline variant={state as ModelsVariant} />;
   }
-  return <SettingsModelsConfig />;
+  return <SettingsModelsConfig embedded />;
 }
 
 function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
@@ -247,15 +283,16 @@ function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="settings" />
       ) : (
-        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+        <div className={PAGE}>
           <PageHeader
             eyebrow="Settings"
             title="Models"
             description="Which models embed, search, and answer for this workspace."
           />
-          <div className="mt-5" />
-          <SettingsTabs active="models" />
-          <Body state={state} />
+          <div className="mt-5"><SettingsTabs active="models" /></div>
+          <SettingsBody mobile={mobile} rail={<ModelsRail />}>
+            <Body state={state} />
+          </SettingsBody>
         </div>
       )}
     </PageFrame>

@@ -53,6 +53,8 @@ function SavedNote({ show }: { show: boolean }) {
 }
 
 export type SettingsModelsConfigProps = {
+  /** Hide the internal PageHeader when the host page already renders one. */
+  embedded?: boolean;
   embedding?: string;
   llm?: string;
   dims?: number;
@@ -67,6 +69,7 @@ export function SettingsModelsConfig({
   dims = 1536,
   chunking: initialChunking = DEMO_CHUNKING,
   loading = false,
+  embedded = false,
   className = "",
 }: SettingsModelsConfigProps) {
   const [emb, setEmb] = useState(embedding);
@@ -121,7 +124,7 @@ export function SettingsModelsConfig({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader title="Models" description="Choose which models embed, search, and answer for this workspace" />
+      {!embedded && <PageHeader title="Models" description="Choose which models embed, search, and answer for this workspace" />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint={`${dims} dims`}>

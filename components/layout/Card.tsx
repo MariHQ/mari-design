@@ -33,7 +33,7 @@ export function Card({ variant = "default", title, eyebrow, icon, actions, hint,
             {eyebrow && <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-0.5">{eyebrow}</span>}
             {title && <h3 className="text-[15px] font-semibold leading-snug text-ink break-words">{title}</h3>}
           </div>
-          {hint && <span className="font-term text-[11px] text-ink/65 whitespace-nowrap self-center">{hint}</span>}
+          {hint && <span className="min-w-0 max-w-full self-center font-term text-[11px] text-ink/65 [overflow-wrap:anywhere]">{hint}</span>}
           {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
         </header>
       )}

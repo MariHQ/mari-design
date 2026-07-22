@@ -121,7 +121,7 @@ export function DocReviewFindingsPanel({
 
   if (loading) {
     return (
-      <Card variant="flush" className="max-w-[440px]">
+      <Card variant="flush" className="w-full">
         <div className="flex gap-4 px-4 pt-4" aria-hidden="true">
           <SkeletonLine w={70} h={11} /><SkeletonLine w={80} h={11} />
         </div>
@@ -148,7 +148,7 @@ export function DocReviewFindingsPanel({
   }
 
   return (
-    <Card variant="flush" className="max-w-[440px]">
+    <Card variant="flush" className="w-full">
       <div className="px-4 pt-4">
         <Tabs<FactTab>
           value={tab}

@@ -6,7 +6,8 @@ import {
 import type { PageModule, PageProps } from "./types";
 import { Stepper } from "../data-display/Stepper";
 import { Button } from "../actions/Button";
-import { Logo } from "../shell/Logo";
+import { Logo, Brandmark } from "../shell/Logo";
+import { Card } from "../layout/Card";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Textarea } from "../forms/Textarea";
@@ -69,6 +70,33 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/* ── Shared unauthenticated framing ────────────────────────────────────────
+   Kept identical to LoginPage / SetupPage: one backdrop, one 672px column, one
+   centered logo/title/sub header, one card, primary-bottom-left actions.
+   Deliberately OFF the 1400px console grid (§11): no sidebar here. */
+const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
+const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
+
+function AuthBackdrop() {
+  return (
+    <>
+      <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
+      <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
+    </>
+  );
+}
+
+function AuthHeader({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-8 flex flex-col items-center text-center">
+      <span className="text-biscay"><Logo size={34} /></span>
+      <h1 className="mt-4 font-display text-[26px] font-bold tracking-[-0.01em] text-ink [overflow-wrap:anywhere]">{title}</h1>
+      <p className="mt-1 text-[13.5px] leading-relaxed text-ink/70 [overflow-wrap:anywhere]">{sub}</p>
+    </div>
+  );
+}
+
 /* ── Step 0: hero ─────────────────────────────────────────────────────── */
 
 function Hero() {
@@ -80,7 +108,7 @@ function Hero() {
   return (
     <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
       <div>
-        <h2 className="font-display text-[26px] font-bold tracking-[-0.01em] text-ink">Let’s set up your workspace</h2>
+        <h2 className="font-display text-[20px] font-semibold text-ink">Let’s set up your workspace</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-ink/70">
           A few real steps: every one does actual work. You can save and finish
           later at any point.
@@ -386,7 +414,7 @@ function FinishStep() {
         <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened: live sync state from your sources.</p>
       </div>
       <WelcomeSyncPanel />
-      <div className="flex justify-end">
+      <div className={AUTH_ACTIONS}>
         <Button variant="primary">Finish setup</Button>
       </div>
     </div>
@@ -548,7 +576,7 @@ function StepBody({ state }: { state: string }) {
 function WelcomePage({ state = "default", mobile = false }: PageProps) {
   if (state === "syncing") {
     return (
-      <div className="h-full w-full overflow-y-auto bg-paper">
+      <div className={AUTH_SHELL}>
         <SkeletonPage variant="auth" />
       </div>
     );
@@ -560,28 +588,28 @@ function WelcomePage({ state = "default", mobile = false }: PageProps) {
     done ? "Go to Overview" : step === 0 ? "Set up my workspace" : step === last ? "Finish setup" : "Continue";
 
   return (
-    <div className="h-full w-full overflow-y-auto bg-paper">
-      <div className={`mx-auto max-w-3xl ${mobile ? "px-4 py-8" : "px-6 py-10"}`}>
-        <div className="mb-6 flex items-center justify-between">
-          <span className="font-term text-[11px] uppercase tracking-[0.1em] text-biscay-2">Workspace setup</span>
-          <Button variant="link">Save and finish later</Button>
-        </div>
+    <div className={AUTH_SHELL}>
+      <AuthBackdrop />
+      <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
+        <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Five steps, all of them real." />
 
-        <div className="mb-7">
-          <Stepper labels={[...LABELS]} current={step} ariaLabel="Onboarding steps" />
-        </div>
+        <Card variant="plain">
+          <div className="mb-5">
+            <Stepper labels={[...LABELS]} current={step} ariaLabel="Onboarding steps" />
+          </div>
 
-        <div className="rounded-[8px] border border-ink/15 bg-paper p-5 sm:p-6">
           <StepBody state={state} />
 
-          <div className="mt-7 flex items-center justify-between border-t border-ink/10 pt-4">
+          {/* Primary bottom LEFT, secondary to its right (§2). */}
+          <div className={`mt-7 border-t border-ink/10 pt-4 ${AUTH_ACTIONS}`}>
+            <Button variant="primary">{nextLabel}</Button>
             <Button variant="default" disabled={step === 0}>← Back</Button>
-            <span className="font-term text-[12px] text-ink/65">
+            <Button variant="link">Save and finish later</Button>
+            <span className="ml-auto font-term text-[12px] text-ink/65">
               {done ? <span className="inline-flex items-center gap-1 text-moss"><Sparkles size={12} /> Setup complete</span> : `${step + 1} of ${LABELS.length}`}
             </span>
-            <Button variant="primary">{nextLabel}</Button>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

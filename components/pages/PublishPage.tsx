@@ -72,7 +72,7 @@ function PublishStressBody({ stress }: { stress: boolean }) {
   const domain = stress ? LONG_URL : LONG_SOURCE;
   const chips = stress ? MANY_TAGS : ["customer-facing", "canonical", "incident-response", "reliability"];
   return (
-    <div className="mt-6 flex flex-col gap-5">
+    <div className="flex flex-col gap-5 [&>*]:min-w-0">
       <Card>
         <div className="flex flex-wrap items-center gap-2.5">
           <Chip label="Live" tone="ok" dot pulse caps />
@@ -317,7 +317,7 @@ function DomainsBody() {
   );
 }
 
-function SiteEditorInline({ tab }: { tab: EditorTab }) {
+function SiteEditorInline({ tab, mobile }: { tab: EditorTab; mobile: boolean }) {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -334,7 +334,16 @@ function SiteEditorInline({ tab }: { tab: EditorTab }) {
       />
       {/* The Preview tab already IS the live preview: showing it twice side by
           side reads as a rendering bug, so the rail drops out on that tab. */}
-      <div className={tab === "preview" ? "grid gap-5" : "grid gap-5 lg:grid-cols-2"}>
+      {/* §11 two-column split: editor column minmax(0,1fr) + the standard
+          320px rail, so Publish's rail sits on the same plumb line as every
+          other console page instead of a 50/50 split. */}
+      <div
+        className={
+          tab === "preview" || mobile
+            ? "grid items-start gap-5 [&>*]:min-w-0"
+            : "grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5 [&>*]:min-w-0"
+        }
+      >
         <Card>
           <EditorTabs active={tab} />
           {tab === "content" && <ContentBody />}
@@ -356,16 +365,22 @@ function SiteEditorInline({ tab }: { tab: EditorTab }) {
 }
 
 /* ── Publish / deploy flow ─────────────────────────────────────────────────*/
-function PublishFlow({ phase }: { phase: PublishPhase }) {
+function PublishFlow({ phase, mobile }: { phase: PublishPhase; mobile: boolean }) {
   const step = phase === "draft" ? 0 : phase === "publishing" ? 1 : 3;
   const statusChip =
     phase === "published" ? <Chip label="Live" tone="ok" dot pulse caps />
     : phase === "publishing" ? <Chip label="Publishing" tone="info" dot caps />
     : <Chip label="Draft" tone="neutral" dot caps />;
   return (
-    /* Left-aligned on the same plumb line as every other page body: a centered
-       column under a left-aligned page header reads as a broken grid. */
-    <div className="flex max-w-2xl flex-col gap-4">
+    /* §11: the deploy card fills the main column and the release log takes the
+       standard 320px rail, instead of a max-w-2xl card leaving a dead gutter. */
+    <div
+      className={
+        mobile
+          ? "flex flex-col gap-5 [&>*]:min-w-0"
+          : "grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5 [&>*]:min-w-0"
+      }
+    >
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3">
           <span className="text-[15px] font-semibold text-ink">Acme Docs · v14</span>
@@ -489,20 +504,20 @@ function McpTokenCreated() {
 }
 
 /* ── Page ──────────────────────────────────────────────────────────────────*/
-function Body({ state }: { state: string }): ReactNode {
-  if (state === "error") return <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>;
-  if (state === "empty") return <div className="mt-6"><EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState></div>;
+function Body({ state, mobile }: { state: string; mobile: boolean }): ReactNode {
+  if (state === "error") return <ErrorMessage id="server.unavailable" />;
+  if (state === "empty") return <EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState>;
   if (state === "overflow" || state === "stress") return <PublishStressBody stress={state === "stress"} />;
 
-  if (state.startsWith("publish-")) return <div className="mt-6"><PublishFlow phase={state.slice("publish-".length) as PublishPhase} /></div>;
-  if (state === "mcp-add") return <div className="mt-6"><McpAddServer /></div>;
-  if (state === "mcp-token") return <div className="mt-6"><McpTokenCreated /></div>;
-  if (state === "mcp-empty") return <div className="mt-6"><PublishMcpServers servers={[]} /></div>;
-  if (state === "mcp") return <div className="mt-6"><PublishMcpServers /></div>;
+  if (state.startsWith("publish-")) return <PublishFlow phase={state.slice("publish-".length) as PublishPhase} mobile={mobile} />;
+  if (state === "mcp-add") return <McpAddServer />;
+  if (state === "mcp-token") return <McpTokenCreated />;
+  if (state === "mcp-empty") return <PublishMcpServers servers={[]} />;
+  if (state === "mcp") return <PublishMcpServers />;
 
   const siteTab: EditorTab =
     state === "site-theme" ? "theme" : state === "site-preview" ? "preview" : state === "site-domains" ? "domains" : "content";
-  return <div className="mt-6"><SiteEditorInline tab={siteTab} /></div>;
+  return <SiteEditorInline tab={siteTab} mobile={mobile} />;
 }
 
 function PublishPage({ state = "default", mobile = false }: PageProps) {
@@ -519,19 +534,19 @@ function PublishPage({ state = "default", mobile = false }: PageProps) {
 
   return (
     <PageFrame active={navFor("publish")} title="Publish" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Doc site"
           title="Publish"
           description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
           icon={<span className="text-moss"><Send size={24} /></span>}
         />
-        {!bareState && (
-          <div className="mt-5">
+        <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
+          {!bareState && (
             <Tabs<Tab> ariaLabel="Publish sections" variant="underline" options={TAB_OPTIONS} value={tabForState(state) === "mcp" ? "mcp" : tab} onChange={setTab} />
-          </div>
-        )}
-        <Body state={state} />
+          )}
+          <Body state={state} mobile={mobile} />
+        </div>
       </div>
     </PageFrame>
   );

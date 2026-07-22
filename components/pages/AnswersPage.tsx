@@ -220,7 +220,7 @@ function AnswersList({ state, filter }: { state: string; filter: Filter }) {
     );
   }
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5">
       {cardsFor(state).map((a) => <AnswerCard key={a.id} answer={a} />)}
     </div>
   );
@@ -259,18 +259,26 @@ function CoverageCard({ state, extended = false }: { state: string; extended?: b
   );
 }
 
-function CoverageRail({ state }: { state: string }) {
+function HowServingWorks() {
   return (
-    <div className="space-y-4">
-      <CoverageCard state={state} />
-      <Card>
-        <div className="mb-1.5 text-[14px] font-semibold text-ink">How serving works</div>
-        <p className="text-[12.5px] leading-relaxed text-ink/70">
-          Approving an answer embeds it so incoming questions match semantically. The Slack
-          bot and support widget then serve the text verbatim with an “Approved” badge: no
-          generation, no drift.
-        </p>
-      </Card>
+    <Card>
+      <div className="mb-1.5 text-[14px] font-semibold text-ink">How serving works</div>
+      <p className="text-[12.5px] leading-relaxed text-ink/70">
+        Approving an answer embeds it so incoming questions match semantically. The Slack
+        bot and support widget then serve the text verbatim with an “Approved” badge: no
+        generation, no drift.
+      </p>
+    </Card>
+  );
+}
+
+/* The rail. Every card in it shares the rail's left and right edge (§11), so
+   no card carries its own max-width. */
+function CoverageRail({ state, withCoverage = true }: { state: string; withCoverage?: boolean }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {withCoverage && <CoverageCard state={state} />}
+      <HowServingWorks />
     </div>
   );
 }
@@ -299,7 +307,7 @@ function HarvestPreview({ state }: { state: string }) {
   const step = HARVEST_STEP[state] ?? 0;
   const importing = state === "harvest-importing";
   return (
-    <Card className="max-w-[720px]">
+    <Card>
       <div className="mb-5 flex items-center gap-2 text-[15px] font-semibold text-ink">
         <Sparkles size={16} className="text-biscay-2" /> Harvest questions
       </div>
@@ -397,48 +405,44 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const isHarvest = state.startsWith("harvest-");
   const isCoverage = state === "coverage";
 
+  /* One main column + the standard 320px rail (§11) for every state, so the
+     outer edges and the rail plumb line never move between states. */
+  const main = isHarvest ? (
+    <HarvestPreview state={state} />
+  ) : isCoverage ? (
+    <CoverageCard state={state} extended />
+  ) : (
+    <div className="flex flex-col gap-5">
+      <Tabs
+        ariaLabel="Filter answers"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { id: "all", label: "All" },
+          { id: "approved", label: "Approved" },
+          { id: "drafts", label: "Drafts" },
+          { id: "retired", label: "Retired" },
+        ]}
+      />
+      <AnswersList state={state} filter={filter} />
+    </div>
+  );
+
   return (
-    <>
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="flex flex-col gap-5">
+      <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-3 gap-5"}>
         <Stat value="128" label="Approved" tone="ok" sub="serving verbatim" />
         <Stat value="6" label="Drafts" tone="attention" sub="awaiting review" />
         <Stat value="2,410" label="Served this week" tone="info" sub="+12% vs last week" />
       </div>
 
-      {isHarvest ? (
-        <div className="mt-6"><HarvestPreview state={state} /></div>
-      ) : isCoverage ? (
-        <div className="mt-6 max-w-2xl">
-          <CoverageCard state={state} extended />
+      <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+        <div className="min-w-0">{main}</div>
+        <div className="min-w-0">
+          <CoverageRail state={state} withCoverage={!isCoverage} />
         </div>
-      ) : (
-        <div
-          className={
-            mobile ? "mt-6 space-y-4" : "mt-6 grid gap-5 grid-cols-[minmax(0,1fr)_320px]"
-          }
-        >
-          <div className="min-w-0">
-            <Tabs
-              ariaLabel="Filter answers"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { id: "all", label: "All" },
-                { id: "approved", label: "Approved" },
-                { id: "drafts", label: "Drafts" },
-                { id: "retired", label: "Retired" },
-              ]}
-            />
-            <div className="mt-4">
-              <AnswersList state={state} filter={filter} />
-            </div>
-          </div>
-          <div className="min-w-0">
-            <CoverageRail state={state} />
-          </div>
-        </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -454,7 +458,7 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="list" />
       ) : (
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Knowledge"
           title="Approved answers"
@@ -462,7 +466,9 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
           actions={mobile ? undefined : actions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <Body key={state} state={state} mobile={mobile} />
+        <div className="mt-6">
+          <Body key={state} state={state} mobile={mobile} />
+        </div>
       </div>
       )}
     </PageFrame>

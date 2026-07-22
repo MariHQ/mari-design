@@ -223,7 +223,7 @@ function KnowledgePage({ state = "default", mobile = false }: PageProps) {
         <div
           className={
             mobile
-              ? "mt-6 space-y-4"
+              ? "mt-6 flex flex-col gap-5"
               : "mt-6 grid gap-5 grid-cols-[minmax(0,1fr)_360px]"
           }
         >

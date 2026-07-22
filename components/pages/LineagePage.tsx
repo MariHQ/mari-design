@@ -108,27 +108,51 @@ function SearchResults() {
   );
 }
 
-function Drawer({ state }: { state: string }) {
-  // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
-  // made these drawers render mobile-style in the desktop canvas.
-  const cls = "w-[420px] shrink-0";
-  if (state === "inspect") return <div className={cls}><LineageNodeDrawer nodeId="n4" /></div>;
-  if (state === "edge") return <div className={cls}><LineageEdgeDrawer edgeId="e3" /></div>;
-  if (state === "group") return <div className={cls}><LineageGroupDrawer /></div>;
-  if (state === "assert") return <div className="w-[460px] shrink-0"><LineageAssertDrawer /></div>;
+/* Which §11 rail width the open drawer takes: standard lineage drawer 420px,
+   impact analysis 460px. `null` = no drawer, canvas runs the full container. */
+function railFor(state: string): number | null {
+  if (state === "inspect" || state === "edge" || state === "group") return 420;
+  if (state === "assert") return 460;
   return null;
 }
 
-/* The instrument is a fixed-width desktop surface: the canvas column needs
-   840px and the drawers 420/460px, which is more than the console's content
-   column offers once a drawer is open. Rather than let the drawer sit on top
-   of the canvas, the rig scrolls sideways as one piece and every panel keeps
-   its declared width. Without a drawer the canvas just fills the column. */
-function Rig({ scroll, children }: { scroll: boolean; children: React.ReactNode }) {
-  if (!scroll) return <div className="mt-6 flex gap-4">{children}</div>;
+function Drawer({ state }: { state: string }) {
+  // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
+  // made these drawers render mobile-style in the desktop canvas.
+  if (state === "inspect") return <LineageNodeDrawer nodeId="n4" />;
+  if (state === "edge") return <LineageEdgeDrawer edgeId="e3" />;
+  if (state === "group") return <LineageGroupDrawer />;
+  if (state === "assert") return <LineageAssertDrawer />;
+  return null;
+}
+
+/* §11 two-column split. The rail keeps its declared width and always sits
+   fully inside the container; the main column carries `minmax(0,1fr)` so the
+   instrument can never push the drawer off-screen. LineageGraph has a hard
+   720px minimum, so on a narrow console the *canvas alone* scrolls sideways
+   inside its own column, leaving both outer edges of the page plumb. */
+function Rig({ rail, scroll = false, canvas, drawer }: {
+  rail: number | null; scroll?: boolean; canvas: React.ReactNode; drawer?: React.ReactNode;
+}) {
+  // Full-width canvas already clears its 720px minimum, so no scroller (a
+  // scroll container would clip the toolbar's search dropdown).
+  if (rail === null && !scroll) return <div className="relative flex min-w-0 flex-col gap-5">{canvas}</div>;
+  const column = (
+    <div className="min-w-0">
+      <div className="overflow-x-auto pb-1">
+        <div className="relative flex min-w-[720px] flex-col gap-5">{canvas}</div>
+      </div>
+    </div>
+  );
+  if (rail === null) return column;
+  // Literal class strings so Tailwind can see both rail widths at build time.
+  const cols = rail === 460
+    ? "grid-cols-[minmax(0,1fr)_460px]"
+    : "grid-cols-[minmax(0,1fr)_420px]";
   return (
-    <div className="mt-6 overflow-x-auto pb-1">
-      <div className="flex w-max gap-4">{children}</div>
+    <div className={`grid gap-5 ${cols}`}>
+      {column}
+      <div className="min-w-0">{drawer}</div>
     </div>
   );
 }
@@ -137,18 +161,22 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
     return (
       <div className="mt-6">
-        <EmptyState icon={<Network size={22} />} title="API offline">
-          The lineage graph is temporarily unavailable. Retrying…
-        </EmptyState>
+        <Card>
+          <EmptyState icon={<Network size={22} />} title="API offline">
+            The lineage graph is temporarily unavailable. Retrying…
+          </EmptyState>
+        </Card>
       </div>
     );
   }
   if (state === "empty") {
     return (
       <div className="mt-6">
-        <EmptyState icon={<Network size={22} />} title="No lineage yet">
-          Connect a source and sync to build the document graph.
-        </EmptyState>
+        <Card>
+          <EmptyState icon={<Network size={22} />} title="No lineage yet">
+            Connect a source and sync to build the document graph.
+          </EmptyState>
+        </Card>
       </div>
     );
   }
@@ -156,27 +184,33 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "overflow" || state === "stress") {
     const p = state === "stress";
     const nodes = stressNodes(p);
+    const sideCard = (
+      <Card title={p ? MIXED_SCRIPT : LONG_TITLE} hint={p ? HUGE_PERCENT : `${HUGE_NUMBER_STR} refs`}>
+        <p className="text-[12.5px] leading-snug text-ink/70 break-words">{p ? UNBREAKABLE : LONG_NAME}</p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(p ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
+        </div>
+        <div className="mt-3">
+          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={p ? 4 : 6} />
+        </div>
+      </Card>
+    );
     return (
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 flex flex-col gap-5">
         <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
-        <Rig scroll>
-          <div className="relative w-[840px] shrink-0 space-y-3">
-            <LineageToolbar />
-            <LineageGraph key={state} nodes={nodes} edges={DEMO_EDGES} lens="source" layout="flow" trace={null} focalId="n1" />
-            <LineageTimeScrubber value={null} />
-          </div>
-          <div className="w-[420px] shrink-0 space-y-3">
-            <Card title={p ? MIXED_SCRIPT : LONG_TITLE} hint={p ? HUGE_PERCENT : `${HUGE_NUMBER_STR} refs`}>
-              <p className="text-[12.5px] leading-snug text-ink/70 break-words">{p ? UNBREAKABLE : LONG_NAME}</p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {(p ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
-              </div>
-              <div className="mt-3">
-                <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={p ? 4 : 6} />
-              </div>
-            </Card>
-          </div>
-        </Rig>
+        <Rig
+          rail={mobile ? null : 420}
+          scroll={mobile}
+          canvas={(
+            <>
+              <LineageToolbar />
+              <LineageGraph key={state} nodes={nodes} edges={DEMO_EDGES} lens="source" layout="flow" trace={null} focalId="n1" />
+              <LineageTimeScrubber value={null} />
+            </>
+          )}
+          drawer={sideCard}
+        />
+        {mobile && sideCard}
       </div>
     );
   }
@@ -190,18 +224,25 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const focalId = trace ? trace.originId : "n1";
   const scrubberValue = state === "as-of" ? 6 : null;
 
-  const hasDrawer = state === "inspect" || state === "edge" || state === "group" || state === "assert";
-  const scroll = mobile || hasDrawer;
+  // Mobile collapses to one column (§11): the drawer drops below the canvas.
+  const rail = mobile ? null : railFor(state);
   return (
-    <Rig scroll={scroll}>
-      <div className={scroll ? "relative w-[840px] shrink-0 space-y-3" : "relative min-w-0 flex-1 space-y-3"}>
-        <LineageToolbar />
-        {state === "search" && <SearchResults />}
-        <LineageGraph key={`${lens}-${layout}-${state}`} lens={lens} layout={layout} trace={trace} focalId={focalId} />
-        <LineageTimeScrubber value={scrubberValue} />
-      </div>
-      <Drawer state={state} />
-    </Rig>
+    <div className="mt-6 flex flex-col gap-5">
+      <Rig
+        rail={rail}
+        scroll={mobile}
+        canvas={(
+          <>
+            <LineageToolbar />
+            {state === "search" && <SearchResults />}
+            <LineageGraph key={`${lens}-${layout}-${state}`} lens={lens} layout={layout} trace={trace} focalId={focalId} />
+            <LineageTimeScrubber value={scrubberValue} />
+          </>
+        )}
+        drawer={<Drawer state={state} />}
+      />
+      {mobile && <Drawer state={state} />}
+    </div>
   );
 }
 

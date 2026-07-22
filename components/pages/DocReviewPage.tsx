@@ -194,24 +194,26 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
   const [tab, setTab] = useState<BottomTab>(initialTab);
   return (
     <>
+      {/* §11: main column carries minmax(0,1fr); both supporting rails at the
+          standard 320px so the internal plumb lines match every other page. */}
       <div
         className={
           mobile
-            ? "space-y-4"
-            : "grid gap-5 grid-cols-[280px_minmax(0,1fr)_300px]"
+            ? "flex flex-col gap-5"
+            : "grid gap-5 grid-cols-[320px_minmax(0,1fr)_320px]"
         }
       >
-        <div className="min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-col gap-5">
           <DocReviewOutlinePanel {...(data ? { body: data.outlineBody, revisions: data.revisions } : {})} />
         </div>
         <div className="min-w-0">
           <DocReviewEditor {...(data ? { body: data.editorBody, findings: data.editorFindings } : {})} />
         </div>
-        <div className="min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-col gap-5">
           <DocReviewRefinePanel {...(data ? data.refine : {})} />
         </div>
       </div>
-      <div className="mt-5">
+      <div className="flex flex-col gap-5">
         <Tabs
           ariaLabel="Review panels"
           variant="underline"
@@ -222,11 +224,9 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
             { id: "findings", label: "Fact check" },
           ]}
         />
-        <div className="mt-4">
-          {tab === "changes"
-            ? <DocReviewChangeQueue {...(data ? { changes: data.changes, body: data.changeBody } : {})} />
-            : <DocReviewFindingsPanel {...(data ? { findings: data.findings, claims: data.claims } : {})} />}
-        </div>
+        {tab === "changes"
+          ? <DocReviewChangeQueue {...(data ? { changes: data.changes, body: data.changeBody } : {})} />
+          : <DocReviewFindingsPanel {...(data ? { findings: data.findings, claims: data.claims } : {})} />}
       </div>
     </>
   );
@@ -234,7 +234,7 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
 
 function PanelFrame({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5">
       <div>
         <h2 className="font-display text-[16px] font-semibold text-ink">{title}</h2>
         <p className="mt-0.5 text-[12.5px] text-ink/65">{description}</p>
@@ -296,7 +296,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "refine") {
     return (
       <PanelFrame title="Refine" description="AI editing skills that propose edits into the review-before-apply queue.">
-        <div className="max-w-[360px]"><DocReviewRefinePanel /></div>
+        <DocReviewRefinePanel />
       </PanelFrame>
     );
   }
@@ -305,18 +305,14 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   return (
     <>
       {state === "offline-dirty" && (
-        <div className="mb-4">
-          <Alert tone="attention" title="You're offline">
-            Changes are kept locally and will save once the connection returns.
-          </Alert>
-        </div>
+        <Alert tone="attention" title="You're offline">
+          Changes are kept locally and will save once the connection returns.
+        </Alert>
       )}
       {state === "applied" && (
-        <div className="mb-4">
-          <Alert tone="ok" title="Changes saved">
-            The document was saved and revisions were refreshed.
-          </Alert>
-        </div>
+        <Alert tone="ok" title="Changes saved">
+          The document was saved and revisions were refreshed.
+        </Alert>
       )}
       <Workspace mobile={mobile} initialTab={initialTab} data={dataFor(state)} />
     </>
@@ -344,7 +340,7 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
           actions={mobile ? undefined : actions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-5">
           <Body state={state} mobile={mobile} />
         </div>
       </div>

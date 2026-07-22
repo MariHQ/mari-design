@@ -41,9 +41,11 @@ function randomSecret(): string {
   return `mk_live_${hex}`;
 }
 
-export type SettingsApiKeysProps = { keys?: ApiKey[]; loading?: boolean; className?: string };
+export type SettingsApiKeysProps = {
+  /** Hide the internal PageHeader when the host page already renders one. */
+  embedded?: boolean; keys?: ApiKey[]; loading?: boolean; className?: string };
 
-export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false, className = "" }: SettingsApiKeysProps) {
+export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false, embedded = false, className = "" }: SettingsApiKeysProps) {
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -88,11 +90,11 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader
+      {!embedded && <PageHeader
         title="API keys"
         description="Programmatic access for CI, bots, and the MCP gateway"
         actions={<Button variant="primary" onClick={() => setCreating((v) => !v)}><Plus size={15} /> Create key</Button>}
-      />
+      />}
 
       {creating && (
         <Card title="New key" hint={TOKEN_REVEAL_WARNING}>
@@ -114,7 +116,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
           <EmptyState icon={<KeyRound size={24} />} title="No keys yet">Create the first one above to give CI or an agent programmatic access.</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse" style={{ minWidth: 860 }}>
+            <table className="w-full text-left border-collapse" style={{ minWidth: 720 }}>
               <colgroup>
                 <col style={{ width: "20%" }} /><col style={{ width: "18%" }} /><col style={{ width: "22%" }} />
                 <col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "9%" }} /><col style={{ width: "9%" }} />
@@ -140,7 +142,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(k.created)}</td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{k.lastUsed ? fmtDate(k.lastUsed) : "Never"}</td>
                     <td className={tdPad}><Chip label={k.revoked ? "Revoked" : "Active"} tone={k.revoked ? "blocked" : "ok"} dot caps /></td>
-                    <td className={tdPad}>{!k.revoked && <ConfirmButton compact confirmLabel="Revoke?" onConfirm={() => revoke(k.id)}>Revoke</ConfirmButton>}</td>
+                    <td className={`${tdPad} whitespace-nowrap`}>{!k.revoked && <ConfirmButton compact confirmLabel="Revoke?" onConfirm={() => revoke(k.id)}>Revoke</ConfirmButton>}</td>
                   </tr>
                 ))}
               </tbody>

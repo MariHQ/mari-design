@@ -53,6 +53,35 @@ function GoogleMark({ size = 17 }: { size?: number }) {
   );
 }
 
+/* ── Shared unauthenticated framing ────────────────────────────────────────
+   Login, Setup and Welcome are single-task screens with no sidebar, so they
+   deliberately sit OFF the 1400px console grid (§11). What they do share is
+   each other: one backdrop, one 672px column, one centered logo/title/sub
+   header, one card, and a primary-bottom-left action row. Keep these three
+   constants identical across the three files. */
+const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
+const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
+
+function AuthBackdrop() {
+  return (
+    <>
+      <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
+      <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
+    </>
+  );
+}
+
+function AuthHeader({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-8 flex flex-col items-center text-center">
+      <span className="text-biscay"><Logo size={34} /></span>
+      <h1 className="mt-4 font-display text-[26px] font-bold tracking-[-0.01em] text-ink [overflow-wrap:anywhere]">{title}</h1>
+      <p className="mt-1 text-[13.5px] leading-relaxed text-ink/70 [overflow-wrap:anywhere]">{sub}</p>
+    </div>
+  );
+}
+
 const DIVIDER =
   "flex items-center gap-3 text-center font-term text-[11px] uppercase tracking-[0.08em] text-ink/65 before:h-px before:flex-1 before:bg-ink/12 after:h-px after:flex-1 after:bg-ink/12";
 
@@ -112,14 +141,17 @@ function CredForm({
         <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" defaultValue="••••••••••" />
       </Field>
       {error && <FieldError id="auth.invalid" />}
-      <Button type="submit" variant="primary" block disabled={busy}>
-        {busy ? "One moment…" : register ? "Create account" : "Sign in"}
-      </Button>
-      {!register && (
-        <button type="button" className={`mx-auto text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}>
-          Email me a magic link instead
-        </button>
-      )}
+      {/* Primary bottom left, secondary to its right (§2). */}
+      <div className={`mt-1 ${AUTH_ACTIONS}`}>
+        <Button type="submit" variant="primary" disabled={busy}>
+          {busy ? "One moment…" : register ? "Create account" : "Sign in"}
+        </Button>
+        {!register && (
+          <button type="button" className={`text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}>
+            Email me a magic link instead
+          </button>
+        )}
+      </div>
     </form>
   );
 }
@@ -129,12 +161,14 @@ function NoticeCard({ icon, title, children, footer }: {
   icon: ReactNode; title: string; children: ReactNode; footer?: ReactNode;
 }) {
   return (
-    <Card>
-      <div className="flex flex-col items-center gap-3 py-4 text-center">
-        <span className="grid h-12 w-12 place-items-center rounded-full border border-ink/15 text-ink/70">{icon}</span>
-        <div>
-          <div className="text-[16px] font-semibold text-ink">{title}</div>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">{children}</p>
+    <Card variant="plain">
+      <div className="flex flex-col gap-3 py-2">
+        <div className="flex items-start gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-ink/15 text-ink/70">{icon}</span>
+          <div className="min-w-0">
+            <div className="text-[16px] font-semibold text-ink">{title}</div>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink/70">{children}</p>
+          </div>
         </div>
         {footer}
       </div>
@@ -164,8 +198,8 @@ function Body({ state }: { state: string }) {
       return (
         <NoticeCard icon={<Mail size={22} className="text-biscay-2" />} title="Check your inbox"
           footer={
-            <div className="flex flex-col items-center gap-2">
-              <Button variant="default"><ArrowLeft size={14} /> Back to sign in</Button>
+            <div className={AUTH_ACTIONS}>
+              <Button variant="primary"><ArrowLeft size={14} /> Back to sign in</Button>
               <span className="text-[12px] text-ink/65">Didn’t get it? Resend in 0:42</span>
             </div>
           }>
@@ -175,27 +209,31 @@ function Body({ state }: { state: string }) {
       );
     case "2fa":
       return (
-        <Card>
-          <div className="flex flex-col items-center gap-2 pb-3 pt-1 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-full border border-ink/15 text-biscay-2"><ShieldCheck size={22} /></span>
-            <div className="text-[16px] font-semibold text-ink">Two-factor authentication</div>
-            <p className="text-[13px] text-ink/70">Enter the 6-digit code from your authenticator app.</p>
+        <Card variant="plain">
+          <div className="flex items-start gap-3 pb-3 pt-1">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-ink/15 text-biscay-2"><ShieldCheck size={22} /></span>
+            <div className="min-w-0">
+              <div className="text-[16px] font-semibold text-ink">Two-factor authentication</div>
+              <p className="mt-1 text-[13px] text-ink/70">Enter the 6-digit code from your authenticator app.</p>
+            </div>
           </div>
-          <div className="my-3 flex justify-center gap-2" aria-label="Verification code">
+          <div className="my-3 flex gap-2" aria-label="Verification code">
             {["4", "1", "9", "", "", ""].map((d, i) => (
               <input key={i} inputMode="numeric" maxLength={1} defaultValue={d} aria-label={`Digit ${i + 1}`}
                 className={`h-11 w-9 rounded-[4px] border border-ink/20 bg-paper text-center font-term text-[16px] text-ink outline-none focus:border-biscay-2 ${focusRing}`} />
             ))}
           </div>
-          <Button variant="primary" block>Verify &amp; continue</Button>
-          <p className="mt-3 text-center text-[12.5px] text-ink/65">
-            Lost your device? <span className="font-medium text-biscay-2">Use a recovery code</span>
-          </p>
+          <div className={`mt-4 ${AUTH_ACTIONS}`}>
+            <Button variant="primary">Verify &amp; continue</Button>
+            <span className="text-[12.5px] text-ink/65">
+              Lost your device? <span className="font-medium text-biscay-2">Use a recovery code</span>
+            </span>
+          </div>
         </Card>
       );
     case "overflow":
       return (
-        <Card>
+        <Card variant="plain">
           <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
             <Field label="Name">
               <Input className="w-full" defaultValue={LONG_NAME} />
@@ -207,7 +245,9 @@ function Body({ state }: { state: string }) {
               <Input className="w-full" defaultValue={LONG_TITLE} />
             </Field>
             <p role="alert" className="text-[12.5px] leading-relaxed text-espelette">{LONG_PARAGRAPH}</p>
-            <Button type="submit" variant="primary" block>Sign in to {LONG_TITLE}</Button>
+            <div className={`mt-1 ${AUTH_ACTIONS}`}>
+              <Button type="submit" variant="primary">Sign in to {LONG_TITLE}</Button>
+            </div>
           </form>
           <OAuthRow />
           <ModeToggle />
@@ -215,7 +255,7 @@ function Body({ state }: { state: string }) {
       );
     case "stress":
       return (
-        <Card>
+        <Card variant="plain">
           <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
             <Field label="Email">
               <Input className="w-full" defaultValue={`${UNBREAKABLE}@example.com`} />
@@ -231,7 +271,9 @@ function Body({ state }: { state: string }) {
             </div>
             <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
             <p className="font-term text-[11px] text-ink/65">{HUGE_NUMBER_STR} sign-ins</p>
-            <Button type="submit" variant="primary" block>{LONG_WORD}</Button>
+            <div className={`mt-1 ${AUTH_ACTIONS}`}>
+              <Button type="submit" variant="primary">{LONG_WORD}</Button>
+            </div>
           </form>
         </Card>
       );
@@ -241,7 +283,7 @@ function Body({ state }: { state: string }) {
       const error = state === "error";
       return (
         <div className="relative">
-          <Card>
+          <Card variant="plain">
             <CredForm register={register} error={error} busy={busy} />
             <OAuthRow />
             <ModeToggle register={register} />
@@ -269,25 +311,17 @@ function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
   const { title, sub } = heading(state);
   if (state === "loading") {
     return (
-      <div className="relative h-full w-full overflow-y-auto bg-paper">
+      <div className={AUTH_SHELL}>
         <SkeletonPage variant="auth" />
       </div>
     );
   }
   return (
-    <div className="relative h-full w-full overflow-y-auto bg-paper">
-      <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
-      <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
-
-      <div className={`relative mx-auto flex min-h-full max-w-md flex-col items-center justify-center ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
-        <div className="mb-8 flex flex-col items-center text-center">
-          <span className="text-biscay"><Logo size={34} /></span>
-          <h1 className="mt-4 font-display text-[26px] font-bold tracking-[-0.01em] text-ink">{title}</h1>
-          <p className="mt-1 text-[13.5px] text-ink/70">{sub}</p>
-        </div>
-        <div className="w-full">
-          <Body state={state} />
-        </div>
+    <div className={AUTH_SHELL}>
+      <AuthBackdrop />
+      <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
+        <AuthHeader title={title} sub={sub} />
+        <Body state={state} />
       </div>
     </div>
   );

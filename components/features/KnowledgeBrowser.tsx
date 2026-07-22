@@ -138,7 +138,7 @@ export type KnowledgeBrowserProps = {
 /** Content-shaped skeleton for the browser: filter rail + search + result cards. */
 function KnowledgeBrowserSkeleton({ className = "" }: { className?: string }) {
   return (
-    <div className={`grid gap-4 lg:grid-cols-[220px_1fr] items-start ${className}`.trim()} aria-hidden="true">
+    <div className={`grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] items-start ${className}`.trim()} aria-hidden="true">
       <Card className="flex flex-col gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="space-y-2">
@@ -221,7 +221,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, className = 
   if (loading) return <KnowledgeBrowserSkeleton className={className} />;
 
   return (
-    <div className={`grid gap-4 lg:grid-cols-[220px_1fr] items-start ${className}`.trim()}>
+    <div className={`grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] items-start ${className}`.trim()}>
       {/* Filter rail */}
       <Card className="flex flex-col gap-4">
         <FacetGroup name="Source" rows={SOURCE_LABELS.map((s) => ({ label: s.label, icon: <SourceMark provider={s.key} size={15} />, count: count((r) => r.source === s.key), active: srcSel.has(s.key), onToggle: () => toggle(srcSel, setSrcSel, s.key) }))} />

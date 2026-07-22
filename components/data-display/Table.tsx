@@ -3,7 +3,7 @@ import { card } from "../tokens/card";
 import { SkeletonLine } from "./Skeleton";
 import { SortHeader, tdPad, useSort, type Align } from "./sortable";
 
-const cellWrap = "break-words";
+const cellWrap = "[overflow-wrap:anywhere]";
 
 const bodyWidths = ["40%", "70%", "55%", "60%", "50%", "65%"];
 

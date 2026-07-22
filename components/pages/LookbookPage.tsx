@@ -80,7 +80,7 @@ const TOKENS: { name: string; color: string }[] = [
 
 function Foundations() {
   return (
-    <div className="space-y-4">
+    <>
       <Exhibit
         title="Color tokens"
         rule="Eight semantic tokens carry the whole console: paper/flysch surfaces, ink text, biscay brand, and moss/clay/espelette for ok/attention/blocked. Swapping these is the brand."
@@ -101,7 +101,7 @@ function Foundations() {
           <p className="font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">Term · 11 uppercase: labels &amp; chrome</p>
         </div>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -176,7 +176,7 @@ function FormsExhibit() {
 function DataDisplay() {
   const [tab, setTab] = useState<"docs" | "facts">("docs");
   return (
-    <div className="space-y-4">
+    <>
       <Exhibit
         title="Chips & pills"
         rule="StatusChip carries lifecycle state; SeverityChip carries risk; tone Chips label neutral facets; CountChip shows a tally."
@@ -231,7 +231,7 @@ function DataDisplay() {
         ]} />
         <p className="mt-3 text-[13px] text-ink/70">Showing the <b>{tab}</b> view.</p>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -239,7 +239,7 @@ function DataDisplay() {
 
 function Feedback() {
   return (
-    <div className="space-y-4">
+    <>
       <Exhibit
         title="Alerts"
         rule="Inline, dismissible feedback. Tone maps to intent: info, ok, attention, blocked, neutral: never stack more than one per region."
@@ -273,7 +273,7 @@ function Feedback() {
           Connect a source to start building your knowledge base.
         </EmptyState>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -297,7 +297,7 @@ function IconsArt() {
    line-clamp, and vertical-overflow failures. */
 function OverflowSection() {
   return (
-    <div className="space-y-4">
+    <>
       <Exhibit
         title={LONG_TITLE}
         rule={LONG_PARAGRAPH}
@@ -321,7 +321,7 @@ function OverflowSection() {
           <Alert tone="attention" title={LONG_TITLE}>{LONG_PARAGRAPH}</Alert>
         </div>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -331,7 +331,7 @@ function OverflowSection() {
    min-w-0 / break-words / truncate, and flex blowouts. */
 function StressSection() {
   return (
-    <div className="space-y-4">
+    <>
       <Exhibit
         title="Chip-row overflow: 20+ tags, no wrap"
         rule="A single non-wrapping row of every tag: it must scroll inside its own container, never push the page body sideways."
@@ -358,32 +358,35 @@ function StressSection() {
         <div className="mt-4"><Progress value={99} label={UNBREAKABLE} tone="info" /></div>
         <div className="mt-4"><Alert tone="blocked" title={UNBREAKABLE}>{LONG_URL}</Alert></div>
       </Card>
-    </div>
+    </>
   );
 }
 
 /* ── Page ─────────────────────────────────────────────────────────────── */
 
+/* Sections that render exactly one exhibit: no point splitting them in two. */
+const SINGLE_EXHIBIT = new Set(["buttons", "inputs", "icons"]);
+
 function Sections({ state }: { state: string }) {
   switch (state) {
     case "foundations": return <Foundations />;
-    case "buttons": return <div className="space-y-4"><Buttons /></div>;
-    case "inputs": return <div className="space-y-4"><FormsExhibit /></div>;
+    case "buttons": return <Buttons />;
+    case "inputs": return <FormsExhibit />;
     case "data-display": return <DataDisplay />;
     case "feedback": return <Feedback />;
-    case "icons": return <div className="space-y-4"><IconsArt /></div>;
+    case "icons": return <IconsArt />;
     case "overflow": return <OverflowSection />;
     case "stress": return <StressSection />;
     default:
       return (
-        <div className="space-y-4">
+        <>
           <Foundations />
           <Buttons />
           <FormsExhibit />
           <DataDisplay />
           <Feedback />
           <IconsArt />
-        </div>
+        </>
       );
   }
 }
@@ -398,7 +401,7 @@ function LookbookPage({ state = "all", mobile = false }: PageProps) {
   }
   return (
     <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Design system"
           title="Design lookbook"
@@ -409,7 +412,11 @@ function LookbookPage({ state = "all", mobile = false }: PageProps) {
             </Button>
           )}
         />
-        <div className="mt-6">
+        {/* One gallery grid owns the gaps, so every exhibit card shares the
+            same left and right edge (§11). Single-exhibit sections run one
+            full-width column rather than leaving a dead right half. Mobile
+            always collapses to one column. */}
+        <div className={mobile || SINGLE_EXHIBIT.has(state) ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-2 items-start gap-5"}>
           <Sections state={state} />
         </div>
       </div>

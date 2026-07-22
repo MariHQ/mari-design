@@ -118,15 +118,18 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
   );
 }
 
-/** Main column + rail. One plumb line for every ledger view. */
-function Shell({ mobile, filter = "all", children }: { mobile: boolean; filter?: string; children: React.ReactNode }) {
+/** Main column + the standard 320px rail (§11). One plumb line for every
+    ledger view: `minmax(0,1fr)` keeps long content from pushing the rail out,
+    and mobile drops the rail below the main column. */
+function Shell({ mobile, filter = "all", lead, children }: { mobile: boolean; filter?: string; lead?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mt-6 flex items-start gap-6">
-      <div className="min-w-0 flex-1 space-y-4">
+    <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">
+        {lead}
         <LedgerFilter filter={filter} />
         {children}
       </div>
-      {!mobile && <Rail />}
+      <Rail />
     </div>
   );
 }
@@ -142,7 +145,7 @@ function StressLedger({ mode, mobile }: { mode: "overflow" | "stress"; mobile: b
 
 function Rail() {
   return (
-    <aside className="w-80 shrink-0 space-y-4">
+    <aside className="flex min-w-0 flex-col gap-5">
       <Card variant="plain" title="Awaiting sign-off">
         <ul className="space-y-2 text-[12.5px]">
           <li className="rounded-[5px] border border-ink/12 p-2.5">
@@ -174,7 +177,7 @@ function LedgerFilter({ filter = "all" }: { filter?: string }) {
 
 function Composer({ saving = false }: { saving?: boolean }) {
   return (
-    <Card variant="default" title="Capture decision" className="mt-5">
+    <Card variant="default" title="Capture decision">
       <div className="space-y-2.5">
         <input
           className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
@@ -200,9 +203,9 @@ function Composer({ saving = false }: { saving?: boolean }) {
   );
 }
 
-function Ledger({ decisions, filter = "all", mobile }: { decisions?: Decisions; filter?: string; mobile: boolean }) {
+function Ledger({ decisions, filter = "all", mobile, lead }: { decisions?: Decisions; filter?: string; mobile: boolean; lead?: React.ReactNode }) {
   return (
-    <Shell mobile={mobile} filter={filter}>
+    <Shell mobile={mobile} filter={filter} lead={lead}>
       <DecisionCardFeature decisions={decisions} />
     </Shell>
   );
@@ -210,23 +213,20 @@ function Ledger({ decisions, filter = "all", mobile }: { decisions?: Decisions; 
 
 function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
-    return (
-      <div className="mt-6">
-        <EmptyState title="API offline">The decisions ledger is temporarily unavailable. Retrying…</EmptyState>
-      </div>
-    );
+    return <EmptyState title="API offline">The decisions ledger is temporarily unavailable. Retrying…</EmptyState>;
   }
   if (state === "empty") {
     return (
-      <div className="mt-6">
-        <EmptyState title="No decisions yet">
-          Capture a decision or run “Scan for decisions” to start the ledger.
-        </EmptyState>
-      </div>
+      <EmptyState title="No decisions yet">
+        Capture a decision or run “Scan for decisions” to start the ledger.
+      </EmptyState>
     );
   }
-  if (state === "composer") return (<><Composer /><Ledger mobile={mobile} /></>);
-  if (state === "composer-saving") return (<><Composer saving /><Ledger mobile={mobile} /></>);
+  /* The composer sits at the top of the main column, not above the whole
+     layout: otherwise it runs edge-to-edge while the ledger below it stops at
+     the rail (§11 "cards share the same left and right edge"). */
+  if (state === "composer") return <Ledger mobile={mobile} lead={<Composer />} />;
+  if (state === "composer-saving") return <Ledger mobile={mobile} lead={<Composer saving />} />;
   if (state === "awaiting") return <Ledger decisions={AWAITING} filter="proposed" mobile={mobile} />;
   if (state === "ratified") return <Ledger decisions={RATIFIED} mobile={mobile} />;
   if (state === "impact-loading") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: true, loading: true })} filter="ratified" />;
@@ -239,12 +239,12 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "ratifying") {
     return (
       <Shell mobile={mobile} filter="proposed">
-        <div>
-          <div className="mb-4">
+        <div className="flex flex-col gap-4">
+          <div>
             <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
             <p className="mt-0.5 text-[13px] text-ink/70">Proposals awaiting sign-off, ratified decisions, and their downstream impact.</p>
           </div>
-          <div className="max-w-[720px]">
+          <div>
             <DecisionCard
               statement="Adopt short-lived JWTs for service-to-service auth"
               context="Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window."
@@ -281,7 +281,7 @@ function DecisionsPage({ state = "default", mobile = false }: PageProps) {
   );
   return (
     <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
-      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-biscay-2"><Feather size={26} /></span>}
           eyebrow="Ledger"
@@ -290,7 +290,9 @@ function DecisionsPage({ state = "default", mobile = false }: PageProps) {
           actions={mobile ? undefined : actions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <Body state={state} mobile={mobile} />
+        <div className="mt-6">
+          <Body state={state} mobile={mobile} />
+        </div>
       </div>
     </PageFrame>
   );

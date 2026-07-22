@@ -18,7 +18,7 @@ export function Progress({ value, label, tone = "info" }: { value: number; label
       {label && (
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[12.5px] text-ink/80">{label}</span>
-          <span className="font-term text-[11px] text-ink/70">{Math.round(v)}%</span>
+          <span className="min-w-0 [overflow-wrap:anywhere] font-term text-[11px] text-ink/70">{Math.round(v)}%</span>
         </div>
       )}
       <RP.Root value={v} className="relative h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.08]">

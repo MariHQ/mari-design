@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Users, UserPlus, ChevronDown, Check, Mail } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
@@ -10,6 +10,7 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Field } from "../forms/Field";
 import { Avatar } from "../data-display/Avatar";
+import { PropertyList } from "../data-display/PropertyList";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -66,8 +67,22 @@ function SettingsTabs({ active }: { active: SettingsTab }) {
       options={SETTINGS_TABS}
       value={value}
       onChange={setValue}
-      className="mb-5"
     />
+  );
+}
+
+/* ── §11 page grid ─────────────────────────────────────────────────────────
+   Shared verbatim with the other four Settings pages: one container width, one
+   main/rail split, one form-field grid. */
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+
+function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
+  return (
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+      <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
+    </div>
   );
 }
 
@@ -94,7 +109,7 @@ const ROLES = ["admin", "manager", "user"] as const;
 /* Inline members card used by the interaction variants — no portalled menus. */
 function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "pending" | "invite-sent" | "remove-confirm" }) {
   return (
-    <div className="flex flex-col gap-5">
+    <>
       {variant === "invite-sent" && (
         <Alert tone="ok" title="Invitation sent">
           We emailed <span className="font-term">jordan@team.com</span>they appear below with an amber dot until they sign in.
@@ -103,7 +118,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
 
       {variant === "invite-open" && (
         <Card title="Invite a teammate" hint="They appear below with an amber dot until they sign in.">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className={FORM_GRID}>
             <Field label="Name"><Input defaultValue="Jordan Lee" placeholder="Jordan Lee" className="w-full" /></Field>
             <Field label="Email"><Input type="email" defaultValue="jordan@team.com" className="w-full" /></Field>
             <Field label="Role">
@@ -167,7 +182,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
           </table>
         </div>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -175,7 +190,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
    members table (one avatar + one status chip per row) doesn't reach. */
 function StressExtras({ extreme }: { extreme: boolean }) {
   return (
-    <Card className="mt-4" title={extreme ? UNBREAKABLE : "Team-wide roles, labels, and everyone with access"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+    <Card title={extreme ? UNBREAKABLE : "Team-wide roles, labels, and everyone with access"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
       <div className="flex items-center gap-3">
         <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} members across every region and team`}</span>
@@ -209,8 +224,33 @@ function StressMembers({ extreme }: { extreme: boolean }) {
       }), 4);
   return (
     <>
-      <SettingsMembersTable members={members} workspaceName={extreme ? UNBREAKABLE : LONG_NAME} githubTeam={{ connected: true, team: extreme ? UNBREAKABLE : LONG_SOURCE }} />
+      <SettingsMembersTable embedded members={members} workspaceName={extreme ? UNBREAKABLE : LONG_NAME} githubTeam={{ connected: true, team: extreme ? UNBREAKABLE : LONG_SOURCE }} />
       <StressExtras extreme={extreme} />
+    </>
+  );
+}
+
+/* Supporting rail (§11, 320px) — matches the General/Models/Keys/Audit rails. */
+function MembersRail() {
+  return (
+    <>
+      <Card title="At a glance" hint="Read only">
+        <PropertyList
+          items={[
+            { label: "Seats used", value: "24 of 50" },
+            { label: "Admins", value: "2" },
+            { label: "Pending invites", value: "1" },
+            { label: "Provisioning", value: "GitHub team sync" },
+          ]}
+        />
+      </Card>
+      <Card title="Roles">
+        <ul className="flex flex-col gap-2 text-[12.5px] text-ink/70">
+          <li><b className="text-ink">Admin</b> Full access, including billing and deletion.</li>
+          <li><b className="text-ink">Manager</b> Curates knowledge and approves reviews.</li>
+          <li><b className="text-ink">User</b> Reads and asks; cannot change settings.</li>
+        </ul>
+      </Card>
     </>
   );
 }
@@ -219,28 +259,24 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") return <StressMembers extreme={state === "stress"} />;
   if (state === "error") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Users size={22} />} title="API offline">
-          The member directory is temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Users size={22} />} title="API offline">
+        The member directory is temporarily unavailable. Retrying…
+      </EmptyState>
     );
   }
   if (state === "empty") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Users size={22} />} title="No members yet">
-          Invite a teammate to give them access to this workspace.
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Users size={22} />} title="No members yet">
+        Invite a teammate to give them access to this workspace.
+      </EmptyState>
     );
   }
-  if (state === "single") return <SettingsMembersTable members={[ROSTER[0]]} />;
-  if (state === "many") return <SettingsMembersTable members={MANY} />;
+  if (state === "single") return <SettingsMembersTable embedded members={[ROSTER[0]]} />;
+  if (state === "many") return <SettingsMembersTable embedded members={MANY} />;
   if (state === "invite-open" || state === "role-change" || state === "pending" || state === "invite-sent" || state === "remove-confirm") {
     return <MembersInline variant={state} />;
   }
-  return <SettingsMembersTable />;
+  return <SettingsMembersTable embedded />;
 }
 
 function SettingsMembersPage({ state = "default", mobile = false }: PageProps) {
@@ -249,16 +285,17 @@ function SettingsMembersPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="settings" />
       ) : (
-        <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+        <div className={PAGE}>
           <PageHeader
             eyebrow="Settings"
             title="Members"
             description="Manage workspace access, invitations, and provisioning."
             actions={<Button variant="primary"><UserPlus size={15} /> Invite member</Button>}
           />
-          <div className="mt-5" />
-          <SettingsTabs active="members" />
-          <Body state={state} />
+          <div className="mt-5"><SettingsTabs active="members" /></div>
+          <SettingsBody mobile={mobile} rail={<MembersRail />}>
+            <Body state={state} />
+          </SettingsBody>
         </div>
       )}
     </PageFrame>

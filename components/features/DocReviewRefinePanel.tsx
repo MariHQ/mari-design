@@ -66,7 +66,7 @@ export function DocReviewRefinePanel({
 
   if (loading) {
     return (
-      <Card title="Refine" className="max-w-[340px]">
+      <Card title="Refine" className="w-full">
         <div className="flex items-center justify-between" aria-hidden="true">
           <SkeletonLine w={44} h={9} /><Skeleton width={130} height={28} rounded="rounded-[4px]" />
         </div>
@@ -93,7 +93,7 @@ export function DocReviewRefinePanel({
   return (
     /* Order: scope, then findings, then the refinement skills, then Run. You
        pick what you are working on before you pick what to do to it. */
-    <Card title="Refine" className="max-w-[340px]">
+    <Card title="Refine" className="w-full">
       {/* scope */}
       <div className="flex items-center justify-between gap-2">
         <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Scope</span>

@@ -120,3 +120,44 @@ Components are **desktop-first, fixed-width**. Do not introduce
 components — that made drawers render mobile-style in the desktop canvas. Pages
 handle mobile via the `mobile` prop on the page component, not via component
 breakpoints.
+
+## 11. Page layout grid
+
+Every console page sits on the same grid so that, flipping between pages, the
+outer borders and the internal plumb lines never move.
+
+**Container.** One width for every page: `max-w-[1400px]`. No page uses
+`max-w-4xl/5xl/6xl` any more; a narrower content column is expressed by the
+grid inside the container, never by shrinking the container itself.
+
+**Vertical rhythm.**
+- Page header block first, then `mt-6` before the body. Never `mt-2`/`mt-5`.
+- Between sibling cards/sections in the body: `gap-5` (a single
+  `flex flex-col gap-5` or `grid gap-5`), never ad-hoc `mt-4`/`mb-6` stacking.
+
+**Filling the width.** The body must occupy the full container. A page whose
+content only covers the left half with dead space on the right is a bug: either
+widen the content, or use the standard two-column split below. This was the
+single most visible inconsistency across the console.
+
+**Two-column split.** Pages with a main column plus a supporting rail use:
+
+    <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">
+
+- Standard rail: **320px** (Answers, Decisions, Audit, Insights, Publish).
+- Knowledge inspector rail: **360px**.
+- Lineage drawer rail: **420px** (**460px** for impact analysis).
+- The main column always carries `minmax(0,1fr)` so long content cannot push
+  the rail off-screen.
+
+**Cards.** All cards in a column share the same left and right edge. Do not
+wrap one card in an extra `max-w-[720px]` while its siblings run full width;
+constrain the *column*, not individual cards.
+
+**Dashboard grids.** Multi-widget pages (Overview, Insights) use
+`grid grid-cols-3 gap-5` with widgets spanning columns as needed, so tile edges
+line up both horizontally and vertically. Not a single stacked column.
+
+**Mobile.** Pages receive a `mobile` prop. Mobile collapses the grid to one
+column and drops rails below the main content. Components themselves stay
+desktop fixed-width (§10); mobile is composed at the page level.

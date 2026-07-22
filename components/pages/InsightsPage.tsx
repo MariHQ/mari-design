@@ -6,7 +6,6 @@ import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFres
 import type { ActivityItem } from "../data-display/ActivityFeed";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { SkeletonCard, SkeletonStat } from "../data-display/Skeleton";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 import { PageHeader } from "../layout/PageHeader";
 import { ErrorMessage } from "../feedback/ErrorMessage";
@@ -149,7 +148,15 @@ function BareHeader() {
   );
 }
 
-function Body({ state }: { state: string }) {
+/* §11 dashboard grid: one three-column grid for the whole body so every tile
+   shares the same left/right edges and the same vertical rhythm. Widgets span
+   the columns they need. */
+const GRID = "grid grid-cols-3 items-start gap-5 [&>*]:min-w-0";
+const GRID_M = "flex flex-col gap-5 [&>*]:min-w-0";
+
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
+  const grid = mobile ? GRID_M : GRID;
+  const full = mobile ? "" : "col-span-3";
   if (state === "error") {
     return (
       <>
@@ -174,33 +181,27 @@ function Body({ state }: { state: string }) {
   if (state === "overflow" || state === "stress") {
     const p = state === "stress";
     return (
-      <div className="space-y-5">
+      <div className={grid}>
         <InsightsWidgets
+          className={full}
           stats={stressStats(p)}
           readability={stressReadability(p)}
           glossary={stressGlossary(p)}
           activity={stressActivity(p)}
         />
-        <InsightsFreshnessChart />
-        <StressExtras pathological={p} />
+        <div className={mobile ? "" : "col-span-2"}><InsightsFreshnessChart /></div>
+        <div className={mobile ? "" : "col-span-1"}><StressExtras pathological={p} /></div>
       </div>
     );
   }
 
   // Per-widget loading: freshness resolved, the stat strip + evidence cards
-  // still resolving — inline skeletons hold their place in the grid.
+  // still resolving — the widgets' own skeleton holds their exact places.
   if (state === "widgets-loading") {
     return (
-      <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
-        </div>
-        <div className="grid items-start gap-5 lg:grid-cols-2">
-          <SkeletonCard lines={5} footer />
-          <SkeletonCard lines={4} footer />
-        </div>
-        <SkeletonCard lines={4} />
-        <InsightsFreshnessChart />
+      <div className={grid}>
+        <InsightsWidgets className={full} loading />
+        <div className={full}><InsightsFreshnessChart /></div>
       </div>
     );
   }
@@ -216,9 +217,9 @@ function Body({ state }: { state: string }) {
   if (state === "audit-empty") widgetProps.activity = [];
 
   return (
-    <div className="space-y-5">
-      <InsightsWidgets {...widgetProps} />
-      {showFreshness && <InsightsFreshnessChart freshness={freshness} />}
+    <div className={grid}>
+      <InsightsWidgets className={full} {...widgetProps} />
+      {showFreshness && <div className={full}><InsightsFreshnessChart freshness={freshness} /></div>}
     </div>
   );
 }
@@ -229,8 +230,8 @@ function InsightsPage({ state = "default", mobile = false }: PageProps) {
       {state === "loading" ? (
         <SkeletonPage variant="dashboard" />
       ) : (
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-          <Body state={state} />
+        <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
+          <Body state={state} mobile={mobile} />
         </div>
       )}
     </PageFrame>
