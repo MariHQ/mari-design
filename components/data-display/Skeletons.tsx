@@ -13,12 +13,15 @@ export type SkeletonPageVariant =
 
 function PageHead({ actions = 2 }: { actions?: number }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div className="space-y-2.5">
-        <Skeleton width={230} height={22} />
-        <SkeletonLine w={340} h={11} />
+    // Fixed 230/340px bars plus non-wrapping action buttons overflowed every
+    // page's loading state by ~130px at phone width. Wrap, and let the title
+    // block shrink.
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <Skeleton width="min(230px, 70%)" height={22} />
+        <SkeletonLine w="min(340px, 95%)" h={11} />
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {Array.from({ length: actions }).map((_, i) => <SkeletonButton key={i} w={i === 0 ? 110 : 84} />)}
       </div>
     </div>

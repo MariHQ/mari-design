@@ -120,9 +120,9 @@ export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, clas
               <Button compact onClick={() => setEditId(null)}>Cancel</Button>
             </div>
           ) : (
-            <div key={t.id} className="flex items-start gap-4 px-4 py-3">
+            <div key={t.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
               <div className="w-40 shrink-0 break-words text-[13.5px] font-semibold text-ink">{t.term}</div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[16rem] flex-1">
                 <div className="break-words text-[13.5px] text-ink/80">{t.definition}</div>
                 <div className="mt-0.5 break-words font-term text-[11px] text-ink/65">
                   {t.owner} · updated {fmtDate(t.updated)}

@@ -12,11 +12,29 @@ type Frame = {
   file: string; page: string; pageTitle: string; row: number;
   state: string; stateLabel: string; view: "desktop" | "mobile";
   x: number; y: number; w: number; h: number;
+  /** Set when this frame belongs to an alternative flow stacked below the
+      page's main line (e.g. "connect-github"). Null on the main line. */
+  flow?: string | null;
+  flowLabel?: string | null;
 };
 type PageRow = { id: string; title: string; route: string; row: number; y: number };
 type Manifest = { generatedFrames: number; pages: PageRow[]; frames: Frame[] };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/** One caption per stacked alternative-flow line. */
+type FlowLine = { page: string; flow: string; flowLabel: string; y: number; count: number };
+function flowLinesOf(frames: Frame[]): FlowLine[] {
+  const byKey = new Map<string, FlowLine>();
+  for (const f of frames) {
+    if (!f.flow || !f.flowLabel) continue;
+    const key = `${f.page}:${f.flow}:${f.y}`;
+    const e = byKey.get(key);
+    if (e) { if (f.view === "desktop") e.count++; continue; }
+    byKey.set(key, { page: f.page, flow: f.flow, flowLabel: f.flowLabel, y: f.y, count: f.view === "desktop" ? 1 : 0 });
+  }
+  return [...byKey.values()];
+}
 
 function useManifest() {
   const [data, setData] = useState<Manifest | null>(null);
@@ -44,6 +62,19 @@ function Canvas({ data }: { data: Manifest }) {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // Deep link: ?at=<pageId>[&k=<scale>] frames a page block on load, so a page
+  // (and its stacked alternative-flow lines) can be linked to directly.
+  useLayoutEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const at = q.get("at");
+    if (!at) return;
+    const page = data.pages.find((p) => p.id === at);
+    if (!page) return;
+    const k = clamp(Number(q.get("k")) || 0.3, 0.03, 4);
+    // Frame the page block: its label sits ~140px above the first frame row.
+    setT({ k, x: 60, y: -(page.y - 200) * k + 40 });
+  }, [data.pages]);
 
   // Wheel: ctrl/⌘ (or trackpad pinch) → zoom about cursor; else pan.
   useEffect(() => {
@@ -105,7 +136,12 @@ function Canvas({ data }: { data: Manifest }) {
     setT({ k, x: 60, y: 60 });
   }, [data, vp]);
 
-  useEffect(() => { fitAll(); }, [fitAll]);
+  // Fit the whole board on load, unless a ?at= deep link asked for a page.
+  const deepLinked = useRef(new URLSearchParams(location.search).has("at"));
+  useEffect(() => {
+    if (deepLinked.current) { deepLinked.current = false; return; }
+    fitAll();
+  }, [fitAll]);
 
   // Visible plane rect (+ margin) for virtualization.
   const margin = 600;
@@ -116,6 +152,8 @@ function Canvas({ data }: { data: Manifest }) {
   const visible = data.frames.filter(
     (f) => f.x < maxPX && f.x + f.w > minPX && f.y < maxPY && f.y + f.h > minPY,
   );
+  // Captions are cheap; derive them from the frames currently on screen.
+  const flowLines = flowLinesOf(visible);
 
   return (
     <div
@@ -133,6 +171,19 @@ function Canvas({ data }: { data: Manifest }) {
           <div key={p.id} style={{ position: "absolute", left: 0, top: p.y - 78, width: 1200 }}>
             <div style={{ font: "700 40px ui-sans-serif, system-ui", color: "#10263B" }}>{p.title}</div>
             <div style={{ font: "500 22px ui-monospace, monospace", color: "#10263B80", marginTop: 4 }}>{p.route}</div>
+          </div>
+        ))}
+        {/* Captions for the alternative-flow lines stacked under each page.
+            One per (page, flow, line-y), drawn to the left of the first frame. */}
+        {flowLines.map((l) => (
+          <div key={`${l.page}:${l.flow}:${l.y}`} style={{ position: "absolute", left: 0, top: l.y - 92, width: 1400 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <span style={{ font: "700 26px ui-monospace, monospace", color: "#1E6FA8" }}>↳</span>
+              <span style={{ font: "700 26px ui-sans-serif, system-ui", color: "#1E6FA8" }}>{l.flowLabel}</span>
+              <span style={{ font: "500 20px ui-monospace, monospace", color: "#10263B66" }}>
+                alternative flow · {l.count} {l.count === 1 ? "step" : "steps"}
+              </span>
+            </div>
           </div>
         ))}
         {/* Frames — click to open the live full-screen page */}

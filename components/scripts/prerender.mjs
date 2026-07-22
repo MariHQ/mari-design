@@ -38,6 +38,16 @@ const FRAME_GAP = 72;
 const MOBILE_GAP = 140;
 const ROW_GAP = 220;
 const TOP_PAD = 140;
+// Vertical gap between the stacked lines inside one page block.
+const LINE_GAP = 150;
+// Extra room above a flow line, which carries its own caption.
+const FLOW_GAP = 210;
+
+/** "connect-github" -> "Connect github flow" caption for a stacked flow line. */
+function flowTitle(key) {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 function waitForServer(url, tries = 60) {
   return new Promise((res, rej) => {
@@ -163,17 +173,85 @@ async function main() {
     const pagesOut = [];
     for (const r of rows) {
       const list = byRow.get(r);
-      list.sort((a, b) => (a.view === b.view ? 0 : a.view === "desktop" ? -1 : 1));
-      const rowH = Math.max(...list.map((c) => c.h));
-      let x = 0; let prevView = null;
+
+      // Split a page's states into LINES so branching is legible:
+      //   line 0        the page's main path (default plus its lifecycle
+      //                 states: loading, error, empty, overflow, stress)
+      //   lines 1..n    one per alternative flow, stacked directly beneath
+      //                 the main line, so you can read a branch top-to-bottom
+      //                 instead of scanning one very long horizontal strip.
+      // A flow is a set of 2+ states sharing a prefix before the first "-"
+      // (e.g. connect-github-configure / -sync / -done, or harvest-*).
+      const seg = (state, n) => state.split("-").slice(0, n).join("-");
+      const countBy = (n) => {
+        const m = new Map();
+        for (const c of list) {
+          if (c.view !== "desktop") continue; // count states once, not per view
+          if (!c.state.includes("-")) continue;
+          const k = seg(c.state, n);
+          m.set(k, (m.get(k) ?? 0) + 1);
+        }
+        return m;
+      };
+      const lvl1 = countBy(1);
+      const lvl2 = countBy(2);
+      // "connect-github-*", "connect-slack-* …" all share the prefix "connect",
+      // which would pile 17 states onto one line and hide the branching. When a
+      // first-level group gets that broad, split it one level deeper so each
+      // provider reads as its own branch.
+      const BROAD = 6;
+      const flowOf = (state) => {
+        if (!state.includes("-")) return null;
+        const a = seg(state, 1);
+        if ((lvl1.get(a) ?? 0) > BROAD) {
+          const b = seg(state, 2);
+          if ((lvl2.get(b) ?? 0) >= 2) return b;
+        }
+        return a;
+      };
+      const flowCount = new Map();
       for (const c of list) {
-        if (prevView === "desktop" && c.view === "mobile") x += MOBILE_GAP;
-        c.x = x; c.y = y;
-        x += c.w + FRAME_GAP; prevView = c.view;
+        if (c.view !== "desktop") continue;
+        const k = flowOf(c.state);
+        if (k) flowCount.set(k, (flowCount.get(k) ?? 0) + 1);
       }
+      const isFlow = (k) => k && (flowCount.get(k) ?? 0) >= 2;
+
+      const lines = new Map(); // key -> frames
+      for (const c of list) {
+        const k = flowOf(c.state);
+        const key = isFlow(k) ? k : "";
+        if (!lines.has(key)) lines.set(key, []);
+        lines.get(key).push(c);
+      }
+      // Main line first, then flows in the order their first state appears.
+      const order = [...lines.keys()].sort((a, b) => {
+        if (a === "") return -1;
+        if (b === "") return 1;
+        const ai = list.findIndex((c) => flowOf(c.state) === a);
+        const bi = list.findIndex((c) => flowOf(c.state) === b);
+        return ai - bi;
+      });
+
       const p = pages.find((pp) => pp.row === r);
       if (p) pagesOut.push({ ...p, y });
-      y += rowH + ROW_GAP;
+
+      for (const key of order) {
+        const line = lines.get(key);
+        line.sort((a, b) => (a.view === b.view ? 0 : a.view === "desktop" ? -1 : 1));
+        const lineH = Math.max(...line.map((c) => c.h));
+        let x = 0; let prevView = null;
+        for (const c of line) {
+          if (prevView === "desktop" && c.view === "mobile") x += MOBILE_GAP;
+          c.x = x; c.y = y;
+          c.flow = key || null;
+          c.flowLabel = key ? flowTitle(key) : null;
+          x += c.w + FRAME_GAP; prevView = c.view;
+        }
+        // Flow lines carry a caption, so give them a little more headroom.
+        y += lineH + (key ? FLOW_GAP : LINE_GAP);
+      }
+      y += ROW_GAP - LINE_GAP;
     }
 
     const manifest = { generatedFrames: captured.length, pages: pagesOut, frames: captured };
