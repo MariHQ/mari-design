@@ -1,16 +1,21 @@
-import { Sparkles, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
+import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { ErrorMessage } from "../feedback/ErrorMessage";
 import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
-import { focusRing } from "../tokens/focusRing";
+import { Button } from "../actions/Button";
 
 /* Overview — Source pulse ─────────────────────────────────────────────────
    A grid of per-source activity tiles showing each connected source's 7-day
-   pulse: provider mark, name, a headline stat, a mini bar chart, and an
-   Active/Moderate status. Local Sparkbars (bar sparkline — catalog Sparkline
-   is a line) + PulseTile sub-components.
+   pulse: provider mark, name, a headline stat, an ALL-CAPS <Chip> status, and
+   a mini bar chart. The chip sits to the LEFT of the chart so the status reads
+   before the shape does, and it is the shared Chip (not a hand-rolled span) so
+   it matches every other chip in the console (CONVENTIONS.md §4).
+   Local Sparkbars (bar sparkline — catalog Sparkline is a line) + PulseTile.
    Source: web/src/pages/Overview.tsx (pulseQ, .card.pulse block). */
 
 type PulseStatus = "active" | "moderate";
@@ -55,24 +60,21 @@ export type PulseTileData = {
 function PulseTile({ tile }: { tile: PulseTileData }) {
   const active = tile.status !== "moderate";
   return (
-    <div className="flex items-center gap-3 rounded-md border border-ink/12 p-3">
-      <SourceMark provider={tile.key} size={26} />
+    <div className="flex items-center gap-3 overflow-hidden rounded-md border border-ink/12 p-3">
+      <span className="shrink-0"><SourceMark provider={tile.key} size={26} /></span>
+      {/* min-w-0 + truncate: a long source name or unit shortens itself rather
+          than wrapping one character per line and blowing the tile's height. */}
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium text-ink">{tile.name}</div>
-        <div className="font-term text-[11px] leading-tight text-ink/55">
+        <div className="truncate font-term text-[11px] leading-tight text-ink/65">
           {tile.stat} {tile.unit}
         </div>
       </div>
-      <Sparkbars values={tile.bars} tone={tile.status} />
-      <span
-        className={[
-          "inline-flex items-center gap-1.5 font-term text-[10.5px] font-medium",
-          active ? "text-moss" : "text-clay",
-        ].join(" ")}
-      >
-        <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-moss" : "bg-clay"}`} />
-        {active ? "Active" : "Moderate"}
+      {/* Status chip first, chart second. Neither may be squeezed away. */}
+      <span className="shrink-0">
+        <Chip label={active ? "Active" : "Moderate"} tone={active ? "ok" : "attention"} dot />
       </span>
+      <span className="shrink-0"><Sparkbars values={tile.bars} tone={tile.status} /></span>
     </div>
   );
 }
@@ -91,12 +93,29 @@ export type OverviewSourcePulseProps = {
   loading?: boolean;
   offline?: boolean;
   onViewAll?: () => void;
+  /** Wires the error banner's Retry control. Omitted = no button. */
+  onRetry?: () => void;
+  /** Start with every source tile showing. */
+  defaultExpanded?: boolean;
   className?: string;
 };
 
+/** Collapsed height of the grid, in tiles. */
+const PREVIEW_TILES = 4;
+
 export function OverviewSourcePulse({
-  tiles = DEMO_TILES, loading = false, offline = false, onViewAll, className = "",
+  tiles = DEMO_TILES, loading = false, offline = false, onViewAll, onRetry,
+  defaultExpanded = false, className = "",
 }: OverviewSourcePulseProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const hidden = Math.max(0, tiles.length - PREVIEW_TILES);
+  const visible = expanded ? tiles : tiles.slice(0, PREVIEW_TILES);
+
+  const viewAll = () => {
+    setExpanded((v) => !v);
+    onViewAll?.();
+  };
+
   return (
     <Card
       className={className}
@@ -105,7 +124,7 @@ export function OverviewSourcePulse({
       hint="Last 7 days"
     >
       {loading ? (
-        <div className="grid gap-2.5 sm:grid-cols-2" aria-hidden="true">
+        <div className="grid grid-cols-[repeat(2,minmax(250px,1fr))] gap-2.5" aria-hidden="true">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-3 rounded-md border border-ink/12 p-3">
               <SkeletonCircle size={26} />
@@ -119,21 +138,27 @@ export function OverviewSourcePulse({
           ))}
         </div>
       ) : offline ? (
-        <EmptyState>API offline — source pulse unavailable.</EmptyState>
+        /* §8: failure copy comes from the catalog, never a bespoke string. */
+        <ErrorMessage id="server.unavailable" onAction={onRetry} />
+      ) : tiles.length === 0 ? (
+        <EmptyState>No sources connected yet. Connect one in Sources.</EmptyState>
       ) : (
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {tiles.map((t) => <PulseTile key={t.key} tile={t} />)}
+        <div className="grid grid-cols-[repeat(2,minmax(250px,1fr))] items-stretch gap-2.5">
+          {visible.map((t) => <PulseTile key={t.key} tile={t} />)}
         </div>
       )}
-      <div className="mt-3 border-t border-ink/10 pt-3">
-        <button
-          type="button"
-          onClick={onViewAll}
-          className={`inline-flex items-center gap-1.5 text-[12.5px] text-biscay-2 hover:text-ink ${focusRing}`}
-        >
-          View all sources <ChevronRight size={14} />
-        </button>
-      </div>
+      {!loading && !offline && hidden > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3">
+          <Button compact onClick={viewAll}>
+            {expanded
+              ? <><ChevronUp size={14} /> Show fewer sources</>
+              : <><ChevronDown size={14} /> View all sources</>}
+          </Button>
+          <span className="font-term text-[11.5px] text-ink/65">
+            {expanded ? `${tiles.length} connected` : `${hidden} more connected`}
+          </span>
+        </div>
+      )}
     </Card>
   );
 }

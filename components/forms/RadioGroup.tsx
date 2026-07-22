@@ -15,16 +15,16 @@ export function RadioGroup({
   return (
     <RG.Root value={value} onValueChange={onValueChange} aria-label={ariaLabel} disabled={disabled} className="flex flex-col gap-2.5">
       {options.map((opt) => (
-        <label key={opt.value} className="inline-flex items-start gap-2.5 text-[13px] text-ink/85 cursor-pointer">
+        <label key={opt.value} className={`inline-flex items-start gap-2.5 text-[13px] ${disabled ? "cursor-not-allowed text-ink/70" : "cursor-pointer text-ink/90"}`}>
           <RG.Item
             value={opt.value}
-            className={`mt-0.5 grid place-items-center w-[16px] h-[16px] shrink-0 rounded-full border border-ink/25 bg-paper data-[state=checked]:border-biscay disabled:opacity-50 disabled:pointer-events-none ${focusRing}`}
+            className={`mt-0.5 grid place-items-center w-[16px] h-[16px] shrink-0 rounded-full border border-ink/25 bg-paper data-[state=checked]:border-biscay disabled:opacity-100 disabled:cursor-not-allowed disabled:border-ink/30 disabled:bg-ink/[0.10] disabled:data-[state=checked]:border-ink/45 ${focusRing}`}
           >
-            <RG.Indicator className="w-[8px] h-[8px] rounded-full bg-biscay" />
+            <RG.Indicator className={`h-[8px] w-[8px] rounded-full ${disabled ? "bg-ink/55" : "bg-biscay"}`} />
           </RG.Item>
           <span>
             {opt.label}
-            {opt.hint && <span className="block text-[12px] text-ink/50 mt-0.5">{opt.hint}</span>}
+            {opt.hint && <span className="block text-[12px] text-ink/70 mt-0.5">{opt.hint}</span>}
           </span>
         </label>
       ))}

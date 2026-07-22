@@ -8,13 +8,15 @@ import { SkeletonStat } from "../data-display/Skeleton";
 /* Overview — Headline stat tiles ─────────────────────────────────────────
    Three big-number tiles summarizing the week: changes, facts to review,
    flows running. Each is click-navigable to its owning area. Composes the
-   catalog <Stat> (with an IconRing icon) and reproduces the notebook look
-   with a local <HatchSwatch> pencil-hatch left-edge texture.
+   catalog <Stat> (with an IconRing icon) plus a SOLID brand-colored accent
+   line on the tile's left edge (moss / espelette / biscay-2). The old
+   pencil-hatch swatch read as a texture, not as a category marker.
    Source: web/src/pages/Overview.tsx (statsQ, STAT_* maps, .ov-row1). */
 
 type Tone = "green" | "red" | "blue";
 
-const TONE_HEX: Record<Tone, string> = { green: "#2C6E49", red: "#B23A1E", blue: "#1E6FA8" };
+/* Solid accent line color, one per tone. Brand tokens only, no gradients. */
+const ACCENT: Record<Tone, string> = { green: "bg-moss", red: "bg-espelette", blue: "bg-biscay-2" };
 const STAT_TONE: Record<Tone, StatTone> = { green: "ok", red: "blocked", blue: "info" };
 const RING_TONE: Record<Tone, IconRingTone> = { green: "ok", red: "blocked", blue: "info" };
 
@@ -39,42 +41,13 @@ export type OverviewStatTilesProps = {
   loading?: boolean;
   /** No data + not loading → "API offline" placeholders. */
   offline?: boolean;
-  /** Show the pencil-hatch swatch on the tile's left edge. */
+  /** Show the solid accent line on the tile's left edge. */
   swatch?: boolean;
   onNavigate?: (area: string) => void;
   className?: string;
 };
 
 const DEMO: OverviewStats = { changes: 47, factsReview: 6, flowsRunning: 3 };
-
-/* ── HatchSwatch — dry colored-pencil hatching for the tile's left edge ── */
-function HatchSwatch({ color, height = 96 }: { color: string; height?: number }) {
-  const lines: ReactNode[] = [];
-  for (let i = -6; i < 26; i++) {
-    const x = i * 7 + ((i * 13) % 4) - 2;
-    const w = 3.4 + ((i * 7) % 3) * 0.5;
-    lines.push(
-      <line
-        key={i}
-        x1={x} y1={-8} x2={x - height * 0.55} y2={height + 8}
-        stroke={color} strokeWidth={w} strokeLinecap="round"
-        opacity={0.55 + ((i * 11) % 4) * 0.11}
-      />,
-    );
-  }
-  return (
-    <svg width="100%" height="100%" viewBox={`0 0 46 ${height}`} preserveAspectRatio="none" aria-hidden>
-      <rect width="46" height={height} fill={color} opacity="0.08" />
-      <g>{lines}</g>
-      <g stroke={color} strokeWidth="1.25" strokeLinecap="round" opacity="0.32">
-        {[...Array(18)].map((_, i) => (
-          <line key={i} x1={-18 + i * 8} y1={height + 4} x2={26 + i * 8} y2={-4} />
-        ))}
-      </g>
-      <rect x="1" y="1" width="44" height={height - 2} rx="4" fill="none" stroke={color} strokeWidth="1" opacity="0.22" />
-    </svg>
-  );
-}
 
 type Tile = { key: StatIconKey; label: string; tone: Tone; num: number | null; sub: string | null };
 
@@ -86,7 +59,8 @@ export function OverviewStatTiles({
 
   if (loading) {
     return (
-      <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
+      /* Desktop-first, fixed three-up. No sm:/lg: stacking (CONVENTIONS.md §10). */
+      <div className={`grid grid-cols-3 gap-3 ${className}`.trim()} aria-hidden="true">
         <SkeletonStat /><SkeletonStat /><SkeletonStat />
       </div>
     );
@@ -94,20 +68,22 @@ export function OverviewStatTiles({
 
   const live = !loading && !offline && stats;
   const tiles: Tile[] = [
-    { key: "clipboard", label: "changes", tone: "green", num: live ? stats!.changes : null, sub: live ? "this week" : null },
-    { key: "check", label: "facts to review", tone: "red", num: live ? stats!.factsReview : null, sub: live ? (stats!.factsReview > 0 ? "awaiting verification" : "all verified") : null },
-    { key: "play", label: "flows running", tone: "blue", num: live ? stats!.flowsRunning : null, sub: live ? (stats!.flowsRunning > 0 ? "All healthy" : "Idle") : null },
+    { key: "clipboard", label: "Changes", tone: "green", num: live ? stats!.changes : null, sub: live ? "This week" : null },
+    { key: "check", label: "Facts to review", tone: "red", num: live ? stats!.factsReview : null, sub: live ? (stats!.factsReview > 0 ? "Awaiting verification" : "All verified") : null },
+    { key: "play", label: "Flows running", tone: "blue", num: live ? stats!.flowsRunning : null, sub: live ? (stats!.flowsRunning > 0 ? "All healthy" : "Idle") : null },
   ];
 
   return (
-    <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
+    <div className={`grid grid-cols-3 gap-3 ${className}`.trim()}>
       {tiles.map((t) => {
-        const value = t.num ?? "—";
-        const sub = t.sub ?? "API offline";
-        const swatchStyle: CSSProperties = { position: "absolute", inset: "0 auto 0 0", width: 8, borderRadius: "6px 0 0 6px", overflow: "hidden" };
+        /* Six- and seven-figure counts need thousands separators to stay
+           readable at 24px: 1284905 reads as noise, 1,284,905 reads as a number. */
+        const value = t.num == null ? "n/a" : t.num.toLocaleString("en-US");
+        const sub = t.sub ?? "Unavailable";
+        const accentStyle: CSSProperties = { position: "absolute", inset: "0 auto 0 0", width: 4, borderRadius: "6px 0 0 6px" };
         return (
           <div key={t.key} className="relative">
-            {swatch && <span style={swatchStyle} aria-hidden><HatchSwatch color={TONE_HEX[t.tone]} /></span>}
+            {swatch && <span style={accentStyle} className={ACCENT[t.tone]} aria-hidden />}
             <Stat
               value={value}
               label={t.label}

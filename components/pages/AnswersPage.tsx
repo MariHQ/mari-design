@@ -3,7 +3,6 @@ import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, Fi
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { AnswerCard } from "../features/AnswerCard";
-import { AnswersHarvestWizard } from "../features/AnswersHarvestWizard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import {
@@ -23,7 +22,7 @@ type Answer = NonNullable<ComponentProps<typeof AnswerCard>["answer"]>;
 const APPROVED: Answer = {
   id: 1,
   question: "How long do sessions last before they expire?",
-  answer: "Sessions are 30-day rolling tokens — each request within the window extends them. Signing in on a new device revokes the oldest session once you pass the five-device cap, and signing out revokes the current session immediately. Admins can force-revoke every session for a member from the members table.",
+  answer: "Sessions are 30-day rolling tokens: each request within the window extends them. Signing in on a new device revokes the oldest session once you pass the five-device cap, and signing out revokes the current session immediately. Admins can force-revoke every session for a member from the members table.",
   status: "approved",
   owner: "Priya Nair",
   channels: ["slack-bot", "docs-site"],
@@ -75,7 +74,7 @@ const DRAFT_2: Answer = {
 const RETIRED: Answer = {
   id: 5,
   question: "How do I export data with the legacy v1 API?",
-  answer: "The v1 export API has been removed. Use the streaming export endpoint instead — see the migration guide.",
+  answer: "The v1 export API has been removed. Use the streaming export endpoint instead: see the migration guide.",
   status: "retired",
   owner: "Priya Nair",
   channels: [],
@@ -248,7 +247,7 @@ function CoverageCard({ state, extended = false }: { state: string; extended?: b
           {qs.map((q) => (
             <div key={q} className="rounded-[6px] border border-ink/12 p-3">
               <div className="text-[13px] text-ink">{q}</div>
-              <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink/50">
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink/65">
                 <MessageSquare size={12} /> from chat logs
               </div>
               <Button variant="link" compact className="mt-1.5">Draft answer</Button>
@@ -266,9 +265,9 @@ function CoverageRail({ state }: { state: string }) {
       <CoverageCard state={state} />
       <Card>
         <div className="mb-1.5 text-[14px] font-semibold text-ink">How serving works</div>
-        <p className="text-[12.5px] leading-relaxed text-ink/60">
+        <p className="text-[12.5px] leading-relaxed text-ink/70">
           Approving an answer embeds it so incoming questions match semantically. The Slack
-          bot and support widget then serve the text verbatim with an “Approved” badge — no
+          bot and support widget then serve the text verbatim with an “Approved” badge: no
           generation, no drift.
         </p>
       </Card>
@@ -322,7 +321,7 @@ function HarvestPreview({ state }: { state: string }) {
               </span>
             </label>
           ))}
-          <div className="flex justify-end"><Button variant="primary">Scan 2 sources</Button></div>
+          <div className="flex items-center gap-2"><Button variant="primary">Scan 2 sources</Button><Button variant="default">Cancel</Button></div>
         </div>
       )}
 
@@ -330,7 +329,7 @@ function HarvestPreview({ state }: { state: string }) {
         <div className="mt-6 flex flex-col items-center gap-3 py-8 text-center">
           <Spinner size="md" label="Scanning" />
           <div className="text-[13px] text-ink/70">Scanning slack, docs…</div>
-          <div className="font-term text-[11.5px] text-ink/50">Clustering threads · extracting question/answer pairs</div>
+          <div className="font-term text-[11.5px] text-ink/65">Clustering threads · extracting question/answer pairs</div>
         </div>
       )}
 
@@ -355,7 +354,7 @@ function HarvestPreview({ state }: { state: string }) {
               </div>
             </Card>
           ))}
-          <div className="flex justify-end"><Button variant="primary">Import 3 drafts</Button></div>
+          <div className="flex items-center gap-2"><Button variant="primary">Import 3 drafts</Button><Button variant="default">Cancel</Button></div>
         </div>
       )}
 
@@ -376,14 +375,14 @@ function HarvestPreview({ state }: { state: string }) {
                     : savingRow ? <Spinner size="sm" />
                     : <Circle size={14} className="shrink-0 text-ink/30" />}
                   <span className="min-w-0 flex-1 truncate">{c.q}</span>
-                  <span className="font-term text-[11px] shrink-0 text-ink/50">
+                  <span className="font-term text-[11px] shrink-0 text-ink/65">
                     {doneRow ? "draft saved" : savingRow ? "saving…" : "queued"}
                   </span>
                 </li>
               );
             })}
           </ul>
-          <div className="flex justify-end">
+          <div className="flex items-center gap-2">
             <Button variant="primary" disabled={importing}>{importing ? "Saving…" : "Done"}</Button>
           </div>
         </div>
@@ -415,7 +414,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
       ) : (
         <div
           className={
-            mobile ? "mt-6 space-y-4" : "mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]"
+            mobile ? "mt-6 space-y-4" : "mt-6 grid gap-5 grid-cols-[minmax(0,1fr)_320px]"
           }
         >
           <div className="min-w-0">
@@ -444,6 +443,12 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 }
 
 function AnswersPage({ state = "default", mobile = false }: PageProps) {
+  const actions = (
+    <>
+      <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
+      <Button variant="primary" compact><Plus size={15} /> New answer</Button>
+    </>
+  );
   return (
     <PageFrame active={navFor("answers")} title="Answers" mobile={mobile}>
       {state === "loading" ? (
@@ -453,16 +458,10 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
         <PageHeader
           eyebrow="Knowledge"
           title="Approved answers"
-          description="Curate the answers bots and teams serve verbatim — no generation, no drift."
-          actions={
-            <>
-              <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
-              <Button variant="primary" compact><Plus size={15} /> New answer</Button>
-            </>
-          }
+          description="Curate the answers bots and teams serve verbatim: no generation, no drift."
+          actions={mobile ? undefined : actions}
         />
-        {/* Mounted drawer, hidden until opened. */}
-        <AnswersHarvestWizard defaultOpen={false} />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <Body key={state} state={state} mobile={mobile} />
       </div>
       )}

@@ -2,10 +2,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
-import type { Column } from "./DataTable";
+import { cellClass, sortRows, type Column } from "./DataTable";
 import { SkeletonTable } from "./Skeleton";
-
-const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
+import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 
 function Check({ checked, indeterminate = false, onChange, label }: {
   checked: boolean; indeterminate?: boolean; onChange: () => void; label: string;
@@ -44,6 +43,10 @@ export function SelectableTable<T>({
   loading?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortState>({ key: null, dir: "asc" });
+  const onSort = (key: string) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  const visible = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
 
   const emit = (next: Set<string>) => {
     setSelected(next);
@@ -79,10 +82,10 @@ export function SelectableTable<T>({
           <thead>
             {someSelected ? (
               <tr>
-                <th className="px-4 py-2.5 border-b border-ink/10 w-9">
+                <th className={`${thPad} border-y border-ink/10 w-9`}>
                   <Check checked={allSelected} indeterminate={someSelected} onChange={toggleAll} label={selectAllLabel} />
                 </th>
-                <th colSpan={columns.length} className="px-4 py-2 border-b border-ink/10">
+                <th colSpan={columns.length} className={`${thPad} border-y border-ink/10`}>
                   <div className="flex items-center gap-3">
                     <span className="font-term text-[12px] font-medium text-ink">{selectedRows.length} selected</span>
                     <div className="flex items-center gap-2 ml-auto">{bulkActions?.(selectedRows)}</div>
@@ -91,11 +94,19 @@ export function SelectableTable<T>({
               </tr>
             ) : (
               <tr>
-                <th className="px-4 py-2.5 border-b border-ink/10 w-9">
+                <th className={`${thPad} border-y border-ink/10 w-9`}>
                   <Check checked={allSelected} onChange={toggleAll} label={selectAllLabel} />
                 </th>
                 {columns.map((c) => (
-                  <th key={c.key} className={`${thClass} px-4 py-2.5 border-b border-ink/10 ${c.align === "right" ? "text-right" : ""}`}>{c.header}</th>
+                  <SortHeader
+                    key={c.key}
+                    label={c.header}
+                    sortKey={c.key}
+                    sort={sort}
+                    onSort={onSort}
+                    align={c.align ?? "left"}
+                    sortable={c.sortable !== false && c.header.trim() !== ""}
+                  />
                 ))}
               </tr>
             )}
@@ -106,11 +117,11 @@ export function SelectableTable<T>({
                 <td colSpan={colSpan}>
                   <div className="grid place-items-center py-16 text-center">
                     <Inbox size={24} className="text-ink/25" />
-                    <p className="mt-2 text-[13px] text-ink/60">{empty}</p>
+                    <p className="mt-2 text-[13px] text-ink/70">{empty}</p>
                   </div>
                 </td>
               </tr>
-            ) : rows.map((row) => {
+            ) : visible.map((row) => {
               const key = rowKey(row);
               const isSel = selected.has(key);
               return (
@@ -119,10 +130,10 @@ export function SelectableTable<T>({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={`border-b border-ink/10 last:border-0 ${isSel ? "bg-biscay-2/[0.06]" : ""} ${onRowClick ? "cursor-pointer hover:bg-flysch/50 group" : ""}`}
                 >
-                  <td className="px-4 py-3 w-9">
+                  <td className={`${tdPad} w-9`}>
                     <Check checked={isSel} onChange={() => toggleRow(key)} label={`Select row`} />
                   </td>
-                  {columns.map((c) => <td key={c.key} className={`px-4 py-3 ${c.align === "right" ? "text-right" : ""} ${c.cell ?? ""}`}>{c.render(row)}</td>)}
+                  {columns.map((c) => <td key={c.key} className={cellClass(c)}>{c.render(row)}</td>)}
                 </tr>
               );
             })}

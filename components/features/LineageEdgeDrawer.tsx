@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ClipboardCheck, Download } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
+import { Button } from "../actions/Button";
+import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Chip } from "../data-display/Chip";
-import { Field } from "../forms/Field";
-import { SectionLabel } from "../forms/SectionLabel";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import {
-  REL, EdgeSwatch, NodeGlyph, LgDrawerShell, SOURCE_LABELS,
+  REL, EdgeSwatch, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
+  LgAuthor, LgOwners, LgSourceChip,
   DEMO_NODES, DEMO_EDGES, nodeById,
   type LNode, type LEdge,
 } from "./LineageDataModel";
@@ -20,7 +21,11 @@ import {
    as the node drawer, in an "edge flavor." Opens when a passthrough (non-
    aggregated) edge is tapped. Describes one typed link between two documents,
    its provenance status, evidence, and both endpoints (each jumps to the node
-   drawer). Fully derived, no queries. Standalone with a baked-in demo edge.
+   drawer).
+
+   Built from the same CardShell primitives as the other three drawers, in the
+   same order (CONVENTIONS §1): title, summary, source + status left with date
+   and author right, then Endpoints, then Owners, then the actions.
    ──────────────────────────────────────────────────────────────────────── */
 
 export type LineageEdgeDrawerProps = {
@@ -40,12 +45,23 @@ export function LineageEdgeDrawer({
 }: LineageEdgeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId] = useState(edgeId);
+  const [taskMade, setTaskMade] = useState(false);
+  const [result, setResult] = useState<{ title: string; body: string } | null>(null);
+
   const edge = edges.find((e) => e.id === openId) ?? edges[0];
   const from = byId[edge.from];
   const to = byId[edge.to];
   const s = REL[edge.rel];
   const confirmed = edge.meta?.status === "confirmed";
   const statusLabel = confirmed ? "Confirmed" : edge.llm ? "Derived by Mari" : "Observed";
+
+  const owners = useMemo(() => {
+    const rows: { name: string; role: string }[] = [];
+    if (from?.owner) rows.push({ name: from.owner, role: "Source owner" });
+    if (to?.owner && to.owner !== from?.owner) rows.push({ name: to.owner, role: "Target owner" });
+    if (edge.llm) rows.push({ name: "Mari", role: "Derived by" });
+    return rows;
+  }, [from?.owner, to?.owner, edge.llm]);
 
   if (loading) {
     return (
@@ -67,68 +83,105 @@ export function LineageEdgeDrawer({
     <LgDrawerShell
       className={className}
       onClose={onClose}
+      width={LG_DRAWER_W}
       icon={<EdgeSwatch rel={edge.rel} width={24} dashed={edge.dashed} />}
-      title={
-        <span className="inline-flex items-center gap-1.5">
-          <span className="truncate">{from?.title}</span>
-          <span className="text-ink/40">→</span>
-          <span className="truncate">{to?.title}</span>
-        </span>
-      }
-      pills={
-        <>
-          <Chip label={s.label} tone="neutral" icon={<EdgeSwatch rel={edge.rel} width={16} dashed={edge.dashed} />} />
-          {edge.llm && <Chip label="Derived by Mari" tone="info" />}
-        </>
-      }
+      title="Relationship"
+      summary="One typed link between two documents."
       footer={
-        <a href="#" className={`inline-flex items-center gap-1 text-[12.5px] text-biscay-2 hover:underline ${focusRing}`}>
-          Open source document <ExternalLink size={12} />
-        </a>
+        <div className="flex w-full flex-col gap-2">
+          {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right. */}
+          <CardActions
+            className="pt-0"
+            primary={
+              <Button compact variant="primary" onClick={() => setTaskMade(true)}>
+                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
+              </Button>
+            }
+            secondary={
+              <>
+                <Button
+                  compact
+                  className={result ? lgToggleOn : ""}
+                  onClick={() => setResult({
+                    title: "Exported 1 relationship",
+                    body: `${s.code.toLowerCase()}-${edge.id}.csv is ready to download.`,
+                  })}
+                >
+                  <Download size={13} /> {result ? "Exported" : "Export"}
+                </Button>
+                <a href="#" className={`inline-flex h-8 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3 text-[12.5px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05] ${focusRing}`}>
+                  Open document <ExternalLink size={12} />
+                </a>
+              </>
+            }
+          />
+        </div>
       }
     >
-      <SectionLabel>Link</SectionLabel>
-      <div className="mt-1">
-        <Field label="Relation">
-          <span style={{ color: s.color }}>{s.label.toLowerCase()}</span>
-        </Field>
-        <Field label="Status">
-          <Chip label={statusLabel} tone={confirmed ? "ok" : edge.llm ? "info" : "neutral"} dot={confirmed} />
-        </Field>
-        {edge.meta?.evidence && (
-          <Field label="Evidence">
-            <span className="inline-flex items-center gap-1.5">
-              <GithubMark size={14} /> <span className="font-term text-[12px]">{edge.meta.evidence}</span>
+      <CardBody>
+        <CardTitleBlock
+          className="[overflow-wrap:anywhere]"
+          title={
+            <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+              <span>{from?.title}</span>
+              <span className="text-ink/65" aria-label="to">→</span>
+              <span>{to?.title}</span>
             </span>
-          </Field>
-        )}
-        {edge.date && <Field label="Last seen">{fmtDate(edge.date)}</Field>}
-        {edge.meta?.note && <Field label="Summary">{edge.meta.note}</Field>}
-      </div>
+          }
+          summary={edge.meta?.note ?? `${from?.title ?? "Source"} ${s.out.toLowerCase()} ${to?.title ?? "target"}.`}
+        />
+        <CardMeta
+          source={<Chip label={s.label} tone="neutral" icon={<EdgeSwatch rel={edge.rel} width={16} dashed={edge.dashed} />} />}
+          status={<Chip label={statusLabel} tone={confirmed ? "ok" : edge.llm ? "info" : "neutral"} dot />}
+          date={edge.date ? fmtDate(edge.date) : "No date recorded"}
+          author={<LgAuthor name={edge.llm ? "Mari" : from?.owner} />}
+        />
 
-      <div className="mt-4">
-        <SectionLabel>Endpoints</SectionLabel>
-        <div className="mt-1.5">
+        {edge.meta?.evidence && (
+          <CardSection label="Evidence">
+            <span className="flex items-start gap-1.5 [overflow-wrap:anywhere]">
+              <span className="mt-0.5 shrink-0 text-ink/70"><GithubMark size={14} /></span>
+              <span className="min-w-0 font-term text-[12px] text-ink/85">{edge.meta.evidence}</span>
+            </span>
+          </CardSection>
+        )}
+
+        <CardSection label="Endpoints" count={2}>
           {from && (
-            <div className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5 -mx-2 hover:bg-flysch/60">
-              <span className="shrink-0 text-ink/70"><NodeGlyph node={from} size={17} /></span>
-              <button type="button" onClick={() => onSelectNode?.(from.id)} className={`min-w-0 flex-1 text-left ${focusRing} rounded-[3px]`}>
-                <span className="block truncate text-[13px] text-ink"><span className="text-ink/40">→ </span>{from.title}</span>
-                <span className="block truncate font-term text-[11px] text-ink/50">{[from.owner, SOURCE_LABELS[from.source]].filter(Boolean).join(" · ")}</span>
-              </button>
-            </div>
+            <ConnectionRow
+              rel={edge.rel}
+              dir="out"
+              dashed={edge.dashed}
+              title={from.title}
+              subline={`${s.out} · ${from.owner ?? "Unowned"}`}
+              onSelect={() => onSelectNode?.(from.id)}
+            />
           )}
           {to && (
-            <div className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5 -mx-2 hover:bg-flysch/60">
-              <span className="shrink-0 text-ink/70"><NodeGlyph node={to} size={17} /></span>
-              <button type="button" onClick={() => onSelectNode?.(to.id)} className={`min-w-0 flex-1 text-left ${focusRing} rounded-[3px]`}>
-                <span className="block truncate text-[13px] text-ink"><span className="text-ink/40">← </span>{to.title}</span>
-                <span className="block truncate font-term text-[11px] text-ink/50">{[to.owner, SOURCE_LABELS[to.source]].filter(Boolean).join(" · ")}</span>
-              </button>
-            </div>
+            <ConnectionRow
+              rel={edge.rel}
+              dir="in"
+              dashed={edge.dashed}
+              title={to.title}
+              subline={`${s.in} · ${to.owner ?? "Unowned"}`}
+              onSelect={() => onSelectNode?.(to.id)}
+            />
           )}
-        </div>
-      </div>
+        </CardSection>
+
+        <CardSection label="Sources">
+          <div className="flex flex-wrap gap-1.5">
+            {from && <LgSourceChip source={from.source} />}
+            {to && to.source !== from?.source && <LgSourceChip source={to.source} />}
+          </div>
+        </CardSection>
+
+        <CardSection label="Owners">
+          <LgOwners owners={owners} />
+        </CardSection>
+
+        {result && <LgResultPanel title={result.title}>{result.body}</LgResultPanel>}
+      </CardBody>
     </LgDrawerShell>
   );
 }

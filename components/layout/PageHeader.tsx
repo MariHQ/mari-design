@@ -17,12 +17,16 @@ export type PageHeaderProps = {
    so the two are interchangeable at the header level. */
 export function PageHeader({ title, eyebrow, description, icon, actions, backLink }: PageHeaderProps) {
   return (
-    <header className="flex items-start justify-between gap-3">
-      <div className="flex items-start gap-3 min-w-0">
+    // flex-wrap + a min-width on the title block: a `shrink-0` actions slot used
+    // to eat the entire row at phone widths, truncating titles to "D." and
+    // wrapping the description one word per line. Actions now drop to their own
+    // line instead of crushing the title.
+    <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-3">
+      <div className="flex min-w-[15rem] flex-1 items-start gap-3">
         {icon && <span className="shrink-0 mt-0.5" aria-hidden="true">{icon}</span>}
         <div className="min-w-0">
           {backLink && (
-            <a href={backLink.href} className={`inline-flex items-center gap-1 mb-1.5 text-[12.5px] font-medium text-ink/55 hover:text-ink rounded-[3px] ${focusRing}`}>
+            <a href={backLink.href} className={`inline-flex items-center gap-1 mb-1.5 text-[12.5px] font-medium text-ink/65 hover:text-ink rounded-[3px] ${focusRing}`}>
               <ArrowLeft size={13} />
               {backLink.label}
             </a>
@@ -33,11 +37,11 @@ export function PageHeader({ title, eyebrow, description, icon, actions, backLin
               {eyebrow}
             </div>
           )}
-          <h3 className="text-[22px] font-bold tracking-[-0.015em] text-ink truncate">{title}</h3>
-          {description && <p className="text-[13px] text-ink/60 mt-1 max-w-[680px]">{description}</p>}
+          <h3 className="text-[22px] font-bold leading-tight tracking-[-0.015em] text-ink [overflow-wrap:anywhere]">{title}</h3>
+          {description && <p className="text-[13px] text-ink/70 mt-1 max-w-[680px]">{description}</p>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }

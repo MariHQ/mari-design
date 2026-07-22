@@ -16,11 +16,13 @@ function Items({ items }: { items: AccordionItemData[] }) {
         <RA.Item key={item.value} value={item.value} className="border-b border-ink/10 last:border-0">
           <RA.Header>
             <RA.Trigger className={TRIGGER_CLASS}>
-              {item.title}
-              <ChevronDown size={15} className="text-ink/40 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+              {/* min-w-0 + break-words: a long unbroken title used to run past
+                  the chevron and out of the panel. */}
+              <span className="min-w-0 break-words">{item.title}</span>
+              <ChevronDown size={15} className="text-ink/65 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
             </RA.Trigger>
           </RA.Header>
-          <RA.Content className="px-4 pb-4 text-[13px] text-ink/70">{item.content}</RA.Content>
+          <RA.Content className="px-4 pb-4 text-[13px] text-ink/70 break-words">{item.content}</RA.Content>
         </RA.Item>
       ))}
     </>

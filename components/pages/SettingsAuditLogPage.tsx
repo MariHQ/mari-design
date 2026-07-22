@@ -34,7 +34,7 @@ const STATES = [
   { id: "filtered-actor", label: "Filtered by actor" },
   { id: "filtered-action", label: "Filtered by action" },
   { id: "filtered-date", label: "Filtered by date" },
-  { id: "no-match", label: "Filter — no matches" },
+  { id: "no-match", label: "Filter: no matches" },
   { id: "expanded", label: "Expanded entry" },
   { id: "many", label: "Many events (paginated)" },
   { id: "overflow", label: "Overflow · long text" },
@@ -103,15 +103,15 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
       hint={`${rows.length} of ${total} events${variant === "many" ? "" : " (last 50)"}`}
       actions={
         <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper">
-          <Search size={13} className="text-ink/50" />
-          <input readOnly value={filter ? filter.label.split(": ")[1] ?? "" : ""} placeholder="Filter events…" className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/45 outline-none" />
+          <Search size={13} className="text-ink/65" />
+          <input readOnly value={filter ? filter.label.split(": ")[1] ?? "" : ""} placeholder="Filter events…" className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
         </div>
       }
     >
       {filter && (
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-ink/10">
-          <span className="text-[11.5px] text-ink/50">Filter:</span>
-          <span className="inline-flex items-center gap-1"><Chip label={filter.label} tone="info" caps /><X size={12} className="text-ink/40" /></span>
+          <span className="text-[11.5px] text-ink/65">Filter:</span>
+          <span className="inline-flex items-center gap-1"><Chip label={filter.label} tone="info" caps /><X size={12} className="text-ink/65" /></span>
         </div>
       )}
       {rows.length === 0 ? (
@@ -128,14 +128,14 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
                     <td className="px-4 py-3 text-[13px] text-ink/60">{e.verb}</td>
                     <td className="px-4 py-3 text-[13px] text-ink/85">{e.target}</td>
                     <td className="px-4 py-3 font-term text-[12px] text-ink/60 whitespace-nowrap">{fmtDateTime(e.at)}</td>
-                    <td className="px-4 py-3"><ChevronDown size={14} className={`text-ink/40 ${e.id === expandedId ? "rotate-180" : ""}`} /></td>
+                    <td className="px-4 py-3"><ChevronDown size={14} className={`text-ink/65 ${e.id === expandedId ? "rotate-180" : ""}`} /></td>
                   </tr>
                   {e.id === expandedId && (
                     <tr className="border-b border-ink/10 bg-flysch/30">
                       <td colSpan={5} className="px-4 py-3">
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-term text-[12px] sm:grid-cols-4">
                           {[["Event ID", `evt_${e.id}f8a20c`], ["Actor IP", "203.0.113.24"], ["Before", "role=user"], ["After", "role=manager"], ["Source", "web · console"], ["Request", "req_9c1e…"]].map(([k, v]) => (
-                            <div key={k}><dt className="text-ink/45">{k}</dt><dd className="text-ink/80">{v}</dd></div>
+                            <div key={k}><dt className="text-ink/65">{k}</dt><dd className="text-ink/80">{v}</dd></div>
                           ))}
                         </dl>
                       </td>
@@ -149,7 +149,7 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
       )}
       {variant === "many" && (
         <div className="px-4 py-3 border-t border-ink/10">
-          <Pagination page={0} pageCount={27} onChange={() => {}} itemLabel="Showing 1–8 of 214" />
+          <Pagination page={0} pageCount={27} onChange={() => {}} itemLabel="Showing 1 to 8 of 214" />
         </div>
       )}
     </Card>
@@ -226,7 +226,7 @@ function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) 
           <PageHeader
             eyebrow="Settings"
             title="Audit log"
-            description="Every workspace change — actor, action, target, and time."
+            description="Every workspace change: actor, action, target, and time."
             actions={<Button variant="default" icon><RefreshCw size={15} /> Refresh</Button>}
           />
           <div className="mt-5" />

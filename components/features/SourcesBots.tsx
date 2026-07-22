@@ -89,7 +89,7 @@ function SlackDrawer({
   const body = () => {
     if (step === 0) return (
       <div className="grid gap-3">
-        <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest" — it pre-fills scopes and the events URL.</p>
+        <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest". It pre-fills scopes and the events URL.</p>
         <CodeBlock code={SLACK_MANIFEST} title="app-manifest.yml" />
       </div>
     );
@@ -103,7 +103,7 @@ function SlackDrawer({
         <Field label="Signing secret">
           <Input className="w-full font-term" type="password" placeholder="••••••••" value={secret} onChange={(e) => { setSecret(e.target.value); setSaved(false); }} />
         </Field>
-        {status.configured && <p className="mt-2 text-[11.5px] text-ink/55">Already configured — enter new values only to replace them.</p>}
+        {status.configured && <p className="mt-2 text-[11.5px] text-ink/70">Already configured. Enter new values only to replace them.</p>}
         <div className="mt-3">
           <Button variant="primary" compact disabled={!canSave} onClick={() => setSaved(true)}>Save credentials</Button>
           {saved && <span className="ml-2 inline-flex items-center gap-1 text-[12.5px] text-moss"><CheckCircle2 size={14} /> Saved</span>}
@@ -120,7 +120,7 @@ function SlackDrawer({
               <StatusChip status="approved" /> <span className="text-[12.5px] text-ink/70">Connected as <b>@Mari</b> in <b>{status.teamName ?? "your workspace"}</b>.</span>
             </div>
           )}
-          {tested === "fail" && <p className="mt-3 text-[12.5px] text-espelette">auth.test failed — check the token and retry.</p>}
+          {tested === "fail" && <p className="mt-3 text-[12.5px] text-espelette">auth.test failed. Check the token and try again.</p>}
         </div>
       </div>
     );
@@ -134,7 +134,7 @@ function SlackDrawer({
         </ul>
         <div className={`${card} p-3 flex items-center gap-2`}>
           {botChip(slackState(status))}
-          {status.lastEventAt && <span className="ml-auto font-term text-[11px] text-ink/45">Last event {fmtDateTime(status.lastEventAt)}</span>}
+          {status.lastEventAt && <span className="ml-auto font-term text-[11px] text-ink/65">Last event {fmtDateTime(status.lastEventAt)}</span>}
         </div>
       </div>
     );
@@ -193,7 +193,7 @@ function GithubDrawer({
           <Button variant="primary" compact disabled={!secret} onClick={() => setSaved(true)}>Save secret</Button>
           {saved && <span className="ml-2 inline-flex items-center gap-1 text-[12.5px] text-moss"><CheckCircle2 size={14} /> Saved</span>}
         </div>
-        <p className="mt-2 text-[11.5px] text-ink/55">Paste the same value into GitHub's "Secret" field. A separate receiver reads <code>MARI_GITHUB_WEBHOOK_SECRET</code>.</p>
+        <p className="mt-2 text-[11.5px] text-ink/70">Paste the same value into GitHub's "Secret" field. A separate receiver reads <code>MARI_GITHUB_WEBHOOK_SECRET</code>.</p>
       </div>
     );
     return (
@@ -203,14 +203,14 @@ function GithubDrawer({
             <StatusChip status="approved" /> <span className="text-[12.5px] text-ink/70">Delivery received {fmtDateTime(status.lastDeliveryAt)}.</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-[13px] text-ink/70"><Spinner size="sm" /> Waiting for the first delivery… (push a commit)</div>
+          <div className="flex items-center gap-2 text-[13px] text-ink/70"><Spinner size="sm" /> Waiting for the first delivery. Push a commit to trigger one.</div>
         )}
         <div>
           <SectionLabel>Connected repositories</SectionLabel>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {status.repos.length > 0
               ? status.repos.map((r) => <Chip key={r} label={r} tone="neutral" icon={<GitFork size={11} />} />)
-              : <span className="text-[12.5px] text-ink/55">Connect a repo on the Connectors tab.</span>}
+              : <span className="text-[12.5px] text-ink/65">Connect a repo on the Connectors tab.</span>}
           </div>
         </div>
       </div>
@@ -280,7 +280,7 @@ export function SourcesBots({
           {botChip(slackState(slack))}
         </div>
         <p className="text-[12.5px] text-ink/65">Answers @mentions and DMs from your knowledge base.</p>
-        <Field label="Workspace"><span className="text-[13px]">{slack.teamName ?? "—"}</span></Field>
+        <Field label="Workspace"><span className="break-words text-[13px]">{slack.teamName ?? "Not connected"}</span></Field>
         <Field label="Last event"><span className="font-term text-[12px] text-ink/70">{slack.lastEventAt ? fmtDateTime(slack.lastEventAt) : "none yet"}</span></Field>
         <Button variant="primary" compact className="self-start" onClick={() => setDrawer("slack")}>
           <Slack size={14} /> {slack.configured ? "Manage setup" : "Set up Slack bot"}
@@ -297,7 +297,9 @@ export function SourcesBots({
         <Field label="Payload URL"><span className="font-term text-[12px] text-ink/70 break-all">{origin}/webhooks/github</span></Field>
         <Field label="Repositories">
           <div className="flex flex-wrap gap-1.5">
-            {github.repos.map((r) => <Chip key={r} label={r} tone="neutral" icon={<GitFork size={11} />} />)}
+            {github.repos.length > 0
+              ? github.repos.map((r) => <Chip key={r} label={r} tone="neutral" icon={<GitFork size={11} />} className="max-w-full [&>span]:truncate" />)
+              : <span className="text-[12.5px] text-ink/70">Connect a repo on the Connectors tab.</span>}
           </div>
         </Field>
         <Button variant="primary" compact className="self-start" onClick={() => setDrawer("github")}>

@@ -136,8 +136,8 @@ function WorkspaceForm({ mode }: { mode: FormMode }) {
         </Button>
         {mode === "view" && <span className="text-[12.5px] text-moss">All changes saved</span>}
         {mode === "saved" && <span className="font-term text-[12.5px] text-moss">✓ Saved just now</span>}
-        {mode === "editing" && <span className="text-[12.5px] text-ink/50">You have unsaved changes</span>}
-        {mode === "saving" && <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink/50"><Spinner size="sm" /> Contacting API…</span>}
+        {mode === "editing" && <span className="text-[12.5px] text-ink/65">You have unsaved changes</span>}
+        {mode === "saving" && <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink/65"><Spinner size="sm" /> Contacting API…</span>}
         {invalid && <span className="text-[12.5px] text-espelette">Fix the errors above to save</span>}
       </div>
     </Card>

@@ -11,6 +11,7 @@ import { Chip } from "../data-display/Chip";
 import { TagChip } from "../data-display/TagChip";
 import { Progress } from "../data-display/Progress";
 import { EmptyState } from "../data-display/EmptyState";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../data-display/Skeleton";
 
 /* LibraryTagsPanel — the Library › Tags tab (default tab).
@@ -18,11 +19,17 @@ import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../dat
    vocabulary drives ranking (search weight), evidence policy, publishing,
    audits and workflows. Admins create / edit / delete tags, tune per-tag
    search weight inline, and run a live coverage analysis. Fully local +
-   standalone here. */
+   standalone here.
+
+   The definitions used to be a headerless <article> grid whose four columns
+   drifted apart as descriptions grew; they are now a real table with
+   <SortHeader> columns, fixed widths and the shared tdPad spacing, and every
+   chip comes from the shared chip family (TagChip for the tag, Chip for the
+   behaviors) instead of bespoke spans (CONVENTIONS §3, §4). */
 
 type Tone = "ok" | "attention" | "blocked" | "info" | "neutral";
 
-type TagDef = {
+export type TagDef = {
   id: string;
   name: string;
   description: string;
@@ -77,6 +84,14 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
     () => rows.filter((t) => `${t.name} ${t.description} ${t.behaviors.join(" ")}`.toLowerCase().includes(query.toLowerCase())),
     [rows, query],
   );
+
+  const { sort, onSort, sorted } = useSort(visible, {
+    name: (t) => t.name,
+    behaviors: (t) => t.behaviors.join(", "),
+    evidence: (t) => t.evidence,
+    weight: (t) => t.weight,
+    usage: (t) => t.usage,
+  });
 
   const tagged = rows.reduce((s, t) => s + t.usage, 0);
   const coverage = Math.min(100, Math.round((tagged / (TOTAL_DOCS * 1.4)) * 100));
@@ -160,9 +175,9 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
         hint={`${rows.length} tags`}
         actions={
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/50 focus-within:border-biscay-2">
+            <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
               <Search size={14} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tags" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/40" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tags" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65" />
             </label>
             <Button compact onClick={() => setAnalyzing((v) => !v)}><Sparkles size={13} /> Analyze documents</Button>
             <Button variant="primary" compact onClick={() => openComposer()}><Plus size={13} /> New tag</Button>
@@ -174,7 +189,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
           {analyzing && (
             <div className="px-4 py-3.5 bg-ink/[0.015] border-b border-ink/10">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/55">Corpus coverage · {TOTAL_DOCS} documents indexed</span>
+                <span className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/70">Corpus coverage · {TOTAL_DOCS} documents indexed</span>
                 <Button variant="link" onClick={() => setAnalyzing(false)}>Close</Button>
               </div>
               <div className="flex flex-col gap-2.5">
@@ -182,13 +197,13 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
                   <div key={t.id} className="grid grid-cols-[10rem_1fr_5.5rem] items-center gap-3">
                     <TagChip tag={t.id} label={t.name} tone={t.tone} />
                     <Progress value={Math.round((t.usage / maxUsage) * 100)} tone={t.tone === "neutral" ? "info" : t.tone} />
-                    <span className="font-term text-[11px] text-ink/55 text-right">{t.usage} docs · {Math.round((t.usage / TOTAL_DOCS) * 100)}%</span>
+                    <span className="font-term text-[11px] text-ink/70 text-right">{t.usage} docs · {Math.round((t.usage / TOTAL_DOCS) * 100)}%</span>
                   </div>
                 ))}
                 <div className="grid grid-cols-[10rem_1fr_5.5rem] items-center gap-3">
-                  <span className="text-[12.5px] text-ink/55">Untagged</span>
+                  <span className="text-[12.5px] text-ink/70">Untagged</span>
                   <Progress value={Math.round((untagged / TOTAL_DOCS) * 100)} tone="attention" />
-                  <span className="font-term text-[11px] text-ink/55 text-right">{untagged} docs</span>
+                  <span className="font-term text-[11px] text-ink/70 text-right">{untagged} docs</span>
                 </div>
               </div>
               <div className="mt-3 font-term text-[11px] text-moss">{coverage}% of the corpus carries at least one project tag.</div>
@@ -200,7 +215,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
             <div className="px-4 py-3.5 bg-biscay-2/[0.03] border-b border-ink/10">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-[13px] font-semibold text-ink">{editId ? "Edit tag" : "New tag"}</span>
-                <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/50 hover:text-ink"><X size={14} /></button>
+                <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/70 hover:text-ink"><X size={14} /></button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div><SectionLabel>Tag name</SectionLabel><Input autoFocus className="mt-1 w-full" value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Runbook" /></div>
@@ -215,49 +230,77 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, className 
             </div>
           )}
 
-          {/* Definition list */}
+          {/* Definition table — headers, one plumb line per column */}
           {visible.length === 0 ? (
             <EmptyState icon={<Search size={20} />}>No tags match this search.</EmptyState>
           ) : (
-            <div className="divide-y divide-ink/10">
-              {visible.map((t) => (
-                <article key={t.id} className="grid gap-3 px-4 py-3.5 md:grid-cols-[1.4fr_1.2fr_1fr_auto] items-start">
-                  <div>
-                    <TagChip tag={t.id} label={t.name} tone={t.tone} />
-                    <p className="mt-1 text-[12.5px] text-ink/65">{t.description}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {t.behaviors.map((b) => <Chip key={b} label={b} tone="neutral" />)}
-                  </div>
-                  <div>
-                    <div className="font-term text-[11px] text-ink/50">{t.evidence}</div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      {weightEditId === t.id ? (
-                        <Input
-                          type="number" step={0.05} min={0} autoFocus className="w-20 h-7"
-                          value={weightVal}
-                          onChange={(e) => setWeightVal(e.target.value)}
-                          onBlur={() => commitWeight(t.id)}
-                          onKeyDown={(e) => { if (e.key === "Enter") commitWeight(t.id); if (e.key === "Escape") setWeightEditId(null); }}
-                        />
-                      ) : (
-                        <button type="button" onClick={() => { setWeightEditId(t.id); setWeightVal(String(t.weight)); }} className="font-term text-[12px] text-ink/80 rounded-[3px] border border-ink/15 px-1.5 py-0.5 hover:border-ink/40">
-                          ×{t.weight.toFixed(2)}
-                        </button>
-                      )}
-                      <span className="font-term text-[11px] text-ink/45">{t.usage} docs</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <Button icon compact aria-label={`Edit ${t.name}`} onClick={() => openComposer(t)}><Pencil size={13} /></Button>
-                    {!t.standard && (
-                      <ConfirmButton compact aria-label={`Delete ${t.name}`} confirmLabel="Delete?" onConfirm={() => del(t.id)} title="Documents keep the raw tag but lose its behaviors.">
-                        Delete
-                      </ConfirmButton>
-                    )}
-                  </div>
-                </article>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] table-fixed border-collapse text-left">
+                <colgroup>
+                  <col style={{ width: "16rem" }} />
+                  <col style={{ width: "14rem" }} />
+                  <col style={{ width: "10rem" }} />
+                  <col style={{ width: "6.5rem" }} />
+                  <col style={{ width: "6rem" }} />
+                  <col style={{ width: "11rem" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <SortHeader label="Tag" sortKey="name" sort={sort} onSort={onSort} />
+                    <SortHeader label="Behaviors" sortKey="behaviors" sort={sort} onSort={onSort} />
+                    <SortHeader label="Evidence" sortKey="evidence" sort={sort} onSort={onSort} />
+                    <SortHeader label="Weight" sortKey="weight" sort={sort} onSort={onSort} align="center" />
+                    <SortHeader label="Docs" sortKey="usage" sort={sort} onSort={onSort} align="center" />
+                    <SortHeader label="Actions" sortable={false} align="right" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((t) => (
+                    <tr key={t.id} className="border-b border-ink/10 align-top last:border-0">
+                      <td className={tdPad}>
+                        <TagChip tag={t.id} label={t.name} tone={t.tone} />
+                        <p className="mt-1 break-words text-[12.5px] text-ink/70">{t.description}</p>
+                      </td>
+                      <td className={tdPad}>
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.behaviors.map((b) => <Chip key={b} label={b} tone="neutral" />)}
+                        </div>
+                      </td>
+                      <td className={`${tdPad} break-words font-term text-[11px] text-ink/70`}>{t.evidence}</td>
+                      <td className={`${tdPad} text-center`}>
+                        {weightEditId === t.id ? (
+                          <Input
+                            type="number" step={0.05} min={0} autoFocus className="h-7 w-20"
+                            value={weightVal}
+                            onChange={(e) => setWeightVal(e.target.value)}
+                            onBlur={() => commitWeight(t.id)}
+                            onKeyDown={(e) => { if (e.key === "Enter") commitWeight(t.id); if (e.key === "Escape") setWeightEditId(null); }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setWeightEditId(t.id); setWeightVal(String(t.weight)); }}
+                            className="rounded-[3px] border border-ink/15 px-1.5 py-0.5 font-term text-[12px] text-ink/80 hover:border-ink/40"
+                          >
+                            ×{t.weight.toFixed(2)}
+                          </button>
+                        )}
+                      </td>
+                      <td className={`${tdPad} text-center font-term text-[12px] tabular-nums text-ink/70`}>{t.usage.toLocaleString("en-US")}</td>
+                      <td className={`${tdPad} text-right`}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Button compact aria-label={`Edit ${t.name}`} onClick={() => openComposer(t)}><Pencil size={13} /> Edit</Button>
+                          {!t.standard && (
+                            <ConfirmButton compact aria-label={`Delete ${t.name}`} confirmLabel="Delete?" onConfirm={() => del(t.id)} title="Documents keep the raw tag but lose its behaviors.">
+                              Delete
+                            </ConfirmButton>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

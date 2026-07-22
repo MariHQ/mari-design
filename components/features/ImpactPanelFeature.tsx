@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Sparkles, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
-import { StatusChip } from "../data-display/Chip";
+import { StatusChip, Chip } from "../data-display/Chip";
+import { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "../layout/CardShell";
 import { Button } from "../actions/Button";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
@@ -28,7 +29,7 @@ export type ImpactPanelFeatureProps = {
 };
 
 const DEMO_DOCS: ImpactDoc[] = [
-  { title: "Pricing & Plans", source: "gdocs · handbook", severity: "update-required", reason: "States the free tier caps at 3 seats — this claim raises it to 5." },
+  { title: "Pricing & Plans", source: "gdocs · handbook", severity: "update-required", reason: "States the free tier caps at 3 seats; this claim raises it to 5." },
   { title: "Onboarding checklist", source: "notion · CS", severity: "review", reason: "Mentions seat limits in step 4; may need a wording pass." },
   { title: "Sales one-pager", source: "slack · #gtm", severity: "minor", reason: "References 'small teams' loosely; likely unaffected." },
 ];
@@ -80,46 +81,54 @@ export function ImpactPanelFeature({
   return (
     <div className={`max-w-[720px] ${className}`.trim()}>
       <article className={`${card} p-4`}>
-        <div className="flex items-start gap-3">
-          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-moss" />
-          <div className="min-w-0 flex-1">
-            <h3 className="text-[15px] font-semibold leading-snug text-ink">
-              <q className="not-italic">{claim}</q>
-            </h3>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <StatusChip status="verified" />
-              <span className="font-term text-[11px] text-ink/50">{source}</span>
-              <span className="font-term text-[11px] text-ink/45">verified {fmtAgo(verifiedAt)}</span>
+        <CardBody>
+          {/* 1 + 2 — header and header summary, like every other card. */}
+          <div className="flex items-start gap-3">
+            <ShieldCheck size={18} className="mt-0.5 shrink-0 text-moss" />
+            <div className="min-w-0">
+              <h2 className="text-[13px] font-semibold text-ink">Impact analysis</h2>
+              <p className="mt-0.5 text-[12.5px] text-ink/70">
+                Mari traces every document that depends on this claim, so you can see what a change would break.
+              </p>
             </div>
           </div>
-        </div>
 
-        <div className="mt-3.5 border-t border-ink/10 pt-3.5">
-          {phase === "idle" ? (
-            <Button compact onClick={run}>
-              <Sparkles size={13} /> Run impact analysis
-            </Button>
-          ) : phase === "loading" ? (
+          {/* 4 + 5 — the claim and what it means */}
+          <CardTitleBlock
+            title={<q className="not-italic">{claim}</q>}
+            summary={summary}
+          />
+
+          {/* 6 + 7 — source and status left, date right */}
+          <CardMeta
+            source={<Chip label="Fact" tone="neutral" />}
+            status={<StatusChip status="verified" />}
+            date={<span className="break-all">{source}</span>}
+            author={<span>Verified {fmtAgo(verifiedAt)}</span>}
+          />
+
+          {/* 8 — references */}
+          {phase === "loading" ? (
             <ImpactPanelUI loading />
-          ) : (
-            <ImpactPanelUI
-              boxed
-              summary={summary}
-              docs={docs}
-              onClose={() => setPhase("idle")}
-              footer={
-                <>
-                  <Button variant="primary" compact>
-                    Create {docs.length} tasks
-                  </Button>
-                  <span className="font-term text-[11px] text-ink/50">
-                    one per affected document
-                  </span>
-                </>
-              }
-            />
-          )}
-        </div>
+          ) : phase === "done" ? (
+            <CardSection label="References" count={docs.length}>
+              <ImpactPanelUI boxed docs={docs} onClose={() => setPhase("idle")} />
+            </CardSection>
+          ) : null}
+
+          {/* 11 + 12 — buttons, biggest action last */}
+          <CardActions
+            primary={phase === "idle"
+              ? <Button variant="primary" compact onClick={run}>Run</Button>
+              : <Button compact onClick={() => setPhase("idle")}>Reset</Button>}
+            secondary={phase === "done" && docs.length > 0 ? (
+              <>
+                <Button variant="primary" compact>Create {docs.length} tasks</Button>
+                <span className="font-term text-[11px] text-ink/65">one per affected document</span>
+              </>
+            ) : undefined}
+          />
+        </CardBody>
       </article>
     </div>
   );

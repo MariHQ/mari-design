@@ -1,21 +1,34 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { Chip } from "./Chip";
+import { SortHeader, useSort, tdPad } from "./sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
 
-/* ImpactPanel — the one impact-analysis rendering, shared by Facts and
+/* ImpactPanel: the one impact-analysis rendering, shared by Facts and
    Decisions in the console (it was duplicated inline on both pages). A short
-   summary plus a list of impacted documents, each tagged with a severity
-   chip. Ported from components/ImpactPanel.tsx (+ .css) to Tailwind. */
+   summary plus a real table of impacted documents.
+
+   The document list is a <table>, not a flex row per document: the reason used
+   to be right-aligned against a ragged left edge, so nothing lined up down the
+   panel. Columns now share the system's header/cell padding (thPad / tdPad)
+   and sort affordance, so this parses like every other table in the console
+   (CONVENTIONS.md §3). Severity is the last column because impact rows have no
+   clickable item. */
 
 export type ImpactDoc = { title: string; source: string; severity: string; reason: string };
 
-const SEVERITY: Record<string, { tone: string; label: string }> = {
-  "update-required": { tone: "blocked", label: "Update required" },
-  review: { tone: "attention", label: "Review" },
-  minor: { tone: "neutral", label: "Minor" },
+const SEVERITY: Record<string, { tone: string; label: string; rank: number }> = {
+  "update-required": { tone: "blocked", label: "Update required", rank: 0 },
+  review: { tone: "attention", label: "Review", rank: 1 },
+  minor: { tone: "neutral", label: "Minor", rank: 2 },
 };
+
+const sev = (s: string) => SEVERITY[s] ?? SEVERITY.minor;
+
+/** Table cells must be allowed to break inside a word, or one unbroken token
+ *  stretches the whole table past its container. */
+const WRAP = "[overflow-wrap:anywhere]";
 
 export type ImpactPanelProps = {
   loading?: boolean;
@@ -23,7 +36,8 @@ export type ImpactPanelProps = {
   summary?: string;
   docs?: ImpactDoc[];
   onClose?: () => void;
-  /** Extra actions under the doc list (e.g. Decisions' "Create N tasks"). */
+  /** Extra actions under the doc list (e.g. Decisions' "Create N tasks").
+   *  Rendered bottom left, primary first (CONVENTIONS.md §2). */
   footer?: ReactNode;
   /** Bordered inset box — for hosts without their own strip chrome (Facts). */
   boxed?: boolean;
@@ -32,7 +46,7 @@ export type ImpactPanelProps = {
 
 export function ImpactPanel({
   loading = false,
-  loadingText = "Mari is reading the graph — checking documents that depend on this claim…",
+  loadingText = "Mari is reading the graph, checking documents that depend on this claim…",
   summary,
   docs = [],
   onClose,
@@ -40,34 +54,38 @@ export function ImpactPanel({
   boxed = false,
   className = "",
 }: ImpactPanelProps) {
+  const { sort, onSort, sorted } = useSort(docs, {
+    title: (d) => d.title,
+    source: (d) => d.source,
+    severity: (d) => sev(d.severity).rank,
+    reason: (d) => d.reason,
+  });
+
+  const wrap = [
+    "text-[13px] leading-[1.45]",
+    boxed && "rounded-[10px] border border-ink/12 bg-flysch/60 px-3.5 py-2.5",
+    className,
+  ].filter(Boolean).join(" ");
+
   if (loading) {
-    const loadWrap = [
-      "text-[13px] leading-[1.45]",
-      boxed && "rounded-[10px] border border-ink/12 bg-flysch/60 px-3.5 py-2.5",
-      className,
-    ].filter(Boolean).join(" ");
     return (
-      <div className={loadWrap} aria-hidden="true">
+      <div className={wrap} aria-hidden="true" title={loadingText}>
         <SkeletonLine w={130} h={13} />
         <SkeletonText lines={2} className="mt-2" lastWidth="68%" />
         <div className="mt-2 flex flex-col">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex items-center gap-2.5 border-t border-ink/10 py-[7px] first:border-t-0">
-              <SkeletonChip w={88} />
               <SkeletonLine w={110} h={11} />
               <SkeletonLine w={70} h={10} />
-              <span className="ml-auto"><Skeleton width={140} height={10} rounded="rounded-full" /></span>
+              <Skeleton width={140} height={10} rounded="rounded-full" />
+              <span className="ml-auto"><SkeletonChip w={88} /></span>
             </div>
           ))}
         </div>
       </div>
     );
   }
-  const wrap = [
-    "text-[13px] leading-[1.45]",
-    boxed && "rounded-[10px] border border-ink/12 bg-flysch/60 px-3.5 py-2.5",
-    className,
-  ].filter(Boolean).join(" ");
+
   return (
     <div className={wrap}>
       <div className="flex items-center gap-2.5">
@@ -78,24 +96,50 @@ export function ImpactPanel({
           </Button>
         )}
       </div>
-      {summary && <p className="mt-1.5 max-w-[640px] text-ink/70">{summary}</p>}
-      {docs.length === 0 && !summary && <span className="font-term text-[11px] text-ink/55">No impacted documents found.</span>}
+      {summary && <p className="mt-1.5 max-w-[640px] break-words text-ink/70">{summary}</p>}
+      {docs.length === 0 && !summary && <span className="font-term text-[11px] text-ink/65">No impacted documents found.</span>}
       {docs.length > 0 && (
-        <div className="mt-2 flex flex-col">
-          {docs.map((doc, i) => {
-            const sev = SEVERITY[doc.severity] ?? SEVERITY.minor;
-            return (
-              <div key={i} className="flex items-baseline gap-2.5 border-t border-ink/10 py-[7px] first:border-t-0">
-                <Chip label={sev.label} tone={sev.tone} caps className="self-center shrink-0" />
-                <b className="font-display text-[13px] font-semibold text-ink whitespace-nowrap">{doc.title}</b>
-                <span className="font-term text-[11.5px] text-ink/45 whitespace-nowrap">{doc.source}</span>
-                <span className="ml-auto max-w-[46%] text-right text-[12px] leading-[1.4] text-ink/70">{doc.reason}</span>
-              </div>
-            );
-          })}
+        <div className="mt-2 overflow-x-auto">
+          {/* table-fixed + a colgroup: column widths are declared, not derived
+              from the longest word, so one unbroken token can neither widen
+              the table nor squeeze its neighbours to a letter per line. */}
+          <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 480 }}>
+            <colgroup>
+              <col style={{ width: "31%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "32%" }} />
+              {/* wide enough for the longest severity chip, "Update required" */}
+              <col style={{ width: "24%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <SortHeader label="Document" sortKey="title" sort={sort} onSort={onSort} />
+                <SortHeader label="Source" sortKey="source" sort={sort} onSort={onSort} align="center" />
+                <SortHeader label="Reason" sortKey="reason" sort={sort} onSort={onSort} />
+                <SortHeader label="Severity" sortKey="severity" sort={sort} onSort={onSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((doc, i) => {
+                const s = sev(doc.severity);
+                return (
+                  <tr key={`${doc.title}-${i}`} className="border-b border-ink/[0.06] last:border-b-0">
+                    {/* overflow-wrap:anywhere, not break-words: only "anywhere"
+                        shrinks a cell's min-content width, so a long unbroken
+                        token stops widening the table until the severity
+                        column falls off the panel. */}
+                    <td className={`${tdPad} font-display text-[13px] font-semibold text-ink align-top ${WRAP}`}>{doc.title}</td>
+                    <td className={`${tdPad} text-center font-term text-[11.5px] text-ink/65 align-top whitespace-nowrap`}>{doc.source}</td>
+                    <td className={`${tdPad} text-[12.5px] leading-[1.4] text-ink/70 align-top ${WRAP}`}>{doc.reason}</td>
+                    <td className={`${tdPad} align-top`}><Chip label={s.label} tone={s.tone} caps /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
-      {footer && <div className="mt-2.5 flex items-center gap-3">{footer}</div>}
+      {footer && <div className="mt-2.5 flex flex-wrap items-center gap-2">{footer}</div>}
     </div>
   );
 }

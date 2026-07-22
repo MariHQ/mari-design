@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CheckCircle2 } from "lucide-react";
+import { Alert } from "../feedback/Alert";
 import {
   ConnectorWizard as ConnectorWizardUI,
   type WizardProvider,
@@ -99,6 +100,10 @@ export function SourcesConnectorWizard({
 }: SourcesConnectorWizardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [sync, setSync] = useState<SyncSource | null>(null);
+  /* Where the connected source LANDED. Connecting used to end on "Done" with
+     no statement of where the source went, so the flow felt like it dropped
+     the source on the floor. */
+  const [landed, setLanded] = useState<string | null>(null);
 
   const finish = ({ provider, config }: { provider: string; config: Record<string, string> }) => {
     const p = providers.find((x) => x.key === provider);
@@ -111,6 +116,7 @@ export function SourcesConnectorWizard({
       chunkCount: 3120, embeddedCount: 1180,
     };
     setSync(running);
+    setLanded(running.name);
     window.setTimeout(() => {
       setSync({
         ...running, state: "done", phase: undefined,
@@ -129,6 +135,17 @@ export function SourcesConnectorWizard({
       <Button variant="primary" onClick={() => { setSync(null); setOpen(true); }}>
         <Plus size={14} /> Add source
       </Button>
+      {landed && !open && (
+        <div className="mt-3">
+          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}
+            action={<Button compact onClick={() => setLanded(null)}>Open Connectors</Button>}>
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 size={14} className="text-moss" />
+              {landed} now lives on Sources, under the Connectors tab. Its first sync keeps running there.
+            </span>
+          </Alert>
+        </div>
+      )}
       <ConnectorWizardUI
         open={open}
         onOpenChange={(o) => { setOpen(o); if (!o) setSync(null); }}

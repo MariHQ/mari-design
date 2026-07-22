@@ -6,10 +6,10 @@
      break-words / truncate, and flex blowouts that normal long text won't. */
 
 export const LONG_TITLE =
-  "Quarterly platform reliability, incident-response, and on-call escalation runbook — consolidated across every service, region, and team, superseding all prior drafts";
+  "Quarterly platform reliability, incident-response, and on-call escalation runbook: consolidated across every service, region, and team, superseding all prior drafts";
 
 export const LONG_PARAGRAPH =
-  "This document consolidates the operating guidance for the entire platform organization across regions, teams, and service tiers. It describes the escalation ladder, the paging policy, the severity rubric, the communication templates, and the post-incident review process in exhaustive detail so that any responder — regardless of tenure or team — can act without ambiguity during an active incident. Every section has been reviewed by the reliability guild and reconciled against the last four quarters of incident retrospectives, and it will be re-reviewed every quarter or after any Sev-1.";
+  "This document consolidates the operating guidance for the entire platform organization across regions, teams, and service tiers. It describes the escalation ladder, the paging policy, the severity rubric, the communication templates, and the post-incident review process in exhaustive detail so that any responder: regardless of tenure or team: can act without ambiguity during an active incident. Every section has been reviewed by the reliability guild and reconciled against the last four quarters of incident retrospectives, and it will be re-reviewed every quarter or after any Sev-1.";
 
 export const LONG_NAME = "Alexandra Wilhelmina Featherstonehaugh-Montgomery-Brixington III";
 
@@ -33,7 +33,7 @@ export const HUGE_NUMBER_STR = "12,847,392";
 export const HUGE_PERCENT = "99.999982%";
 
 /** Emoji + CJK + Arabic + accents to exercise glyph width + bidi. */
-export const MIXED_SCRIPT = "部署が失敗しました ⚠️ الإصدار النهائي — café résumé naïve 🚀🔥✅";
+export const MIXED_SCRIPT = "部署が失敗しました ⚠️ الإصدار النهائي: café résumé naïve 🚀🔥✅";
 
 /** Many tags (some long) — overflow a chip row / wrap test. */
 export const MANY_TAGS = [

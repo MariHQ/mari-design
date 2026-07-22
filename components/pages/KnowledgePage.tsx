@@ -27,7 +27,7 @@ const RESULTS: Result[] = [
   { id: "r4", kind: "page", source: "docs", title: "Sign-in and session model", snippet: "Sessions are 30-day rolling tokens. Signing in from a new device revokes the oldest session past the cap.", author: "Dana Osei", date: "2026-07-11", tags: ["customer-facing"], status: "verified" },
   { id: "r5", kind: "thread", source: "slack", title: "Decision chunk: deprecate the v1 export API", snippet: "v1 export is superseded by the streaming endpoint; we'll keep it read-only for one quarter, then remove it.", author: "#product", date: "2026-07-08", tags: [], status: "stale", messageCount: 14, participantCount: 4 },
   { id: "r6", kind: "pr", source: "github", title: "fix: correct freshness rollup for archived sources", snippet: "Archived sources were dragging the fresh-% down; exclude them from the denominator in the rollup job.", author: "Priya Nair", date: "2026-06-30", tags: [], status: "stale" },
-  { id: "r7", kind: "page", source: "notion", title: "Evidence policy — how tags drive ranking", snippet: "Canonical outranks verified; needs-review is excluded from evidence entirely until a person clears it.", author: "Dana Osei", date: "2026-07-02", tags: ["canonical"], status: "canonical" },
+  { id: "r7", kind: "page", source: "notion", title: "Evidence policy: how tags drive ranking", snippet: "Canonical outranks verified; needs-review is excluded from evidence entirely until a person clears it.", author: "Dana Osei", date: "2026-07-02", tags: ["canonical"], status: "canonical" },
 ];
 
 const MANY: Result[] = [
@@ -116,7 +116,7 @@ const STRESS_DOC: Doc = {
   tags: MANY_TAGS,
   facts: [
     { text: UNBREAKABLE },
-    { text: `${MIXED_SCRIPT} — ${LONG_URL}` },
+    { text: `${MIXED_SCRIPT}, ${LONG_URL}` },
     { text: LONG_WORD },
   ],
   related: [
@@ -215,18 +215,22 @@ function KnowledgePage({ state = "default", mobile = false }: PageProps) {
         <SkeletonPage variant="detail" />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-        <PageHeader eyebrow="Knowledge" title="Search the knowledge base" />
+        <PageHeader
+          eyebrow="Knowledge"
+          title="Search the knowledge base"
+          description="Every connected source in one index: filter, read the match in context, and inspect the document beside it."
+        />
         <div
           className={
             mobile
               ? "mt-6 space-y-4"
-              : "mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"
+              : "mt-6 grid gap-5 grid-cols-[minmax(0,1fr)_360px]"
           }
         >
           <div className="min-w-0">
             <Feed state={state} />
           </div>
-          <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+          <div className={mobile ? "min-w-0" : "min-w-0 sticky top-6 self-start"}>
             <Inspector state={state} />
           </div>
         </div>

@@ -12,7 +12,7 @@ export type ComposerProps = {
   disabled?: boolean;
 };
 
-/* Composer — the input row. A single auto-growing textarea plus a send
+/* Composer: the input row. A single auto-growing textarea plus a send
    affordance, framed as one bordered field (the source's pill composer).
    Enter sends; Shift+Enter inserts a newline. While streaming, the send
    button swaps for a danger-tone Stop. */
@@ -47,7 +47,7 @@ export function Composer({
   }
 
   return (
-    <div className="flex items-end gap-2 mx-3 pl-3 pr-2 py-1.5 rounded-md border border-ink/15 bg-flysch focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
+    <div className="flex items-end gap-2 mx-3.5 mb-1 pl-2.5 pr-2 py-1.5 rounded-md border border-ink/15 bg-flysch focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
       <textarea
         ref={ref}
         rows={1}
@@ -60,7 +60,9 @@ export function Composer({
         placeholder={placeholder}
         aria-label="Message the agent"
         disabled={disabled}
-        className="flex-1 min-w-0 resize-none self-center max-h-[132px] py-1 bg-transparent border-none outline-none text-[13.5px] leading-snug text-ink placeholder:text-ink/40 disabled:opacity-50"
+        /* Disabled stays legible: opacity-100 plus the explicit disabled
+           palette, never a washed-out ghost (CONVENTIONS.md §6). */
+        className="flex-1 min-w-0 resize-none self-center max-h-[132px] py-1 bg-transparent border-none outline-none text-[13.5px] leading-snug text-ink placeholder:text-ink/60 disabled:opacity-100 disabled:cursor-not-allowed disabled:text-ink/60"
       />
       {isStreaming ? (
         <Button compact variant="danger" onClick={onStop} className="mb-0.5">

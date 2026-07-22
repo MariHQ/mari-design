@@ -29,7 +29,7 @@ export function Dialog({ open, onOpenChange, title, description, footer, width =
               <RD.Title className="text-[16px] font-semibold text-ink">{title}</RD.Title>
               {description && <RD.Description className="text-[13px] text-ink/60 mt-1">{description}</RD.Description>}
             </div>
-            <RD.Close aria-label="Close" className={`grid place-items-center w-7 h-7 rounded-[4px] text-ink/50 hover:bg-flysch hover:text-ink shrink-0 ${focusRing}`}>
+            <RD.Close aria-label="Close" className={`grid place-items-center w-7 h-7 rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink shrink-0 ${focusRing}`}>
               <X size={15} />
             </RD.Close>
           </header>

@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
-import { ArrowDownAZ, ArrowUpAZ, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
+import { allOptionLabel } from "./DataTable";
 
 const controlBox =
   "h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper text-[12.5px] text-ink/75 outline-none focus:border-biscay-2 focus:ring-1 focus:ring-biscay-2/40";
@@ -8,6 +9,8 @@ const controlBox =
 export type ToolbarFacet = {
   /** Human label used for the "All …" option and the active-filter summary. */
   label: string;
+  /** Override the sentence-case "All …" option copy. */
+  allLabel?: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
@@ -57,14 +60,14 @@ export function TableToolbar({
         <div className="flex flex-wrap items-center gap-2 ml-auto">
           {search && (
             <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
-              <Search size={13} className="text-ink/50" />
-              <input value={search.value} onChange={(e) => search.onChange(e.target.value)} placeholder={searchPlaceholder} className="w-[130px] sm:w-[170px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/45 outline-none" />
+              <Search size={13} className="text-ink/65" />
+              <input value={search.value} onChange={(e) => search.onChange(e.target.value)} placeholder={searchPlaceholder} className="w-[130px] sm:w-[170px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
             </div>
           )}
 
           {facets.map((f) => (
-            <select key={f.label} aria-label={f.label} value={f.value} onChange={(e) => f.onChange(e.target.value)} className={controlBox}>
-              <option value="">All {f.label}</option>
+            <select key={f.label} aria-label={f.allLabel ?? allOptionLabel(f.label)} value={f.value} onChange={(e) => f.onChange(e.target.value)} className={controlBox}>
+              <option value="">{f.allLabel ?? allOptionLabel(f.label)}</option>
               {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           ))}
@@ -80,7 +83,7 @@ export function TableToolbar({
                 onClick={() => sort.onDirChange(sort.dir === "asc" ? "desc" : "asc")}
                 className={`grid place-items-center w-8 h-8 rounded-[4px] border border-ink/20 text-ink/70 hover:bg-flysch ${focusRing}`}
               >
-                {sort.dir === "asc" ? <ArrowUpAZ size={14} /> : <ArrowDownAZ size={14} />}
+                {sort.dir === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
               </button>
             </div>
           )}
@@ -90,7 +93,7 @@ export function TableToolbar({
       </div>
 
       {onClearAll && hasActive && (
-        <div className="flex flex-wrap items-center gap-1.5 font-term text-[11px] text-ink/55">
+        <div className="flex flex-wrap items-center gap-1.5 font-term text-[11px] text-ink/65">
           <span className="uppercase tracking-[0.06em]">Filters</span>
           {search?.value && (
             <button type="button" onClick={() => search.onChange("")} className={`inline-flex items-center gap-1 rounded-[3px] border border-ink/15 bg-flysch px-1.5 py-0.5 text-ink/70 hover:border-ink/35 ${focusRing}`}>

@@ -167,7 +167,7 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
                 <div className="flex flex-col items-center gap-3 text-center">
                   <Spinner size="md" label="Scanning" />
                   <div className="text-[13px] text-ink/70">Scanning {[...picked].join(", ")}…</div>
-                  <div className="font-term text-[11.5px] text-ink/50">Clustering threads · extracting question/answer pairs</div>
+                  <div className="font-term text-[11.5px] text-ink/65">Clustering threads · extracting question/answer pairs</div>
                 </div>
               ) : scanEmpty ? (
                 <EmptyState title="Nothing new found" action={<Button compact onClick={scan}>Scan again</Button>}>No fresh question candidates in the selected sources.</EmptyState>
@@ -200,7 +200,7 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
                         </>
                       ) : (
                         <>
-                          <span className="text-[12.5px] text-ink/55">Skipped</span>
+                          <span className="text-[12.5px] text-ink/65">Skipped</span>
                           <span className="flex-1" />
                           <Button variant="success" compact onClick={() => setAccepted(i, true)}>Accept</Button>
                         </>
@@ -226,7 +226,7 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
                       : c.status === "saving" ? <Spinner size="sm" />
                       : <Circle size={14} className="text-ink/30 shrink-0" />}
                     <span className="min-w-0 flex-1 truncate">{c.question}</span>
-                    <span className="font-term text-[11px] text-ink/50 shrink-0">{c.status === "done" ? "draft saved" : c.status === "saving" ? "saving…" : "queued"}</span>
+                    <span className="font-term text-[11px] text-ink/65 shrink-0">{c.status === "done" ? "draft saved" : c.status === "saving" ? "saving…" : "queued"}</span>
                   </li>
                 ))}
               </ul>

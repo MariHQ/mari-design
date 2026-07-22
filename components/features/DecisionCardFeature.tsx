@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Sparkles, Layers } from "lucide-react";
 import { DecisionCard as DecisionCardUI, type DecisionStatus } from "../data-display/DecisionCard";
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
+import { Chip } from "../data-display/Chip";
+import { EmptyState } from "../data-display/EmptyState";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
@@ -33,15 +35,28 @@ type Decision = {
   provider: string;
   owners: string[];
   decidedOn?: string;
+  /** The decision this one was set aside for. */
+  ignoredFor?: string;
+  /** @deprecated Use `ignoredFor`. Kept so existing pages keep compiling. */
   supersededBy?: string;
   impact: ImpactState;
 };
 
+/* The ledger calls setting a decision aside "Ignored", never "superseded".
+   These labels drive the facet chips so the copy and the cards agree. */
+type Facet = "all" | "proposed" | "ratified" | "ignored";
+const FACETS: { value: Facet; label: string }[] = [
+  { value: "all", label: "All decisions" },
+  { value: "proposed", label: "Proposed" },
+  { value: "ratified", label: "Ratified" },
+  { value: "ignored", label: "Ignored" },
+];
+
 const NO_IMPACT: ImpactState = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
 
 const IMPACT_DOCS: ImpactDoc[] = [
-  { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; must move to short-lived JWTs." },
-  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft — revisit under the new scheme." },
+  { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; it must move to short-lived JWTs." },
+  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft, so revisit it under the new scheme." },
   { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
 ];
 
@@ -82,12 +97,12 @@ const DEMO: Decision[] = [
   {
     id: 4,
     statement: "Use REST for the public API surface",
-    status: "superseded",
+    status: "ignored",
     source: "Founders memo",
     provider: "docs",
     owners: ["Sam Rowe"],
     decidedOn: "2025-11-14",
-    supersededBy: "Expose a typed GraphQL gateway in front of the internal services",
+    ignoredFor: "Expose a typed GraphQL gateway in front of the internal services",
     impact: { ...NO_IMPACT },
   },
 ];
@@ -102,6 +117,16 @@ export type DecisionCardFeatureProps = {
 export function DecisionCardFeature({ decisions = DEMO, loading = false, className = "" }: DecisionCardFeatureProps) {
   const [items, setItems] = useState<Decision[]>(decisions);
   const [ratifying, setRatifying] = useState<number | null>(null);
+  const [filter, setFilter] = useState<Facet>("all");
+
+  const resolved = (d: Decision) => (d.status === "superseded" ? "ignored" : d.status);
+  const counts: Record<Facet, number> = {
+    all: items.length,
+    proposed: items.filter((d) => resolved(d) === "proposed").length,
+    ratified: items.filter((d) => resolved(d) === "ratified").length,
+    ignored: items.filter((d) => resolved(d) === "ignored").length,
+  };
+  const shown = filter === "all" ? items : items.filter((d) => resolved(d) === filter);
 
   const patch = (id: number, next: Partial<Decision>) =>
     setItems((cur) => cur.map((d) => (d.id === id ? { ...d, ...next } : d)));
@@ -149,12 +174,30 @@ export function DecisionCardFeature({ decisions = DEMO, loading = false, classNa
     <div className={`max-w-[720px] ${className}`.trim()}>
       <div className="mb-4">
         <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
-        <p className="mt-0.5 text-[13px] text-ink/60">
-          Proposals awaiting sign-off, ratified decisions, and their downstream impact.
+        <p className="mt-0.5 text-[13px] text-ink/70">
+          Proposals awaiting sign-off, ratified decisions, the ones the team set aside, and their downstream impact.
         </p>
+        {/* Facet counts read from the live ledger, so the labels and the
+            numbers can never drift apart. The old copy still said
+            "superseded" while the cards already rendered "Ignored". */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {FACETS.map((f) => (
+            <Chip
+              key={f.value}
+              label={`${f.label} ${counts[f.value]}`}
+              tone={f.value === filter ? "info" : "neutral"}
+              selected={f.value === filter}
+              onClick={() => setFilter(f.value)}
+            />
+          ))}
+        </div>
       </div>
 
-      {items.map((d, i) => {
+      {shown.length === 0 && (
+        <EmptyState title="Nothing in this filter">No decisions match the {FACETS.find((f) => f.value === filter)?.label.toLowerCase()} filter yet.</EmptyState>
+      )}
+
+      {shown.map((d, i) => {
         const im = d.impact;
         const impactStrip =
           d.status !== "ratified" ? undefined : im.loading ? (
@@ -205,12 +248,12 @@ export function DecisionCardFeature({ decisions = DEMO, loading = false, classNa
             sourceIcon={<SourceMark provider={d.provider} size={13} />}
             owners={d.owners}
             decidedOn={d.decidedOn}
-            supersededByStatement={d.supersededBy}
+            ignoredForStatement={d.ignoredFor ?? d.supersededBy}
             ratifying={ratifying === d.id}
             onRatify={() => ratify(d.id)}
-            onSupersede={() => patch(d.id, { status: "superseded", supersededBy: "(pending replacement)" })}
+            onIgnore={() => patch(d.id, { status: "ignored", ignoredFor: "(pending replacement)" })}
             impact={impactStrip}
-            spine={i < items.length - 1}
+            spine={i < shown.length - 1}
           />
         );
       })}

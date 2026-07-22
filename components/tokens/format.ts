@@ -1,7 +1,6 @@
 /* Canonical date formatting for the console.
  *
- * - fmtDate:      "Jul 16"           — same-year dates omit the year.
- *                 "Jul 16, 2025"     — other years include it.
+ * - fmtDate:      "Jul 16, 2026"     — the year is ALWAYS shown.
  * - fmtDateTime:  "Jul 16, 2:17 PM"  — timestamps belong in feeds/activity
  *                 rows only; everywhere else use fmtDate.
  * - fmtAgo:       "5m ago", "3h ago" — status-chip relative time, falls
@@ -23,11 +22,12 @@ function toDate(input: DateInput): Date {
   return new Date(input);
 }
 
-export function fmtDate(input: DateInput, now: Date = new Date()): string {
+export function fmtDate(input: DateInput, _now: Date = new Date()): string {
   const d = toDate(input);
   if (Number.isNaN(d.getTime())) return String(input);
-  const base = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-  return d.getFullYear() === now.getFullYear() ? base : `${base}, ${d.getFullYear()}`;
+  // Always carry the year: an undated "Jul 16" is ambiguous once content spans
+  // more than one year, and audit/lineage views routinely do.
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
 function fmtTime(input: DateInput): string {

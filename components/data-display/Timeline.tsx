@@ -75,10 +75,14 @@ export function Timeline({ items, className = "", loading = false }: TimelinePro
             </span>
             <div className="min-w-0 flex-1 -mt-px">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[13.5px] font-medium text-ink break-words">{it.title}</span>
-                {it.time && <span className="shrink-0 font-term text-[11px] text-ink/50 whitespace-nowrap">{it.time}</span>}
+                {/* min-w-0: without it the title is a flex item at its
+                    intrinsic width, so break-words never fires and a long
+                    token runs past the rail. */}
+                <span className="min-w-0 text-[13.5px] font-medium text-ink break-words">{it.title}</span>
+                {/* text-ink/65 is the meta-text contrast floor (§6). */}
+                {it.time && <span className="shrink-0 font-term text-[11px] text-ink/65 whitespace-nowrap">{it.time}</span>}
               </div>
-              {it.description && <div className="mt-0.5 text-[13px] text-ink/65 break-words">{it.description}</div>}
+              {it.description && <div className="mt-0.5 text-[13px] text-ink/70 break-words">{it.description}</div>}
             </div>
           </li>
         );

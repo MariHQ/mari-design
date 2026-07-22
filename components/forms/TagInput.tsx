@@ -35,7 +35,7 @@ export function TagInput({
         onKeyDown={onKeyDown}
         onBlur={commit}
         placeholder={value.length === 0 ? placeholder : ""}
-        className="flex-1 min-w-[80px] bg-transparent text-[13px] text-ink placeholder:text-ink/40 outline-none py-0.5"
+        className="flex-1 min-w-[80px] bg-transparent text-[13px] text-ink placeholder:text-ink/65 outline-none py-0.5"
       />
     </div>
   );

@@ -32,7 +32,7 @@ export type ChipProps = {
    remove (×) affordance. Renders a <button> when onClick is given, a
    <span> otherwise. */
 export function Chip({
-  label, tone = "neutral", dot = false, pulse = false, caps = false, icon,
+  label, tone = "neutral", dot = false, pulse = false, caps = true, icon,
   selected = false, onClick, onRemove, removeLabel = "Remove", className = "",
 }: ChipProps) {
   const toneKey = resolveToneKey(tone) as ChipTone;
@@ -40,10 +40,12 @@ export function Chip({
   const dotColor = DOT[toneKey];
 
   const shared = [
-    "inline-flex items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-term text-[11px] font-medium whitespace-nowrap transition-colors",
-    caps && "uppercase tracking-[0.04em]",
+    "inline-flex max-w-full items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-term text-[11px] font-medium whitespace-nowrap transition-colors",
+    caps && "uppercase tracking-[0.06em]",
     toneClasses,
-    selected && "ring-1 ring-biscay-2/60",
+    // Selection reads on ALL FOUR sides — a ring alone sat behind the chip's
+    // own border on some edges and looked like a partial underline.
+    selected && "border-biscay-2 ring-1 ring-biscay-2 bg-biscay-2/[0.10] text-biscay-2",
     className,
   ].filter(Boolean).join(" ");
 
@@ -56,7 +58,7 @@ export function Chip({
         </span>
       )}
       {icon}
-      <span>{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {onRemove && (
         <button
           type="button"
@@ -80,11 +82,22 @@ export function Chip({
   return <span className={shared}>{body}</span>;
 }
 
-/* ── StatusChip: named lifecycle states, mapped onto the 5-tone scale ──── */
-export type ChipStatus = "verified" | "canonical" | "approved" | "stale" | "draft" | "retired" | "running" | "failed" | "needs-review";
+/* ── StatusChip: named lifecycle states, mapped onto the 5-tone scale ────
+   This is the single source of truth for every status pill in the console.
+   If a page needs a status word, add it here rather than hand-rolling a span. */
+export type ChipStatus =
+  | "verified" | "canonical" | "approved" | "stale" | "draft" | "retired"
+  | "running" | "failed" | "needs-review"
+  // evidence / fact-check
+  | "supported" | "contradiction" | "unsupported" | "unverified"
+  // severity-ish document checks
+  | "error" | "warn" | "advisory"
+  // sync + run lifecycle
+  | "healthy" | "syncing" | "paused" | "queued" | "succeeded" | "skipped"
+  | "connected" | "disconnected" | "dry";
 
 const STATUS: Record<ChipStatus, { tone: ChipTone; label: string; dot?: boolean; pulse?: boolean }> = {
-  verified: { tone: "info", label: "Verified", dot: true },
+  verified: { tone: "ok", label: "Verified", dot: true },
   canonical: { tone: "ok", label: "Canonical", dot: true },
   approved: { tone: "ok", label: "Approved", dot: true },
   stale: { tone: "attention", label: "Stale", dot: true },
@@ -93,11 +106,33 @@ const STATUS: Record<ChipStatus, { tone: ChipTone; label: string; dot?: boolean;
   running: { tone: "ok", label: "Running", dot: true, pulse: true },
   failed: { tone: "blocked", label: "Failed", dot: true },
   "needs-review": { tone: "attention", label: "Needs review", dot: true },
+  supported: { tone: "ok", label: "Supported", dot: true },
+  contradiction: { tone: "blocked", label: "Contradiction", dot: true },
+  unsupported: { tone: "attention", label: "Unsupported", dot: true },
+  unverified: { tone: "neutral", label: "Unverified" },
+  error: { tone: "blocked", label: "Error", dot: true },
+  warn: { tone: "attention", label: "Warn", dot: true },
+  advisory: { tone: "info", label: "Advisory", dot: true },
+  healthy: { tone: "ok", label: "Healthy", dot: true },
+  syncing: { tone: "attention", label: "Syncing", dot: true, pulse: true },
+  paused: { tone: "neutral", label: "Paused" },
+  queued: { tone: "neutral", label: "Queued" },
+  succeeded: { tone: "ok", label: "Succeeded", dot: true },
+  skipped: { tone: "neutral", label: "Skipped" },
+  connected: { tone: "ok", label: "Connected", dot: true },
+  disconnected: { tone: "blocked", label: "Disconnected", dot: true },
+  dry: { tone: "info", label: "Dry run" },
 };
 
 export function StatusChip({ status, className }: { status: ChipStatus; className?: string }) {
   const s = STATUS[status];
   return <Chip label={s.label} tone={s.tone} dot={s.dot} pulse={s.pulse} className={className} />;
+}
+
+/* Dry-run marker. Its own component so every workflow surface (run panel, run
+   history, guardrails table) renders the identical chip. */
+export function DryChip({ className }: { className?: string }) {
+  return <StatusChip status="dry" className={className} />;
 }
 
 /* ── SeverityChip ────────────────────────────────────────────────────── */

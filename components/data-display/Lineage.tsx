@@ -62,12 +62,14 @@ function NodeCard({ node, focus = false, onSelect }: { node: LineageNode; focus?
       style={{ height: NODE_H }}
       className={`w-40 shrink-0 flex items-center gap-2 rounded-[5px] border px-3 text-left transition-colors ${surface} ${interactive}`.trim()}
     >
+      {/* A BAR, not a dot: a circle reads as "choose me" (CONVENTIONS §6), and
+          the tone is echoed by the card border so color is not the only channel. */}
       {node.icon
-        ? <span className="shrink-0 text-ink/50" aria-hidden>{node.icon}</span>
-        : <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${focus ? "bg-biscay-2" : DOT[tone]}`} aria-hidden />}
+        ? <span className="shrink-0 text-ink/70" aria-hidden>{node.icon}</span>
+        : <span className={`shrink-0 w-[3px] h-6 rounded-[1px] ${focus ? "bg-biscay-2" : DOT[tone]}`} aria-hidden />}
       <span className="min-w-0">
         <span className="block text-[12.5px] font-medium text-ink truncate">{node.label}</span>
-        {node.sublabel && <span className="block font-term text-[10.5px] text-ink/50 truncate">{node.sublabel}</span>}
+        {node.sublabel && <span className="block font-term text-[10.5px] text-ink/65 truncate">{node.sublabel}</span>}
       </span>
     </Tag>
   );

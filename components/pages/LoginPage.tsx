@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Mail, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Mail, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Logo, Brandmark } from "../shell/Logo";
 import { Card } from "../layout/Card";
@@ -11,7 +11,9 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { GithubMark } from "../icons/marks";
+import { FieldError } from "../feedback/ErrorMessage";
 import { focusRing } from "../tokens/focusRing";
+import { btnDisabled } from "../actions/buttons";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD,
   HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
@@ -52,10 +54,14 @@ function GoogleMark({ size = 17 }: { size?: number }) {
 }
 
 const DIVIDER =
-  "flex items-center gap-3 text-center font-term text-[11px] uppercase tracking-[0.08em] text-ink/40 before:h-px before:flex-1 before:bg-ink/12 after:h-px after:flex-1 after:bg-ink/12";
+  "flex items-center gap-3 text-center font-term text-[11px] uppercase tracking-[0.08em] text-ink/65 before:h-px before:flex-1 before:bg-ink/12 after:h-px after:flex-1 after:bg-ink/12";
 
+/* Third-party sign-in. SSO sits here rather than on the credential form: it is
+   an alternative identity provider, not a second password field, and giving it
+   its own full-width row keeps the enterprise path obvious without crowding
+   the two consumer providers. */
 function OAuthRow({ busy }: { busy?: string }) {
-  const base = `inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:opacity-45 disabled:pointer-events-none ${focusRing}`;
+  const base = `inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:pointer-events-none ${btnDisabled} ${focusRing}`;
   return (
     <>
       <div className={`my-3.5 ${DIVIDER}`}>or continue with</div>
@@ -67,13 +73,19 @@ function OAuthRow({ busy }: { busy?: string }) {
           {busy === "google" ? <Spinner size="sm" /> : <GoogleMark />} Google
         </button>
       </div>
+      <button type="button" className={`mt-2 w-full ${base}`} disabled={busy != null}>
+        {busy === "sso" ? <Spinner size="sm" /> : <KeyRound size={16} />} Single sign-on (SAML)
+      </button>
+      <p className="mt-1.5 text-center text-[11.5px] text-ink/65">
+        Workspace admins can require SSO for everyone on your domain.
+      </p>
     </>
   );
 }
 
 function ModeToggle({ register }: { register?: boolean }) {
   return (
-    <p className="mt-4 text-center text-[12.5px] text-ink/60">
+    <p className="mt-4 text-center text-[12.5px] text-ink/70">
       {register ? (
         <>Already have an account? <span className="font-medium text-biscay-2">Sign in</span></>
       ) : (
@@ -99,9 +111,7 @@ function CredForm({
       <Field label="Password">
         <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" defaultValue="••••••••••" />
       </Field>
-      {error && (
-        <p role="alert" className="text-[12.5px] text-espelette">Invalid email or password.</p>
-      )}
+      {error && <FieldError id="auth.invalid" />}
       <Button type="submit" variant="primary" block disabled={busy}>
         {busy ? "One moment…" : register ? "Create account" : "Sign in"}
       </Button>
@@ -124,7 +134,7 @@ function NoticeCard({ icon, title, children, footer }: {
         <span className="grid h-12 w-12 place-items-center rounded-full border border-ink/15 text-ink/70">{icon}</span>
         <div>
           <div className="text-[16px] font-semibold text-ink">{title}</div>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink/60">{children}</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">{children}</p>
         </div>
         {footer}
       </div>
@@ -137,15 +147,15 @@ function Body({ state }: { state: string }) {
     case "oauth-github":
       return (
         <NoticeCard icon={<GithubMark size={22} />} title="Redirecting to GitHub…"
-          footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/55"><Spinner size="sm" /> Waiting for authorization</span>}>
-          You’re being sent to GitHub to authorize Mari Cloud. This window will
+          footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/65"><Spinner size="sm" /> Waiting for authorization</span>}>
+          You’re being sent to GitHub to authorize Mari. This window will
           return here once you approve access.
         </NoticeCard>
       );
     case "oauth-google":
       return (
         <NoticeCard icon={<GoogleMark size={22} />} title="Redirecting to Google…"
-          footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/55"><Spinner size="sm" /> Waiting for authorization</span>}>
+          footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/65"><Spinner size="sm" /> Waiting for authorization</span>}>
           You’re being sent to Google to choose an account. This window will
           return here once you approve access.
         </NoticeCard>
@@ -156,7 +166,7 @@ function Body({ state }: { state: string }) {
           footer={
             <div className="flex flex-col items-center gap-2">
               <Button variant="default"><ArrowLeft size={14} /> Back to sign in</Button>
-              <span className="text-[12px] text-ink/50">Didn’t get it? Resend in 0:42</span>
+              <span className="text-[12px] text-ink/65">Didn’t get it? Resend in 0:42</span>
             </div>
           }>
           We emailed a one-time sign-in link to <b className="text-ink/80">maya@team.com</b>.
@@ -169,7 +179,7 @@ function Body({ state }: { state: string }) {
           <div className="flex flex-col items-center gap-2 pb-3 pt-1 text-center">
             <span className="grid h-12 w-12 place-items-center rounded-full border border-ink/15 text-biscay-2"><ShieldCheck size={22} /></span>
             <div className="text-[16px] font-semibold text-ink">Two-factor authentication</div>
-            <p className="text-[13px] text-ink/60">Enter the 6-digit code from your authenticator app.</p>
+            <p className="text-[13px] text-ink/70">Enter the 6-digit code from your authenticator app.</p>
           </div>
           <div className="my-3 flex justify-center gap-2" aria-label="Verification code">
             {["4", "1", "9", "", "", ""].map((d, i) => (
@@ -178,7 +188,7 @@ function Body({ state }: { state: string }) {
             ))}
           </div>
           <Button variant="primary" block>Verify &amp; continue</Button>
-          <p className="mt-3 text-center text-[12.5px] text-ink/55">
+          <p className="mt-3 text-center text-[12.5px] text-ink/65">
             Lost your device? <span className="font-medium text-biscay-2">Use a recovery code</span>
           </p>
         </Card>
@@ -214,13 +224,13 @@ function Body({ state }: { state: string }) {
               <Input className="w-full" type="password" defaultValue={LONG_WORD} />
             </Field>
             <p role="alert" className="break-words text-[12.5px] leading-relaxed text-espelette">
-              {MIXED_SCRIPT} — {UNBREAKABLE}
+              {MIXED_SCRIPT}, {UNBREAKABLE}
             </p>
             <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
               {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
             </div>
             <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-            <p className="font-term text-[11px] text-ink/50">{HUGE_NUMBER_STR} sign-ins</p>
+            <p className="font-term text-[11px] text-ink/65">{HUGE_NUMBER_STR} sign-ins</p>
             <Button type="submit" variant="primary" block>{LONG_WORD}</Button>
           </form>
         </Card>
@@ -252,7 +262,7 @@ function heading(state: string): { title: string; sub: string } {
   if (state === "2fa") return { title: "Verify it’s you", sub: "One more step to keep your workspace secure." };
   if (state === "overflow") return { title: LONG_NAME, sub: LONG_PARAGRAPH };
   if (state === "stress") return { title: MIXED_SCRIPT, sub: UNBREAKABLE };
-  return { title: "Mari Cloud", sub: "Your product knowledge, curated." };
+  return { title: "Mari", sub: "Your product knowledge, curated." };
 }
 
 function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
@@ -273,7 +283,7 @@ function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
         <div className="mb-8 flex flex-col items-center text-center">
           <span className="text-biscay"><Logo size={34} /></span>
           <h1 className="mt-4 font-display text-[26px] font-bold tracking-[-0.01em] text-ink">{title}</h1>
-          <p className="mt-1 text-[13.5px] text-ink/60">{sub}</p>
+          <p className="mt-1 text-[13.5px] text-ink/70">{sub}</p>
         </div>
         <div className="w-full">
           <Body state={state} />

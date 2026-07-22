@@ -28,15 +28,15 @@ import {
    (open / saving), superseded + filtered ledgers, and the load/error/empty edges. */
 
 const STATES = [
-  { id: "default", label: "Default — ledger timeline" },
+  { id: "default", label: "Default: ledger timeline" },
   { id: "awaiting", label: "Awaiting sign-off" },
-  { id: "ratifying", label: "Ratify — signing off" },
-  { id: "ratified", label: "Ratify — ratified" },
-  { id: "impact-loading", label: "Run impact — tracing" },
-  { id: "impact-docs", label: "Run impact — docs affected" },
-  { id: "impact-collapsed", label: "Run impact — collapsed" },
-  { id: "composer", label: "Capture decision — open" },
-  { id: "composer-saving", label: "Capture decision — saving" },
+  { id: "ratifying", label: "Ratify: signing off" },
+  { id: "ratified", label: "Ratify: ratified" },
+  { id: "impact-loading", label: "Run impact: tracing" },
+  { id: "impact-docs", label: "Run impact: docs affected" },
+  { id: "impact-collapsed", label: "Run impact: collapsed" },
+  { id: "composer", label: "Capture decision: open" },
+  { id: "composer-saving", label: "Capture decision: saving" },
   { id: "superseded", label: "Superseded decision" },
   { id: "filtered", label: "Filtered · Ratified" },
   { id: "empty", label: "No decisions yet" },
@@ -60,7 +60,7 @@ const NO_IMPACT: Impact = { open: false, loading: false, docs: null, tasksCreate
 
 const DOCS: ImpactDoc[] = [
   { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; must move to short-lived JWTs." },
-  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft — revisit under the new scheme." },
+  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft: revisit under the new scheme." },
   { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
 ];
 
@@ -118,21 +118,31 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
   );
 }
 
-function StressLedger({ mode }: { mode: "overflow" | "stress" }) {
+/** Main column + rail. One plumb line for every ledger view. */
+function Shell({ mobile, filter = "all", children }: { mobile: boolean; filter?: string; children: React.ReactNode }) {
   return (
     <div className="mt-6 flex items-start gap-6">
       <div className="min-w-0 flex-1 space-y-4">
-        <StressExtras mode={mode} />
-        <DecisionCardFeature decisions={mode === "stress" ? STRESS_DECISIONS : OVERFLOW_DECISIONS} />
+        <LedgerFilter filter={filter} />
+        {children}
       </div>
-      <Rail filter="all" />
+      {!mobile && <Rail />}
     </div>
   );
 }
 
-function Rail({ filter = "all" }: { filter?: string }) {
+function StressLedger({ mode, mobile }: { mode: "overflow" | "stress"; mobile: boolean }) {
   return (
-    <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
+    <Shell mobile={mobile}>
+      <StressExtras mode={mode} />
+      <DecisionCardFeature decisions={mode === "stress" ? STRESS_DECISIONS : OVERFLOW_DECISIONS} />
+    </Shell>
+  );
+}
+
+function Rail() {
+  return (
+    <aside className="w-80 shrink-0 space-y-4">
       <Card variant="plain" title="Awaiting sign-off">
         <ul className="space-y-2 text-[12.5px]">
           <li className="rounded-[5px] border border-ink/12 p-2.5">
@@ -152,11 +162,14 @@ function Rail({ filter = "all" }: { filter?: string }) {
           keeps the old record, struck through.
         </p>
       </Card>
-      <Card variant="plain" title="Filter the ledger">
-        <Tabs ariaLabel="Filter the ledger" options={FILTERS} value={filter} onChange={() => {}} variant="underline" />
-      </Card>
     </aside>
   );
+}
+
+/** The ledger filter lives in the main column, above the timeline: the same
+    place Facts puts its status filter, and wide enough that no tab clips. */
+function LedgerFilter({ filter = "all" }: { filter?: string }) {
+  return <Tabs ariaLabel="Filter the ledger" options={FILTERS} value={filter} onChange={() => {}} />;
 }
 
 function Composer({ saving = false }: { saving?: boolean }) {
@@ -164,39 +177,38 @@ function Composer({ saving = false }: { saving?: boolean }) {
     <Card variant="default" title="Capture decision" className="mt-5">
       <div className="space-y-2.5">
         <input
-          className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/40"
-          placeholder="Statement — the decision, in one sentence"
+          className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
+          placeholder="Statement: the decision, in one sentence"
           defaultValue={saving ? "Adopt trunk-based development for the web app" : ""}
         />
         <textarea
-          className="min-h-[72px] w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/40"
-          placeholder="Context — why, and what it closes off"
+          className="min-h-[72px] w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
+          placeholder="Context: why, and what it closes off"
           defaultValue={saving ? "Long-lived feature branches keep drifting; short-lived branches behind flags keep main releasable." : ""}
         />
         <input
-          className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/40"
-          placeholder="Source — e.g. slack · #eng-security"
+          className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
+          placeholder="Source: e.g. slack · #eng-security"
           defaultValue={saving ? "slack · #eng-web" : ""}
         />
-        <div className="flex justify-end gap-2">
-          <Button variant="default" disabled={saving}>Cancel</Button>
+        <div className="flex items-center gap-2">
           <Button variant="primary" disabled={saving}>{saving ? "Capturing…" : "Capture"}</Button>
+          <Button variant="default" disabled={saving}>Cancel</Button>
         </div>
       </div>
     </Card>
   );
 }
 
-function Ledger({ decisions, filter = "all" }: { decisions?: Decisions; filter?: string }) {
+function Ledger({ decisions, filter = "all", mobile }: { decisions?: Decisions; filter?: string; mobile: boolean }) {
   return (
-    <div className="mt-6 flex items-start gap-6">
-      <div className="min-w-0 flex-1"><DecisionCardFeature decisions={decisions} /></div>
-      <Rail filter={filter} />
-    </div>
+    <Shell mobile={mobile} filter={filter}>
+      <DecisionCardFeature decisions={decisions} />
+    </Shell>
   );
 }
 
-function Body({ state }: { state: string }) {
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -213,24 +225,24 @@ function Body({ state }: { state: string }) {
       </div>
     );
   }
-  if (state === "composer") return (<><Composer /><Ledger /></>);
-  if (state === "composer-saving") return (<><Composer saving /><Ledger /></>);
-  if (state === "awaiting") return <Ledger decisions={AWAITING} filter="proposed" />;
-  if (state === "ratified") return <Ledger decisions={RATIFIED} />;
-  if (state === "impact-loading") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: true, loading: true })} filter="ratified" />;
-  if (state === "impact-docs") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: true, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
-  if (state === "impact-collapsed") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: false, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
-  if (state === "overflow") return <StressLedger mode="overflow" />;
-  if (state === "stress") return <StressLedger mode="stress" />;
-  if (state === "superseded") return <Ledger decisions={SUPERSEDED} filter="superseded" />;
-  if (state === "filtered") return <Ledger decisions={RATIFIED_ONLY} filter="ratified" />;
+  if (state === "composer") return (<><Composer /><Ledger mobile={mobile} /></>);
+  if (state === "composer-saving") return (<><Composer saving /><Ledger mobile={mobile} /></>);
+  if (state === "awaiting") return <Ledger decisions={AWAITING} filter="proposed" mobile={mobile} />;
+  if (state === "ratified") return <Ledger decisions={RATIFIED} mobile={mobile} />;
+  if (state === "impact-loading") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: true, loading: true })} filter="ratified" />;
+  if (state === "impact-docs") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: true, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
+  if (state === "impact-collapsed") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: false, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
+  if (state === "overflow") return <StressLedger mode="overflow" mobile={mobile} />;
+  if (state === "stress") return <StressLedger mode="stress" mobile={mobile} />;
+  if (state === "superseded") return <Ledger decisions={SUPERSEDED} filter="superseded" mobile={mobile} />;
+  if (state === "filtered") return <Ledger decisions={RATIFIED_ONLY} filter="ratified" mobile={mobile} />;
   if (state === "ratifying") {
     return (
-      <div className="mt-6 flex items-start gap-6">
-        <div className="min-w-0 flex-1">
+      <Shell mobile={mobile} filter="proposed">
+        <div>
           <div className="mb-4">
             <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
-            <p className="mt-0.5 text-[13px] text-ink/60">Proposals awaiting sign-off, ratified decisions, and their downstream impact.</p>
+            <p className="mt-0.5 text-[13px] text-ink/70">Proposals awaiting sign-off, ratified decisions, and their downstream impact.</p>
           </div>
           <div className="max-w-[720px]">
             <DecisionCard
@@ -247,11 +259,10 @@ function Body({ state }: { state: string }) {
             />
           </div>
         </div>
-        <Rail filter="proposed" />
-      </div>
+      </Shell>
     );
   }
-  return <Ledger />;
+  return <Ledger mobile={mobile} />;
 }
 
 function DecisionsPage({ state = "default", mobile = false }: PageProps) {
@@ -262,6 +273,12 @@ function DecisionsPage({ state = "default", mobile = false }: PageProps) {
       </PageFrame>
     );
   }
+  const actions = (
+    <>
+      <Button variant="link">Scan for decisions</Button>
+      <Button variant="primary">Capture decision</Button>
+    </>
+  );
   return (
     <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
@@ -269,15 +286,11 @@ function DecisionsPage({ state = "default", mobile = false }: PageProps) {
           icon={<span className="text-biscay-2"><Feather size={26} /></span>}
           eyebrow="Ledger"
           title="Decisions"
-          description="One decision, one record — ratified by the people accountable, and traceable across the corpus."
-          actions={
-            <>
-              <Button variant="link">Scan for decisions</Button>
-              <Button variant="primary">Capture decision</Button>
-            </>
-          }
+          description="One decision, one record: ratified by the people accountable, and traceable across the corpus."
+          actions={mobile ? undefined : actions}
         />
-        <Body state={state} />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        <Body state={state} mobile={mobile} />
       </div>
     </PageFrame>
   );

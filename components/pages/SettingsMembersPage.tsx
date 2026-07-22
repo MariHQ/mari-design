@@ -97,7 +97,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
     <div className="flex flex-col gap-5">
       {variant === "invite-sent" && (
         <Alert tone="ok" title="Invitation sent">
-          We emailed <span className="font-term">jordan@team.com</span> — they appear below with an amber dot until they sign in.
+          We emailed <span className="font-term">jordan@team.com</span>they appear below with an amber dot until they sign in.
         </Alert>
       )}
 
@@ -126,7 +126,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
                 const roleCell = variant === "role-change" && m.id === 2 ? (
                   <div className="relative inline-block">
                     <button className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-biscay-2 bg-paper text-[13px] text-ink">
-                      {m.role} <ChevronDown size={13} className="text-ink/50" />
+                      {m.role} <ChevronDown size={13} className="text-ink/65" />
                     </button>
                     {/* inline (non-portal) menu depiction */}
                     <div className="absolute left-0 top-[calc(100%+4px)] z-10 w-32 rounded-[6px] border border-ink/15 bg-paper p-1 shadow-md">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BookOpen, RefreshCw, Sparkles, FileText, Plus, Search, CheckCircle2, AlertTriangle } from "lucide-react";
+import { focusRing } from "../tokens/focusRing";
 import { card } from "../tokens/card";
 import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
@@ -30,13 +31,15 @@ export type WelcomeGlossaryStepProps = {
   candidates?: Candidate[];
   /** Simulate the "LLM unavailable" deterministic fallback. */
   llm?: boolean;
+  /** Open straight into a given step (used by the state gallery). */
+  defaultMode?: Mode;
   loading?: boolean;
   className?: string;
 };
 
-export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, loading = false, className = "" }: WelcomeGlossaryStepProps) {
-  const [mode, setMode] = useState<Mode>("start");
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, defaultMode = "start", loading = false, className = "" }: WelcomeGlossaryStepProps) {
+  const [mode, setMode] = useState<Mode>(defaultMode);
+  const [checked, setChecked] = useState<Set<string>>(new Set(defaultMode === "review" ? candidates.map((c) => c.term) : []));
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [addResult, setAddResult] = useState<{ ok: number; failed: number } | null>(null);
   const [addedThisSession, setAddedThisSession] = useState(0);
@@ -101,7 +104,7 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
     return (
       <div className={`${card} ${className}`.trim()}>
         <div className="flex items-center justify-center gap-2 py-14 text-[13px] text-ink/65">
-          <Spinner size="md" /> Reading your docs… (the LLM pass can take a minute)
+          <Spinner size="md" /> Reading your docs. The LLM pass can take a minute.
         </div>
       </div>
     );
@@ -130,32 +133,45 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
     }
     return (
       <div className={`${card} p-4 ${className}`.trim()}>
+        <div className="mb-3">
+          <h2 className="text-[15px] font-semibold text-ink">Fill glossary</h2>
+          <p className="mt-0.5 text-[12.5px] text-ink/70">Keep the terms worth defining. Nothing is saved until you add them.</p>
+        </div>
         {!llm && (
           <div className="mb-3 flex items-start gap-2 rounded-[4px] border border-clay/35 bg-clay/[0.07] px-3 py-2 text-[12.5px] text-clay">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span><b>LLM unavailable.</b> These came from a deterministic capitalized-phrase scan — review them extra carefully.</span>
+            <span><b>LLM unavailable.</b> These came from a deterministic capitalized-phrase scan, so review them extra carefully.</span>
           </div>
         )}
-        <div className="grid gap-1.5">
-          {candidates.map((c) => (
-            <label key={c.term} className="flex items-start gap-2.5 p-2.5 rounded-md border border-ink/12 hover:border-ink/25 cursor-pointer">
-              <input type="checkbox" className="mt-1 accent-biscay" checked={checked.has(c.term)} onChange={() => toggle(c.term)} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <b className="text-[13px] font-semibold text-ink">{c.term}</b>
-                  <Chip label={c.evidence} tone="neutral" icon={<FileText size={10} />} />
+        {/* Same shape as "Pick a style guide": control on the LEFT, a check
+            mark on the RIGHT once the row is on. */}
+        <div className="grid gap-2">
+          {candidates.map((c) => {
+            const on = checked.has(c.term);
+            return (
+              <label key={c.term}
+                className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors ${focusRing} ${
+                  on ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
+                }`}>
+                <input type="checkbox" className="mt-1 accent-biscay shrink-0" checked={on} onChange={() => toggle(c.term)} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                    <b className="min-w-0 break-all text-[13.5px] font-semibold text-ink">{c.term}</b>
+                    <Chip label={c.evidence} tone="neutral" icon={<FileText size={10} />} className="min-w-0 max-w-full [&>span]:truncate" />
+                  </span>
+                  <span className="block mt-0.5 break-words text-[12.5px] text-ink/70">{c.definition}</span>
                 </span>
-                <span className="block mt-0.5 text-[12.5px] text-ink/65">{c.definition}</span>
-              </span>
-            </label>
-          ))}
+                {on && <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-moss" />}
+              </label>
+            );
+          })}
         </div>
         <div className="mt-3 flex items-center gap-2">
           <Button variant="primary" compact disabled={checked.size === 0} onClick={addTerms}>
             <Plus size={13} /> Add {checked.size} term{checked.size === 1 ? "" : "s"}
           </Button>
           <Button compact onClick={scan}><RefreshCw size={13} /> Scan again</Button>
-          <span className="text-[11.5px] text-ink/50">Unchecked rows are discarded.</span>
+          <span className="text-[11.5px] text-ink/65">Unchecked rows are discarded.</span>
         </div>
       </div>
     );
@@ -164,23 +180,24 @@ export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, 
   // start
   return (
     <div className={`${card} p-6 text-center ${className}`.trim()}>
-      <span className="grid place-items-center mx-auto w-10 h-10 rounded-full border border-ink/15 text-ink/50 mb-3"><BookOpen size={20} /></span>
+      <span className="grid place-items-center mx-auto w-10 h-10 rounded-full border border-ink/15 text-ink/60 mb-3"><BookOpen size={20} /></span>
+      <h2 className="text-[15px] font-semibold text-ink">Fill glossary</h2>
       {addResult ? (
-        <p className="text-[13.5px] text-moss inline-flex items-center gap-1.5 justify-center">
+        <p className="mt-1 text-[13.5px] text-moss inline-flex items-center gap-1.5 justify-center">
           <CheckCircle2 size={15} /> Added {addResult.ok} term{addResult.ok === 1 ? "" : "s"} to your glossary.
         </p>
       ) : (
-        <p className="text-[13.5px] text-ink/70 max-w-[420px] mx-auto">
-          Seed your glossary from your own documents. Mari proposes term candidates grounded in real docs — you review before anything is saved.
+        <p className="mt-1 text-[13.5px] text-ink/70 max-w-[420px] mx-auto">
+          Fill your glossary from your own documents. Mari proposes term candidates grounded in real docs, and you review every one before anything is saved.
         </p>
       )}
-      <div className="mt-4">
+      <div className="mt-4 flex justify-center">
         <Button variant="primary" onClick={scan}>
           <Sparkles size={14} /> {addResult ? "Scan again" : "Scan my documents"}
         </Button>
       </div>
       {addedThisSession > 0 && (
-        <p className="mt-3 font-term text-[11px] text-ink/45">{addedThisSession} terms added this session</p>
+        <p className="mt-3 font-term text-[11px] text-ink/65">{addedThisSession} terms added this session</p>
       )}
     </div>
   );

@@ -12,6 +12,7 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Chip } from "../index";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
+import { fmtDateTime } from "../tokens/format";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
@@ -26,17 +27,17 @@ import {
    many / hide-resolved variants, the cleared run, and the load/error/empty edges. */
 
 const STATES = [
-  { id: "default", label: "Default — full findings" },
+  { id: "default", label: "Default: full findings" },
   { id: "localization", label: "Section · Localization" },
   { id: "tags", label: "Section · Tags" },
   { id: "authorship", label: "Section · Authorship" },
   { id: "coverage", label: "Section · Coverage" },
   { id: "hygiene", label: "Section · Hygiene" },
   { id: "fixed", label: "A finding fixed" },
-  { id: "fix-all", label: "Fix all — section handled" },
-  { id: "many", label: "Over threshold — many findings" },
+  { id: "fix-all", label: "Fix all: section handled" },
+  { id: "many", label: "Over threshold: many findings" },
   { id: "hide-resolved", label: "Hide-resolved · mostly handled" },
-  { id: "clear", label: "Run cleared — all clear" },
+  { id: "clear", label: "Run cleared: all clear" },
   { id: "loading", label: "Scanning" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No repo connected" },
@@ -48,8 +49,8 @@ const REPO = "acme/product-docs";
 
 const FINDINGS: AuditFinding[] = [
   { id: 1, kind: "Localization", title: "onboarding.fr.md has no source translation link", detail: "French doc exists but isn't linked to its English source.", fixAction: "link_translation", status: "open" },
-  { id: 2, kind: "Localization", title: "pricing.md changed — translations stale", detail: "3 locale copies are older than the source.", fixAction: "translation_task", status: "open" },
-  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags — won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "open" },
+  { id: 2, kind: "Localization", title: "pricing.md changed: translations stale", detail: "3 locale copies are older than the source.", fixAction: "translation_task", status: "open" },
+  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags: won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "open" },
   { id: 4, kind: "Tags", title: "billing.md missing 'customer-facing'", detail: "Suggested by content classifier.", fixAction: "apply_tag", fixPayload: { suggest: "customer-facing" }, status: "open" },
   { id: 5, kind: "Authorship", title: "Unknown author 'jsmith' on 6 docs", detail: "Git author not mapped to a team member.", fixAction: "invite_member", status: "open" },
   { id: 6, kind: "Coverage", title: "webhooks.md referenced but not indexed", detail: "Linked from 4 docs; never ingested.", fixAction: "ingest", status: "open" },
@@ -72,7 +73,7 @@ const FIXED_MIX: AuditFinding[] = FINDINGS.map((f) =>
 );
 
 const FIX_ALL: AuditFinding[] = [
-  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags — won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "fixed" },
+  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags: won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "fixed" },
   { id: 4, kind: "Tags", title: "billing.md missing 'customer-facing'", detail: "Suggested by content classifier.", fixAction: "apply_tag", fixPayload: { suggest: "customer-facing" }, status: "fixed" },
   { id: 10, kind: "Tags", title: "sdk-quickstart.md missing 'reference'", detail: "Classifier confidence 0.91.", fixAction: "apply_tag", fixPayload: { suggest: "reference" }, status: "fixed" },
 ];
@@ -119,20 +120,20 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
 
 function HistoryRail() {
   return (
-    <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
+    <aside className="w-80 shrink-0 space-y-4">
       <Card variant="plain" title="Audit history">
         <ul className="space-y-1.5 text-[12.5px]">
           <li className="rounded-[5px] border border-biscay/30 bg-flysch px-3 py-2">
             <div className="font-medium text-ink">Today · 9:04 AM</div>
-            <div className="text-ink/55">8 findings · 1 fixed</div>
+            <div className="text-ink/65">8 findings · 1 fixed</div>
           </li>
           <li className="rounded-[5px] px-3 py-2 hover:bg-flysch">
             <div className="font-medium text-ink">Jul 14</div>
-            <div className="text-ink/55">12 findings · 12 fixed</div>
+            <div className="text-ink/65">12 findings · 12 fixed</div>
           </li>
           <li className="rounded-[5px] px-3 py-2 hover:bg-flysch">
             <div className="font-medium text-ink">Jul 2</div>
-            <div className="text-ink/55">First audit · 21 findings</div>
+            <div className="text-ink/65">First audit · 21 findings</div>
           </li>
         </ul>
       </Card>
@@ -149,16 +150,17 @@ function HistoryRail() {
   );
 }
 
-function withRail(main: ReactNode) {
+function withRail(main: ReactNode, mobile: boolean) {
   return (
     <div className="mt-6 flex items-start gap-6">
       <div className="min-w-0 flex-1">{main}</div>
-      <HistoryRail />
+      {!mobile && <HistoryRail />}
     </div>
   );
 }
 
-function Body({ state }: { state: string }) {
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
+  const withRailM = (main: ReactNode) => withRail(main, mobile);
   if (state === "error") {
     return (
       <div className="mt-6">
@@ -176,32 +178,32 @@ function Body({ state }: { state: string }) {
     );
   }
   if (state === "clear") {
-    return withRail(
+    return withRailM(
       <EmptyState title="Run cleared 🎉">
         Every finding in this run is fixed or dismissed. Re-audit any time to catch new drift.
       </EmptyState>,
     );
   }
-  if (state === "localization") return withRail(<AuditFindingsChecklist repo={REPO} findings={section("Localization")} />);
-  if (state === "tags") return withRail(<AuditFindingsChecklist repo={REPO} findings={section("Tags")} />);
-  if (state === "authorship") return withRail(<AuditFindingsChecklist repo={REPO} findings={section("Authorship")} />);
-  if (state === "coverage") return withRail(<AuditFindingsChecklist repo={REPO} findings={section("Coverage")} />);
-  if (state === "hygiene") return withRail(<AuditFindingsChecklist repo={REPO} findings={section("Hygiene")} />);
-  if (state === "fixed") return withRail(<AuditFindingsChecklist repo={REPO} findings={FIXED_MIX} />);
-  if (state === "fix-all") return withRail(<AuditFindingsChecklist repo={REPO} findings={FIX_ALL} />);
-  if (state === "many") return withRail(<AuditFindingsChecklist repo={REPO} findings={MANY} />);
+  if (state === "localization") return withRailM(<AuditFindingsChecklist repo={REPO} findings={section("Localization")} />);
+  if (state === "tags") return withRailM(<AuditFindingsChecklist repo={REPO} findings={section("Tags")} />);
+  if (state === "authorship") return withRailM(<AuditFindingsChecklist repo={REPO} findings={section("Authorship")} />);
+  if (state === "coverage") return withRailM(<AuditFindingsChecklist repo={REPO} findings={section("Coverage")} />);
+  if (state === "hygiene") return withRailM(<AuditFindingsChecklist repo={REPO} findings={section("Hygiene")} />);
+  if (state === "fixed") return withRailM(<AuditFindingsChecklist repo={REPO} findings={FIXED_MIX} />);
+  if (state === "fix-all") return withRailM(<AuditFindingsChecklist repo={REPO} findings={FIX_ALL} />);
+  if (state === "many") return withRailM(<AuditFindingsChecklist repo={REPO} findings={MANY} />);
   if (state === "hide-resolved") {
-    return withRail(
+    return withRailM(
       <div className="space-y-4">
         <Alert tone="info" title="Hide resolved is on">
-          Fixed and dismissed findings are collapsed — only what still needs attention shows.
+          Fixed and dismissed findings are collapsed: only what still needs attention shows.
         </Alert>
         <AuditFindingsChecklist repo={REPO} findings={MOSTLY_HANDLED} />
       </div>,
     );
   }
   if (state === "overflow") {
-    return withRail(
+    return withRailM(
       <div className="space-y-4">
         <StressExtras mode="overflow" />
         <AuditFindingsChecklist repo={LONG_SOURCE} findings={OVERFLOW_FINDINGS} />
@@ -209,21 +211,22 @@ function Body({ state }: { state: string }) {
     );
   }
   if (state === "stress") {
-    return withRail(
+    return withRailM(
       <div className="space-y-4">
         <StressExtras mode="stress" />
         <AuditFindingsChecklist repo={UNBREAKABLE} findings={STRESS_FINDINGS} />
       </div>,
     );
   }
-  return withRail(<AuditFindingsChecklist repo={REPO} findings={FINDINGS} />);
+  return withRailM(<AuditFindingsChecklist repo={REPO} findings={FINDINGS} />);
 }
 
 function AuditPage({ state = "default", mobile = false }: PageProps) {
   const subline =
     state === "loading" ? "Scanning github · " + REPO + "…"
     : state === "empty" ? "Connect a repo to begin."
-    : "github · " + REPO + " · last audit Jul 21, 9:04 AM · 8 findings, 1 fixed";
+    : `github · ${REPO} · last audit ${fmtDateTime("2026-07-21T09:04:00")} · 8 findings, 1 fixed`;
+  const actions = <Button variant="primary">{state === "empty" ? "Run first audit" : "Re-audit"}</Button>;
   if (state === "loading") {
     return (
       <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
@@ -237,11 +240,12 @@ function AuditPage({ state = "default", mobile = false }: PageProps) {
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
           eyebrow="Onboarding"
-          title={"Repository audit — " + REPO}
+          title={"Repository audit, " + REPO}
           description={subline}
-          actions={<Button variant="primary">{state === "empty" ? "Run first audit" : "Re-audit"}</Button>}
+          actions={mobile ? undefined : actions}
         />
-        <Body state={state} />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        <Body state={state} mobile={mobile} />
       </div>
     </PageFrame>
   );

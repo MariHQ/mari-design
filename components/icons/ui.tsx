@@ -63,7 +63,12 @@ export const IconCalendar = (p: IconProps) => (
   <IconBase {...p}><rect x="4.5" y="6" width="15" height="14" rx="2" /><path d="M4.5 10.5 h15 M8.5 4 v3.5 M15.5 4 v3.5" /></IconBase>
 );
 export const IconGear = (p: IconProps) => (
-  <IconBase {...p}><circle cx="12" cy="12" r="3" /><path d="M12 4.5 v2.2 M12 17.3 v2.2 M4.5 12 h2.2 M17.3 12 h2.2 M6.7 6.7 l1.6 1.6 M15.7 15.7 l1.6 1.6 M17.3 6.7 l-1.6 1.6 M8.3 15.7 l-1.6 1.6" /></IconBase>
+  // A real toothed cog. The old version was radial spokes around a circle,
+  // which read as a sun rather than a settings gear.
+  <IconBase {...p} strokeLinejoin="miter">
+    <path d="M 9.80 2.45 L 14.20 2.45 L 14.10 5.01 L 16.16 6.00 L 18.09 4.32 L 20.84 7.77 L 18.78 9.28 L 19.28 11.51 L 21.80 11.98 L 20.82 16.27 L 18.35 15.60 L 16.93 17.39 L 18.13 19.65 L 14.16 21.56 L 13.14 19.21 L 10.86 19.21 L 9.84 21.56 L 5.87 19.65 L 7.07 17.39 L 5.65 15.60 L 3.18 16.27 L 2.20 11.98 L 4.72 11.51 L 5.22 9.28 L 3.16 7.77 L 5.91 4.32 L 7.84 6.00 L 9.90 5.01 Z" />
+    <circle cx="12" cy="12" r="3.4" />
+  </IconBase>
 );
 export const IconKebab = (p: IconProps) => (
   <IconBase {...p}><circle cx="12" cy="5.5" r="1.1" fill="currentColor" /><circle cx="12" cy="12" r="1.1" fill="currentColor" /><circle cx="12" cy="18.5" r="1.1" fill="currentColor" /></IconBase>
@@ -128,6 +133,9 @@ export const IconTrash = (p: IconProps) => (
 export const IconRefresh = (p: IconProps) => (
   <IconBase {...p}><path d="M19 12 a7 7 0 1 1 -2.2 -5.1 M17.5 3.5 v3.6 h-3.6" /></IconBase>
 );
+export const IconUpload = (p: IconProps) => (
+  <IconBase {...p}><path d="M12 16.5 V4.5 M7 9.5 L12 4.5 L17 9.5" /><path d="M4.5 15.5 V19.5 H19.5 V15.5" /></IconBase>
+);
 export const IconEye = (p: IconProps) => (
   <IconBase {...p}><path d="M2.5 12 C5 7.5 8.5 5.5 12 5.5 s7 2 9.5 6.5 c-2.5 4.5 -6 6.5 -9.5 6.5 s-7 -2 -9.5 -6.5 z" /><circle cx="12" cy="12" r="2.6" /></IconBase>
 );
@@ -175,6 +183,7 @@ export const ICONS = {
   close: IconClose,
   trash: IconTrash,
   refresh: IconRefresh,
+  upload: IconUpload,
   eye: IconEye,
 } as const;
 

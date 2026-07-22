@@ -3,6 +3,7 @@ import { Search, Plus, MoreVertical, Eye, FilePlus2, Trash2, Clipboard, GitFork,
 import type { LucideIcon } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
@@ -10,15 +11,19 @@ import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
-import { Menu, MenuItem, MenuSeparator } from "../navigation/Menu";
+import { Menu, MenuItem } from "../navigation/Menu";
 
 /* LibraryTemplatesPanel — the Library › Templates tab.
    A gallery of document scaffolds (Runbook, ADR, Postmortem, RFC…) plus
    user-created custom templates. Filter by category or search, preview a
    template's section list, create custom templates, delete custom ones, and
-   "Use template" to spin up a draft task. Fully local + standalone. */
+   "Use template" to spin up a draft task. Fully local + standalone.
 
-type Template = {
+   Every hook is declared before the `loading` early return: they used to sit
+   after it, which is a conditional-hook bug that crashes the panel the moment
+   it flips from loading to loaded. */
+
+export type Template = {
   id: string;
   name: string;
   category: string;
@@ -49,7 +54,24 @@ export type LibraryTemplatesPanelProps = {
 };
 
 export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, className = "" }: LibraryTemplatesPanelProps) {
+  // Every hook runs on every render: these used to sit AFTER the `loading`
+  // early return, so a panel that started life loading and then resolved
+  // mounted a different number of hooks and React threw.
   const [rows, setRows] = useState<Template[]>(templates);
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
+  const [query, setQuery] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [usedId, setUsedId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [cat, setCat] = useState("Engineering");
+  const [desc, setDesc] = useState("");
+  const [count, setCount] = useState("5");
+
+  const visible = useMemo(
+    () => rows.filter((t) => (category === "All" || t.category === category) && `${t.name} ${t.description}`.toLowerCase().includes(query.toLowerCase())),
+    [rows, category, query],
+  );
 
   if (loading) {
     return (
@@ -67,20 +89,6 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
       </div>
     );
   }
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
-  const [query, setQuery] = useState("");
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  const [usedId, setUsedId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [cat, setCat] = useState("Engineering");
-  const [desc, setDesc] = useState("");
-  const [count, setCount] = useState("5");
-
-  const visible = useMemo(
-    () => rows.filter((t) => (category === "All" || t.category === category) && `${t.name} ${t.description}`.toLowerCase().includes(query.toLowerCase())),
-    [rows, category, query],
-  );
 
   const add = () => {
     if (!name.trim()) return;
@@ -99,12 +107,11 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
     <Card
       variant="flush"
       title="Templates"
-      hint="Shared scaffolds for the editor, chat, workflows, and the GitHub bot"
       actions={
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/50 focus-within:border-biscay-2">
+          <label className="flex items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
             <Search size={14} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a template" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/40" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a template" className="w-32 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink/65" />
           </label>
           <Button variant="primary" compact onClick={() => setComposerOpen((v) => !v)}><Plus size={13} /> New template</Button>
         </div>
@@ -112,11 +119,17 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
       className={className}
     >
       <div className="border-t border-ink/10">
+        {/* Header summary sits on its own line under the header + search +
+            new-template row, not squeezed between them. */}
+        <div className="px-4 pt-3 text-[12.5px] text-ink/70">
+          Shared scaffolds for the editor, chat, workflows, and the GitHub bot. {rows.length} available, {rows.filter((t) => !t.standard).length} custom.
+        </div>
+
         {composerOpen && (
           <div className="px-4 py-3.5 bg-biscay-2/[0.03] border-b border-ink/10">
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-[13px] font-semibold text-ink">New template</span>
-              <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/50 hover:text-ink"><X size={14} /></button>
+              <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/70 hover:text-ink"><X size={14} /></button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div><SectionLabel>Name</SectionLabel><Input autoFocus className="mt-1 w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Design doc" /></div>
@@ -160,7 +173,6 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
                     <Menu trigger={<Button icon compact aria-label="More"><MoreVertical size={15} /></Button>}>
                       <MenuItem icon={<Eye size={14} />} onSelect={() => setPreviewId(open ? null : t.id)}>{open ? "Hide sections" : "Preview sections"}</MenuItem>
                       <MenuItem icon={<FilePlus2 size={14} />} onSelect={() => use(t.id)}>Use template</MenuItem>
-                      {!t.standard && <><MenuSeparator /><MenuItem danger icon={<Trash2 size={14} />} onSelect={() => del(t.id)}>Delete</MenuItem></>}
                     </Menu>
                   </div>
 
@@ -168,17 +180,24 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
 
                   {open && (
                     <ol className="mt-2.5 flex flex-col gap-1 list-decimal list-inside">
-                      {t.sections.map((s) => <li key={s} className="text-[12px] text-ink/70 marker:text-ink/40 marker:font-term">{s}</li>)}
+                      {t.sections.map((s) => <li key={s} className="text-[12px] text-ink/70 marker:text-ink/65 marker:font-term">{s}</li>)}
                     </ol>
                   )}
 
                   <div className="mt-3 flex items-center justify-between pt-2.5 border-t border-ink/10">
-                    <span className="font-term text-[11px] text-ink/50">{t.sections.length} sections · {t.standard ? "Standard" : "Custom"}</span>
+                    <span className="font-term text-[11px] text-ink/70">{t.sections.length} sections · {t.standard ? "Standard" : "Custom"}</span>
                     <Badge label={t.standard ? "Standard" : "Custom"} tone={t.standard ? "info" : "neutral"} />
                   </div>
-                  <div className="mt-2.5 flex items-center gap-2">
+                  {/* Same size and shape as "Use template" so the pair reads
+                      as one control row (CONVENTIONS §2). */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
                     <Button variant={used ? "success" : "primary"} compact onClick={() => use(t.id)}>{used ? "Draft task created" : "Use template"}</Button>
-                    <Button variant="link" onClick={() => setPreviewId(open ? null : t.id)}>{open ? "Hide" : "Preview"}</Button>
+                    <Button compact onClick={() => setPreviewId(open ? null : t.id)}>{open ? "Hide sections" : "Preview"}</Button>
+                    {!t.standard && (
+                      <ConfirmButton compact aria-label={`Delete ${t.name}`} confirmLabel="Delete?" onConfirm={() => del(t.id)}>
+                        <Trash2 size={13} /> Delete
+                      </ConfirmButton>
+                    )}
                   </div>
                 </article>
               );

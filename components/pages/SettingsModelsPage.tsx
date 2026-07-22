@@ -96,7 +96,7 @@ function TestResult({ variant }: { variant: ModelsVariant }) {
     return (
       <span className="inline-flex items-center gap-2">
         <Chip label="Unreachable" tone="blocked" dot caps />
-        <span className="font-term text-[11.5px] text-espelette">401 — invalid API key for provider openai</span>
+        <span className="font-term text-[11.5px] text-espelette">401: invalid API key for provider openai</span>
       </span>
     );
   }
@@ -120,7 +120,7 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
           </Field>
           <div className="mt-3 flex items-center gap-3">
             <Button variant="primary" compact disabled={!embDirty}>Save</Button>
-            {embDirty && <span className="text-[11.5px] text-ink/50">Re-indexes all documents</span>}
+            {embDirty && <span className="text-[11.5px] text-ink/65">Re-indexes all documents</span>}
             {variant === "saved" && <SavedNote />}
           </div>
         </Card>
@@ -136,7 +136,7 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
           </Field>
           <div className="mt-3 flex items-center gap-3">
             <Button variant="primary" compact disabled={!llmDirty}>Save</Button>
-            {llmDirty && <span className="text-[11.5px] text-ink/50">Unsaved changes</span>}
+            {llmDirty && <span className="text-[11.5px] text-ink/65">Unsaved changes</span>}
             {variant === "saved" && <SavedNote />}
           </div>
         </Card>

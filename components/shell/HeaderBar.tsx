@@ -24,14 +24,14 @@ export function SearchTrigger({
       type="button"
       onClick={onClick}
       className={[
-        "flex h-9 w-full items-center gap-2.5 rounded-[6px] border border-ink/15 bg-paper px-3 text-left text-[13px] text-ink/45 hover:border-ink/30 hover:text-ink/60",
+        "flex h-9 w-full items-center gap-2.5 rounded-[6px] border border-ink/15 bg-paper px-3 text-left text-[13px] text-ink/70 hover:border-ink/45 hover:text-ink",
         focusRing,
         className,
       ].filter(Boolean).join(" ")}
     >
-      <Search size={15} className="shrink-0 text-ink/40" />
+      <Search size={18} className="shrink-0 text-ink/65" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{placeholder}</span>
-      {shortcut && <kbd className="shrink-0 font-term text-[11px] text-ink/40">{shortcut}</kbd>}
+      {shortcut && <kbd className="shrink-0 font-term text-[11px] text-ink/65">{shortcut}</kbd>}
     </button>
   );
 }
@@ -66,15 +66,17 @@ function userButton(user: HeaderUser, onClick?: () => void) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-[6px] py-1 pl-1 pr-2 text-[13px] text-ink hover:bg-flysch ${focusRing}`}
+      // min-w-0 so a long account name truncates instead of shoving the bar
+      // past its container and colliding with the actions to its left.
+      className={`flex min-w-0 max-w-[240px] items-center gap-2 rounded-[6px] py-1 pl-1 pr-2 text-[13px] text-ink hover:bg-flysch ${focusRing}`}
       aria-label={`Account: ${user.name}`}
     >
       <Avatar initials={user.initials} />
       <span className="hidden min-w-0 flex-col text-left leading-tight sm:flex">
         <span className="truncate font-medium">{user.name}</span>
-        {user.detail && <span className="truncate font-term text-[10.5px] text-ink/45">{user.detail}</span>}
+        {user.detail && <span className="truncate font-term text-[10.5px] text-ink/65">{user.detail}</span>}
       </span>
-      <ChevronDown size={15} className="text-ink/40" />
+      <ChevronDown size={18} className="text-ink/65" aria-hidden />
     </button>
   );
 }
@@ -95,9 +97,9 @@ export function HeaderBar({
           type="button"
           onClick={onToggleSidebar}
           aria-label="Toggle sidebar"
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-ink/55 hover:bg-flysch hover:text-ink ${focusRing}`}
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-ink/70 hover:bg-flysch hover:text-ink ${focusRing}`}
         >
-          <PanelLeft size={17} />
+          <PanelLeft size={18} />
         </button>
       )}
 

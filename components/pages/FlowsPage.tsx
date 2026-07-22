@@ -1,6 +1,6 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { Workflow, Plus, Bell, FileText } from "lucide-react";
+import { Workflow, Bell, FileText } from "lucide-react";
 import { FlowsList } from "../features/FlowsList";
 import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
@@ -19,6 +19,7 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { ErrorMessage } from "../feedback/ErrorMessage";
 
 /* Flows (pages/flows.md). The automation surface — a single route that swaps
    between three surfaces held in local state: the list view (template gallery +
@@ -77,7 +78,7 @@ function stressRuns(pathological: boolean): WorkflowRun[] {
 
 function StressExtras({ pathological }: { pathological: boolean }) {
   return (
-    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE} className="mb-5">
+    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE}>
       <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
       <div className="mt-3 flex flex-wrap gap-1.5">
         {(pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
@@ -121,7 +122,7 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
       onClose={() => {}}
       title="Trigger"
       subtitle={meta.flow}
-      icon={<Bell size={16} className="text-ink/50" />}
+      icon={<Bell size={16} className="text-ink/65" />}
       footer={
         <>
           <Button variant="primary">Save trigger</Button>
@@ -141,8 +142,8 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
       {kind === "schedule" && (
         <Field label="Every (minutes)">
           <Input type="number" min={1} max={10080} value={10080} onChange={() => {}} className="w-full" />
-          <div className="mt-1.5 font-term text-[11px] text-ink/50">Every week · presets: 10 / 60 / 1440 / 10080</div>
-          <div className="mt-1 text-[11.5px] text-ink/45">
+          <div className="mt-1.5 font-term text-[11px] text-ink/65">Every week · presets: 10 / 60 / 1440 / 10080</div>
+          <div className="mt-1 text-[11.5px] text-ink/65">
             The scheduler checks twice a minute and never starts a run while the previous one is still going.
           </div>
         </Field>
@@ -163,14 +164,14 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
           <Field label="Path glob">
             <Input value="docs/**" onChange={() => {}} className="w-full font-term" />
           </Field>
-          <div className="pt-2 text-[11.5px] text-ink/45">Filters are optional and combine — a run fires only when all set filters match.</div>
+          <div className="pt-2 text-[11.5px] text-ink/65">Filters are optional and combine: a run fires only when all set filters match.</div>
         </>
       )}
 
       {kind === "manual" && (
-        <div className="pt-2 text-[12.5px] text-ink/55">
-          <FileText size={13} className="mr-1 inline text-ink/40" />
-          Manual-only — this flow runs when you press Run or Test run.
+        <div className="pt-2 text-[12.5px] text-ink/70">
+          <FileText size={13} className="mr-1 inline text-ink/65" />
+          Manual only: this flow runs when you press Run or Test run.
         </div>
       )}
     </Drawer>
@@ -183,90 +184,91 @@ const TRIGGER_STATE: Record<string, TriggerKind> = {
   "trigger-document": "document",
 };
 
-function Body({ state }: { state: string }) {
-  if (state === "error") {
-    return (
-      <div className="mt-5">
-        <EmptyState icon={<Workflow size={22} />} title="API offline">
-          Flows unavailable. Retrying…
-        </EmptyState>
-      </div>
-    );
-  }
+/* States that render <FlowsList/>, which brings its OWN page header (title,
+   summary, and a working "New flow"). The page must not stack a second header
+   on top of it, so `pageHeaderFor` returns null for these. */
+const LIST_STATES = (state: string) => state === "default" || state in TRIGGER_STATE;
+
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
+  if (state === "error") return <ErrorMessage id="server.unavailable" />;
   if (state === "empty") {
     return (
-      <div className="mt-5">
-        <EmptyState icon={<Workflow size={22} />} title="No flows yet">
-          Start from a template or create one to automate editorial work.
-        </EmptyState>
-      </div>
+      <EmptyState icon={<Workflow size={22} />} title="No flows yet">
+        Start from a template or create one to automate editorial work.
+      </EmptyState>
     );
   }
 
   if (state === "overflow" || state === "stress") {
     const p = state === "stress";
     return (
-      <div className="mt-5">
+      <>
         <StressExtras pathological={p} />
         <FlowsRunHistory runs={stressRuns(p)} limit={p ? 24 : 6} />
-      </div>
+      </>
     );
   }
 
-  if (state === "pipeline-editor") {
-    return <div className="mt-5"><FlowsPipelineEditor /></div>;
-  }
+  if (state === "pipeline-editor") return <FlowsPipelineEditor />;
   if (state === "pipeline-branch") {
     return (
-      <div className="mt-5">
-        <FlowsPipelineEditor
-          name="Stale sweeper"
-          description="Flags docs that have gone quiet and routes contradictions for review."
-          steps={BRANCH_STEPS}
-        />
-      </div>
+      <FlowsPipelineEditor
+        name="Stale sweeper"
+        description="Flags docs that have gone quiet and routes contradictions for review."
+        steps={BRANCH_STEPS}
+      />
     );
   }
 
-  if (state === "run-history") {
-    return <div className="mt-5"><FlowsRunHistory /></div>;
-  }
+  if (state === "run-history") return <FlowsRunHistory />;
 
   if (state === "run" || state === "run-passed" || state === "run-failed") {
     const openNumber = state === "run-passed" ? 145 : state === "run-failed" ? 143 : 209;
-    return <div className="mt-5"><FlowsRunPanel openNumber={openNumber} /></div>;
+    return <FlowsRunPanel openNumber={openNumber} />;
   }
 
   const triggerKind = TRIGGER_STATE[state];
   if (triggerKind) {
+    /* Fixed 420px editor rail beside the list on desktop (§10: no
+       flex-col/lg:flex-row); on mobile the rail stacks under the list. */
+    if (mobile) {
+      return (
+        <div className="flex flex-col gap-5">
+          <FlowsList />
+          <TriggerEditorPreview kind={triggerKind} />
+        </div>
+      );
+    }
     return (
-      <div className="mt-5 flex flex-col gap-4 lg:flex-row">
+      <div className="flex gap-5">
         <div className="min-w-0 flex-1"><FlowsList /></div>
-        <div className="w-full shrink-0 lg:w-[420px]"><TriggerEditorPreview kind={triggerKind} /></div>
+        <div className="w-[420px] shrink-0"><TriggerEditorPreview kind={triggerKind} /></div>
       </div>
     );
   }
 
-  return <div className="mt-5"><FlowsList /></div>;
+  return <FlowsList />;
 }
 
 function FlowsPage({ state = "default", mobile = false }: PageProps) {
   const editing = state === "pipeline-editor" || state === "pipeline-branch";
+  const showHeader = !editing && !LIST_STATES(state);
   return (
     <PageFrame active={navFor("flows")} title="Flows" mobile={mobile}>
       {state === "loading" ? (
         <SkeletonPage variant="list" />
       ) : (
         <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-          {!editing && (
+          {showHeader && (
             <PageHeader
               eyebrow="Flows"
               title="Flows"
               description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
-              actions={<Button variant="primary" icon={false}><Plus size={15} /> New flow</Button>}
             />
           )}
-          <Body state={state} />
+          <div className={`flex flex-col gap-5 ${showHeader ? "mt-6" : ""}`}>
+            <Body state={state} mobile={mobile} />
+          </div>
         </div>
       )}
     </PageFrame>

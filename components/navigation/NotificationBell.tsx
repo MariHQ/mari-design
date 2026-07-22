@@ -14,10 +14,10 @@ export function NotificationBell({ items, onItemClick, loading = false }: { item
   return (
     <RPop.Root>
       <RPop.Trigger asChild>
-        <button aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`} className={`relative grid place-items-center w-9 h-9 rounded-[4px] text-ink/60 hover:bg-flysch hover:text-ink ${focusRing}`}>
-          <Bell size={16} />
+        <button aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`} className={`relative grid place-items-center w-9 h-9 rounded-[4px] text-ink/70 hover:bg-flysch hover:text-ink ${focusRing}`}>
+          <Bell size={18} />
           {unread > 0 && (
-            <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-full bg-espelette text-white font-term text-[9px] font-semibold grid place-items-center">
+            <span className="absolute right-0.5 top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-espelette px-[3px] font-term text-[9px] font-semibold text-white ring-2 ring-paper">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -40,7 +40,7 @@ export function NotificationBell({ items, onItemClick, loading = false }: { item
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-ink/45">You're all caught up.</div>
+            <div className="px-4 py-8 text-center text-[13px] text-ink/65">You're all caught up.</div>
           ) : (
             items.map((n) => (
               <button
@@ -49,11 +49,11 @@ export function NotificationBell({ items, onItemClick, loading = false }: { item
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-ink/[0.06] last:border-0 hover:bg-flysch/60 ${focusRing}`}
               >
                 <span className={`mt-1.5 w-[6px] h-[6px] rounded-full shrink-0 ${n.unread ? "bg-biscay-2" : ""}`} aria-hidden="true" />
-                {n.icon && <span className="shrink-0 text-ink/45 mt-0.5">{n.icon}</span>}
+                {n.icon && <span className="shrink-0 text-ink/65 mt-0.5">{n.icon}</span>}
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] text-ink">{n.title}</span>
-                  {n.body && <span className="block text-[12.5px] text-ink/55 mt-0.5">{n.body}</span>}
-                  <span className="block font-term text-[10.5px] text-ink/40 mt-1">{n.time}</span>
+                  {n.body && <span className="block text-[12.5px] text-ink/65 mt-0.5">{n.body}</span>}
+                  <span className="block font-term text-[10.5px] text-ink/65 mt-1">{n.time}</span>
                 </span>
               </button>
             ))

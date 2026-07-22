@@ -34,7 +34,7 @@ export function SearchField({
       ].filter(Boolean).join(" ")}
       onClick={onOpen}
     >
-      <Search size={15} className="text-ink/40 shrink-0" />
+      <Search size={18} className="text-ink/65 shrink-0" aria-hidden />
       <input
         type="text"
         value={value}
@@ -42,7 +42,7 @@ export function SearchField({
         onFocus={onOpen}
         placeholder={placeholder}
         aria-label="Search"
-        className="flex-1 min-w-0 bg-transparent text-[13px] text-ink placeholder:text-ink/45 outline-none"
+        className="flex-1 min-w-0 bg-transparent text-[13px] text-ink placeholder:text-ink/65 outline-none"
       />
       {shortcut ? <Kbd keys={shortcut} className="shrink-0" /> : null}
     </div>

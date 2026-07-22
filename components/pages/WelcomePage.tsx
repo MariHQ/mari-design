@@ -73,7 +73,7 @@ const STATES = [
 
 function Hero() {
   const promises = [
-    "Connect your real sources — no fake OAuth, no “coming soon”.",
+    "Connect your real sources: no fake OAuth, no “coming soon”.",
     "Curate a style guide that becomes your Library default.",
     "Seed a glossary from documents you already have.",
   ];
@@ -82,7 +82,7 @@ function Hero() {
       <div>
         <h2 className="font-display text-[26px] font-bold tracking-[-0.01em] text-ink">Let’s set up your workspace</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-ink/70">
-          A few real steps — every one does actual work. You can save and finish
+          A few real steps: every one does actual work. You can save and finish
           later at any point.
         </p>
         <ul className="mt-5 space-y-2.5">
@@ -97,7 +97,7 @@ function Hero() {
       <div className="grid aspect-[4/3] place-items-center rounded-[8px] border border-dashed border-ink/20 bg-flysch/60 text-center">
         <div className="px-6">
           <span className="text-biscay"><Logo size={30} /></span>
-          <p className="mt-3 font-term text-[11px] uppercase tracking-[0.1em] text-ink/45">Onboarding journey</p>
+          <p className="mt-3 font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">Onboarding journey</p>
         </div>
       </div>
     </div>
@@ -144,7 +144,7 @@ function ConnectGrid({ tiles = TILES }: { tiles?: Tile[] }) {
           </div>
         ))}
       </div>
-      <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/55 rounded-[3px] ${focusRing}`}>
+      <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
         <ChevronRight size={13} /> Show all 14 connectors
       </button>
     </div>
@@ -177,7 +177,7 @@ function ConnectorHeader({ provider, name, blurb, docs }: {
 
 function BackToConnectors() {
   return (
-    <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/55 rounded-[3px] ${focusRing}`}>
+    <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
       ← All connectors
     </button>
   );
@@ -186,7 +186,7 @@ function BackToConnectors() {
 function ConnectFooterHint({ children }: { children: ReactNode }) {
   return (
     <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
-      <span className="flex-1 text-[12px] text-ink/55">{children}</span>
+      <span className="flex-1 text-[12px] text-ink/65">{children}</span>
       <Button variant="primary">Connect &amp; sync <ArrowRight size={14} /></Button>
     </div>
   );
@@ -204,10 +204,10 @@ function CredFields({ fields }: { fields: CField[] }) {
           ) : (
             <Input className="w-full" type={f.secret ? "password" : "text"} placeholder={f.placeholder} defaultValue={f.value} autoComplete="off" />
           )}
-          {f.help && <p className="mt-1 text-[11.5px] text-ink/55">{f.help}</p>}
+          {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
         </Field>
       ))}
-      <p className="text-[11.5px] text-ink/55">Credentials are stored server-side and never shown again.</p>
+      <p className="text-[11.5px] text-ink/65">Credentials are stored server-side and never shown again.</p>
     </div>
   );
 }
@@ -232,15 +232,15 @@ function GithubConnect() {
             <label key={r.name}
               className={`flex items-center gap-2.5 rounded-md border p-2.5 ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15"}`}>
               <input type="radio" name="repo" className="accent-biscay" defaultChecked={active} readOnly />
-              <GitFork size={14} className="shrink-0 text-ink/45" />
+              <GitFork size={14} className="shrink-0 text-ink/65" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <b className="truncate text-[13px] font-semibold text-ink">{r.name}</b>
                   {r.priv && <Chip label="Private" tone="neutral" icon={<Lock size={10} />} />}
                 </span>
-                <span className="block truncate text-[11.5px] text-ink/55">{r.desc}</span>
+                <span className="block truncate text-[11.5px] text-ink/65">{r.desc}</span>
               </span>
-              <span className="shrink-0 font-term text-[11px] text-ink/45">{r.branch}</span>
+              <span className="shrink-0 font-term text-[11px] text-ink/65">{r.branch}</span>
             </label>
           );
         })}
@@ -311,7 +311,7 @@ function UploadConnect() {
         <Button compact>Browse files</Button>
       </div>
       <div>
-        <p className="text-[12.5px] text-ink/70">3 files ingested · 214 chunks · 189 embedded <span className="text-ink/50">(unchanged chunks skipped by content hash)</span></p>
+        <p className="text-[12.5px] text-ink/70">3 files ingested · 214 chunks · 189 embedded <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
         <div className="mt-2 grid gap-1.5">
           {[
             { name: "pricing.md", n: "88 chunks · 88 embedded" },
@@ -319,15 +319,15 @@ function UploadConnect() {
             { name: "faq.md", n: "55 chunks · 30 embedded" },
           ].map((f) => (
             <div key={f.name} className="flex items-center gap-2 rounded-md border border-ink/12 p-2">
-              <FileText size={14} className="shrink-0 text-ink/45" />
+              <FileText size={14} className="shrink-0 text-ink/65" />
               <span className="flex-1 truncate text-[13px] text-ink">{f.name}</span>
-              <span className="shrink-0 font-term text-[11px] text-ink/55">{f.n}</span>
+              <span className="shrink-0 font-term text-[11px] text-ink/65">{f.n}</span>
             </div>
           ))}
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3 border-t border-ink/10 pt-3">
-        <span className="flex-1 text-[12px] text-ink/55">.md / .txt · up to 20 files · 1 MB each</span>
+        <span className="flex-1 text-[12px] text-ink/65">.md / .txt · up to 20 files · 1 MB each</span>
         <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
@@ -344,7 +344,7 @@ function ConnectSyncing() {
       <ConnectorHeader provider="github" name="GitHub" blurb="The initial sync runs on the server — live status below." />
       <SyncPanel sources={[source]} />
       <div className="flex items-center gap-3 border-t border-ink/10 pt-3">
-        <span className="flex-1 text-[12px] text-ink/55">Sync continues on the server — leaving this step won’t interrupt it.</span>
+        <span className="flex-1 text-[12px] text-ink/65">Sync continues on the server — leaving this step won’t interrupt it.</span>
         <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
@@ -358,7 +358,7 @@ function GuideStep() {
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Choose a style guide</h2>
-        <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default — you can change it any time.</p>
+        <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default: you can change it any time.</p>
       </div>
       <WelcomeGuideStep />
       <Button variant="link">Manage guides in the Library →</Button>
@@ -383,7 +383,7 @@ function FinishStep() {
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Finish setup</h2>
-        <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened — live sync state from your sources.</p>
+        <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened: live sync state from your sources.</p>
       </div>
       <WelcomeSyncPanel />
       <div className="flex justify-end">
@@ -435,7 +435,7 @@ function GlossaryPreview({ items }: { items: { term: string; def: string; ev: st
     <div className="grid gap-1.5">
       {items.map((c) => (
         <div key={c.term} className="flex items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
-          <BookOpen size={14} className="mt-0.5 shrink-0 text-ink/45" />
+          <BookOpen size={14} className="mt-0.5 shrink-0 text-ink/65" />
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
               <b className="break-words text-[13px] font-semibold text-ink">{c.term}</b>
@@ -515,7 +515,7 @@ function StressStep() {
       </div>
       <div className="flex items-center gap-4">
         <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-        <span className="font-term text-[12px] text-ink/55">{HUGE_NUMBER_STR} members</span>
+        <span className="font-term text-[12px] text-ink/65">{HUGE_NUMBER_STR} members</span>
       </div>
       <ConnectGrid tiles={tiles} />
       <GlossaryPreview items={glossary} />
@@ -576,7 +576,7 @@ function WelcomePage({ state = "default", mobile = false }: PageProps) {
 
           <div className="mt-7 flex items-center justify-between border-t border-ink/10 pt-4">
             <Button variant="default" disabled={step === 0}>← Back</Button>
-            <span className="font-term text-[12px] text-ink/50">
+            <span className="font-term text-[12px] text-ink/65">
               {done ? <span className="inline-flex items-center gap-1 text-moss"><Sparkles size={12} /> Setup complete</span> : `${step + 1} of ${LABELS.length}`}
             </span>
             <Button variant="primary">{nextLabel}</Button>

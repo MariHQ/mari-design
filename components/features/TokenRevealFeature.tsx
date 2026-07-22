@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Key } from "lucide-react";
-import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
+import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-display/TokenReveal";
+import { EmptyState } from "../data-display/EmptyState";
 import { Button } from "../actions/Button";
 import { card } from "../tokens/card";
 import { fmtAgo } from "../tokens/format";
@@ -50,8 +51,8 @@ export function TokenRevealFeature({ keys = DEMO_KEYS, className = "" }: TokenRe
       <div className="mb-4 flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-[19px] text-ink">API keys</h2>
-          <p className="mt-0.5 text-[13px] text-ink/60">
-            Keys authenticate programmatic access. A key's secret is shown only once, at creation.
+          <p className="mt-0.5 text-[13px] text-ink/70">
+            Keys authenticate programmatic access. {TOKEN_REVEAL_WARNING}
           </p>
         </div>
         <Button variant="primary" compact onClick={create} disabled={fresh !== null}>
@@ -66,17 +67,22 @@ export function TokenRevealFeature({ keys = DEMO_KEYS, className = "" }: TokenRe
       )}
 
       <div className={`${card} overflow-hidden`}>
+        {rows.length === 0 && (
+          <EmptyState icon={<Key size={24} />} title="No keys yet">
+            Create the first one to give CI or an agent programmatic access.
+          </EmptyState>
+        )}
         {rows.map((k, i) => (
           <div
             key={k.id}
             className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? "border-t border-ink/10" : ""}`}
           >
-            <Key size={15} className="shrink-0 text-ink/40" />
+            <Key size={15} className="shrink-0 text-ink/65" />
             <div className="min-w-0 flex-1">
-              <div className="text-[13.5px] font-medium text-ink">{k.label}</div>
-              <code className="font-term text-[11.5px] text-ink/55">{k.prefix}••••••••</code>
+              <div className="break-all text-[13.5px] font-medium text-ink">{k.label}</div>
+              <code className="block break-all font-term text-[11.5px] text-ink/70">{k.prefix}••••••••</code>
             </div>
-            <span className="font-term text-[11px] text-ink/45 whitespace-nowrap">
+            <span className="font-term text-[11px] text-ink/65 whitespace-nowrap">
               {k.lastUsed ? `used ${fmtAgo(k.lastUsed)}` : "never used"}
             </span>
           </div>

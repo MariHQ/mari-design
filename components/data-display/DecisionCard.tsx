@@ -1,37 +1,55 @@
 import type { ReactNode } from "react";
-import { Check, ArrowRight, MoreVertical, RefreshCw } from "lucide-react";
+import { Check, CornerDownRight } from "lucide-react";
 import { card } from "../tokens/card";
 import { fmtDate, type DateInput } from "../tokens/format";
 import { Chip } from "./Chip";
 import { Avatar } from "./Avatar";
 import { Button } from "../actions/Button";
-import { Menu, MenuItem } from "../navigation/Menu";
+import { ConfirmButton } from "../actions/ConfirmButton";
+import { CardBody, CardTitleBlock, CardMeta, CardActions } from "../layout/CardShell";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip, SkeletonButton } from "./Skeleton";
 
-/* DecisionCard — one row in the decision ledger's timeline: a node marker on a
-   spine, then the decision card (statement, context, a superseded-by line, and
-   a meta row of source / owners / date / actions). Ratified decisions can host
-   an impact strip via the `impact` slot (compose <ImpactPanel />). Ported from
-   pages/decisions/DecisionCard.tsx; app state replaced by props/callbacks. */
+/* DecisionCard: one row in the decision ledger's timeline. A state marker on a
+   spine, then the decision card laid out in the standard card order
+   (CONVENTIONS.md §1): statement, context, source/status meta with date and
+   owners, an optional impact strip, then the actions bottom left.
 
-export type DecisionStatus = "proposed" | "ratified" | "superseded";
+   Two things the ledger got wrong and this fixes:
 
-const STAMP_LABEL: Record<DecisionStatus, string> = {
+   1. The spine marker was a filled circle, which reads as a radio button, i.e.
+      "pick me" (CONVENTIONS.md §6). It is a square state marker now: a check
+      inside it once the decision is ratified, the same left-marker /
+      check-on-the-right pairing the style picker uses.
+   2. The ledger said "Supersede" / "Superseded". The word for setting a
+      decision aside is "Ignore" / "Ignored".
+
+   Ratified decisions can host an impact strip via the `impact` slot (compose
+   <ImpactPanel />). */
+
+/** "superseded" is the old spelling of "ignored"; both render as Ignored. */
+export type DecisionStatus = "proposed" | "ratified" | "ignored" | "superseded";
+
+type ResolvedStatus = "proposed" | "ratified" | "ignored";
+
+const resolve = (s: DecisionStatus): ResolvedStatus => (s === "superseded" ? "ignored" : s);
+
+const STAMP_LABEL: Record<ResolvedStatus, string> = {
   proposed: "Proposed",
   ratified: "Ratified",
-  superseded: "Superseded",
+  ignored: "Ignored",
 };
 
-const STAMP_TONE: Record<DecisionStatus, string> = {
-  proposed: "text-clay border-clay/35 bg-clay/[0.07]",
-  ratified: "text-moss border-moss/35 bg-moss/[0.07]",
-  superseded: "text-ink/50 border-ink/20 bg-ink/[0.04]",
+const STAMP_TONE: Record<ResolvedStatus, string> = {
+  proposed: "attention",
+  ratified: "ok",
+  ignored: "neutral",
 };
 
-const NODE: Record<DecisionStatus, string> = {
-  proposed: "border-clay/50 bg-paper text-clay",
+/* Square, not round: a circle on a list means "choose one". */
+const NODE: Record<ResolvedStatus, string> = {
+  proposed: "border-clay/60 bg-paper text-clay",
   ratified: "border-moss bg-moss text-white",
-  superseded: "border-ink/25 bg-flysch text-ink/40",
+  ignored: "border-ink/30 bg-flysch text-ink/65",
 };
 
 function initialsOf(name: string): string {
@@ -51,11 +69,17 @@ export type DecisionCardProps = {
   /** Owner names — rendered as overlapping avatars from their initials. */
   owners?: string[];
   decidedOn?: DateInput;
+  /** The decision this one was set aside for. */
+  ignoredForStatement?: string;
+  /** @deprecated Use `ignoredForStatement`. */
   supersededByStatement?: string;
   ratifying?: boolean;
   onRatify?: () => void;
+  /** Sets the decision aside. Shown as "Ignore". */
+  onIgnore?: () => void;
+  /** @deprecated Use `onIgnore`. */
   onSupersede?: () => void;
-  /** Override the default action cluster (Ratify / Supersede menu). */
+  /** Override the default action cluster (Ratify / Ignore). */
   actions?: ReactNode;
   /** Impact strip — compose <ImpactPanel /> here for ratified decisions. */
   impact?: ReactNode;
@@ -68,8 +92,8 @@ export type DecisionCardProps = {
 
 export function DecisionCard({
   statement, context, status, fresh = false, sourceLabel, sourceIcon,
-  owners = [], decidedOn, supersededByStatement, ratifying = false,
-  onRatify, onSupersede, actions, impact, spine = true, loading = false, className = "",
+  owners = [], decidedOn, ignoredForStatement, supersededByStatement, ratifying = false,
+  onRatify, onIgnore, onSupersede, actions, impact, spine = true, loading = false, className = "",
 }: DecisionCardProps) {
   if (loading) {
     return (
@@ -88,69 +112,95 @@ export function DecisionCard({
             <SkeletonChip w={92} />
             <SkeletonCircle size={20} />
             <SkeletonCircle size={20} />
-            <span className="ml-auto"><SkeletonButton w={82} /></span>
           </div>
+          <div className="mt-3"><SkeletonButton w={82} /></div>
         </div>
       </div>
     );
   }
-  const superseded = status === "superseded";
+
+  const state = resolve(status);
+  const ignored = state === "ignored";
+  const replacedBy = ignoredForStatement ?? supersededByStatement;
+  const ignore = onIgnore ?? onSupersede;
+
   return (
     <div className={`relative flex gap-4 ${className}`.trim()}>
       <div className="relative flex flex-col items-center">
         {spine && <span className="absolute top-6 bottom-0 w-px bg-ink/12" aria-hidden="true" />}
-        <span className={`relative z-10 grid place-items-center w-6 h-6 rounded-full border ${NODE[status]}`} aria-hidden="true">
-          {status === "ratified" && <Check size={12} />}
+        <span
+          className={`relative z-10 grid place-items-center w-6 h-6 rounded-[5px] border ${NODE[state]}`}
+          role="img"
+          aria-label={STAMP_LABEL[state]}
+        >
+          {state === "ratified" && <Check size={13} strokeWidth={2.6} />}
         </span>
       </div>
 
-      <article className={`${card} min-w-0 flex-1 p-4 mb-4 ${superseded ? "opacity-70" : ""}`.trim()}>
-        <div className="flex items-start gap-3">
-          <h3 className={`min-w-0 flex-1 text-[15px] font-semibold text-ink ${superseded ? "line-through decoration-ink/30" : ""}`.trim()}>
-            {fresh && <span title="Found by Mari scan" className="mr-1">✨</span>}
-            <q className="not-italic">{statement}</q>
-          </h3>
-          <span className={`shrink-0 rounded-[3px] border px-1.5 py-[2.5px] font-term text-[10.5px] font-medium uppercase tracking-[0.06em] ${STAMP_TONE[status]}`}>
-            {STAMP_LABEL[status]}
-          </span>
-        </div>
-
-        {context && <p className="mt-1.5 text-[13px] leading-[1.5] text-ink/70">{context}</p>}
-
-        {superseded && supersededByStatement && (
-          <div className="mt-2 flex items-center gap-1.5 text-[12.5px] text-ink/60">
-            <ArrowRight size={14} className="shrink-0" />
-            <span>Superseded by <b className="text-ink/80">{`“${supersededByStatement}”`}</b></span>
+      <article className={`${card} min-w-0 flex-1 p-4 mb-4 ${ignored ? "opacity-80" : ""}`.trim()}>
+        <CardBody>
+          {/* 4 + 5: the decision itself, then its context. The state stamp sits
+              on the right of the title line, opposite the spine marker. */}
+          <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+            <CardTitleBlock
+              className="flex-1 basis-[220px]"
+              title={(
+                /* break-words: an unbroken 90-character token used to punch
+                   straight through the card's right edge. */
+                <span className={`block break-words ${ignored ? "line-through decoration-ink/30" : ""}`.trim()}>
+                  {fresh && <span title="Found by Mari scan" className="mr-1">✨</span>}
+                  <q className="not-italic">{statement}</q>
+                </span>
+              )}
+              summary={context && <span className="block break-words">{context}</span>}
+            />
+            <Chip
+              label={STAMP_LABEL[state]}
+              tone={STAMP_TONE[state]}
+              icon={state === "ratified" ? <Check size={11} strokeWidth={2.6} aria-hidden /> : undefined}
+              dot={state !== "ratified"}
+              className="shrink-0"
+            />
           </div>
-        )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {sourceLabel && <Chip label={sourceLabel} icon={sourceIcon} />}
-          {owners.length > 0 && (
-            <span className="flex items-center -space-x-1.5">
-              {owners.map((o) => <Avatar key={o} initials={initialsOf(o)} />)}
-            </span>
+          {ignored && replacedBy && (
+            <div className="flex items-start gap-1.5 text-[12.5px] text-ink/70">
+              <CornerDownRight size={14} className="mt-[2px] shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">Ignored in favour of <b className="text-ink/85">{`“${replacedBy}”`}</b></span>
+            </div>
           )}
-          {decidedOn && <span className="font-term text-[11px] text-ink/55">Decided {fmtDate(decidedOn)}</span>}
-          <span className="ml-auto flex items-center gap-2">
-            {actions ?? (
-              <>
-                {status === "proposed" && onRatify && (
-                  <Button variant="success" compact onClick={onRatify} disabled={ratifying}>
-                    <Check size={13} /> {ratifying ? "Ratifying…" : "Ratify"}
-                  </Button>
-                )}
-                {status === "ratified" && onSupersede && (
-                  <Menu trigger={<Button icon compact aria-label="Decision actions"><MoreVertical size={16} /></Button>}>
-                    <MenuItem icon={<RefreshCw size={14} />} onSelect={onSupersede}>Supersede…</MenuItem>
-                  </Menu>
-                )}
-              </>
-            )}
-          </span>
-        </div>
 
-        {impact && <div className="mt-3 border-t border-ink/10 pt-3">{impact}</div>}
+          {/* 6 + 7: source and status chips left, date and owners right. */}
+          <CardMeta
+            source={sourceLabel ? <Chip label={sourceLabel} icon={sourceIcon} /> : undefined}
+            date={decidedOn ? `Decided ${fmtDate(decidedOn)}` : undefined}
+            author={owners.length > 0 ? (
+              <span className="flex items-center -space-x-1.5">
+                {owners.map((o) => <Avatar key={o} initials={initialsOf(o)} />)}
+              </span>
+            ) : undefined}
+          />
+
+          {impact && <div className="border-t border-ink/10 pt-3">{impact}</div>}
+
+          {/* 11 + 12: buttons last, biggest action first and bottom LEFT. */}
+          {actions ? (
+            <CardActions primary={actions} />
+          ) : (
+            <CardActions
+              primary={state === "proposed" && onRatify ? (
+                <Button variant="success" compact onClick={onRatify} disabled={ratifying}>
+                  <Check size={13} /> {ratifying ? "Ratifying…" : "Ratify"}
+                </Button>
+              ) : undefined}
+              secondary={state !== "ignored" && ignore ? (
+                <ConfirmButton compact confirmLabel="Ignore this decision?" onConfirm={ignore}>
+                  Ignore
+                </ConfirmButton>
+              ) : undefined}
+            />
+          )}
+        </CardBody>
       </article>
     </div>
   );

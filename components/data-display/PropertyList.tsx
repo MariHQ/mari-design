@@ -2,7 +2,8 @@ import { type ReactNode } from "react";
 import { card } from "../tokens/card";
 import { SkeletonLine } from "./Skeleton";
 
-const labelClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
+/* text-ink/65 is the meta/label contrast floor (CONVENTIONS.md §6). */
+const labelClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/65";
 
 export type PropertyItem = {
   label: ReactNode;
@@ -71,8 +72,11 @@ export function PropertyList({
           key={i}
           className={`flex gap-4 py-2.5 border-b border-ink/10 last:border-0 ${it.stacked ? "flex-col gap-1" : "items-baseline justify-between"}`}
         >
-          <dt className={`${labelClass} shrink-0`}>{it.label}</dt>
-          <dd className={`text-[13.5px] text-ink break-words ${it.stacked ? "" : "text-right"}`}>{it.value}</dd>
+          {/* The label used to be shrink-0, so a long one pushed the value off
+              the card. It now shares the row, with a floor so it can never
+              collapse into a one-letter-per-line column. */}
+          <dt className={`${labelClass} min-w-[88px] max-w-[55%] break-words ${it.stacked ? "" : "flex-1"}`.trim()}>{it.label}</dt>
+          <dd className={`min-w-0 flex-1 text-[13.5px] text-ink break-words ${it.stacked ? "" : "text-right"}`}>{it.value}</dd>
         </div>
       ))}
     </dl>

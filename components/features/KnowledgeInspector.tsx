@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { CheckCircle2, ArrowRight, GitBranch } from "lucide-react";
 import { Card } from "../layout/Card";
+import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
 import { SectionLabel } from "../forms/SectionLabel";
 import { TagPicker } from "../forms/TagPicker";
 import { Tabs } from "../navigation/Tabs";
-import { CountChip } from "../data-display/Chip";
+import { Chip, CountChip } from "../data-display/Chip";
 import { Pill } from "../data-display/Pill";
 import { SourceMark } from "../icons/marks";
+import { fmtDate } from "../tokens/format";
+import { ConnectionRow, type RelKey } from "./LineageDataModel";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 
 /* KnowledgeInspector — the sticky right-rail describing the selected search
@@ -19,6 +22,8 @@ import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../dat
 type Fact = { text: string };
 type Related = { source: string; title: string };
 type Revision = { at: string; actor: string; verb: string };
+/** One lineage edge off this document, drawn with the shared lineage styling. */
+type Link = { rel: RelKey; dir: "out" | "in"; title: string; source: string };
 
 type Doc = {
   id: string;
@@ -34,7 +39,12 @@ type Doc = {
   facts: Fact[];
   related: Related[];
   timeline: Revision[];
+  /** Lineage edges off this doc. Optional: callers that predate the preview
+      fall back to a derived list built from `related`. */
+  lineage?: Link[];
 };
+
+const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
 
 const DEMO: Doc = {
   id: "doc_8f21",
@@ -57,9 +67,17 @@ const DEMO: Doc = {
     { source: "docs", title: "Sign-in and session model" },
   ],
   timeline: [
-    { at: "Jul 16, 4:12 PM", actor: "Priya Nair", verb: "verified the runbook" },
-    { at: "Jul 11, 9:38 AM", actor: "Marcus Vale", verb: "added the rollback window" },
-    { at: "Jun 28, 2:05 PM", actor: "Dana Osei", verb: "created the page" },
+    { at: "Jul 16, 2026, 4:12 PM", actor: "Priya Nair", verb: "verified the runbook" },
+    { at: "Jul 11, 2026, 9:38 AM", actor: "Marcus Vale", verb: "added the rollback window" },
+    { at: "Jun 28, 2026, 2:05 PM", actor: "Dana Osei", verb: "created the page" },
+    { at: "Jun 20, 2026, 11:02 AM", actor: "Priya Nair", verb: "linked the settlement dashboard" },
+    { at: "Jun 14, 2026, 3:47 PM", actor: "Marcus Vale", verb: "split the escalation section" },
+    { at: "Jun 02, 2026, 8:15 AM", actor: "Dana Osei", verb: "imported the page from Notion" },
+  ],
+  lineage: [
+    { rel: "derived", dir: "in", title: "Settlement queue postmortem", source: "docs" },
+    { rel: "references", dir: "out", title: "feat: retry settlement on transient errors", source: "github" },
+    { rel: "discussed", dir: "out", title: "#payments-oncall escalation thread", source: "slack" },
   ],
 };
 
@@ -74,6 +92,19 @@ export type KnowledgeInspectorProps = {
 export function KnowledgeInspector({ doc = DEMO, loading = false, className = "" }: KnowledgeInspectorProps) {
   const [insTab, setInsTab] = useState<InsTab>("document");
   const [tags, setTags] = useState<string[]>(doc.tags);
+  // Both rail links used to be inert. They now drive real state: the history
+  // link expands the full revision list, the lineage link opens the connection
+  // preview inline (CONVENTIONS.md §2).
+  const [fullHistory, setFullHistory] = useState(false);
+  const [lineageOpen, setLineageOpen] = useState(false);
+  const [focused, setFocused] = useState<string | null>(null);
+
+  const lineage: Link[] = doc.lineage ?? doc.related.map((r, i) => ({
+    rel: REL_CYCLE[i % REL_CYCLE.length],
+    dir: i === 0 ? "in" : "out",
+    title: r.title,
+    source: r.source,
+  }));
 
   if (loading) {
     return (
@@ -112,24 +143,10 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
       </div>
 
       <div className="p-4">
-        {/* Title */}
+        {/* Title (order slot 4) */}
         <div className="flex items-start gap-2.5">
           <SourceMark provider={doc.source} size={20} />
           <h3 className="text-[15px] font-semibold text-ink leading-snug min-w-0 break-words">{doc.title}</h3>
-        </div>
-
-        {/* Tag row */}
-        <div className="mt-3">
-          {doc.slack ? (
-            <div className="rounded-[4px] border border-ink/12 bg-ink/[0.02] px-3 py-2 font-term text-[11.5px] text-ink/60">
-              Thread-sized search chunk · {doc.messageCount ?? 18} messages · no per-message tagging
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              {tags.map((t) => <Pill key={t} kind={t} />)}
-              <TagPicker compact tags={tags} onChange={setTags} onManage={() => undefined} />
-            </div>
-          )}
         </div>
 
         {insTab === "inspector" ? (
@@ -138,42 +155,34 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
             {metaRow("Kind", doc.kind)}
             {metaRow("Source", doc.source)}
             {metaRow("Owner", doc.owner)}
-            {metaRow("Updated", doc.updated)}
-            {metaRow("Tags", tags.length ? tags.join(", ") : "—")}
+            {metaRow("Updated", fmtDate(doc.updated))}
+            {metaRow("Tags", tags.length ? tags.join(", ") : "")}
             {metaRow("Watched", "Yes")}
             <Button block className="mt-4">Open document <ArrowRight size={14} /></Button>
           </div>
         ) : (
+          /* Rail order is fixed by the client note and CONVENTIONS.md §1:
+             summary → verified facts → related docs → source badge → status
+             badge (tags) → owner → last updated → revision timeline. */
           <div className="mt-4 flex flex-col gap-5">
-            {/* strip */}
-            <div className="grid grid-cols-3 gap-2 rounded-[5px] border border-ink/12 p-3">
-              <div><SectionLabel>Owner</SectionLabel><div className="text-[12.5px] text-ink/85 mt-0.5">{doc.owner}</div></div>
-              <div><SectionLabel>Last updated</SectionLabel><div className="text-[12.5px] text-ink/85 mt-0.5">{doc.updated}</div></div>
-              <div><SectionLabel>Source</SectionLabel><div className="text-[12.5px] text-ink/85 mt-0.5 capitalize">{doc.source}</div></div>
-            </div>
+            {/* Summary (order slot 5) */}
+            <p className="text-[13px] leading-relaxed text-ink/80">{doc.summary}</p>
 
-            {/* Summary */}
-            <div>
-              <h4 className="font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60 mb-1.5">Summary</h4>
-              <p className="text-[13px] text-ink/80">{doc.summary}</p>
-            </div>
-
-            {/* Verified facts */}
-            <div>
-              <h4 className="flex items-center gap-1.5 font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60 mb-2">Verified facts <CountChip count={doc.facts.length} tone="info" /></h4>
+            <CardSection label="Verified facts" count={doc.facts.length}>
               <ul className="flex flex-col gap-1.5">
                 {doc.facts.slice(0, 6).map((f, i) => (
                   <li key={i} className="flex items-start gap-2 text-[12.5px] text-ink/80">
                     <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-moss" />
-                    <span>{f.text}</span>
+                    <span className="min-w-0 break-words">{f.text}</span>
                   </li>
                 ))}
+                {doc.facts.length === 0 && (
+                  <li className="text-[12.5px] text-ink/70">No verified facts extracted from this document yet.</li>
+                )}
               </ul>
-            </div>
+            </CardSection>
 
-            {/* Related */}
-            <div>
-              <h4 className="flex items-center gap-1.5 font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60 mb-2">Related <CountChip count={doc.related.length} /></h4>
+            <CardSection label="Related docs" count={doc.related.length}>
               <ul className="flex flex-col gap-1.5">
                 {doc.related.slice(0, 4).map((r, i) => (
                   <li key={i} className="flex items-center gap-2 text-[12.5px] text-ink/80">
@@ -181,40 +190,87 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
                     <span className="min-w-0 truncate hover:text-biscay-2 cursor-pointer">{r.title}</span>
                   </li>
                 ))}
+                {doc.related.length === 0 && (
+                  <li className="text-[12.5px] text-ink/70">Nothing links to this document yet.</li>
+                )}
               </ul>
+            </CardSection>
+
+            {/* Source badge (slot 6) + status badge / tags (slot 7) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip
+                label={doc.source}
+                tone="neutral"
+                icon={<SourceMark provider={doc.source} size={13} />}
+              />
+              {doc.slack ? (
+                <Chip label="Decision excerpt" tone="info" />
+              ) : (
+                <>
+                  {tags.map((t) => <Pill key={t} kind={t} />)}
+                  <TagPicker compact tags={tags} onChange={setTags} onManage={() => undefined} />
+                </>
+              )}
+            </div>
+            {doc.slack && (
+              <p className="-mt-3 text-[12px] text-ink/70">
+                A decision excerpt is the passage of a thread where the call was made,
+                {" "}{doc.messageCount ?? 18} messages long. Tags apply to the excerpt, not to single messages.
+              </p>
+            )}
+
+            {/* Owner + last updated (slots 8 to 10) */}
+            <div className="grid grid-cols-2 gap-2 rounded-[5px] border border-ink/12 p-3">
+              <div><SectionLabel>Owner</SectionLabel><div className="text-[12.5px] text-ink/85 mt-0.5">{doc.owner}</div></div>
+              <div><SectionLabel>Last updated</SectionLabel><div className="text-[12.5px] text-ink/85 mt-0.5">{fmtDate(doc.updated)}</div></div>
             </div>
 
-            {/* 2-col: timeline + lineage */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <h4 className="font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60 mb-2">Revision timeline</h4>
-                <ul className="flex flex-col gap-2">
-                  {doc.timeline.map((r, i) => (
-                    <li key={i} className="text-[12px] text-ink/75">
-                      <b className="font-term text-[11px] text-ink/55 block">{r.at}</b>
-                      {r.verb} — {r.actor}
-                    </li>
+            {/* Revision timeline, last */}
+            <CardSection label="Revision timeline" count={doc.timeline.length}>
+              <ul className="flex flex-col gap-2">
+                {(fullHistory ? doc.timeline : doc.timeline.slice(0, 3)).map((r, i) => (
+                  <li key={i} className="break-words text-[12px] text-ink/75">
+                    <b className="font-term text-[11px] text-ink/65 block">{r.at}</b>
+                    {r.verb}, {r.actor}
+                  </li>
+                ))}
+                {doc.timeline.length === 0 && (
+                  <li className="text-[12.5px] text-ink/70">No revisions recorded for this document.</li>
+                )}
+              </ul>
+
+              {lineageOpen && (
+                <div className="mt-3 rounded-[5px] border border-ink/12 bg-flysch/50 p-2.5">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <h5 className="font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65">Lineage connections</h5>
+                    <CountChip count={lineage.length} tone="info" />
+                  </div>
+                  {/* Same ConnectionRow / EdgeSwatch the lineage drawers use, so
+                      the preview reads as one component family. */}
+                  {lineage.map((l) => (
+                    <ConnectionRow
+                      key={l.title}
+                      rel={l.rel}
+                      dir={l.dir}
+                      title={l.title}
+                      subline={focused === l.title ? "Focused on the canvas" : l.source}
+                      onSelect={() => setFocused((f) => (f === l.title ? null : l.title))}
+                      onFocus={() => setFocused(l.title)}
+                    />
                   ))}
-                </ul>
-                <Button variant="link" className="mt-2">View full history <ArrowRight size={12} /></Button>
-              </div>
-              <div>
-                <h4 className="font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60 mb-2">Open in lineage</h4>
-                <div className="rounded-[5px] border border-ink/12 bg-flysch/60 p-3 grid place-items-center h-[92px]">
-                  <svg width="150" height="64" aria-hidden>
-                    <line x1="24" y1="32" x2="74" y2="18" stroke="#10263B40" strokeWidth="1.4" />
-                    <line x1="24" y1="32" x2="74" y2="48" stroke="#10263B40" strokeWidth="1.4" />
-                    <line x1="90" y1="18" x2="130" y2="32" stroke="#10263B40" strokeWidth="1.4" />
-                    <line x1="90" y1="48" x2="130" y2="32" stroke="#10263B40" strokeWidth="1.4" />
-                    <foreignObject x="8" y="20" width="24" height="24"><SourceMark provider={doc.source} size={20} /></foreignObject>
-                    <circle cx="82" cy="18" r="5" fill="#1E6FA8" />
-                    <circle cx="82" cy="48" r="5" fill="#2C6E49" />
-                    <circle cx="130" cy="32" r="6" fill="#1C3F60" />
-                  </svg>
                 </div>
-                <Button variant="link" className="mt-2"><GitBranch size={12} /> Open in lineage <ArrowRight size={12} /></Button>
+              )}
+
+              {/* Both actions on the same line, bottom left (CONVENTIONS.md §2). */}
+              <div className="mt-2 flex flex-wrap items-center gap-4">
+                <Button variant="link" onClick={() => setFullHistory((v) => !v)}>
+                  {fullHistory ? "Show recent revisions" : `View full history (${doc.timeline.length})`} <ArrowRight size={12} />
+                </Button>
+                <Button variant="link" onClick={() => setLineageOpen((v) => !v)}>
+                  <GitBranch size={12} /> {lineageOpen ? "Hide lineage" : "Open in lineage"} <ArrowRight size={12} />
+                </Button>
               </div>
-            </div>
+            </CardSection>
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import { DocReviewChangeQueue } from "../features/DocReviewChangeQueue";
 import { DocReviewFindingsPanel } from "../features/DocReviewFindingsPanel";
 import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { fmtDate } from "../tokens/format";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_URL,
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT,
@@ -86,12 +87,12 @@ ${LONG_PARAGRAPH}
 ${LONG_PARAGRAPH}`,
   editorFindings: [
     { id: 1, kind: "fact", severity: "error", text: "re-reviewed every quarter or after any Sev-1", note: LONG_PARAGRAPH },
-    { id: 2, kind: "prose", severity: "warn", text: "in exhaustive detail", note: "hedge — consider trimming this qualifier for concision across the section" },
+    { id: 2, kind: "prose", severity: "warn", text: "in exhaustive detail", note: "hedge: consider trimming this qualifier for concision across the section" },
   ],
   refine: { errorN: 12, warnN: 34, advisoryN: 21 },
   changes: [
-    { id: 1, original: LONG_PARAGRAPH, proposed: "This document consolidates the operating guidance for the entire platform organization and describes the escalation ladder, the paging policy, and the post-incident review process.", rule: "Tighten — cut redundant scope-setting across the opening paragraph so responders reach the escalation ladder faster", state: "pending" },
-    { id: 2, original: "It will be re-reviewed every quarter or after any Sev-1.", proposed: "It is re-reviewed each quarter and after every Sev-1 incident.", rule: "Sharpen — commit to the cadence instead of hedging with a future tense", state: "pending" },
+    { id: 1, original: LONG_PARAGRAPH, proposed: "This document consolidates the operating guidance for the entire platform organization and describes the escalation ladder, the paging policy, and the post-incident review process.", rule: "Tighten: cut redundant scope-setting across the opening paragraph so responders reach the escalation ladder faster", state: "pending" },
+    { id: 2, original: "It will be re-reviewed every quarter or after any Sev-1.", proposed: "It is re-reviewed each quarter and after every Sev-1 incident.", rule: "Sharpen: commit to the cadence instead of hedging with a future tense", state: "pending" },
   ],
   changeBody: LONG_PARAGRAPH,
   findings: [
@@ -99,7 +100,7 @@ ${LONG_PARAGRAPH}`,
     { id: 2, kind: "freshness", severity: "warn", text: "reviewed by the reliability guild", note: "The reliability-guild sign-off referenced here is more than eight months old and predates the current escalation ladder." },
   ],
   claims: [
-    { claim: LONG_PARAGRAPH, source: LONG_DOC_TITLE, status: "Contradicted", verified: "—" },
+    { claim: LONG_PARAGRAPH, source: LONG_DOC_TITLE, status: "Contradicted", verified: "" },
     { claim: "Every section has been reviewed by the reliability guild and reconciled against retrospectives.", source: LONG_TITLE, status: "Verified", verified: "May 1, 2024" },
   ],
 };
@@ -135,12 +136,12 @@ ${UNBREAKABLE}`,
   ],
   changeBody: `${UNBREAKABLE} ${LONG_URL} ${MIXED_SCRIPT}`,
   findings: [
-    { id: 1, kind: "fact", severity: "error", text: UNBREAKABLE, note: `${MIXED_SCRIPT} — ${LONG_URL}` },
+    { id: 1, kind: "fact", severity: "error", text: UNBREAKABLE, note: `${MIXED_SCRIPT}, ${LONG_URL}` },
     { id: 2, kind: "freshness", severity: "warn", text: LONG_WORD, note: MIXED_SCRIPT },
   ],
   claims: [
     { claim: UNBREAKABLE, source: LONG_URL, status: "Contradicted", verified: HUGE_NUMBER_STR },
-    { claim: MIXED_SCRIPT, source: LONG_WORD, status: "Unsupported", verified: "—" },
+    { claim: MIXED_SCRIPT, source: LONG_WORD, status: "Unsupported", verified: "" },
   ],
 };
 
@@ -157,7 +158,7 @@ function HeaderActions({ state }: { state: string }) {
   const applied = state === "applied";
 
   const statusChip = offlineDirty ? (
-    <span className="text-[12px] font-medium text-espelette">API offline — can't save</span>
+    <span className="text-[12px] font-medium text-espelette">API offline: can't save</span>
   ) : saving ? (
     <Chip label="Saving…" tone="info" dot />
   ) : dirty ? (
@@ -197,7 +198,7 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
         className={
           mobile
             ? "space-y-4"
-            : "grid grid-cols-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)_300px]"
+            : "grid gap-5 grid-cols-[280px_minmax(0,1fr)_300px]"
         }
       >
         <div className="min-w-0 space-y-4">
@@ -236,7 +237,7 @@ function PanelFrame({ title, description, children }: { title: string; descripti
     <div className="space-y-4">
       <div>
         <h2 className="font-display text-[16px] font-semibold text-ink">{title}</h2>
-        <p className="mt-0.5 text-[12.5px] text-ink/55">{description}</p>
+        <p className="mt-0.5 text-[12.5px] text-ink/65">{description}</p>
       </div>
       {children}
     </div>
@@ -280,7 +281,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   }
   if (state === "change-queue") {
     return (
-      <PanelFrame title="Change queue" description="Proposed edits as a word-level diff — accept to rewrite the body, reject to dismiss.">
+      <PanelFrame title="Change queue" description="Proposed edits as a word-level diff: accept to rewrite the body, reject to dismiss.">
         <DocReviewChangeQueue />
       </PanelFrame>
     );
@@ -323,12 +324,13 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 }
 
 function DocReviewPage({ state = "default", mobile = false }: PageProps) {
+  const actions = <HeaderActions state={state} />;
   return (
     <PageFrame active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
       {state === "loading" ? (
         <SkeletonPage variant="editor" />
       ) : (
-      <div className="mx-auto max-w-[1500px] px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           title={state === "overflow" ? LONG_TITLE : state === "stress" ? `${UNBREAKABLE} ${MIXED_SCRIPT}` : "Billing proration runbook"}
           backLink={{ href: "/knowledge", label: "Library" }}
@@ -337,10 +339,11 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
               ? `Owner: ${LONG_NAME} · Last verified across every service, region, and team`
               : state === "stress"
                 ? `${MIXED_SCRIPT} · ${LONG_URL}`
-                : "Owner: Maya M. · Last verified May 13, 2024"
+                : `Owner: Maya M. · Last verified ${fmtDate("2024-05-13")}`
           }
-          actions={<HeaderActions state={state} />}
+          actions={mobile ? undefined : actions}
         />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <div className="mt-6">
           <Body state={state} mobile={mobile} />
         </div>

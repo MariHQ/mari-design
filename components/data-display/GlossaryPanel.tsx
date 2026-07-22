@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
+import { IconPencil, IconTrash } from "../icons/ui";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -53,7 +54,7 @@ export function GlossaryPanel({
       <div className="divide-y divide-ink/10 border-t border-ink/10">
         {entries.length === 0 && (
           <div className="px-4 py-3">
-            <EmptyState>No terms yet{onAdd ? " — add the first one below." : "."}</EmptyState>
+            <EmptyState>No terms yet{onAdd ? ". Add the first one below." : "."}</EmptyState>
           </div>
         )}
 
@@ -66,22 +67,25 @@ export function GlossaryPanel({
               <Button compact onClick={() => setEditId(null)}>Cancel</Button>
             </div>
           ) : (
-            <div key={e.id} className="flex items-start gap-4 px-4 py-3">
-              <div className="w-40 shrink-0 text-[13.5px] font-semibold text-ink break-words">{e.term}</div>
-              <div className="flex-1 min-w-0">
+            <div key={e.id} className="flex flex-wrap items-start gap-x-4 gap-y-1.5 px-4 py-3">
+              <div className="w-40 shrink-0 break-words text-[13.5px] font-semibold text-ink">{e.term}</div>
+              <div className="min-w-[12rem] flex-1">
                 <div className="text-[13.5px] text-ink/80 break-words">{e.definition}</div>
-                {e.meta && <div className="mt-0.5 font-term text-[11px] text-ink/50">{e.meta}</div>}
+                {e.meta && <div className="mt-0.5 font-term text-[11px] text-ink/65">{e.meta}</div>}
               </div>
+              {/* Edit and delete are the SAME 36px icon button carrying the
+                  SAME 18px glyph. They used to be 36px vs 28px, which read as
+                  two unrelated controls. */}
               {(onEdit || onDelete) && (
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
                   {onEdit && (
-                    <Button icon compact aria-label={`Edit ${e.term}`} title="Edit term" onClick={() => startEdit(e)}>
-                      <Pencil size={13} />
+                    <Button icon aria-label={`Edit ${e.term}`} title="Edit term" onClick={() => startEdit(e)}>
+                      <IconPencil size={18} />
                     </Button>
                   )}
                   {onDelete && (
-                    <ConfirmButton compact aria-label={`Delete ${e.term}`} title="Delete term" confirmLabel="Delete?" onConfirm={() => onDelete(e.id)}>
-                      <Trash2 size={13} />
+                    <ConfirmButton icon aria-label={`Delete ${e.term}`} title="Delete term" confirmLabel="Yes" onConfirm={() => onDelete(e.id)}>
+                      <IconTrash size={18} />
                     </ConfirmButton>
                   )}
                 </div>
@@ -95,7 +99,7 @@ export function GlossaryPanel({
             <Input className="w-40 shrink-0" placeholder="New term" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} />
             <Input className="flex-1 min-w-[12rem]" placeholder="What it means, in one sentence." value={newDef} onChange={(e) => setNewDef(e.target.value)} />
             <Button variant="primary" compact onClick={add} disabled={!newTerm.trim() || !newDef.trim()}>
-              <Plus size={13} /> Add
+              <Plus size={16} /> Add
             </Button>
           </div>
         )}

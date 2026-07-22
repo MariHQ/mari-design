@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
-import { ChevronsUpDown, Layers } from "lucide-react";
+import { ChevronsUpDown, Layers, ClipboardCheck, Download } from "lucide-react";
 import { Button } from "../actions/Button";
+import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Chip } from "../data-display/Chip";
-import { Field } from "../forms/Field";
-import { SectionLabel } from "../forms/SectionLabel";
+import { EmptyState } from "../data-display/EmptyState";
 import { GithubMark } from "../icons";
 import { fmtDate } from "../tokens/format";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import {
-  LgDrawerShell, ConnectionRow, groupParts, groupKindWord,
-  DEMO_EDGES, type LNode, type LEdge,
+  LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow, groupParts, groupKindWord,
+  LgAuthor, LgOwners, LgSourceChip,
+  DEMO_EDGES, DEMO_NODES, nodeById, type LNode, type LEdge,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -18,8 +19,12 @@ import {
    The macro-node counterpart to the node drawer. When a roll-up macro node
    (one card standing in for a whole gh:<repo>:<kind> bucket, e.g. "89 commits ·
    MariHQ/web") is tapped, this drawer summarizes the group and offers the
-   expand/collapse affordance plus a jump list of the top members (ranked by
-   degree). Same non-modal shell. Standalone with a baked-in demo bucket.
+   expand/collapse affordance plus a jump list of the members (ranked by
+   degree).
+
+   Same shell and the same content order as the other three drawers
+   (CONVENTIONS §1): title, summary, source + status left with date and author
+   right, then References, Members, Owners, then the actions.
    ──────────────────────────────────────────────────────────────────────── */
 
 export type LineageGroupDrawerProps = {
@@ -52,6 +57,8 @@ export function LineageGroupDrawer({
 }: LineageGroupDrawerProps) {
   const { repo, kind } = groupParts(groupId);
   const [isOpen, setIsOpen] = useState(false);
+  const [taskMade, setTaskMade] = useState(false);
+  const [exported, setExported] = useState(false);
 
   const degreeOf = useMemo(() => {
     const d = new Map<string, number>();
@@ -66,8 +73,29 @@ export function LineageGroupDrawer({
     () => [...members].sort((a, b) => (b.inbound ?? 0) - (a.inbound ?? 0) || (b.date ?? "").localeCompare(a.date ?? "")),
     [members],
   );
-  const visibleCount = members.length; // in the demo, all listed members pass filters
+
+  /* Edges that leave the bucket: the group's References / Endpoints. */
+  const graphById = useMemo(() => nodeById(DEMO_NODES), []);
+  const references = useMemo(
+    () => edges.filter((e) => e.id.startsWith("ge:") || e.from.startsWith("grp:")),
+    [edges],
+  );
+
+  const owners = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const m of members) if (m.owner) tally.set(m.owner, (tally.get(m.owner) ?? 0) + 1);
+    return [...tally]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([name, n]) => ({ name, role: `${n} ${groupKindWord(kind, n)}` }));
+  }, [members, kind]);
+
+  const latest = useMemo(
+    () => members.map((m) => m.date).filter(Boolean).sort().slice(-1)[0] as string | undefined,
+    [members],
+  );
   const kindWord = groupKindWord(kind, totalMembers);
+  const shown = isOpen ? ranked : ranked.slice(0, 5);
 
   if (loading) {
     return (
@@ -89,33 +117,74 @@ export function LineageGroupDrawer({
     <LgDrawerShell
       className={className}
       onClose={onClose}
+      width={LG_DRAWER_W}
       icon={<GithubMark size={19} />}
-      title={`${totalMembers} ${kindWord}`}
-      pills={
-        <>
-          <Chip label={repo} tone="neutral" />
-          <Chip label="Rolled up" tone="neutral" icon={<Layers size={11} />} />
-          {visibleCount !== totalMembers && <Chip label={`${visibleCount} match filters`} tone="attention" />}
-        </>
-      }
+      title="Rolled-up group"
+      summary="One card standing in for a whole bucket of nodes."
       footer={
-        <Button compact onClick={() => setIsOpen((o) => !o)}>
-          <ChevronsUpDown size={13} /> {isOpen ? "Collapse group" : "Expand group"}
-        </Button>
+        <div className="flex w-full flex-col gap-2">
+          {/* The expand/collapse toggle latches and actually redraws the list. */}
+          <div className="flex flex-wrap gap-2">
+            <Button compact onClick={() => setIsOpen((o) => !o)} className={isOpen ? lgToggleOn : ""}>
+              <ChevronsUpDown size={13} /> {isOpen ? "Collapse group" : "Expand group"}
+            </Button>
+          </div>
+          {/* CONVENTIONS §2: primary bottom LEFT, export to its right. */}
+          <CardActions
+            className="pt-0"
+            primary={
+              <Button variant="primary" onClick={() => setTaskMade(true)}>
+                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
+              </Button>
+            }
+            secondary={
+              <Button onClick={() => setExported(true)} className={exported ? lgToggleOn : ""}>
+                <Download size={13} /> {exported ? "Exported" : "Export"}
+              </Button>
+            }
+          />
+        </div>
       }
     >
-      <SectionLabel>Group</SectionLabel>
-      <div className="mt-1">
-        <Field label="Repository">{repo}</Field>
-        <Field label="Kind">{groupKindWord(kind, 2)}</Field>
-        <Field label="Members">{totalMembers}</Field>
-        <Field label="Matching filters">{visibleCount}</Field>
-      </div>
+      <CardBody>
+        <CardTitleBlock
+          className="[overflow-wrap:anywhere]"
+          title={`${totalMembers} ${kindWord}`}
+          summary={`Rolled up from ${repo}. ${members.length} of ${totalMembers} listed here.`}
+        />
+        <CardMeta
+          source={<LgSourceChip source="github" />}
+          status={<Chip label={isOpen ? "Expanded" : "Rolled up"} tone={isOpen ? "info" : "neutral"} icon={<Layers size={11} />} />}
+          date={latest ? fmtDate(latest) : "No date recorded"}
+          author={<LgAuthor name={owners[0]?.name} />}
+        />
 
-      <div className="mt-4">
-        <SectionLabel>Top members (by connections)</SectionLabel>
-        <div className="mt-1.5">
-          {ranked.slice(0, 8).map((m) => (
+        {isOpen && (
+          <LgResultPanel title="Group expanded on the canvas">
+            The {totalMembers} members now render as individual nodes, and every
+            listed member appears below instead of the top five.
+          </LgResultPanel>
+        )}
+
+        <CardSection label="References" count={references.length}>
+          {references.length === 0 ? (
+            <p className="text-[12.5px] text-ink/70">This bucket links to nothing outside itself.</p>
+          ) : references.map((e) => (
+            <ConnectionRow
+              key={e.id}
+              rel={e.rel}
+              dir="out"
+              dashed={e.dashed}
+              title={graphById[e.to]?.title ?? e.to}
+              subline={e.count && e.count > 1 ? `${e.count} rolled-up links` : "1 link"}
+            />
+          ))}
+        </CardSection>
+
+        <CardSection label="Members" count={totalMembers}>
+          {shown.length === 0 ? (
+            <EmptyState title="No members">Nothing in this bucket matches the current filters.</EmptyState>
+          ) : shown.map((m) => (
             <ConnectionRow
               key={m.id}
               rel="references"
@@ -125,8 +194,12 @@ export function LineageGroupDrawer({
               onSelect={() => onSelectMember?.(m.id)}
             />
           ))}
-        </div>
-      </div>
+        </CardSection>
+
+        <CardSection label="Owners">
+          <LgOwners owners={owners} />
+        </CardSection>
+      </CardBody>
     </LgDrawerShell>
   );
 }

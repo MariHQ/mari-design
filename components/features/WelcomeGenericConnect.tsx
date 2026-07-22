@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, CheckCircle2 } from "lucide-react";
 import { ConnectDrawer } from "../forms/ConnectDrawer";
 import { type ConnectorField, type ConnectTestResult } from "../forms/ConnectorWizard";
 import { type SyncSource } from "../feedback/SyncPanel";
 import { Button } from "../actions/Button";
+import { Alert } from "../feedback/Alert";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonButton } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
@@ -43,6 +44,9 @@ export function WelcomeGenericConnect({
 }: WelcomeGenericConnectProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [sync, setSync] = useState<SyncSource | null>(null);
+  /* Where the source LANDED. "Done" on its own left people wondering whether
+     the connection had gone anywhere at all. */
+  const [landed, setLanded] = useState<string | null>(null);
 
   const test = (_v: Record<string, string>): ConnectTestResult => ({ ok: true });
 
@@ -53,6 +57,7 @@ export function WelcomeGenericConnect({
       state: "syncing", phase: "Chunking", done: 40, total: 210, chunkCount: 640, embeddedCount: 210,
     };
     setSync(running);
+    setLanded(running.name);
     window.setTimeout(() => setSync({
       ...running, state: "done", phase: undefined,
       docCount: 210, chunkCount: 1980, embeddedCount: 1980, lastSyncAt: new Date().toISOString(),
@@ -63,7 +68,22 @@ export function WelcomeGenericConnect({
 
   return (
     <div className={className}>
-      <Button variant="primary" onClick={() => { setSync(null); setOpen(true); }}>Connect {providerName}</Button>
+      {/* Every connector trigger carries its provider mark. Either they all
+          have an icon or none do; GitHub used to be the only one with one. */}
+      <Button variant="primary" onClick={() => { setSync(null); setOpen(true); }}>
+        <SourceMark provider={providerKey} size={15} /> Connect {providerName}
+      </Button>
+      {landed && !open && (
+        <div className="mt-3">
+          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}
+            action={<Button compact onClick={() => setLanded(null)}>Open Connectors</Button>}>
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 size={14} className="text-moss" />
+              {landed} now lives on Sources, under the Connectors tab. Its first sync keeps running there.
+            </span>
+          </Alert>
+        </div>
+      )}
       <ConnectDrawer
         open={open}
         onClose={() => { setOpen(false); setSync(null); }}
@@ -75,7 +95,7 @@ export function WelcomeGenericConnect({
         onTest={test}
         onConnect={connect}
         note={providerKey === "slack" ? (
-          <span><MessageSquare size={13} className="inline mr-1" /> Importing channel history is separate from the answering bot — set that up under Settings → Sources → Bots.</span>
+          <span><MessageSquare size={13} className="inline mr-1" /> Importing channel history is separate from the answering bot. Set that up under Settings, Sources, Bots.</span>
         ) : undefined}
         syncStatus={sync}
         onRetrySync={() => setSync((s) => (s ? { ...s, state: "syncing" } : s))}

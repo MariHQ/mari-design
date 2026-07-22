@@ -47,13 +47,13 @@ function StressBody({ extreme }: { extreme: boolean }) {
 
   const docs = (extreme
     ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT]
-    : [LONG_DOC_TITLE, LONG_TITLE, `${LONG_NAME} — ${LONG_SOURCE}`]
+    : [LONG_DOC_TITLE, LONG_TITLE, `${LONG_NAME}, ${LONG_SOURCE}`]
   ).map((title, i) => ({ id: 100 + i, source: ["github", "notion", "granola"][i], title, date: "2026-07-20" }));
 
   const tasks = (extreme
     ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, `${HUGE_NUMBER_STR} ${UNBREAKABLE}`]
     : repeat(() => LONG_PARAGRAPH, 4)
-  ).map((text, i) => ({ id: i + 1, text, who: MANY_INITIALS[i % MANY_INITIALS.length], pill: "needs-review", pillText: extreme ? UNBREAKABLE : "Needs review — long editorial label that will not fit" }));
+  ).map((text, i) => ({ id: i + 1, text, who: MANY_INITIALS[i % MANY_INITIALS.length], pill: "needs-review", pillText: extreme ? UNBREAKABLE : "Needs review: long editorial label that will not fit" }));
 
   const feed = (extreme
     ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT]

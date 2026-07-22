@@ -163,7 +163,7 @@ export function ConnectorWizard({
                     <span className="text-[13px] font-semibold text-ink truncate flex-1">{p.name}</span>
                     {p.connected && <Chip label="Connected" tone="ok" caps className="shrink-0" />}
                   </span>
-                  <span className="text-[11.5px] text-ink/55 leading-snug line-clamp-2">{p.blurb}</span>
+                  <span className="text-[11.5px] text-ink/65 leading-snug line-clamp-2">{p.blurb}</span>
                 </button>
               );
             })}
@@ -185,7 +185,7 @@ export function ConnectorWizard({
             </a>
           )}
           {chosen.fields.length === 0 ? (
-            <div className="mt-3 text-[13px] text-ink/60">No credentials needed — connect to start the first sync.</div>
+            <div className="mt-3 text-[13px] text-ink/70">No credentials needed. Connect to start the first sync.</div>
           ) : (
             <div className="mt-2">
               {chosen.fields.map((f) => (
@@ -209,14 +209,14 @@ export function ConnectorWizard({
                       onChange={(e) => setField(f.key, e.target.value)}
                     />
                   )}
-                  {f.help && <p className="mt-1 text-[11.5px] text-ink/55">{f.help}</p>}
+                  {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
                 </Field>
               ))}
             </div>
           )}
           {test.ok === true && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
-              <CheckCircle2 size={14} /> Connection OK — credentials verified.
+              <CheckCircle2 size={14} /> Connection OK: credentials verified.
             </div>
           )}
           {test.ok === false && (
@@ -231,7 +231,7 @@ export function ConnectorWizard({
     return (
       <div>
         <div className="text-[13px] text-ink/70 mb-3">
-          The initial sync runs on the server — closing this dialog won’t interrupt it.
+          The initial sync runs on the server. Closing this dialog won’t interrupt it.
         </div>
         {syncStatus ? (
           <SyncPanel sources={[syncStatus]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />
@@ -271,7 +271,7 @@ export function ConnectorWizard({
       )}
       {step === 2 && (
         <>
-          <span className="text-[12px] text-ink/55">Sync continues in the background.</span>
+          <span className="text-[12px] text-ink/65">Sync continues in the background.</span>
           <Button variant="primary" onClick={() => onOpenChange(false)}>
             Done <CheckCircle2 size={14} />
           </Button>

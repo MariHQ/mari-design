@@ -29,7 +29,7 @@ export const NAV: NavSection[] = [
     { id: "publish", label: "Publish", icon: <Send size={18} /> },
     { id: "insights", label: "Insights", icon: <Sparkles size={18} /> },
   ] },
-  { heading: "Admin", items: [
+  { divider: true, items: [
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
   ] },
 ];

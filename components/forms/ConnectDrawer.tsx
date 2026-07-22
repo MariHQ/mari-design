@@ -70,18 +70,18 @@ export function ConnectDrawer({
 
   const footer = connected ? (
     <div className="flex items-center gap-3 w-full">
-      <span className="text-[12px] text-ink/55 flex-1">Sync continues on the server — closing won’t interrupt it.</span>
-      <Button variant="primary" onClick={onClose}>Done <CheckCircle2 size={14} /></Button>
+      <span className="text-[12px] text-ink/70 flex-1">Sync continues on the server. Closing won’t interrupt it.</span>
+      <Button variant="primary" onClick={onClose}>Done <CheckCircle2 size={16} /></Button>
     </div>
   ) : (
     <div className="flex items-center gap-2 w-full justify-end">
       {onTest && (
         <Button disabled={!filled || test.busy} onClick={runTest}>
-          {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={14} /> Test connection</>}
+          {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={16} /> Test connection</>}
         </Button>
       )}
       <Button variant="primary" disabled={!filled} onClick={() => onConnect(trimmed())}>
-        Connect &amp; sync <ArrowRight size={14} />
+        Connect &amp; sync <ArrowRight size={16} />
       </Button>
     </div>
   );
@@ -107,7 +107,7 @@ export function ConnectDrawer({
         </div>
       ) : connected ? (
         <>
-          <p className="text-[13px] text-ink/70 mb-3">The initial sync runs on the server — live status below.</p>
+          <p className="text-[13px] text-ink/70 mb-3">The initial sync runs on the server. Live status below.</p>
           <SyncPanel sources={[syncStatus!]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />
         </>
       ) : (
@@ -116,7 +116,7 @@ export function ConnectDrawer({
             {blurb}{" "}
             {docsUrl && (
               <a className="inline-flex items-center gap-1 text-biscay-2 hover:underline" href={docsUrl} target="_blank" rel="noreferrer">
-                Where do I get these? <ExternalLink size={11} />
+                Where do I get these? <ExternalLink size={14} />
               </a>
             )}
           </p>
@@ -142,16 +142,16 @@ export function ConnectDrawer({
                     onChange={(e) => set(f.key, e.target.value)}
                   />
                 )}
-                {f.help && <p className="mt-1 text-[11.5px] text-ink/55">{f.help}</p>}
+                {f.help && <p className="mt-1 text-[11.5px] text-ink/70">{f.help}</p>}
               </Field>
             ))}
           </div>
-          <p className="mt-3 text-[11.5px] text-ink/55">
+          <p className="mt-3 text-[11.5px] text-ink/70">
             Credentials are stored server-side and never shown again.
           </p>
           {test.ok === true && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
-              <CheckCircle2 size={14} /> Connection test passed. <Chip label="Valid" tone="ok" caps />
+              <CheckCircle2 size={16} /> Connection test passed. <Chip label="Valid" tone="ok" caps />
             </div>
           )}
           {test.ok === false && (

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { useSyncExternalStore } from "react";
 import { GithubMark, SourceMark } from "../icons";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
-import { Chip } from "../data-display/Chip";
+import { Chip, StatusChip } from "../data-display/Chip";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 
@@ -86,14 +87,30 @@ export type GraphView = { id: number; name: string; state: string };
 
 /* ── Relation styles — order matters (drives menu + legend) ──────────────── */
 
-export type RelStyle = { color: string; dash?: string; label: string; out: string; in: string };
+/* Color is never the only channel (CONVENTIONS.md §4/§6): every relation also
+   carries its own dash pattern, its own stroke weight, and a short mono code
+   that is drawn on the edge itself and repeated in the legend. */
+export type RelStyle = {
+  color: string;
+  /** SVG stroke-dasharray. Undefined = solid. Unique per relation. */
+  dash?: string;
+  /** Stroke weight, also unique enough to read without color. */
+  width: number;
+  /** Short ALL-CAPS code printed on the edge and in the legend. */
+  code: string;
+  /** Plain-language name for the dash pattern, for the legend. */
+  pattern: string;
+  label: string;
+  out: string;
+  in: string;
+};
 
 export const REL: Record<RelKey, RelStyle> = {
-  references: { color: "#35549d", label: "References", out: "References", in: "Referenced by" },
-  discussed: { color: "#bf4f2e", label: "Discussed in", out: "Discussed in", in: "Discusses" },
-  derived: { color: "#43663c", label: "Derived from", out: "Derived from", in: "Source of" },
-  translates: { color: "#6a5a9c", dash: "4 5", label: "Translates", out: "Translates", in: "Translated by" },
-  contradicts: { color: "#c8502e", dash: "6 5", label: "Contradicts", out: "Contradicts", in: "Contradicted by" },
+  references: { color: "#35549d", width: 1.8, code: "REF", pattern: "Solid, thin", label: "References", out: "References", in: "Referenced by" },
+  discussed: { color: "#bf4f2e", dash: "1 4", width: 2.2, code: "DISC", pattern: "Dotted", label: "Discussed in", out: "Discussed in", in: "Discusses" },
+  derived: { color: "#43663c", dash: "9 4", width: 2.4, code: "DERIV", pattern: "Long dash", label: "Derived from", out: "Derived from", in: "Source of" },
+  translates: { color: "#6a5a9c", dash: "5 3 1 3", width: 2, code: "TRANS", pattern: "Dash dot", label: "Translates", out: "Translates", in: "Translated by" },
+  contradicts: { color: "#c8502e", dash: "3 3", width: 3.4, code: "CONTRA", pattern: "Short dash, heavy", label: "Contradicts", out: "Contradicts", in: "Contradicted by" },
 };
 
 export const REL_ORDER: RelKey[] = ["references", "discussed", "derived", "translates", "contradicts"];
@@ -183,6 +200,120 @@ export const SEVERITY_META: Record<Severity, { label: string; color: string; ton
   minor: { label: "Minor", color: "#35549d", tone: "info" },
 };
 
+/* ── Node surface ───────────────────────────────────────────────────────── */
+
+/** Flat cream node fill (brand paper, warmed). No gradient, no shadow. */
+export const NODE_CREAM = "#FAF7F2";
+/** Cream one step down, for the node's meta strip. */
+export const NODE_CREAM_DEEP = "#F3EEE4";
+
+/* ── Shared toolbar ⇄ canvas control state ──────────────────────────────
+   The toolbar and the graph render as siblings (the page composes them), so a
+   plain parent `useState` cannot connect them without owning the page. This is
+   a tiny external store instead: the toolbar writes, the canvas subscribes, and
+   "the toolbar does nothing to the graph" stops being true. Components may
+   still be driven by explicit props — a prop always wins and is pushed into the
+   store on mount so both paths agree. */
+
+export type StatusFilter = "all" | "verified" | "review" | "warnings";
+export type NodeStatusKey = "verified" | "review" | "warning";
+
+export type LineageControlState = {
+  query: string;
+  /** null = every source. */
+  sources: string[] | null;
+  /** null = every relation. */
+  rels: RelKey[] | null;
+  status: StatusFilter;
+  lens: Lens;
+  layout: LayoutMode;
+  scope: "focus" | "all";
+  /** Canvas scale, 1 = 100%. */
+  zoom: number;
+};
+
+const DEFAULT_CONTROLS: LineageControlState = {
+  query: "", sources: null, rels: null, status: "all",
+  lens: "source", layout: "flow", scope: "all", zoom: 1,
+};
+
+let controlState: LineageControlState = DEFAULT_CONTROLS;
+const controlListeners = new Set<() => void>();
+
+export function getLineageControls(): LineageControlState {
+  return controlState;
+}
+
+export function setLineageControls(patch: Partial<LineageControlState>) {
+  const next = { ...controlState, ...patch };
+  const changed = (Object.keys(next) as (keyof LineageControlState)[]).some((k) => next[k] !== controlState[k]);
+  if (!changed) return;
+  controlState = next;
+  for (const l of controlListeners) l();
+}
+
+function subscribeControls(cb: () => void) {
+  controlListeners.add(cb);
+  return () => { controlListeners.delete(cb); };
+}
+
+/** Subscribe to the shared control state. Returns [state, patch]. */
+export function useLineageControls(): [LineageControlState, (patch: Partial<LineageControlState>) => void] {
+  const state = useSyncExternalStore(subscribeControls, getLineageControls, getLineageControls);
+  return [state, setLineageControls];
+}
+
+export const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "verified", label: "Verified" },
+  { key: "review", label: "Needs review" },
+  { key: "warnings", label: "Warnings" },
+];
+
+/** Health bucket for one node: fresh = verified, aging = needs review. */
+export function nodeStatusKey(n: LNode): NodeStatusKey {
+  if (n.warn || n.orphan) return "warning";
+  if ((n.staleDays ?? 0) > 14) return "review";
+  return "verified";
+}
+
+/** Does this node survive the current source + status + search filters? */
+export function nodePasses(n: LNode, c: LineageControlState): boolean {
+  if (c.sources && !n.macro && !c.sources.includes(n.source)) return false;
+  if (c.status !== "all" && !n.macro) {
+    const k = nodeStatusKey(n);
+    if (c.status === "verified" && k !== "verified") return false;
+    if (c.status === "review" && k !== "review") return false;
+    if (c.status === "warnings" && k !== "warning") return false;
+  }
+  return true;
+}
+
+/** Search match (used to spotlight rather than remove). */
+export function nodeMatchesQuery(n: LNode, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    n.title.toLowerCase().includes(q) ||
+    (n.owner ?? "").toLowerCase().includes(q) ||
+    n.source.toLowerCase().includes(q) ||
+    (n.tags ?? []).some((t) => t.toLowerCase().includes(q))
+  );
+}
+
+/** Accent color per toolbar control — each control owns one hue. */
+export const CONTROL_ACCENT: Record<string, string> = {
+  search: "#10263B",
+  sources: "#1E6FA8",
+  relations: "#6a5a9c",
+  status: "#A05E1C",
+  zoom: "#4a7d7b",
+  lens: "#2C6E49",
+  layout: "#35549d",
+  flow: "#8a5a3b",
+  views: "#a04a6e",
+};
+
 /* ── Pure helpers ───────────────────────────────────────────────────────── */
 
 export const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
@@ -206,13 +337,14 @@ export function NodeGlyph({ node, size = 18 }: { node: Pick<LNode, "source" | "m
   return <SourceMark provider={node.source === "gdocs" ? "gdocs" : node.source} size={size} />;
 }
 
-/** Inline SVG line swatch colored (and optionally dashed) by relation. */
+/** Inline SVG line swatch: the relation's own color, dash pattern and weight,
+    so the swatch matches the edge drawn on the canvas exactly. */
 export function EdgeSwatch({ rel, width = 22, dashed }: { rel: RelKey; width?: number; dashed?: boolean }) {
   const s = REL[rel];
-  const dash = dashed ?? Boolean(s.dash);
+  const dash = dashed === true ? (s.dash ?? "3 3") : dashed === false ? undefined : s.dash;
   return (
-    <svg width={width} height={8} viewBox="0 0 22 8" aria-hidden className="shrink-0">
-      <line x1={1} y1={4} x2={21} y2={4} stroke={s.color} strokeWidth={2} strokeLinecap="round" strokeDasharray={dash ? "3 3" : undefined} />
+    <svg width={width} height={9} viewBox="0 0 22 9" aria-hidden className="shrink-0">
+      <line x1={1} y1={4.5} x2={21} y2={4.5} stroke={s.color} strokeWidth={s.width} strokeLinecap="butt" strokeDasharray={dash} />
     </svg>
   );
 }
@@ -238,17 +370,17 @@ export function ConnectionRow({
         onClick={onSelect}
         className={`flex min-w-0 flex-1 items-start gap-1.5 text-left ${focusRing} rounded-[3px]`}
       >
-        <span className="mt-[1px] shrink-0 font-term text-[12px] text-ink/40">{dir === "out" ? "→" : "←"}</span>
+        <span className="mt-[1px] shrink-0 font-term text-[12px] text-ink/65">{dir === "out" ? "→" : "←"}</span>
         <span className="min-w-0">
           <span className="block truncate text-[13px] text-ink">{title}</span>
-          {subline && <span className="block truncate font-term text-[11px] text-ink/50">{subline}</span>}
+          {subline && <span className="block truncate font-term text-[11px] text-ink/65">{subline}</span>}
         </span>
       </button>
       {onFocus && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onFocus(); }}
-          className={`shrink-0 rounded-[3px] px-1.5 py-0.5 font-term text-[11px] text-ink/45 opacity-0 hover:text-ink group-hover:opacity-100 ${focusRing}`}
+          className={`shrink-0 rounded-[3px] px-1.5 py-0.5 font-term text-[11px] text-ink/65 opacity-0 hover:text-ink group-hover:opacity-100 ${focusRing}`}
           title="Focus on the canvas"
         >
           ⌖ focus
@@ -262,10 +394,13 @@ export function ConnectionRow({
     drawers: paper panel, hairline border, NO backdrop / focus-trap (so the
     canvas stays interactive). Not the catalog `Drawer`. */
 export function LgDrawerShell({
-  icon, title, pills, footer, onClose, width = 384, children, className = "",
+  icon, title, summary, pills, footer, onClose, width = LG_DRAWER_W, children, className = "",
 }: {
   icon: ReactNode;
+  /** Slot 1: the header/title of the CARD (not of the document). */
   title: ReactNode;
+  /** Slot 2: one line of supporting text under the card header. */
+  summary?: ReactNode;
   pills?: ReactNode;
   footer?: ReactNode;
   onClose?: () => void;
@@ -276,29 +411,99 @@ export function LgDrawerShell({
   return (
     <aside
       aria-label={typeof title === "string" ? title : "Lineage detail"}
-      style={{ width, maxHeight: 640 }}
-      className={`${card} flex max-w-full flex-col overflow-hidden font-display ${className}`.trim()}
+      // Desktop-fixed width (CONVENTIONS.md §10): one number, no breakpoints.
+      // minWidth keeps the panel from being squeezed by a narrow parent — a
+      // squeezed drawer reads as a broken mobile layout.
+      style={{ width, minWidth: width, maxHeight: 720 }}
+      className={`${card} flex flex-col overflow-hidden font-display ${className}`.trim()}
     >
       <header className="shrink-0 border-b border-ink/10 px-4 pt-3.5 pb-3">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 shrink-0 text-ink/70" aria-hidden>{icon}</span>
-          <div className="min-w-0 flex-1 text-[14.5px] font-semibold leading-snug text-ink">{title}</div>
+          <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+            <div className="text-[14.5px] font-semibold leading-snug text-ink">{title}</div>
+            {summary && <div className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{summary}</div>}
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-[4px] text-ink/50 hover:bg-flysch hover:text-ink ${focusRing}`}
+            className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink active:bg-ink/10 ${focusRing}`}
           >
             ✕
           </button>
         </div>
         {pills && <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{pills}</div>}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">{children}</div>
-      {footer && <footer className="shrink-0 border-t border-ink/10 p-3">{footer}</footer>}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+      {footer && <footer className="shrink-0 border-t border-ink/10 px-4 py-3">{footer}</footer>}
     </aside>
   );
 }
+
+/** Source identity chip: brand glyph + label. Same object in all four drawers
+    so the "source badge" slot (CONVENTIONS §1.6) reads identically. */
+export function LgSourceChip({ source }: { source: string }) {
+  return (
+    <Chip
+      label={SOURCE_LABELS[source] ?? source}
+      tone="neutral"
+      icon={<SourceMark provider={source === "gdocs" ? "gdocs" : source} size={13} />}
+    />
+  );
+}
+
+/** Status badge for one node, derived from health + staleness. Never color
+    alone: the chip carries its own word and a dot. */
+export function LgNodeStatusChip({ node }: { node: LNode }) {
+  const k = nodeStatusKey(node);
+  return <StatusChip status={k === "warning" ? "warn" : k === "review" ? "needs-review" : "verified"} />;
+}
+
+/** The date + author pair that sits on the RIGHT of the meta line. The author
+    is deliberately higher-contrast than the date (client note). */
+export function LgAuthor({ name }: { name?: string }) {
+  return <span className="font-medium text-ink/85">{name?.trim() ? name : "Unowned"}</span>;
+}
+
+/** Owners block used by every drawer's "Owners" section. */
+export function LgOwners({ owners }: { owners: { name: string; role: string }[] }) {
+  if (owners.length === 0) return <p className="text-[12.5px] text-ink/70">No owner recorded.</p>;
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {owners.map((o, i) => (
+        <li key={i} className="flex items-center gap-2 text-[13px] text-ink">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[3px] border border-ink/15 bg-flysch font-term text-[10px] font-semibold text-ink/75">
+            {o.name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "?"}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium text-ink/85">{o.name}</span>
+          <span className="shrink-0 font-term text-[11px] text-ink/65">{o.role}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Shared drawer widths. Node / edge / roll-up share one number so the three
+    panels are interchangeable; the impact analyser is one step wider because it
+    carries an input, three buckets and a document list. */
+export const LG_DRAWER_W = 420;
+export const LG_DRAWER_W_WIDE = 460;
+
+/** Inline result panel used by the drawers' "make something happen" buttons
+    (trace impact / provenance, export, expand group, full history). */
+export function LgResultPanel({ title, children }: { title: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="rounded-[4px] border border-biscay-2/30 bg-biscay-2/[0.06] px-3 py-2.5">
+      <div className="text-[12.5px] font-semibold text-ink">{title}</div>
+      {children && <div className="mt-1 text-[12.5px] leading-relaxed text-ink/70">{children}</div>}
+    </div>
+  );
+}
+
+/** A secondary button that visibly latches when it is "on". Plain hover states
+    were not enough of a change indicator for toggles like Watch / Pin. */
+export const lgToggleOn = "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2 hover:border-biscay-2 hover:text-biscay-2";
 
 /* ── Baked-in demo graph ────────────────────────────────────────────────── */
 
@@ -351,10 +556,11 @@ export const nodeById = (nodes: LNode[] = DEMO_NODES) =>
 
 /* ── LineageDataModel — visual legend (so the model spec has a gallery view) */
 
-function Swatch({ color, dash }: { color: string; dash?: boolean }) {
+function Swatch({ rel }: { rel: RelKey }) {
+  const s = REL[rel];
   return (
-    <svg width={26} height={8} viewBox="0 0 26 8" aria-hidden className="shrink-0">
-      <line x1={1} y1={4} x2={25} y2={4} stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeDasharray={dash ? "3 3" : undefined} />
+    <svg width={40} height={9} viewBox="0 0 40 9" aria-hidden className="shrink-0">
+      <line x1={1} y1={4.5} x2={39} y2={4.5} stroke={s.color} strokeWidth={s.width} strokeLinecap="butt" strokeDasharray={s.dash} />
     </svg>
   );
 }
@@ -374,9 +580,9 @@ export type LineageDataModelProps = {
 export function LineageDataModel({ loading = false, className = "" }: LineageDataModelProps) {
   if (loading) {
     return (
-      <div className={`${card} max-w-[640px] p-5 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} w-[640px] min-w-[640px] p-5 ${className}`.trim()} aria-hidden="true">
         <div className="mb-4 space-y-2"><Skeleton width={200} height={16} /><SkeletonLine w={320} h={10} /></div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="space-y-2">
               <SkeletonLine w={90} h={9} />
@@ -390,23 +596,29 @@ export function LineageDataModel({ loading = false, className = "" }: LineageDat
   }
 
   return (
-    <div className={`${card} max-w-[640px] p-5 font-display text-ink ${className}`.trim()}>
+    <div className={`${card} w-[640px] min-w-[640px] p-5 font-display text-ink ${className}`.trim()}>
       <div className="mb-4">
-        <div className="text-[15px] font-semibold">Lineage model — legend</div>
-        <div className="mt-0.5 text-[12.5px] text-ink/55">The shared palettes every lineage view reads from.</div>
+        <div className="text-[15px] font-semibold">Lineage model: legend</div>
+        <div className="mt-0.5 text-[12.5px] text-ink/70">The shared palettes every lineage view reads from.</div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-6">
         <section>
           <SectionLabel>Relations</SectionLabel>
           <ul className="mt-2 space-y-1.5">
             {REL_ORDER.map((k) => (
               <li key={k} className="flex items-center gap-2.5 text-[13px]">
-                <Swatch color={REL[k].color} dash={Boolean(REL[k].dash)} />
+                <Swatch rel={k} />
+                <span className="font-term text-[10.5px] font-medium uppercase tracking-[0.06em] text-ink/70">{REL[k].code}</span>
                 <span>{REL[k].label}</span>
+                <span className="ml-auto font-term text-[11px] text-ink/65">{REL[k].pattern}</span>
               </li>
             ))}
           </ul>
+          <p className="mt-2 text-[12px] leading-relaxed text-ink/70">
+            Every relation carries three channels: color, dash pattern, and the
+            code printed on the edge. Color is never the only signal.
+          </p>
         </section>
 
         <section>
@@ -416,10 +628,28 @@ export function LineageDataModel({ loading = false, className = "" }: LineageDat
               <li key={s} className="flex items-center gap-2.5 text-[13px]">
                 <SourceMark provider={s === "gdocs" ? "gdocs" : s} size={16} />
                 <span>{SOURCE_LABELS[s]}</span>
-                <span className="font-term text-[11px] text-ink/40">{SOURCE_GLYPH[s]}</span>
+                <span className="font-term text-[11px] text-ink/65">{SOURCE_GLYPH[s]}</span>
               </li>
             ))}
           </ul>
+        </section>
+
+        <section>
+          <SectionLabel>Node</SectionLabel>
+          <div className="mt-2 flex items-stretch overflow-hidden rounded-[4px] border border-ink/20" style={{ backgroundColor: NODE_CREAM }}>
+            <span className="w-[5px] shrink-0" style={{ backgroundColor: SOURCE_ACCENT.docs }} aria-hidden />
+            <span className="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
+              <SourceMark provider="docs" size={16} />
+              <span className="min-w-0">
+                <span className="block truncate text-[12.5px] font-medium text-ink">Pricing policy</span>
+                <span className="block truncate font-term text-[10.5px] text-ink/70">DOCS · Ana K</span>
+              </span>
+            </span>
+          </div>
+          <p className="mt-2 text-[12px] leading-relaxed text-ink/70">
+            Flat cream card. The source is a bar on the left plus an icon and a
+            mono source label, so the color bar is never read alone.
+          </p>
         </section>
 
         <section>
@@ -445,7 +675,7 @@ export function LineageDataModel({ loading = false, className = "" }: LineageDat
         </section>
       </div>
 
-      <div className="mt-5 border-t border-ink/10 pt-3 font-term text-[11px] text-ink/45">
+      <div className="mt-5 border-t border-ink/10 pt-3 font-term text-[11px] text-ink/65">
         {DEMO_NODES.filter((n) => !n.macro).length} document nodes · {DEMO_EDGES.length} edges · {DEMO_DATES.length} event dates · virtual space 1600×900
       </div>
     </div>

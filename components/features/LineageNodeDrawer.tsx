@@ -2,17 +2,17 @@ import { useMemo, useState } from "react";
 import { ExternalLink, Eye, ClipboardCheck, Target, Pin, Link2, Plus } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
+import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Tabs } from "../navigation/Tabs";
-import { Chip } from "../data-display/Chip";
 import { Pill } from "../data-display/Pill";
-import { Field } from "../forms/Field";
 import { SectionLabel } from "../forms/SectionLabel";
 import { EmptyState } from "../data-display/EmptyState";
 import { Timeline } from "../data-display/Timeline";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
 import {
-  REL, staleColor, NodeGlyph, LgDrawerShell, ConnectionRow, SOURCE_LABELS,
+  REL, staleColor, NodeGlyph, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
+  LgSourceChip, LgNodeStatusChip, LgAuthor, LgOwners,
   DEMO_NODES, DEMO_EDGES, nodeById,
   type LNode, type LEdge, type DocHistoryRow,
 } from "./LineageDataModel";
@@ -54,6 +54,11 @@ export function LineageNodeDrawer({
   const [tab, setTab] = useState<Tab>("overview");
   const [watched, setWatched] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [focal, setFocal] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [taskMade, setTaskMade] = useState(false);
+  /** Inline result for the otherwise-inert trace/export buttons. */
+  const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
   const node = byId[openId] ?? nodes[0];
 
@@ -69,6 +74,17 @@ export function LineageNodeDrawer({
   const downstream = connections.filter((c) => c.dir === "out").length;
   const upstream = connections.filter((c) => c.dir === "in").length;
   const showReferences = ["pr", "issue", "commit"].includes(node.docKind);
+  const references = connections.filter((c) => c.rel === "references");
+
+  /* Owners block: the document owner plus whoever last approved it. Derived,
+     never invented — an unowned document says so. */
+  const owners = useMemo(() => {
+    const rows: { name: string; role: string }[] = [];
+    if (node.owner) rows.push({ name: node.owner, role: "Owner" });
+    const approver = DEMO_HISTORY.find((h) => h.verb === "reviewed")?.actor;
+    if (approver && approver !== node.owner) rows.push({ name: approver, role: "Approver" });
+    return rows;
+  }, [node.owner]);
 
   const metaParts = node.meta.split("·").map((s) => s.trim()).filter(Boolean);
 
@@ -94,32 +110,40 @@ export function LineageNodeDrawer({
     <LgDrawerShell
       className={className}
       onClose={onClose}
+      width={LG_DRAWER_W}
       icon={<NodeGlyph node={node} size={19} />}
-      title={node.title}
-      pills={
-        <>
-          {metaParts.map((p, i) => <Chip key={i} label={p} tone="neutral" />)}
-          {node.warn && <Chip label="Needs attention" tone="blocked" dot />}
-          {node.pinned && <Chip label="Pinned" tone="info" />}
-          {node.group && <Chip label={`⊖ ${node.repo ?? node.group}`} tone="neutral" />}
-        </>
-      }
+      title="Document"
+      summary="One node in the lineage graph."
       footer={
         <div className="flex w-full flex-col gap-2">
+          {/* Secondary controls first; each latches visibly when it is on. */}
           <div className="flex flex-wrap gap-2">
-            <Button compact><Target size={13} /> Set focal</Button>
-            <Button compact><Pin size={13} /> Pin</Button>
-            <Button compact onClick={copyLink}><Link2 size={13} /> {copied ? "Copied" : "Copy link"}</Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button compact onClick={() => setWatched((w) => !w)} className={watched ? "border-biscay-2 text-biscay-2" : ""}>
+            <Button compact onClick={() => setFocal((f) => !f)} className={focal ? lgToggleOn : ""}>
+              <Target size={13} /> {focal ? "Focal" : "Set focal"}
+            </Button>
+            <Button compact onClick={() => setPinned((p) => !p)} className={pinned ? lgToggleOn : ""}>
+              <Pin size={13} /> {pinned ? "Pinned" : "Pin"}
+            </Button>
+            <Button compact onClick={copyLink} className={copied ? lgToggleOn : ""}>
+              <Link2 size={13} /> {copied ? "Copied" : "Copy link"}
+            </Button>
+            <Button compact onClick={() => setWatched((w) => !w)} className={watched ? lgToggleOn : ""}>
               <Eye size={13} /> {watched ? "Watching" : "Watch"}
             </Button>
-            <Button compact><ClipboardCheck size={13} /> Create review task</Button>
-            <a href="#" className={`ml-auto inline-flex items-center gap-1 text-[12.5px] text-biscay-2 hover:underline ${focusRing}`}>
-              Open document <ExternalLink size={12} />
-            </a>
           </div>
+          {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right. */}
+          <CardActions
+            primary={
+              <Button variant="primary" onClick={() => setTaskMade(true)}>
+                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
+              </Button>
+            }
+            secondary={
+              <a href="#" className={`inline-flex h-9 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3.5 text-[13px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05] ${focusRing}`}>
+                Open document <ExternalLink size={12} />
+              </a>
+            }
+          />
         </div>
       }
     >
@@ -139,53 +163,86 @@ export function LineageNodeDrawer({
       </div>
 
       {tab === "overview" && (
-        <div>
-          <SectionLabel>Document</SectionLabel>
-          <div className="mt-1">
-            <Field label="Owner">{node.owner ?? "Unowned"}</Field>
-            <Field label="Updated">{node.date ? fmtDate(node.date) : "—"}</Field>
-            <Field label="Source">
-              <span className="inline-flex items-center gap-1.5"><NodeGlyph node={node} size={15} /> {SOURCE_LABELS[node.source] ?? node.source}</span>
-            </Field>
-            <Field label="Staleness">
-              <span style={{ color: staleColor(node.staleDays ?? 0) }}>{node.staleDays ?? 0} days</span>
-            </Field>
-            {node.tags && node.tags.length > 0 && (
-              <Field label="Tags">
-                <span className="flex flex-wrap gap-1.5">{node.tags.map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}</span>
-              </Field>
-            )}
-          </div>
+        /* CONVENTIONS §1: title, summary, source + status left with date and
+           author right on one line, then References, Connections, Owners. */
+        <CardBody>
+          <CardTitleBlock
+            className="[overflow-wrap:anywhere]"
+            title={node.title}
+            summary={metaParts.join(" · ")}
+          />
+          <CardMeta
+            source={<LgSourceChip source={node.source} />}
+            status={<LgNodeStatusChip node={node} />}
+            date={node.date ? fmtDate(node.date) : "No date recorded"}
+            author={<LgAuthor name={node.owner} />}
+          />
 
-          {showReferences && (
-            <div className="mt-4">
-              <SectionLabel>References</SectionLabel>
-              <div className="mt-1.5">
-                {connections.filter((c) => c.rel === "references").length === 0 ? (
-                  <p className="text-[12.5px] text-ink/45">No extracted references yet.</p>
-                ) : connections.filter((c) => c.rel === "references").map((c, i) => (
-                  <ConnectionRow
-                    key={i}
-                    rel={c.rel}
-                    dir={c.dir}
-                    dashed={c.edge.dashed}
-                    title={c.other.title}
-                    subline={c.edge.meta?.evidence}
-                    onSelect={() => setOpenId(c.other.id)}
-                    onFocus={() => setOpenId(c.other.id)}
-                  />
-                ))}
-              </div>
+          {node.tags && node.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {node.tags.map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}
             </div>
           )}
 
-          <div className="mt-4">
-            <SectionLabel>Verified facts</SectionLabel>
-            <div className="mt-1.5 rounded-[4px] border border-ink/10 bg-flysch/50 px-3 py-2 text-[12.5px] text-ink/70">
-              “Free-tier limits are enforced per workspace, not per user.” <span className="text-ink/40">— verified · pricing</span>
+          {showReferences && (
+            <CardSection label="References" count={references.length}>
+              {references.length === 0 ? (
+                <p className="text-[12.5px] text-ink/70">No extracted references yet.</p>
+              ) : references.map((c, i) => (
+                <ConnectionRow
+                  key={i}
+                  rel={c.rel}
+                  dir={c.dir}
+                  dashed={c.edge.dashed}
+                  title={c.other.title}
+                  subline={c.edge.meta?.evidence}
+                  onSelect={() => setOpenId(c.other.id)}
+                  onFocus={() => setOpenId(c.other.id)}
+                />
+              ))}
+            </CardSection>
+          )}
+
+          <CardSection
+            label="Connections"
+            count={connections.length}
+            action={connections.length > 3
+              ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See all</button>
+              : undefined}
+          >
+            {connections.length === 0 ? (
+              <p className="text-[12.5px] text-ink/70">No links recorded for this document.</p>
+            ) : connections.slice(0, 3).map((c, i) => (
+              <ConnectionRow
+                key={i}
+                rel={c.rel}
+                dir={c.dir}
+                dashed={c.edge.dashed}
+                title={c.other.title}
+                subline={c.dir === "out" ? REL[c.rel].out : REL[c.rel].in}
+                onSelect={() => setOpenId(c.other.id)}
+              />
+            ))}
+          </CardSection>
+
+          <CardSection label="Owners">
+            <LgOwners owners={owners} />
+          </CardSection>
+
+          <CardSection label="Verified facts" count={1}>
+            <div className="rounded-[4px] border border-ink/10 bg-flysch/50 px-3 py-2 text-[12.5px] text-ink/70">
+              “Free-tier limits are enforced per workspace, not per user.”
+              <span className="text-ink/65"> Verified, pricing.</span>
             </div>
-          </div>
-        </div>
+          </CardSection>
+
+          <CardSection label="Staleness">
+            <span className="inline-flex items-center gap-2 text-[13px] text-ink">
+              <span className="h-3 w-[3px] rounded-[1px]" style={{ backgroundColor: staleColor(node.staleDays ?? 0) }} aria-hidden />
+              {node.staleDays ?? 0} days since the last update
+            </span>
+          </CardSection>
+        </CardBody>
       )}
 
       {tab === "connections" && (
@@ -198,7 +255,7 @@ export function LineageNodeDrawer({
                 {(i === 0 || connections[i - 1].rel !== c.rel || connections[i - 1].dir !== c.dir) && (
                   <div className="mb-1 mt-3 flex items-center gap-2 first:mt-0">
                     <SectionLabel>{c.dir === "out" ? REL[c.rel].out : REL[c.rel].in}</SectionLabel>
-                    <span className="font-term text-[11px] text-ink/40">
+                    <span className="font-term text-[11px] text-ink/65">
                       {connections.filter((x) => x.rel === c.rel && x.dir === c.dir).length}
                     </span>
                   </div>
@@ -235,21 +292,57 @@ export function LineageNodeDrawer({
           <div className="mt-1.5 grid grid-cols-2 gap-2">
             <div className="rounded-[4px] border border-ink/12 p-2.5">
               <div className="text-[20px] font-bold text-ink">{downstream}</div>
-              <div className="font-term text-[11px] text-ink/50">Downstream · depends on this</div>
+              <div className="font-term text-[11px] text-ink/65">Downstream, depends on this</div>
             </div>
             <div className="rounded-[4px] border border-ink/12 p-2.5">
               <div className="text-[20px] font-bold text-ink">{upstream}</div>
-              <div className="font-term text-[11px] text-ink/50">Upstream · this rests on</div>
+              <div className="font-term text-[11px] text-ink/65">Upstream, this rests on</div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button compact disabled={downstream === 0}>Trace impact</Button>
-            <Button compact disabled={upstream === 0}>Trace provenance</Button>
-            <Button compact disabled={downstream + upstream === 0}><Plus size={13} /> Export CSV</Button>
+            <Button
+              compact
+              disabled={downstream === 0}
+              className={result?.title.startsWith("Impact") ? lgToggleOn : ""}
+              onClick={() => setResult({
+                title: `Impact traced: ${downstream} downstream documents`,
+                body: connections.filter((c) => c.dir === "out").map((c) => c.other.title).join(", "),
+              })}
+            >
+              Trace impact
+            </Button>
+            <Button
+              compact
+              disabled={upstream === 0}
+              className={result?.title.startsWith("Provenance") ? lgToggleOn : ""}
+              onClick={() => setResult({
+                title: `Provenance traced: ${upstream} upstream documents`,
+                body: connections.filter((c) => c.dir === "in").map((c) => c.other.title).join(", "),
+              })}
+            >
+              Trace provenance
+            </Button>
+            <Button
+              compact
+              disabled={downstream + upstream === 0}
+              className={result?.title.startsWith("Exported") ? lgToggleOn : ""}
+              onClick={() => setResult({
+                title: `Exported ${connections.length} rows`,
+                body: `${node.title.replace(/,/g, "")}-closure.csv is ready to download.`,
+              })}
+            >
+              <Plus size={13} /> Export CSV
+            </Button>
           </div>
-          <p className="mt-3 text-[12.5px] text-ink/50">
-            Tracing highlights the closure on the canvas and lists it here.
-          </p>
+          {result ? (
+            <div className="mt-3">
+              <LgResultPanel title={result.title}>{result.body}</LgResultPanel>
+            </div>
+          ) : (
+            <p className="mt-3 text-[12.5px] text-ink/70">
+              Tracing highlights the closure on the canvas and lists it here.
+            </p>
+          )}
         </div>
       )}
     </LgDrawerShell>

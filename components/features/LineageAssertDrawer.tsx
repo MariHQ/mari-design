@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
-import { Sparkles, Send, Globe, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Sparkles, Send, Globe, ChevronDown } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
+import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Input } from "../forms/Input";
-import { SectionLabel } from "../forms/SectionLabel";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
-  LgDrawerShell, SEVERITY_META, SOURCE_LABELS,
+  LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
   type ImpactResult, type Severity,
 } from "./LineageDataModel";
 
@@ -42,6 +42,15 @@ const DEMO_RESULT: ImpactResult = {
   ],
 };
 
+/** Top owners of the impacted documents (demo, derived from DEMO_RESULT). */
+const OWNERS: { name: string; role: string }[] = [
+  { name: "Ana K", role: "3 documents" },
+  { name: "Sam L", role: "2 documents" },
+  { name: "Mia M", role: "2 documents" },
+  { name: "Dev R", role: "1 document" },
+];
+const PEOPLE = [{ initials: "AK" }, { initials: "SL" }, { initials: "MM" }, { initials: "DR" }, { initials: "JS" }];
+
 const BUCKETS: { key: Severity; label: string }[] = [
   { key: "update-required", label: "Direct contradiction" },
   { key: "review", label: "Needs update" },
@@ -64,6 +73,7 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(initial ? "just now" : null);
   const [filter, setFilter] = useState<Severity | null>(null);
   const [taskState, setTaskState] = useState<"idle" | "creating" | "done">("idle");
+  const [exported, setExported] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<Severity, number> = { "update-required": 0, review: 0, minor: 0 };
@@ -92,7 +102,6 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
   };
 
   const state: "running" | "completed" | "ready" = running ? "running" : result ? "completed" : "ready";
-  const stateColor = state === "running" ? "#c8973a" : state === "completed" ? "#2C6E49" : "#94a3b8";
   const stateWord = state === "running" ? "Running" : state === "completed" ? "Completed" : "Ready";
   const stateSub = state === "running" ? "Mari is reading the graph…" : state === "completed" ? `Analyzed ${analyzedAt}` : "Type an assertion to analyze";
 
@@ -106,7 +115,7 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
       <LgDrawerShell
         className={className}
         onClose={onClose}
-        width={412}
+        width={LG_DRAWER_W_WIDE}
         icon={<SkeletonCircle size={19} />}
         title={<SkeletonLine w="55%" h={14} />}
       >
@@ -127,112 +136,134 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
     <LgDrawerShell
       className={className}
       onClose={onClose}
-      width={412}
+      width={LG_DRAWER_W_WIDE}
       icon={<Sparkles size={19} className="text-biscay-2" />}
-      title={
-        <span>
-          Impact analysis
-          <span className="mt-0.5 block text-[12px] font-normal text-ink/50">What does changing this touch?</span>
-        </span>
-      }
+      title="Impact analysis"
+      summary="What does changing this touch?"
       footer={
+        /* CONVENTIONS §2: primary bottom LEFT, secondary on the same line to
+           its right. */
         <div className="flex w-full flex-col gap-2">
-          <Button variant="primary" block onClick={createTasks} disabled={!result || taskState !== "idle"}>
-            {taskLabel}
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button compact><Send size={13} /> Export report</Button>
-            <span className="ml-auto inline-flex items-center gap-1.5 font-term text-[11px] text-ink/45">
-              <Globe size={12} /> All reachable documents
-            </span>
-          </div>
+          <CardActions
+            className="pt-0"
+            primary={
+              <Button variant="primary" onClick={createTasks} disabled={!result || taskState !== "idle"}>
+                {taskLabel}
+              </Button>
+            }
+            secondary={
+              <Button onClick={() => setExported(true)}>
+                <Send size={13} /> {exported ? "Report exported" : "Export report"}
+              </Button>
+            }
+          />
+          <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/65">
+            <Globe size={12} /> All reachable documents
+          </span>
         </div>
       }
     >
-      {/* assertion input */}
-      <div className="flex items-center gap-2">
-        <Input
-          value={claim}
-          onChange={(e) => setClaim(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") analyze(); }}
-          placeholder="Free tier ends September 1"
-          className="flex-1"
-          aria-label="Assertion to analyze"
+      <CardBody>
+        {/* Slot 3: the card's own search/assertion bar. */}
+        <div className="flex items-center gap-2">
+          <Input
+            value={claim}
+            onChange={(e) => setClaim(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") analyze(); }}
+            placeholder="Free tier ends September 1"
+            className="flex-1"
+            aria-label="Assertion to analyze"
+          />
+          <Button onClick={analyze} disabled={running || !claim.trim()} className={running ? "text-clay" : ""}>
+            <Sparkles size={14} /> {running ? "Analyzing…" : "Analyze"}
+          </Button>
+        </div>
+
+        {/* Slots 4 + 5: the claim under analysis and what came back. */}
+        <CardTitleBlock
+          className="[overflow-wrap:anywhere]"
+          title={result?.claim ?? claim ?? "No assertion yet"}
+          summary={result?.summary ?? "Type an assertion and run the analysis to see what it touches."}
         />
-        <Button onClick={analyze} disabled={running || !claim.trim()} className={running ? "text-clay" : ""}>
-          <Sparkles size={14} /> {running ? "Analyzing…" : "Analyze"}
-        </Button>
-      </div>
+        <CardMeta
+          source={<Chip label="All reachable documents" tone="neutral" icon={<Globe size={11} />} />}
+          status={
+            <Chip
+              label={stateWord}
+              tone={state === "running" ? "attention" : state === "completed" ? "ok" : "neutral"}
+              dot
+              pulse={state === "running"}
+            />
+          }
+          date={stateSub}
+          author={<LgAuthor name="Mari" />}
+        />
 
-      {/* status row */}
-      <div className="mt-3 flex items-center gap-2.5 rounded-[4px] border border-ink/10 bg-flysch/40 px-3 py-2">
-        <CheckCircle2 size={16} style={{ color: stateColor }} />
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold text-ink">{stateWord}</div>
-          <div className="truncate font-term text-[11px] text-ink/50">{stateSub}</div>
-        </div>
-      </div>
+        <CardSection label="Documents that need updates" count={needUpdates}>
+          <div className="space-y-1.5">
+            {BUCKETS.map((b) => {
+              const active = filter === b.key;
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  disabled={!result}
+                  onClick={() => setFilter((f) => (f === b.key ? null : b.key))}
+                  title={result ? undefined : "Run the analysis first"}
+                  aria-pressed={active}
+                  /* Disabled reads as a legible grey, never a 45% ghost (§6). */
+                  className={`flex w-full items-center gap-2.5 rounded-[4px] border px-3 py-2 text-left transition-colors disabled:opacity-100 disabled:border-ink/10 disabled:bg-flysch/60 disabled:text-ink/60 ${
+                    active ? "border-biscay-2 bg-biscay-2/[0.08] ring-1 ring-biscay-2" : "border-ink/12 hover:border-ink/25"
+                  } ${focusRing}`}
+                >
+                  {/* Square marker, not a radio-looking circle (§6). */}
+                  <span
+                    className="grid h-4 w-4 shrink-0 place-items-center rounded-[2px] font-term text-[10px] font-bold text-white"
+                    style={{ backgroundColor: SEVERITY_META[b.key].color }}
+                    aria-hidden
+                  >
+                    !
+                  </span>
+                  <span className="text-[16px] font-bold text-ink">{counts[b.key]}</span>
+                  <span className="text-[13px] text-ink/75">{b.label}</span>
+                  <ChevronDown size={14} className={`ml-auto text-ink/65 transition-transform ${active ? "rotate-180" : ""}`} />
+                </button>
+              );
+            })}
+          </div>
+        </CardSection>
 
-      {/* summary */}
-      {result && <p className="mt-3 text-[13px] leading-relaxed text-ink/75">{result.summary}</p>}
-
-      {/* buckets */}
-      <div className="mt-4">
-        <div className="mb-1.5 flex items-center justify-between">
-          <SectionLabel>{needUpdates} documents need updates</SectionLabel>
-        </div>
-        <div className="space-y-1.5">
-          {BUCKETS.map((b) => {
-            const active = filter === b.key;
-            return (
-              <button
-                key={b.key}
-                type="button"
-                disabled={!result}
-                onClick={() => setFilter((f) => (f === b.key ? null : b.key))}
-                title={result ? undefined : "Run the analysis first"}
-                className={`flex w-full items-center gap-2.5 rounded-[4px] border px-3 py-2 text-left transition-colors disabled:opacity-45 ${
-                  active ? "border-ink/30 bg-flysch" : "border-ink/12 hover:border-ink/25"
-                } ${focusRing}`}
-              >
-                <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: SEVERITY_META[b.key].color }}>!</span>
-                <span className="text-[16px] font-bold text-ink">{counts[b.key]}</span>
-                <span className="text-[13px] text-ink/75">{b.label}</span>
-                <ChevronDown size={14} className={`ml-auto text-ink/40 transition-transform ${active ? "rotate-180" : ""}`} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* impact list */}
-      <div className="mt-3">
-        {result && shown.length === 0 ? (
-          <p className="px-1 py-2 text-[12.5px] text-ink/45">No documents in this bucket — click it again to show all.</p>
-        ) : (
-          shown.map((d, i) => (
-            <div key={i} className="border-b border-ink/8 py-2 last:border-0">
+        <CardSection
+          label={filter ? `${SEVERITY_META[filter].label} documents` : "Impacted documents"}
+          count={shown.length}
+          action={filter
+            ? <button type="button" onClick={() => setFilter(null)} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>Clear filter</button>
+            : undefined}
+        >
+          {shown.length === 0 ? (
+            <p className="text-[12.5px] text-ink/70">
+              {result ? "No documents in this bucket. Clear the filter to show all." : "Nothing analyzed yet."}
+            </p>
+          ) : shown.map((d, i) => (
+            <div key={i} className="border-b border-ink/10 py-2 last:border-0">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{d.title}</span>
-                <Chip label={SEVERITY_META[d.severity].label} tone={SEVERITY_META[d.severity].tone} />
+                <Chip label={SEVERITY_META[d.severity].label} tone={SEVERITY_META[d.severity].tone} dot />
               </div>
-              <div className="mt-0.5 font-term text-[11px] text-ink/50">{SOURCE_LABELS[d.source] ?? d.source} — {d.reason}</div>
+              <div className="mt-1 flex items-start gap-2">
+                <LgSourceChip source={d.source} />
+                <span className="min-w-0 flex-1 font-term text-[11px] leading-[1.6] text-ink/70">{d.reason}</span>
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </CardSection>
 
-      {/* top owners */}
-      {result && (
-        <div className="mt-4 flex items-center gap-2">
-          <SectionLabel>Top owners</SectionLabel>
-          <AvatarGroup
-            className="ml-auto"
-            people={[{ initials: "AK" }, { initials: "SL" }, { initials: "MM" }, { initials: "DR" }, { initials: "JS" }]}
-            max={4}
-          />
-        </div>
-      )}
+        {result && (
+          <CardSection label="Owners" count={5} action={<AvatarGroup people={PEOPLE} max={4} />}>
+            <LgOwners owners={OWNERS} />
+          </CardSection>
+        )}
+      </CardBody>
     </LgDrawerShell>
   );
 }

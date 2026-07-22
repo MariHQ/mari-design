@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
+import { Chip } from "../data-display/Chip";
 import { SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 
-/* Workflow pipeline — the "When / Do / Check / Then" stages of a flow laid
+/* Workflow pipeline: the "When / Do / Check / Then" stages of a flow laid
    out on a dashed vertical spine. This is the visualization + navigator: it
    holds no data of its own and no router — clicking a stage calls onSelect,
    and the parent decides which detail to swap into view. */
@@ -27,16 +28,19 @@ export type WorkflowStep = {
   icon?: ReactNode;
 };
 
-const SECTION: Record<WorkflowSection, { title: string; chip: string; dotBorder: string }> = {
-  when: { title: "When", chip: "text-moss border-moss/40 bg-moss/[0.08]", dotBorder: "border-moss" },
-  do: { title: "Do", chip: "text-biscay-2 border-biscay-2/40 bg-biscay-2/[0.08]", dotBorder: "border-biscay-2" },
-  check: { title: "Check", chip: "text-clay border-clay/40 bg-clay/[0.09]", dotBorder: "border-clay" },
-  then: { title: "Then", chip: "text-espelette border-espelette/40 bg-espelette/[0.08]", dotBorder: "border-espelette" },
+/* Section marker and spine node share one tone per section. The marker is a
+   <Chip>, not a hand-rolled span: §4 forbids bespoke chips, and a rounded-full
+   pill matched nothing else on the page. */
+const SECTION: Record<WorkflowSection, { title: string; tone: string; dotBorder: string }> = {
+  when: { title: "When", tone: "ok", dotBorder: "border-moss" },
+  do: { title: "Do", tone: "info", dotBorder: "border-biscay-2" },
+  check: { title: "Check", tone: "attention", dotBorder: "border-clay" },
+  then: { title: "Then", tone: "blocked", dotBorder: "border-espelette" },
 };
 
 const llmBadge = (
-  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-clay/35 bg-clay/[0.07] px-2 py-[2px] font-term text-[10px] font-medium tracking-[0.06em] text-clay">
-    <Sparkles size={10} /> LLM — runs the local model, slower
+  <span className="mt-1.5 block">
+    <Chip label="LLM: runs the local model, slower" tone="attention" icon={<Sparkles size={10} aria-hidden />} />
   </span>
 );
 
@@ -84,8 +88,8 @@ export function PipelineView({
     <div className={className}>
       {(name || description) && (
         <div className={`${card} mb-4 px-5 py-4`}>
-          {name && <div className="font-display text-[22px] font-bold tracking-[-0.01em] text-ink">{name}</div>}
-          {description && <div className="mt-1 text-[13px] text-ink/60">{description}</div>}
+          {name && <div className="break-words font-display text-[22px] font-bold tracking-[-0.01em] text-ink">{name}</div>}
+          {description && <div className="mt-1 break-words text-[13px] text-ink/70">{description}</div>}
         </div>
       )}
 
@@ -124,15 +128,13 @@ export function PipelineView({
                     ].join(" ")}
                   />
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex shrink-0 items-center rounded-[4px] border px-1.5 py-[2px] font-term text-[9px] font-bold uppercase tracking-[0.12em] ${sec.chip}`}>
-                      {sec.title}
-                    </span>
+                    <Chip label={sec.title} tone={sec.tone} className="shrink-0" />
                     <span className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-ink">
                       {s.icon}
                       <span className="truncate">{s.label}</span>
                     </span>
                   </div>
-                  {s.summary && <div className="mt-1 text-[12px] leading-snug text-ink/60">{s.summary}</div>}
+                  {s.summary && <div className="mt-1 break-words text-[12px] leading-snug text-ink/70">{s.summary}</div>}
                   {s.llm && llmBadge}
                 </button>
               </li>

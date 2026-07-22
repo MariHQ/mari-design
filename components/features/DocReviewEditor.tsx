@@ -19,6 +19,7 @@ import {
 } from "../data-display/markdown";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { Chip } from "../data-display/Chip";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 
@@ -140,7 +141,16 @@ const DEMO_FINDINGS: Finding[] = [
   { id: -4, kind: "prose", severity: "warn", text: "across the fleet", note: "vague scope" },
 ];
 
-type Annot = { fid: number; rule: string; red: boolean; quote: string; top: number };
+type Annot = { fid: number; rule: string; tone: string; red: boolean; quote: string; top: number };
+
+/* Each annotation kind gets its own chip tone so "fact check" never reads the
+   same as "hedge" at a glance (CONVENTIONS.md §4). */
+const ANNOT_TONE: Record<string, string> = {
+  "fact check": "blocked",
+  hedge: "attention",
+  freshness: "info",
+  "vague scope": "neutral",
+};
 
 /* ————— component ————— */
 
@@ -306,14 +316,20 @@ export function DocReviewEditor({
   const annots = useMemo<Annot[]>(() => {
     const fs = findings.filter((f) => f.severity === "warn" || f.severity === "error").slice(0, 6);
     const items = fs.map((f) => {
-      const rule = f.id < 0 && f.kind === "prose" ? f.note : f.kind === "fact" ? "fact-check" : f.kind;
+      const rule = f.id < 0 && f.kind === "prose" ? f.note : f.kind === "fact" ? "fact check" : f.kind;
       const red = f.kind === "fact" || f.severity === "error";
-      return { fid: f.id, rule, red, quote: `“${cleanText(f.text)}”`, top: annTops[String(f.id)] as number | undefined };
+      return {
+        fid: f.id, rule, red, tone: ANNOT_TONE[rule] ?? "neutral",
+        quote: `“${cleanText(f.text)}”`, top: annTops[String(f.id)] as number | undefined,
+      };
     });
+    // 64px minimum spread: at 46 the chip of one annotation sat on the quote of
+    // the one above it.
+    const GAP = 64;
     const placed = items.filter((i) => i.top !== undefined).sort((a, b) => a.top! - b.top!);
-    let last = -46;
-    for (const p of placed) { p.top = Math.max(p.top!, last + 46); last = p.top; }
-    for (const u of items.filter((i) => i.top === undefined)) { last += 46; u.top = Math.max(6, last); }
+    let last = -GAP;
+    for (const p of placed) { p.top = Math.max(p.top!, last + GAP); last = p.top; }
+    for (const u of items.filter((i) => i.top === undefined)) { last += GAP; u.top = Math.max(6, last); }
     return items.slice().sort((a, b) => a.top! - b.top!).map((i) => ({ ...i, top: i.top! }));
   }, [findings, annTops]);
 
@@ -420,10 +436,17 @@ export function DocReviewEditor({
               onKeyDown: (e: KeyboardEvent) => onBlockKeyDown(e, b),
             }),
           )}
-          {blocks.length === 0 && <div className="text-[13px] text-ink/45">Loading document…</div>}
+          {blocks.length === 0 && (
+            <div className="text-[13px] text-ink/70">This document is empty. Start typing to add the first block.</div>
+          )}
         </div>
 
-        <div className="relative border-l border-ink/10">
+        {/* The annotations are absolutely positioned, so the rail needs an
+            explicit height or the last chips spill out through the card. */}
+        <div
+          className="relative border-l border-ink/10"
+          style={{ minHeight: annots.length ? annots[annots.length - 1].top + 56 : 0 }}
+        >
           {annots.map((a) => (
             <button
               key={a.fid}
@@ -432,11 +455,8 @@ export function DocReviewEditor({
               style={{ top: a.top }}
               onClick={() => jumpToFinding(a.fid)}
             >
-              <span className="flex items-center gap-1.5">
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${a.red ? "bg-espelette" : "bg-clay"}`} />
-                <span className={`font-term text-[10.5px] uppercase tracking-[0.05em] ${a.red ? "text-espelette" : "text-clay"}`}>{a.rule}</span>
-              </span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-ink/55 group-hover:text-ink/80 line-clamp-2">{a.quote}</span>
+              <Chip label={a.rule} tone={a.tone} dot />
+              <span className="mt-1.5 block text-[11.5px] leading-snug text-ink/70 group-hover:text-ink line-clamp-2">{a.quote}</span>
             </button>
           ))}
         </div>

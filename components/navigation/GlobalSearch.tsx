@@ -108,13 +108,13 @@ export function GlobalSearch({
 
           {/* Input */}
           <div className="flex items-center gap-2.5 px-4 h-12 border-b border-ink/10 shrink-0">
-            <Search size={16} className="text-ink/40 shrink-0" />
+            <Search size={16} className="text-ink/65 shrink-0" />
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={placeholder}
-              className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink/40 outline-none"
+              className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink/65 outline-none"
             />
             <Kbd keys="Esc" />
           </div>
@@ -133,14 +133,14 @@ export function GlobalSearch({
           <div role="listbox" className="flex-1 min-h-0 overflow-y-auto p-1.5">
             {!hasQuery && recentSearches.length > 0 && (
               <div>
-                <div className="px-2.5 pt-2 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/40">Recent</div>
+                <div className="px-2.5 pt-2 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/65">Recent</div>
                 {recentSearches.map((r) => (
                   <button
                     key={r}
                     onClick={() => { onRecentSelect ? onRecentSelect(r) : setQuery(r); }}
                     className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-[4px] text-[13px] text-ink/80 hover:bg-flysch text-left"
                   >
-                    <Clock size={14} className="shrink-0 text-ink/40" />
+                    <Clock size={14} className="shrink-0 text-ink/65" />
                     <span className="flex-1 min-w-0 truncate">{r}</span>
                   </button>
                 ))}
@@ -148,19 +148,19 @@ export function GlobalSearch({
             )}
 
             {!hasQuery && recentSearches.length === 0 && (
-              <div className="px-3 py-10 text-center text-[13px] text-ink/45">Type to search across {scopeList.length > 0 ? scopeList.map((s) => s.label).join(", ") : "everything"}.</div>
+              <div className="px-3 py-10 text-center text-[13px] text-ink/65">Type to search across {scopeList.length > 0 ? scopeList.map((s) => s.label).join(", ") : "everything"}.</div>
             )}
 
             {hasQuery && flat.length === 0 && (
-              <div className="px-3 py-10 text-center text-[13px] text-ink/45">
+              <div className="px-3 py-10 text-center text-[13px] text-ink/65">
                 No results for <span className="text-ink/70">“{query.trim()}”</span>
               </div>
             )}
 
             {hasQuery && groups.map((g) => (
               <div key={g.scope.id}>
-                <div className="flex items-center gap-1.5 px-2.5 pt-2.5 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/40">
-                  {g.scope.icon && <span className="text-ink/40">{g.scope.icon}</span>}
+                <div className="flex items-center gap-1.5 px-2.5 pt-2.5 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/65">
+                  {g.scope.icon && <span className="text-ink/65">{g.scope.icon}</span>}
                   {g.scope.label}
                   <span className="text-ink/30">{g.results.length}</span>
                 </div>
@@ -179,12 +179,12 @@ export function GlobalSearch({
                         i === active ? "bg-flysch" : "",
                       ].filter(Boolean).join(" ")}
                     >
-                      {r.icon && <span className="shrink-0 text-ink/45 flex items-center">{r.icon}</span>}
+                      {r.icon && <span className="shrink-0 text-ink/65 flex items-center">{r.icon}</span>}
                       <span className="flex-1 min-w-0">
                         <span className="block text-[13px] text-ink/90 truncate">{r.title}</span>
-                        {r.subtitle && <span className="block text-[11.5px] text-ink/50 truncate">{r.subtitle}</span>}
+                        {r.subtitle && <span className="block text-[11.5px] text-ink/65 truncate">{r.subtitle}</span>}
                       </span>
-                      {r.meta && <span className="shrink-0 font-term text-[10.5px] text-ink/40">{r.meta}</span>}
+                      {r.meta && <span className="shrink-0 font-term text-[10.5px] text-ink/65">{r.meta}</span>}
                     </div>
                   );
                 })}
@@ -193,7 +193,7 @@ export function GlobalSearch({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-4 px-4 h-9 border-t border-ink/10 font-term text-[10.5px] text-ink/45 shrink-0">
+          <div className="flex items-center gap-4 px-4 h-9 border-t border-ink/10 font-term text-[10.5px] text-ink/65 shrink-0">
             <span className="flex items-center gap-1.5"><ArrowUp size={11} /><ArrowDown size={11} />to navigate</span>
             <span className="flex items-center gap-1.5"><CornerDownLeft size={11} />to open</span>
             <span className="ml-auto">Hybrid search · BM25 + embeddings</span>
@@ -215,7 +215,7 @@ function ScopeChip({ label, icon, active, onClick }: { label: string; icon?: Rea
           : "bg-transparent text-ink/65 border-ink/15 hover:border-ink/30 hover:text-ink/85",
       ].join(" ")}
     >
-      {icon && <span className={active ? "text-paper/80" : "text-ink/45"}>{icon}</span>}
+      {icon && <span className={active ? "text-paper/80" : "text-ink/65"}>{icon}</span>}
       {label}
     </button>
   );

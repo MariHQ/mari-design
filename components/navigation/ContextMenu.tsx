@@ -31,7 +31,7 @@ export function ContextMenuItem({
 }) {
   return (
     <CM.Item className={`${ITEM} ${danger ? ITEM_DANGER : ""}`.trim()} disabled={disabled} onSelect={onSelect}>
-      {icon && <span className="shrink-0 text-ink/50" aria-hidden="true">{icon}</span>}
+      {icon && <span className="shrink-0 text-ink/65" aria-hidden="true">{icon}</span>}
       <span className="flex-1 min-w-0 truncate">{children}</span>
     </CM.Item>
   );

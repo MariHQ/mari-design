@@ -1,14 +1,22 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Key, X, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { Key, X, Eye, EyeOff } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { CopyButton } from "../actions/CopyButton";
 import { Skeleton, SkeletonLine, SkeletonButton } from "./Skeleton";
 
-/* TokenReveal — one-time secret reveal (API keys, MCP tokens): a clay dashed
+/* TokenReveal: one-time secret reveal (API keys, MCP tokens). A clay dashed
    card that keeps the secret masked until you reveal it, a copy button, and a
    "you won't see this again" warning. Ported from components/TokenReveal.tsx,
    with the reveal-toggle added. */
+
+/* The standardized one-time-secret warning. One sentence per idea, no dashes,
+   and it ends with the action the reader must take (feedback/errors.ts house
+   style). "closing" is deliberate: the card can be closed by dismissing it or
+   by navigating away, and both lose the token. */
+export const TOKEN_REVEAL_WARNING =
+  "You will not see this token again. Copy and store it somewhere safe before closing.";
 
 function mask(token: string): string {
   // Keep a short tail visible for recognition; dot out the rest.
@@ -31,11 +39,10 @@ export type TokenRevealProps = {
 
 export function TokenReveal({
   token, title = "Your new token", masked = true,
-  warning = "You won't see this again — store it somewhere safe before dismissing.",
+  warning = TOKEN_REVEAL_WARNING,
   onDismiss, loading = false, className = "",
 }: TokenRevealProps) {
   const [revealed, setRevealed] = useState(!masked);
-  const [copied, setCopied] = useState(false);
 
   if (loading) {
     return (
@@ -52,16 +59,6 @@ export function TokenReveal({
       </Card>
     );
   }
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(token);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable — the code stays selectable */
-    }
-  };
 
   return (
     <Card
@@ -85,11 +82,9 @@ export function TokenReveal({
         <code className="min-w-0 flex-1 rounded-[3px] bg-ink/[0.05] px-2.5 py-1.5 font-term text-[12.5px] text-ink break-all select-all">
           {revealed ? token : mask(token)}
         </code>
-        <Button compact onClick={copy}>
-          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={token} label="Copy" />
       </div>
-      {warning && <div className="mt-2.5 text-[12px] text-clay">{warning}</div>}
+      {warning && <div className="mt-2.5 text-[12px] leading-relaxed text-clay">{warning}</div>}
     </Card>
   );
 }

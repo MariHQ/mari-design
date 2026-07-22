@@ -8,9 +8,10 @@
 import { Fragment, useState } from "react";
 import { Check, ShieldCheck, CheckCircle2, ChevronDown, Calendar, ArrowRight, FileText } from "lucide-react";
 import { Card } from "../layout/Card";
+import { CardActions } from "../layout/CardShell";
 import { Button } from "../actions/Button";
-import { Avatar } from "../data-display/Avatar";
 import { StatusChip } from "../data-display/Chip";
+import { Combobox } from "../forms/Combobox";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Tabs } from "../navigation/Tabs";
 import { fmtDate } from "../tokens/format";
@@ -28,20 +29,30 @@ const DEMO_FINDINGS: Finding[] = [
   { id: 3, kind: "freshness", severity: "warn", text: "JWKS endpoint published Q1", note: "Endpoint doc last updated 8 months ago." },
 ];
 
+/* "Not verified" / "No source" rather than a bare dash: CONVENTIONS.md §5
+   bans em/en dashes in user-visible copy. */
+const NONE = "Not verified";
 const DEMO_CLAIMS: Claim[] = [
   { claim: "Tokens are signed with RS256.", source: "Auth RFC v1.2", status: "Verified", verified: "May 1, 2024" },
-  { claim: "Login latency drops by 40%.", source: "Migration brief", status: "Contradicted", verified: "—" },
+  { claim: "Login latency drops by 40%.", source: "Migration brief", status: "Contradicted", verified: NONE },
   { claim: "All downstream services validate against JWKS.", source: "Platform wiki", status: "Verified", verified: "Apr 12, 2024" },
-  { claim: "Tokens rotate every 24 hours.", source: "—", status: "Unsupported", verified: "—" },
+  { claim: "Tokens rotate every 24 hours.", source: "No source", status: "Unsupported", verified: NONE },
   { claim: "Rollback drains every active token.", source: "Runbook", status: "Verified", verified: "Mar 3, 2024" },
 ];
 
 const daysFromNow = (days: number) => fmtDate(new Date(Date.now() + days * 86400000));
+/* Owner picker is a searchable Combobox (CONVENTIONS.md §7), so the roster can
+   grow past the three demo names without becoming a scroll hunt. */
 const TASK_OWNERS = [
   { init: "AK", name: "Aki Kim" },
   { init: "LS", name: "Lena Shah" },
   { init: "MC", name: "Maya Chen" },
+  { init: "PN", name: "Priya Nair" },
+  { init: "MV", name: "Marcus Vale" },
+  { init: "DO", name: "Dana Osei" },
+  { init: "SO", name: "Sam Ortiz" },
 ];
+const OWNER_OPTIONS = TASK_OWNERS.map((o, i) => ({ value: String(i), label: o.name }));
 const TASK_DUES = [daysFromNow(3), daysFromNow(7), daysFromNow(14)];
 const TASK_PRIS: [string, string][] = [
   ["High", "#B23A1E"],
@@ -53,19 +64,24 @@ const TASK_PRIS: [string, string][] = [
 export function DocReviewFindingsPanel({
   findings = DEMO_FINDINGS,
   claims = DEMO_CLAIMS,
+  defaultTab = "check",
   loading = false,
 }: {
   findings?: Finding[];
   claims?: Claim[];
+  /** Which tab opens first, so each tab can be reviewed on its own. */
+  defaultTab?: FactTab;
   loading?: boolean;
 }) {
-  const [tab, setTab] = useState<FactTab>("check");
+  const [tab, setTab] = useState<FactTab>(defaultTab);
   const [checking, setChecking] = useState(false);
   const [taskState, setTaskState] = useState<"idle" | "creating" | "done">("idle");
   const [ownerIx, setOwnerIx] = useState(0);
   const [dueIx, setDueIx] = useState(0);
   const [priIx, setPriIx] = useState(0);
   const [flashId, setFlashId] = useState<number | null>(null);
+  /* The tally row is the claim filter: picking one narrows the claim list. */
+  const [claimFilter, setClaimFilter] = useState<string | null>(null);
 
   const contra = findings.find((f) => f.kind === "fact" && f.severity === "error") ?? null;
   const evidence = contra ? contra.note.replace(/^Contradicts verified fact:\s*/i, "") : "";
@@ -86,11 +102,20 @@ export function DocReviewFindingsPanel({
   };
   const jump = (id: number) => { setFlashId(id); setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1200); };
 
-  const tallies: [number, string, string, React.ReactNode][] = [
-    [supportedN, "Supported", "text-moss", <Check size={14} key="s" />],
-    [contradictionN, "Contradiction", "text-espelette", <span key="c" className="font-bold">!</span>],
-    [unsupportedN, "Unsupported", "text-clay", <span key="u" className="font-bold">!</span>],
+  /* Overview-style tab row: label on top, count centered UNDERNEATH it, the
+     whole cell clickable and wired to the claim list below. */
+  const tallies: { n: number; label: string; status: string; tone: string; icon: React.ReactNode }[] = [
+    { n: supportedN, label: "Supported", status: "Verified", tone: "text-moss", icon: <Check size={14} /> },
+    { n: contradictionN, label: "Contradiction", status: "Contradicted", tone: "text-espelette", icon: <span className="font-bold">!</span> },
+    { n: unsupportedN, label: "Unsupported", status: "Unsupported", tone: "text-clay", icon: <span className="font-bold">!</span> },
   ];
+
+  const pickClaims = (status: string) => {
+    setClaimFilter((f) => (f === status ? null : status));
+    setTab("claims");
+  };
+
+  const shownClaims = claimFilter ? claims.filter((c) => c.status === claimFilter) : claims;
 
   const pickBtn = "flex w-full items-center justify-between gap-2";
 
@@ -113,10 +138,10 @@ export function DocReviewFindingsPanel({
           <div className="rounded-[6px] border border-ink/12 p-3 space-y-2.5">
             <SkeletonLine w="45%" h={11} /><SkeletonText lines={2} /><SkeletonLine w="60%" h={10} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" />
-            <Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" />
+          <div className="grid grid-cols-3 gap-2.5">
+            <Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" /><Skeleton height={34} rounded="rounded-[4px]" />
           </div>
+          <Skeleton width={132} height={28} rounded="rounded-[4px]" />
         </div>
       </Card>
     );
@@ -137,17 +162,30 @@ export function DocReviewFindingsPanel({
         />
       </div>
 
-      {/* tallies */}
-      <div className="flex items-stretch px-4 py-3.5 border-b border-ink/10">
-        {tallies.map(([n, label, tone, icon], i) => (
-          <Fragment key={label}>
-            {i > 0 && <span className="mx-3 w-px bg-ink/12" />}
-            <span className="flex-1">
-              <span className={`flex items-center gap-1.5 text-[11.5px] font-medium ${tone}`}>{icon} {label}</span>
-              <b className="mt-0.5 block font-display text-[20px] text-ink">{n}</b>
-            </span>
-          </Fragment>
-        ))}
+      {/* tally row, doubling as the claim filter */}
+      <div className="flex items-stretch border-b border-ink/10 px-4 py-3.5">
+        {tallies.map((t, i) => {
+          const on = claimFilter === t.status;
+          return (
+            <Fragment key={t.label}>
+              {i > 0 && <span className="mx-2 w-px bg-ink/12" />}
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => pickClaims(t.status)}
+                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[5px] border px-1.5 py-1.5 text-center transition-colors ${
+                  on ? "border-biscay-2 bg-biscay-2/[0.08] ring-1 ring-biscay-2" : "border-transparent hover:border-ink/20"
+                }`}
+              >
+                <span className={`flex max-w-full items-center justify-center gap-1.5 text-[11.5px] font-medium ${t.tone}`}>
+                  {t.icon}
+                  <span className="truncate">{t.label}</span>
+                </span>
+                <b className="block font-display text-[20px] leading-tight text-ink">{t.n}</b>
+              </button>
+            </Fragment>
+          );
+        })}
       </div>
 
       <div className="px-4 py-3">
@@ -157,20 +195,33 @@ export function DocReviewFindingsPanel({
       </div>
 
       {tab === "claims" ? (
-        <div className="px-4 pb-4 space-y-2">
-          {claims.map((f) => (
+        <div className="space-y-2 px-4 pb-4">
+          {claimFilter && (
+            <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-ink/70">
+              <span>Filtered to {claimFilter.toLowerCase()} claims.</span>
+              <Button variant="link" compact onClick={() => setClaimFilter(null)}>Show all claims</Button>
+            </div>
+          )}
+          {shownClaims.map((f) => (
             <div key={f.claim} className="flex items-start gap-2.5">
-              <span className={`mt-0.5 shrink-0 ${f.status === "Verified" ? "text-moss" : "text-ink/25"}`}>
+              <span className={`mt-0.5 shrink-0 ${f.status === "Verified" ? "text-moss" : "text-ink/65"}`}>
                 <CheckCircle2 size={15} />
               </span>
-              <span className="min-w-0 text-[13px] text-ink/85">
+              <span className="min-w-0 break-words text-[13px] text-ink/85">
                 {f.claim}
-                <span className="mt-0.5 block text-[11px] text-ink/45">
-                  {f.source} · {f.status}{f.verified !== "—" ? ` · ${f.verified}` : ""}
+                <span className="mt-0.5 block break-words text-[11px] text-ink/65">
+                  {f.source} · {f.status} · {f.verified}
                 </span>
               </span>
             </div>
           ))}
+          {shownClaims.length === 0 && (
+            <p className="text-[12.5px] text-ink/70">
+              {claims.length === 0
+                ? "No claims extracted yet. Run a fact check to scan the document."
+                : "No claims in this state."}
+            </p>
+          )}
         </div>
       ) : (
         <div className="px-4 pb-4">
@@ -181,20 +232,20 @@ export function DocReviewFindingsPanel({
                   <span className="grid place-items-center w-4 h-4 rounded-full bg-espelette text-white text-[10px] font-bold">!</span>
                   Contradiction
                 </span>
-                <span className="text-[11px] text-ink/45">High confidence</span>
+                <span className="text-[11px] text-ink/65">High confidence</span>
               </div>
               <div className="mt-2.5">
-                <span className="block text-[10.5px] uppercase tracking-[0.06em] text-ink/45">In document</span>
+                <span className="block text-[10.5px] uppercase tracking-[0.06em] text-ink/65">In document</span>
                 <mark
-                  className={`mt-1 inline-block cursor-pointer rounded-[3px] bg-espelette/15 px-1 py-0.5 text-[12.5px] text-ink/85 transition-colors ${flashId === contra.id ? "ring-2 ring-espelette/50" : ""}`}
+                  className={`mt-1 inline-block max-w-full cursor-pointer break-words rounded-[3px] bg-espelette/15 px-1 py-0.5 text-[12.5px] text-ink/85 transition-colors ${flashId === contra.id ? "ring-2 ring-espelette/50" : ""}`}
                   onClick={() => jump(contra.id)}
                 >{contra.text}</mark>
               </div>
               <div className="mt-2.5">
-                <span className="block text-[10.5px] uppercase tracking-[0.06em] text-ink/45">Verified evidence</span>
-                <mark className="mt-1 inline-block rounded-[3px] bg-moss/15 px-1 py-0.5 text-[12.5px] text-ink/85">{evidence}</mark>
+                <span className="block text-[10.5px] uppercase tracking-[0.06em] text-ink/65">Verified evidence</span>
+                <mark className="mt-1 inline-block max-w-full break-words rounded-[3px] bg-moss/15 px-1 py-0.5 text-[12.5px] text-ink/85">{evidence}</mark>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-ink/55">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-ink/65">
                 <FileText size={13} /> Auth RFC v1.2 · May 1, 2024
                 <StatusChip status="canonical" />
                 <Button variant="link" className="ml-auto" onClick={() => window.open("/knowledge?q=Auth%20RFC", "_blank")}>
@@ -203,61 +254,72 @@ export function DocReviewFindingsPanel({
               </div>
             </div>
           ) : (
-            <div className="text-[12.5px] text-ink/50">No contradictions found. Run a fact check to scan the latest claims.</div>
+            <div className="text-[12.5px] text-ink/65">No contradictions found. Run a fact check to scan the latest claims.</div>
           )}
 
-          {/* create-task row */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div>
-              <span className="text-[11px] text-ink/45">Owner</span>
-              <Menu align="start" trigger={(
-                <Button className={pickBtn}>
-                  <span className="flex items-center gap-1.5">
-                    <Avatar initials={TASK_OWNERS[ownerIx].init} />
-                    {TASK_OWNERS[ownerIx].name}
-                  </span>
-                  <ChevronDown size={12} />
-                </Button>
-              )}>
-                <MenuRadioGroup value={String(ownerIx)} onValueChange={(v) => setOwnerIx(Number(v))}>
-                  {TASK_OWNERS.map((o, i) => <MenuRadioItem key={o.name} value={String(i)}>{o.name}</MenuRadioItem>)}
-                </MenuRadioGroup>
-              </Menu>
+          {/* create-task row: owner, priority, due date on ONE line in that
+              order (CONVENTIONS.md §7), primary action bottom left (§2). */}
+          <div className="mt-4 grid grid-cols-3 gap-2.5">
+            <div className="min-w-0">
+              <span className="block text-[11px] text-ink/65">Owner</span>
+              <div className="mt-1">
+                <Combobox
+                  ariaLabel="Task owner"
+                  search
+                  value={String(ownerIx)}
+                  onChange={(v) => setOwnerIx(Number(v))}
+                  options={OWNER_OPTIONS}
+                  searchPlaceholder="Search people…"
+                  emptyLabel="No people match"
+                />
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] text-ink/45">Due date</span>
-              <Menu align="start" trigger={(
-                <Button className={pickBtn}>
-                  <span className="flex items-center gap-1.5"><Calendar size={13} /> {TASK_DUES[dueIx]}</span>
-                  <ChevronDown size={12} />
-                </Button>
-              )}>
-                <MenuRadioGroup value={String(dueIx)} onValueChange={(v) => setDueIx(Number(v))}>
-                  {TASK_DUES.map((d, i) => <MenuRadioItem key={d} value={String(i)}>{d}</MenuRadioItem>)}
-                </MenuRadioGroup>
-              </Menu>
+            <div className="min-w-0">
+              <span className="block text-[11px] text-ink/65">Priority</span>
+              <div className="mt-1">
+                <Menu align="start" trigger={(
+                  <Button className={pickBtn}>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-[1px]" style={{ background: TASK_PRIS[priIx][1] }} />
+                      <span className="truncate">{TASK_PRIS[priIx][0]}</span>
+                    </span>
+                    <ChevronDown size={12} className="shrink-0" />
+                  </Button>
+                )}>
+                  <MenuRadioGroup value={String(priIx)} onValueChange={(v) => setPriIx(Number(v))}>
+                    {TASK_PRIS.map(([label], i) => <MenuRadioItem key={label} value={String(i)}>{label}</MenuRadioItem>)}
+                  </MenuRadioGroup>
+                </Menu>
+              </div>
             </div>
-            <div>
-              <span className="text-[11px] text-ink/45">Priority</span>
-              <Menu align="start" trigger={(
-                <Button className={pickBtn}>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: TASK_PRIS[priIx][1] }} /> {TASK_PRIS[priIx][0]}
-                  </span>
-                  <ChevronDown size={12} />
-                </Button>
-              )}>
-                <MenuRadioGroup value={String(priIx)} onValueChange={(v) => setPriIx(Number(v))}>
-                  {TASK_PRIS.map(([label], i) => <MenuRadioItem key={label} value={String(i)}>{label}</MenuRadioItem>)}
-                </MenuRadioGroup>
-              </Menu>
-            </div>
-            <div className="flex items-end">
-              <Button variant="primary" block onClick={createTask} disabled={taskState !== "idle"}>
-                {taskState === "done" ? "Task created ✓" : taskState === "creating" ? "Creating…" : "Create review task"}
-              </Button>
+            <div className="min-w-0">
+              <span className="block text-[11px] text-ink/65">Due date</span>
+              <div className="mt-1">
+                <Menu align="start" trigger={(
+                  <Button className={pickBtn}>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <Calendar size={13} className="shrink-0" />
+                      <span className="truncate">{TASK_DUES[dueIx]}</span>
+                    </span>
+                    <ChevronDown size={12} className="shrink-0" />
+                  </Button>
+                )}>
+                  <MenuRadioGroup value={String(dueIx)} onValueChange={(v) => setDueIx(Number(v))}>
+                    {TASK_DUES.map((d, i) => <MenuRadioItem key={d} value={String(i)}>{d}</MenuRadioItem>)}
+                  </MenuRadioGroup>
+                </Menu>
+              </div>
             </div>
           </div>
+
+          <CardActions
+            className="mt-3"
+            primary={
+              <Button variant="primary" compact onClick={createTask} disabled={taskState !== "idle"}>
+                {taskState === "done" ? "Task created" : taskState === "creating" ? "Creating…" : "Create review task"}
+              </Button>
+            }
+          />
         </div>
       )}
     </Card>

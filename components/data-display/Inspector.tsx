@@ -42,7 +42,7 @@ export function Inspector({
           <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-1">{eyebrow}</span>
         )}
         <div className="flex items-start gap-2.5">
-          {icon && <span className="shrink-0 mt-0.5 text-ink/70">{icon}</span>}
+          {icon && <span className="shrink-0 mt-0.5 text-ink/80">{icon}</span>}
           <h3 className="text-[16px] font-semibold text-ink leading-snug min-w-0 break-words">{title}</h3>
         </div>
 
@@ -57,7 +57,7 @@ export function Inspector({
         {sections?.map((s, i) => (
           <div key={i} className="mt-5 first:mt-4">
             {s.title && (
-              <h4 className="flex items-center gap-1.5 mb-2 font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/60">
+              <h4 className="flex items-center gap-1.5 mb-2 font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/65">
                 {s.title}
                 {s.count != null && <CountChip count={s.count} />}
               </h4>

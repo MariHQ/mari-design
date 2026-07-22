@@ -16,7 +16,7 @@ export type CopyButtonProps = Omit<ButtonProps, "onClick" | "children"> & {
 };
 
 export function CopyButton({
-  value, label, copiedLabel = "Copied", icon, compact = true, variant = "default", onCopy, ...rest
+  value, label, copiedLabel = "Copied", icon, compact, variant = "default", onCopy, ...rest
 }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number>();
@@ -36,12 +36,16 @@ export function CopyButton({
   };
 
   const iconOnly = icon ?? label === undefined;
+  /* A labelled copy button ("Copy install") sits in a row with ordinary
+     buttons, so it takes the ordinary h-9 height. Only the icon-only form
+     stays compact, where it tucks into code blocks and dense rows. */
+  const isCompact = compact ?? iconOnly;
 
   return (
     <Button
       {...rest}
       variant={variant}
-      compact={compact}
+      compact={isCompact}
       icon={iconOnly}
       onClick={copy}
       aria-label={iconOnly ? (copied ? copiedLabel : "Copy") : undefined}

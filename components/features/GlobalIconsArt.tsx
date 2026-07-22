@@ -150,20 +150,28 @@ function Ticks({ n = 12, width = 200, color = BISCAY }: { n?: number; width?: nu
   );
 }
 
-/** Cross-hatch placeholder for generated imagery. */
+/** Cross-hatch placeholder for generated imagery.
+ *  The old version was a 0.8px web at 35% opacity, so it read as dirt on the
+ *  screen rather than as artwork. It now uses the same weight and density as
+ *  <Hatch>: a solid tinted ground, colored-pencil strokes at full sketch
+ *  weight, and a visible frame. */
 function TexturePlaceholder({ hue = CLAY, width = 96, height = 64 }: { hue?: string; width?: number; height?: number }) {
+  const step = 9;
+  const n = Math.ceil((width + height) / step) + 2;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="rounded-[4px]">
-      <rect width={width} height={height} fill={hue} opacity="0.06" />
-      <g filter="url(#sketch-soft)" stroke={hue} strokeWidth="0.8" opacity="0.35">
-        {Array.from({ length: 14 }, (_, i) => (
-          <line key={`a${i}`} x1={-height + i * 12} y1={height} x2={i * 12} y2={0} />
+      <rect width={width} height={height} fill={hue} opacity="0.14" />
+      <g filter="url(#sketch-soft)" stroke={hue} strokeLinecap="round">
+        {Array.from({ length: n }, (_, i) => (
+          <line key={`a${i}`} x1={-height + i * step} y1={height} x2={i * step} y2={0}
+            strokeWidth={2.4 + ((i * 7) % 3) * 0.5} opacity={0.5 + ((i * 11) % 4) * 0.1} />
         ))}
-        {Array.from({ length: 14 }, (_, i) => (
-          <line key={`b${i}`} x1={i * 12} y1={height} x2={height + i * 12} y2={0} />
+        {Array.from({ length: Math.round(n / 2) }, (_, i) => (
+          <line key={`b${i}`} x1={i * step * 2} y1={height} x2={height + i * step * 2} y2={0}
+            strokeWidth={1.4} opacity={0.3} />
         ))}
       </g>
-      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="4" fill="none" stroke={hue} strokeWidth="1" opacity="0.3" />
+      <rect x="0.75" y="0.75" width={width - 1.5} height={height - 1.5} rx="4" fill="none" stroke={hue} strokeWidth="1.5" opacity="0.7" />
     </svg>
   );
 }
@@ -175,7 +183,7 @@ function Section({ title, note, children }: { title: string; note?: string; chil
     <section>
       <div className="mb-3 flex items-baseline gap-2 border-b border-ink/10 pb-1.5">
         <h3 className="font-display text-[15px] text-ink">{title}</h3>
-        {note && <span className="font-term text-[11px] text-ink/45">{note}</span>}
+        {note && <span className="font-term text-[11px] text-ink/65">{note}</span>}
       </div>
       {children}
     </section>
@@ -186,7 +194,7 @@ function Cell({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-1.5 rounded-[6px] border border-ink/10 bg-paper px-2 py-3 text-ink/80">
       <div className="grid h-9 place-items-center">{children}</div>
-      <span className="font-term text-[10px] text-ink/50">{label}</span>
+      <span className="font-term text-[10px] text-ink/65">{label}</span>
     </div>
   );
 }
@@ -232,8 +240,8 @@ export function GlobalIconsArt({ loading = false, className = "" }: GlobalIconsA
 
       <div className="mb-5">
         <h2 className="font-display text-[19px] text-ink">Icons, marks & notebook art</h2>
-        <p className="mt-0.5 text-[13px] text-ink/60">
-          The console ships its iconography and decoration as inline SVG — a line-art icon set,
+        <p className="mt-0.5 text-[13px] text-ink/70">
+          The console ships its iconography and decoration as inline SVG: a line-art icon set,
           brand-colored source marks, the tag vocabulary, and hand-drawn "Editorial Notebook" art.
         </p>
       </div>

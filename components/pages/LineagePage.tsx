@@ -91,17 +91,17 @@ function SearchResults() {
   ).slice(0, 6);
   return (
     <div className={`${card} absolute left-2 top-[52px] z-30 w-[320px] p-1 shadow-lg`}>
-      <div className="px-2.5 py-1.5 font-term text-[11px] text-ink/45">{hits.length} results for “{q}”</div>
+      <div className="px-2.5 py-1.5 font-term text-[11px] text-ink/65">{hits.length} results for “{q}”</div>
       {hits.map((n) => (
         <div key={n.id} className="flex items-center gap-2.5 rounded-[3px] px-2 py-1.5 hover:bg-flysch">
           <span className="shrink-0 text-ink/70"><NodeGlyph node={n} size={16} /></span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium text-ink">{n.title}</span>
-            <span className="block truncate font-term text-[11px] text-ink/50">
+            <span className="block truncate font-term text-[11px] text-ink/65">
               {[n.owner, SOURCE_LABELS[n.source] ?? n.source, n.date].filter(Boolean).join(" · ")}
             </span>
           </span>
-          <span className="shrink-0 font-term text-[11px] text-ink/45">{n.inbound ?? 0}↩</span>
+          <span className="shrink-0 font-term text-[11px] text-ink/65">{n.inbound ?? 0}↩</span>
         </div>
       ))}
     </div>
@@ -109,18 +109,34 @@ function SearchResults() {
 }
 
 function Drawer({ state }: { state: string }) {
-  const cls = "w-full shrink-0 lg:w-[380px]";
+  // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
+  // made these drawers render mobile-style in the desktop canvas.
+  const cls = "w-[420px] shrink-0";
   if (state === "inspect") return <div className={cls}><LineageNodeDrawer nodeId="n4" /></div>;
   if (state === "edge") return <div className={cls}><LineageEdgeDrawer edgeId="e3" /></div>;
   if (state === "group") return <div className={cls}><LineageGroupDrawer /></div>;
-  if (state === "assert") return <div className="w-full shrink-0 lg:w-[420px]"><LineageAssertDrawer /></div>;
+  if (state === "assert") return <div className="w-[460px] shrink-0"><LineageAssertDrawer /></div>;
   return null;
 }
 
-function Body({ state }: { state: string }) {
+/* The instrument is a fixed-width desktop surface: the canvas column needs
+   840px and the drawers 420/460px, which is more than the console's content
+   column offers once a drawer is open. Rather than let the drawer sit on top
+   of the canvas, the rig scrolls sideways as one piece and every panel keeps
+   its declared width. Without a drawer the canvas just fills the column. */
+function Rig({ scroll, children }: { scroll: boolean; children: React.ReactNode }) {
+  if (!scroll) return <div className="mt-6 flex gap-4">{children}</div>;
+  return (
+    <div className="mt-6 overflow-x-auto pb-1">
+      <div className="flex w-max gap-4">{children}</div>
+    </div>
+  );
+}
+
+function Body({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
     return (
-      <div className="mt-5">
+      <div className="mt-6">
         <EmptyState icon={<Network size={22} />} title="API offline">
           The lineage graph is temporarily unavailable. Retrying…
         </EmptyState>
@@ -129,7 +145,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "empty") {
     return (
-      <div className="mt-5">
+      <div className="mt-6">
         <EmptyState icon={<Network size={22} />} title="No lineage yet">
           Connect a source and sync to build the document graph.
         </EmptyState>
@@ -141,17 +157,17 @@ function Body({ state }: { state: string }) {
     const p = state === "stress";
     const nodes = stressNodes(p);
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
-        <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="relative min-w-0 flex-1 space-y-3">
+        <Rig scroll>
+          <div className="relative w-[840px] shrink-0 space-y-3">
             <LineageToolbar />
             <LineageGraph key={state} nodes={nodes} edges={DEMO_EDGES} lens="source" layout="flow" trace={null} focalId="n1" />
             <LineageTimeScrubber value={null} />
           </div>
-          <div className="w-full shrink-0 space-y-3 lg:w-[380px]">
+          <div className="w-[420px] shrink-0 space-y-3">
             <Card title={p ? MIXED_SCRIPT : LONG_TITLE} hint={p ? HUGE_PERCENT : `${HUGE_NUMBER_STR} refs`}>
-              <p className="text-[12.5px] leading-snug text-ink/60 break-words">{p ? UNBREAKABLE : LONG_NAME}</p>
+              <p className="text-[12.5px] leading-snug text-ink/70 break-words">{p ? UNBREAKABLE : LONG_NAME}</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {(p ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
               </div>
@@ -160,7 +176,7 @@ function Body({ state }: { state: string }) {
               </div>
             </Card>
           </div>
-        </div>
+        </Rig>
       </div>
     );
   }
@@ -174,33 +190,37 @@ function Body({ state }: { state: string }) {
   const focalId = trace ? trace.originId : "n1";
   const scrubberValue = state === "as-of" ? 6 : null;
 
+  const hasDrawer = state === "inspect" || state === "edge" || state === "group" || state === "assert";
+  const scroll = mobile || hasDrawer;
   return (
-    <div className="mt-5 flex flex-col gap-4 lg:flex-row">
-      <div className="relative min-w-0 flex-1 space-y-3">
+    <Rig scroll={scroll}>
+      <div className={scroll ? "relative w-[840px] shrink-0 space-y-3" : "relative min-w-0 flex-1 space-y-3"}>
         <LineageToolbar />
         {state === "search" && <SearchResults />}
         <LineageGraph key={`${lens}-${layout}-${state}`} lens={lens} layout={layout} trace={trace} focalId={focalId} />
         <LineageTimeScrubber value={scrubberValue} />
       </div>
       <Drawer state={state} />
-    </div>
+    </Rig>
   );
 }
 
 function LineagePage({ state = "default", mobile = false }: PageProps) {
+  const actions = <Button variant="default">Authentication API ↗</Button>;
   return (
     <PageFrame active={navFor("lineage")} title="Lineage" mobile={mobile}>
       {state === "loading" ? (
         <SkeletonPage variant="graph" />
       ) : (
-        <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
+        <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <PageHeader
             eyebrow="Lineage"
             title="Product lineage"
             description="The document graph: provenance, impact, and drift across every source."
-            actions={<Button variant="default">Authentication API ↗</Button>}
+            actions={mobile ? undefined : actions}
           />
-          <Body state={state} />
+          {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+          <Body state={state} mobile={mobile} />
         </div>
       )}
     </PageFrame>

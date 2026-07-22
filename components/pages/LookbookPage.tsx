@@ -91,14 +91,14 @@ function Foundations() {
 
       <Card title="Type scale">
         <p className="mb-4 text-[13px] leading-relaxed text-ink/65">
-          Display for headings, a system sans for body, and JetBrains Mono (font-term) for chrome — labels, counts, code.
+          Display for headings, a system sans for body, and JetBrains Mono (font-term) for chrome: labels, counts, code.
         </p>
         <div className="space-y-2">
           <p className="font-display text-[26px] font-bold tracking-[-0.01em] text-ink">Display · 26 / bold</p>
           <p className="font-display text-[19px] font-semibold text-ink">Heading · 19 / semibold</p>
-          <p className="text-[14px] text-ink/80">Body · 14 — the readable default for paragraphs and descriptions.</p>
-          <p className="text-[12.5px] text-ink/60">Small · 12.5 — hints, captions, secondary copy.</p>
-          <p className="font-term text-[11px] uppercase tracking-[0.1em] text-ink/45">Term · 11 uppercase — labels &amp; chrome</p>
+          <p className="text-[14px] text-ink/80">Body · 14: the readable default for paragraphs and descriptions.</p>
+          <p className="text-[12.5px] text-ink/70">Small · 12.5: hints, captions, secondary copy.</p>
+          <p className="font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">Term · 11 uppercase: labels &amp; chrome</p>
         </div>
       </Card>
     </div>
@@ -242,14 +242,14 @@ function Feedback() {
     <div className="space-y-4">
       <Exhibit
         title="Alerts"
-        rule="Inline, dismissible feedback. Tone maps to intent: info, ok, attention, blocked, neutral — never stack more than one per region."
+        rule="Inline, dismissible feedback. Tone maps to intent: info, ok, attention, blocked, neutral: never stack more than one per region."
         imp='import { Alert } from "../feedback/Alert"'
       >
         <div className="w-full space-y-3">
           <Alert tone="info" title="Sync scheduled">Confluence · Ops will sync in 5 minutes.</Alert>
           <Alert tone="ok" title="Fact-check passed">All 12 claims in pricing.md verified.</Alert>
           <Alert tone="attention" title="Token expiring">Rotate the GitHub token within 7 days.</Alert>
-          <Alert tone="blocked" title="Sync failed">GET /rest/api/content returned 401 — token expired.</Alert>
+          <Alert tone="blocked" title="Sync failed">GET /rest/api/content returned 401: token expired.</Alert>
         </div>
       </Exhibit>
 
@@ -279,12 +279,12 @@ function Feedback() {
 
 /* ── Icons & art ──────────────────────────────────────────────────────── */
 
+/* GlobalIconsArt renders its own heading and blurb, so wrapping it in a titled
+   Card printed the same title twice. The Card stays for the surface, the title
+   does not. */
 function IconsArt() {
   return (
-    <Card title="Icons, marks & notebook art">
-      <p className="mb-4 text-[13px] leading-relaxed text-ink/65">
-        The console ships its iconography and decoration as inline SVG — a bespoke line-art UI set plus source/provider brand marks.
-      </p>
+    <Card>
       <GlobalIconsArt />
     </Card>
   );
@@ -333,7 +333,7 @@ function StressSection() {
   return (
     <div className="space-y-4">
       <Exhibit
-        title="Chip-row overflow — 20+ tags, no wrap"
+        title="Chip-row overflow: 20+ tags, no wrap"
         rule="A single non-wrapping row of every tag: it must scroll inside its own container, never push the page body sideways."
         imp={LONG_URL}
       >
@@ -398,12 +398,16 @@ function LookbookPage({ state = "all", mobile = false }: PageProps) {
   }
   return (
     <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
-      <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Design system"
           title="Design lookbook"
           description="Every canonical primitive, exhibited live with its usage rule and import path. This page is built only from the components it documents."
-          actions={<Button variant="primary" icon={false}>Open catalog ↗</Button>}
+          actions={(
+            <Button variant="primary" icon={false} onClick={() => window.open("/index.html", "_blank", "noopener")}>
+              Open catalog ↗
+            </Button>
+          )}
         />
         <div className="mt-6">
           <Sections state={state} />

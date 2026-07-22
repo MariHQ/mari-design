@@ -1,25 +1,62 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, Inbox, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { card } from "../tokens/card";
-import { focusRing } from "../tokens/focusRing";
+import { cellText } from "./Table";
+import { pagerBtn } from "./Pagination";
 import { SkeletonTable } from "./Skeleton";
-
-const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
+import { SortHeader, tdPad, type Align, type SortState } from "./sortable";
 
 export type Column<T> = {
   key: string;
   header: string;
+  /** Columns sort by default; set false for action/decoration columns. */
   sortable?: boolean;
+  /** Sort value. Falls back to the text of the rendered cell. */
   sort?: (row: T) => string | number;
   render: (row: T) => ReactNode;
-  align?: "right";
+  align?: Align;
   cell?: string;
 };
+
+export const alignClass = (a?: Align) => (a === "center" ? "text-center" : a === "right" ? "text-right" : "");
+
+/** Body cell class shared by every table type. */
+export const cellClass = (c: { align?: Align; cell?: string }) =>
+  [tdPad, alignClass(c.align), c.cell ?? ""].filter(Boolean).join(" ");
+
+/** Sort accessors for a column set: explicit `sort`, else the rendered text. */
+export function columnAccessors<T>(columns: Column<T>[]): Record<string, (row: T) => string | number> {
+  const map: Record<string, (row: T) => string | number> = {};
+  for (const c of columns) map[c.key] = c.sort ?? ((row: T) => cellText(c.render(row)).trim().toLowerCase());
+  return map;
+}
+
+/** Sort a row set by the current sort state. */
+export function sortRows<T>(rows: T[], columns: Column<T>[], sort: SortState): T[] {
+  if (!sort.key) return rows;
+  const col = columns.find((c) => c.key === sort.key);
+  if (!col || col.sortable === false) return rows;
+  const get = columnAccessors(columns)[sort.key];
+  return [...rows].sort((a, b) => {
+    const av = get(a), bv = get(b);
+    const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+}
+
+/** "Region" → "All regions", "Sources" → "All sources" (CONVENTIONS §3). */
+export function allOptionLabel(label: string) {
+  const l = label.trim().toLowerCase();
+  // A facet label that already reads "All regions" must not become
+  // "All all regions"; only add the prefix (and plural) when it's missing.
+  if (l.startsWith("all ")) return `All ${l.slice(4)}`;
+  return `All ${l.endsWith("s") ? l : `${l}s`}`;
+}
 
 /* ── DataTable: search, sort, filter, paginate, empty state ────────────── */
 export function DataTable<T>({
   title, count, rows, columns, rowKey, search, searchPlaceholder = "Search…",
-  facet, onRowClick, pageSize = 8, minW = 720, empty = "No results", loading = false,
+  facet, actions, onRowClick, pageSize = 8, minW = 720, empty = "No results", loading = false,
 }: {
   title?: string;
   count?: number;
@@ -28,7 +65,16 @@ export function DataTable<T>({
   rowKey: (row: T) => string;
   search?: (row: T) => string;
   searchPlaceholder?: string;
-  facet?: { label: string; get: (row: T) => string };
+  facet?: {
+    label: string;
+    get: (row: T) => string;
+    /** Override the "All …" option copy. */
+    allLabel?: string;
+    /** Display form of an option value (e.g. regionLabel from tokens/regions). */
+    optionLabel?: (value: string) => string;
+  };
+  /** Table-level action button. Rendered top right (CONVENTIONS §2). */
+  actions?: ReactNode;
   onRowClick?: (row: T) => void;
   pageSize?: number;
   minW?: number;
@@ -37,8 +83,7 @@ export function DataTable<T>({
 }) {
   const [query, setQuery] = useState("");
   const [facetVal, setFacetVal] = useState("");
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sort, setSort] = useState<SortState>({ key: null, dir: "asc" });
   const [page, setPage] = useState(0);
 
   const facetOptions = useMemo(() => (facet ? Array.from(new Set(rows.map(facet.get))) : []), [rows, facet]);
@@ -47,25 +92,15 @@ export function DataTable<T>({
     let r = rows;
     if (query && search) { const q = query.toLowerCase(); r = r.filter((x) => search(x).toLowerCase().includes(q)); }
     if (facet && facetVal) r = r.filter((x) => facet.get(x) === facetVal);
-    const col = columns.find((c) => c.key === sortKey);
-    if (col?.sort) {
-      const s = col.sort;
-      r = [...r].sort((a, b) => {
-        const av = s(a), bv = s(b);
-        const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-        return sortDir === "asc" ? cmp : -cmp;
-      });
-    }
-    return r;
-  }, [rows, query, facet, facetVal, sortKey, sortDir, columns, search]);
+    return sortRows(r, columns, sort);
+  }, [rows, query, facet, facetVal, sort, columns, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const cur = Math.min(page, pageCount - 1);
   const pageRows = filtered.slice(cur * pageSize, cur * pageSize + pageSize);
 
-  const toggleSort = (key: string) => {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("asc"); }
+  const onSort = (key: string) => {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
     setPage(0);
   };
 
@@ -97,23 +132,24 @@ export function DataTable<T>({
         <div className="flex items-center gap-2 ml-auto">
           {search && (
             <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
-              <Search size={13} className="text-ink/50" />
-              <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder={searchPlaceholder} className="w-[130px] sm:w-[170px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/45 outline-none" />
+              <Search size={13} className="text-ink/65" />
+              <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder={searchPlaceholder} className="w-[130px] sm:w-[170px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
             </div>
           )}
           {facet && (
-            <select value={facetVal} onChange={(e) => { setFacetVal(e.target.value); setPage(0); }} className={`h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper text-[12.5px] text-ink/75 outline-none focus:border-biscay-2 focus:ring-1 focus:ring-biscay-2/40`}>
-              <option value="">All {facet.label}</option>
-              {facetOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            <select aria-label={facet.allLabel ?? allOptionLabel(facet.label)} value={facetVal} onChange={(e) => { setFacetVal(e.target.value); setPage(0); }} className={`h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper text-[12.5px] text-ink/75 outline-none focus:border-biscay-2 focus:ring-1 focus:ring-biscay-2/40`}>
+              <option value="">{facet.allLabel ?? allOptionLabel(facet.label)}</option>
+              {facetOptions.map((o) => <option key={o} value={o}>{facet.optionLabel ? facet.optionLabel(o) : o}</option>)}
             </select>
           )}
+          {actions}
         </div>
       </div>
 
       {pageRows.length === 0 ? (
         <div className="grid place-items-center py-16 text-center">
           <Inbox size={24} className="text-ink/25" />
-          <p className="mt-2 text-[13px] text-ink/60">{query || facetVal ? "No matches. Try clearing filters." : empty}</p>
+          <p className="mt-2 text-[13px] text-ink/70">{query || facetVal ? "No matches. Try clearing filters." : empty}</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -121,21 +157,22 @@ export function DataTable<T>({
             <thead>
               <tr>
                 {columns.map((c) => (
-                  <th key={c.key} className={`${thClass} px-4 py-2.5 border-b border-ink/10 ${c.align === "right" ? "text-right" : ""}`}>
-                    {c.sortable ? (
-                      <button onClick={() => toggleSort(c.key)} className={`inline-flex items-center gap-1 uppercase hover:text-ink rounded-[3px] ${focusRing}`}>
-                        {c.header}
-                        {sortKey === c.key ? (sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronsUpDown size={12} className="text-ink/30" />}
-                      </button>
-                    ) : c.header}
-                  </th>
+                  <SortHeader
+                    key={c.key}
+                    label={c.header}
+                    sortKey={c.key}
+                    sort={sort}
+                    onSort={onSort}
+                    align={c.align ?? "left"}
+                    sortable={c.sortable !== false && c.header.trim() !== ""}
+                  />
                 ))}
               </tr>
             </thead>
             <tbody>
               {pageRows.map((row) => (
                 <tr key={rowKey(row)} onClick={onRowClick ? () => onRowClick(row) : undefined} className={`border-b border-ink/10 last:border-0 ${onRowClick ? "cursor-pointer hover:bg-flysch/50 group" : ""}`}>
-                  {columns.map((c) => <td key={c.key} className={`px-4 py-3 ${c.align === "right" ? "text-right" : ""} ${c.cell ?? ""}`}>{c.render(row)}</td>)}
+                  {columns.map((c) => <td key={c.key} className={cellClass(c)}>{c.render(row)}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -144,11 +181,11 @@ export function DataTable<T>({
       )}
 
       {filtered.length > pageSize && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-ink/10 font-term text-[11.5px] text-ink/60">
-          <span>{cur * pageSize + 1}–{Math.min((cur + 1) * pageSize, filtered.length)} of {filtered.length}</span>
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-ink/10 font-term text-[11.5px] text-ink/65">
+          <span>{cur * pageSize + 1} to {Math.min((cur + 1) * pageSize, filtered.length)} of {filtered.length}</span>
           <div className="flex items-center gap-1">
-            <button disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} aria-label="Previous page" className={`grid place-items-center w-7 h-7 rounded-[4px] border border-ink/20 text-ink/70 disabled:opacity-40 hover:bg-flysch ${focusRing}`}><ChevronLeft size={14} /></button>
-            <button disabled={cur >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} aria-label="Next page" className={`grid place-items-center w-7 h-7 rounded-[4px] border border-ink/20 text-ink/70 disabled:opacity-40 hover:bg-flysch ${focusRing}`}><ChevronRight size={14} /></button>
+            <button disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} aria-label="Previous page" className={pagerBtn}><ChevronLeft size={14} /></button>
+            <button disabled={cur >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} aria-label="Next page" className={pagerBtn}><ChevronRight size={14} /></button>
           </div>
         </div>
       )}

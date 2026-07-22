@@ -1,6 +1,8 @@
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { fmtDate, type DateInput } from "../tokens/format";
+import { DateRangePicker, dateRangeStart, type DateRange } from "./DateRangePicker";
 
 /* Scrubber — an "as-of" timeline scrubber that snaps to real event dates and
    shows activity density beneath the track (Wayback-style). Ported from the
@@ -8,7 +10,11 @@ import { fmtDate, type DateInput } from "../tokens/format";
 
    `value` is the selected index into `dates`, or null for "all time" (the
    rightmost position). `onChange` emits the new index, or null when the
-   scrubber lands on the latest date. */
+   scrubber lands on the latest date.
+
+   The range control is <DateRangePicker>: picking "Last 30 days" snaps the
+   as-of marker to the earliest event date inside that window, and "All time"
+   resets it. The range is uncontrolled unless you pass `range`. */
 
 export type ScrubberActivity = { date: string; count: number };
 
@@ -20,12 +26,20 @@ export type ScrubberProps = {
   /** Selected index into `dates`, or null = "all time". */
   value: number | null;
   onChange: (index: number | null) => void;
+  /** Controlled range selection. Omit to let the Scrubber own it. */
+  range?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
   /** Format a date for the label; defaults to fmtDate. */
   format?: (d: DateInput) => string;
   className?: string;
 };
 
-export function Scrubber({ dates, activity = [], value, onChange, format = fmtDate, className = "" }: ScrubberProps) {
+export function Scrubber({
+  dates, activity = [], value, onChange, range, onRangeChange, format = fmtDate, className = "",
+}: ScrubberProps) {
+  const [internalRange, setInternalRange] = useState<DateRange>({ preset: "all" });
+  const activeRange = range ?? internalRange;
+
   const lastIdx = Math.max(0, dates.length - 1);
   const effIdx = value == null ? lastIdx : Math.min(Math.max(0, value), lastIdx);
   const empty = dates.length === 0;
@@ -39,47 +53,57 @@ export function Scrubber({ dates, activity = [], value, onChange, format = fmtDa
     onChange(next);
   };
 
+  /* Applying a range snaps the as-of marker to the earliest event inside the
+     window; an unbounded range resets to "all time". */
+  const applyRange = (next: DateRange) => {
+    if (range === undefined) setInternalRange(next);
+    onRangeChange?.(next);
+    const start = dateRangeStart(next);
+    if (!start || empty) return onChange(null);
+    const i = dates.findIndex((d) => new Date(String(d)).getTime() >= start.getTime());
+    if (i < 0 || i >= lastIdx) return onChange(null);
+    onChange(i);
+  };
+
   const label = value == null ? "All time" : `As of ${format(dates[effIdx])}`;
-  const btn = `grid place-items-center w-8 h-8 shrink-0 rounded-[4px] border border-ink/20 bg-paper text-ink/70 hover:border-ink/45 hover:text-ink disabled:opacity-40 disabled:pointer-events-none ${focusRing}`;
+  const btn = `grid place-items-center w-9 h-9 shrink-0 rounded-[4px] border border-ink/25 bg-paper text-ink/75 hover:border-ink/45 hover:text-ink disabled:opacity-100 disabled:cursor-not-allowed disabled:bg-ink/[0.07] disabled:text-ink/70 disabled:border-ink/20 ${focusRing}`;
 
   return (
-    <div className={`flex items-center gap-2.5 ${className}`.trim()}>
+    <div className={`flex flex-wrap items-center gap-x-2.5 gap-y-2 ${className}`.trim()}>
       <button type="button" className={btn} onClick={() => step(-1)} disabled={empty} aria-label="Step back one event date">
-        <ChevronLeft size={16} />
+        <ChevronLeft size={18} />
       </button>
 
-      <button
-        type="button"
-        onClick={() => onChange(null)}
-        className={`inline-flex items-center gap-1.5 h-8 px-2.5 shrink-0 rounded-[4px] border border-ink/20 bg-paper font-term text-[12px] text-ink/75 hover:border-ink/45 hover:text-ink ${focusRing}`}
-        title={dates.length ? `Events ${format(dates[0])} – ${format(dates[lastIdx])} · click to reset` : undefined}
-      >
-        <Calendar size={14} /> {label}
-      </button>
+      <DateRangePicker
+        value={activeRange}
+        onChange={applyRange}
+        disabled={empty}
+        className="w-[11.5rem] min-w-[7rem] shrink"
+      />
 
-      <div className="relative flex-1 min-w-[8rem] h-8">
+      <div className="relative h-9 min-w-[6rem] flex-[1_1_10rem]">
         {/* activity density */}
-        <svg className="absolute inset-x-0 bottom-2 h-4 w-full" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden>
+        <svg className="absolute inset-x-0 bottom-2.5 h-4 w-full" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden>
           {activity.map((a) => {
             const i = isoDates.indexOf(a.date);
             if (i < 0) return null;
             const x = lastIdx > 0 ? (i / lastIdx) * 97 + 1.5 : 50;
             const h = 2 + (a.count / maxActivity) * 12;
-            return <rect key={a.date} x={x - 0.6} y={14 - h} width={1.2} height={h} rx={0.5} className="fill-espelette" opacity={0.45} />;
+            return <rect key={a.date} x={x - 0.6} y={14 - h} width={1.2} height={h} rx={0.5} className="fill-espelette" opacity={0.55} />;
           })}
         </svg>
         {/* baseline */}
-        <div className="absolute inset-x-0 bottom-[7px] h-px bg-ink/15" />
+        <div className="absolute inset-x-0 bottom-[11px] h-px bg-ink/20" />
         {/* selection window */}
         {!empty && (
           <div
-            className="absolute bottom-[3px] h-1.5 rounded-full bg-biscay-2/25 ring-1 ring-inset ring-biscay-2/40 pointer-events-none"
+            className="pointer-events-none absolute bottom-[7px] h-1.5 rounded-full bg-biscay-2/25 ring-1 ring-inset ring-biscay-2/40"
             style={{ left: `${(effIdx / Math.max(1, lastIdx)) * 100}%`, width: 14, transform: "translateX(-50%)" }}
           />
         )}
         <input
           type="range"
-          className={`absolute inset-x-0 bottom-0 w-full cursor-pointer accent-biscay-2 ${focusRing}`}
+          className={`absolute inset-x-0 bottom-1 w-full cursor-pointer accent-biscay-2 ${focusRing}`}
           min={0}
           max={lastIdx}
           value={effIdx}
@@ -93,8 +117,10 @@ export function Scrubber({ dates, activity = [], value, onChange, format = fmtDa
       </div>
 
       <button type="button" className={btn} onClick={() => step(1)} disabled={empty} aria-label="Step forward one event date">
-        <ChevronRight size={16} />
+        <ChevronRight size={18} />
       </button>
+
+      <span className="min-w-0 shrink-0 truncate font-term text-[12px] text-ink/70" aria-live="polite">{label}</span>
     </div>
   );
 }

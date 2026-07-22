@@ -47,7 +47,7 @@ function DrawerBody({
         {icon}
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-semibold text-ink truncate">{title}</div>
-          {subtitle && <div className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/55 truncate">{subtitle}</div>}
+          {subtitle && <div className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65 truncate">{subtitle}</div>}
         </div>
         {closable && (
           <button onClick={onClose} className={`grid place-items-center w-8 h-8 rounded-[4px] text-ink/60 hover:bg-flysch hover:text-ink ${focusRing}`} aria-label="Close"><X size={16} /></button>

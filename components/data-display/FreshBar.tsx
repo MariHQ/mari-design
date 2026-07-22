@@ -25,7 +25,7 @@ export type FreshSegment = {
 
 export function LegendSwatch({ tone = "neutral", color, label }: { tone?: ChipTone; color?: string; label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/60">
+    <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/70">
       <span
         className={`inline-block w-2.5 h-2.5 rounded-[2px] ${color ? "" : TONE_BG[tone]}`}
         style={color ? { backgroundColor: color } : undefined}
@@ -52,7 +52,7 @@ export function FreshBar({ segments, legend = true, showCounts = true, height = 
   return (
     <div className={className}>
       <div
-        className="flex w-full overflow-hidden rounded-full bg-ink/[0.06] ring-1 ring-inset ring-ink/10"
+        className="flex w-full overflow-hidden rounded-full bg-ink/[0.06] ring-1 ring-inset ring-ink/15"
         style={{ height }}
         role="img"
         aria-label={segments.map((s) => `${s.label}: ${s.value}`).join(", ")}

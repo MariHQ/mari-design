@@ -33,3 +33,8 @@ import { TrendingUp } from "lucide-react";
 ## Notes
 
 - The reference implementation also had a `swatch` slot (a left-edge texture placeholder). Not carried over — this library has no texture system (brutalist is deliberately flat), so it collapsed into just `icon`.
+
+## Width
+
+Stat tiles are uniform: each carries `flex-1 basis-[200px] min-w-[200px]`, so a
+row of them renders at equal width regardless of how long the value or label is.

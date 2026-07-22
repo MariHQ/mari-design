@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { ShieldCheck, X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ClipboardCheck, ShieldCheck, X } from "lucide-react";
 import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
-import { Table } from "../data-display/Table";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonTable } from "../data-display/Skeleton";
@@ -16,6 +16,8 @@ import { fmtDate, type DateInput } from "../tokens/format";
    + Button. Renders standalone with baked facts. */
 
 const STALE_AFTER_DAYS = 60;
+
+const td = `${tdPad} text-[13px] text-ink/75`;
 
 export type Fact = {
   id: number;
@@ -58,6 +60,7 @@ export type FactsVerificationAuditProps = {
 
 export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = false, className = "" }: FactsVerificationAuditProps) {
   const [taskState, setTaskState] = useState<Record<number, TaskState>>({});
+  const [tasks, setTasks] = useState<Record<number, string>>({});
 
   const auditRows = useMemo(() => {
     const verified = facts.filter((f) => f.status === "Verified");
@@ -71,12 +74,21 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
       .sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
   }, [facts]);
 
+  const { sort, onSort, sorted } = useSort(auditRows, {
+    claim: (r) => r.fact.claim,
+    owner: (r) => r.fact.owner,
+    verified: (r) => (r.fact.verified ? new Date(String(r.fact.verified)).getTime() || 0 : 0),
+    status: (r) => (r.age != null && r.age > STALE_AFTER_DAYS ? "stale" : "fresh"),
+  });
+
   const staleCount = auditRows.filter((r) => r.age != null && r.age > STALE_AFTER_DAYS).length;
 
   const createReviewTask = (f: Fact) => {
     setTaskState((s) => ({ ...s, [f.id]: "creating" }));
-    // Emulate the createTask mutation resolving.
+    // Emulate the createTask mutation resolving. The button has to leave
+    // something behind on screen, so the new task lands as its own row (§2).
     setTaskState((s) => ({ ...s, [f.id]: "done" }));
+    setTasks((t) => ({ ...t, [f.id]: `TASK-${1200 + Object.keys(t).length + 1}` }));
   };
 
   const hint =
@@ -84,7 +96,7 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
       ? undefined
       : staleCount === 0
         ? "None verified more than 60 days ago."
-        : `${staleCount} verified more than 60 days ago — stale candidate${staleCount === 1 ? "" : "s"}.`;
+        : `${staleCount} verified more than 60 days ago: stale candidate${staleCount === 1 ? "" : "s"}.`;
 
   if (loading) {
     return (
@@ -113,38 +125,68 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
       {auditRows.length === 0 ? (
         <EmptyState icon={<ShieldCheck size={24} />} title="Nothing to audit">No verified facts to audit yet.</EmptyState>
       ) : (
-        <Table head={["Status", "Claim", "Verified", ""]} minW={640}>
-          {auditRows.map(({ fact, age }) => {
-            const stale = age != null && age > STALE_AFTER_DAYS;
-            const state = taskState[fact.id] ?? "idle";
-            return (
-              <tr key={fact.id} className="border-b border-ink/[0.06] last:border-0">
-                <td className="px-4 py-3 align-top">
-                  <Chip label={stale ? "Stale candidate" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
-                </td>
-                <td className="px-4 py-3 align-top">
-                  <b className="text-[13px] font-medium text-ink">{fact.claim}</b>
-                  <div className="mt-0.5 font-term text-[11px] text-ink/45">{fact.source} · {fact.owner}</div>
-                </td>
-                <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">
-                  {fact.verified ? fmtDate(fact.verified) : "—"}
-                  {age != null && <span className="text-ink/45"> · {age}d ago</span>}
-                </td>
-                <td className="px-4 py-3 align-top text-right">
-                  {stale && (
-                    state === "error" ? (
-                      <span className="font-term text-[11.5px] text-espelette">Couldn’t reach Mari.</span>
-                    ) : (
-                      <Button compact disabled={state === "creating" || state === "done"} onClick={() => createReviewTask(fact)}>
-                        {state === "done" ? "Task created" : state === "creating" ? "Creating…" : "Create review task"}
-                      </Button>
-                    )
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left" style={{ minWidth: 700 }}>
+            <thead>
+              <tr>
+                <SortHeader label="Claim" sortKey="claim" sort={sort} onSort={onSort} />
+                <SortHeader label="Owner" sortKey="owner" sort={sort} onSort={onSort} />
+                <SortHeader label="Verified" sortKey="verified" sort={sort} onSort={onSort} align="center" />
+                <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+                <SortHeader label="Review task" sortable={false} align="right" />
               </tr>
-            );
-          })}
-        </Table>
+            </thead>
+            <tbody>
+              {sorted.map(({ fact, age }) => {
+                const stale = age != null && age > STALE_AFTER_DAYS;
+                const state = taskState[fact.id] ?? "idle";
+                return (
+                  <Fragment key={fact.id}>
+                    <tr className="border-b border-ink/[0.06]">
+                      <td className={`${td} max-w-[320px] align-top`}>
+                        <b className="block text-[13px] font-medium text-ink">{fact.claim}</b>
+                        <div className="mt-0.5 truncate font-term text-[11px] text-ink/65">{fact.source}</div>
+                      </td>
+                      <td className={`${td} max-w-[160px] truncate align-top`}>{fact.owner}</td>
+                      <td className={`${td} whitespace-nowrap text-center align-top font-term text-[12px] text-ink/70`}>
+                        {fact.verified ? fmtDate(fact.verified) : "Not recorded"}
+                        {age != null && <span className="block text-ink/65">{age}d ago</span>}
+                      </td>
+                      <td className={`${td} whitespace-nowrap align-top`}>
+                        <Chip label={stale ? "Stale candidate" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
+                      </td>
+                      <td className={`${td} whitespace-nowrap text-right align-top`}>
+                        {stale && (
+                          state === "error" ? (
+                            <span className="font-term text-[11.5px] text-espelette">Couldn’t reach Mari.</span>
+                          ) : (
+                            <Button
+                              variant="primary" compact
+                              disabled={state === "creating" || state === "done"}
+                              onClick={() => createReviewTask(fact)}
+                            >
+                              {state === "done" ? "Task created" : state === "creating" ? "Creating" : "Create review task"}
+                            </Button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                    {tasks[fact.id] && (
+                      <tr className="border-b border-ink/[0.06] bg-moss/[0.05]">
+                        <td className={`${td} font-term text-[11.5px] text-moss`} colSpan={5}>
+                          <span className="inline-flex items-center gap-1.5">
+                            <ClipboardCheck size={13} />
+                            {tasks[fact.id]} opened for {fact.owner}: re-verify “{fact.claim.slice(0, 48)}{fact.claim.length > 48 ? "…" : ""}”
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );

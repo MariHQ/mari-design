@@ -30,19 +30,32 @@ export type NavSection = {
   id?: string;
   /** Optional mono section heading. */
   heading?: string;
+  /* Draw a horizontal rule above this section instead of labelling it. Utility
+     groups (Settings, sign-out) read better as a ruled-off tail than as a
+     section named "Admin", which named a permission level rather than a place. */
+  divider?: boolean;
   items: NavItem[];
 };
 
 /* ---- shared item chrome ---- */
 
 const ITEM_BASE = `group/item relative flex w-full items-center gap-3 rounded-[6px] text-[13px] transition-colors ${focusRing}`;
-const ITEM_IDLE = "text-white/70 hover:bg-white/10 hover:text-white";
+const ITEM_IDLE = "text-white/80 hover:bg-white/10 hover:text-white";
 const ITEM_ACTIVE = "bg-paper text-biscay font-semibold hover:bg-paper";
 
-function Trailing({ item }: { item: NavItem }) {
-  if (item.badge) return <span className="shrink-0">{item.badge}</span>;
+function Trailing({ item, active }: { item: NavItem; active: boolean }) {
+  /* A Chip/Badge dropped in here is styled for paper, so on the dark rail it
+     rendered ink-on-navy and disappeared. Idle rows repaint any badge in rail
+     colors; the active row is already paper, so it keeps the badge as authored. */
+  if (item.badge) {
+    return (
+      <span className={`shrink-0 ${active ? "" : "[&_*]:!border-white/35 [&_*]:!bg-white/20 [&_*]:!text-white"}`.trim()}>
+        {item.badge}
+      </span>
+    );
+  }
   if (item.count != null) {
-    return <span className="shrink-0 font-term text-[11px] tabular-nums opacity-60">{item.count}</span>;
+    return <span className="shrink-0 font-term text-[11px] tabular-nums opacity-80">{item.count}</span>;
   }
   return null;
 }
@@ -67,11 +80,13 @@ export function SidebarItem({
       aria-current={active ? "page" : undefined}
       onClick={() => onNavigate?.(item.id)}
       style={indent}
-      className={[ITEM_BASE, pad, active ? ITEM_ACTIVE : ITEM_IDLE, item.disabled && "opacity-40 pointer-events-none"].filter(Boolean).join(" ")}
+      // Disabled stays legible: a flat, clearly-inert treatment, not a 40%
+      // ghost you cannot read (CONVENTIONS.md §6).
+      className={[ITEM_BASE, pad, active ? ITEM_ACTIVE : ITEM_IDLE, item.disabled && "!bg-white/[0.06] !text-white/55 cursor-not-allowed pointer-events-none"].filter(Boolean).join(" ")}
     >
       {item.icon && <span className="grid shrink-0 place-items-center [&_svg]:opacity-90" aria-hidden="true">{item.icon}</span>}
       {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>}
-      {!collapsed && <Trailing item={item} />}
+      {!collapsed && <Trailing item={item} active={active} />}
       {!collapsed && trailingChevron}
     </button>
   );
@@ -116,8 +131,8 @@ function SidebarGroup({
         depth={depth}
         onNavigate={() => setOpen((o) => !o)}
         trailingChevron={
-          <span className="shrink-0 opacity-60" aria-hidden="true">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span className="shrink-0 opacity-80" aria-hidden="true">
+            {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           </span>
         }
       />
@@ -139,9 +154,11 @@ function SidebarGroup({
 /* ---- section ---- */
 
 export function SidebarSection({
-  heading, items, activeId, collapsed = false, onNavigate,
+  heading, divider = false, items, activeId, collapsed = false, onNavigate,
 }: {
   heading?: string;
+  /** Rule above the section instead of a heading. */
+  divider?: boolean;
   items: NavItem[];
   activeId?: string;
   collapsed?: boolean;
@@ -149,10 +166,13 @@ export function SidebarSection({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      {heading && !collapsed && (
-        <div className="px-3 pb-1 pt-1 font-term text-[10px] font-medium uppercase tracking-[0.14em] text-white/40">{heading}</div>
+      {divider && (
+        <hr className={`my-1 h-px border-0 bg-white/20 ${collapsed ? "mx-auto w-6" : ""}`.trim()} aria-hidden="true" />
       )}
-      {heading && collapsed && <div className="mx-auto my-1 h-px w-6 bg-white/15" aria-hidden="true" />}
+      {heading && !divider && !collapsed && (
+        <div className="px-3 pb-1 pt-1 font-term text-[10px] font-medium uppercase tracking-[0.14em] text-white/70">{heading}</div>
+      )}
+      {heading && !divider && collapsed && <div className="mx-auto my-1 h-px w-6 bg-white/20" aria-hidden="true" />}
       {items.map((item) =>
         item.children?.length ? (
           <SidebarGroup key={item.id} item={item} activeId={activeId} collapsed={collapsed} depth={0} onNavigate={onNavigate} />
@@ -195,6 +215,7 @@ export function Sidebar({ sections, activeId, onNavigate, collapsed = false, bra
           <SidebarSection
             key={s.id ?? s.heading ?? i}
             heading={s.heading}
+            divider={s.divider}
             items={s.items}
             activeId={activeId}
             collapsed={collapsed}

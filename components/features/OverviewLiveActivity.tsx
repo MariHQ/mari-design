@@ -1,18 +1,23 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Workflow, Send, ShieldCheck, Clipboard, RefreshCw, GitFork, Pencil } from "lucide-react";
+import { Activity, Workflow, Send, ShieldCheck, Clipboard, RefreshCw, GitFork, Pencil } from "lucide-react";
 import { Card } from "../layout/Card";
+import { IconRing } from "../data-display/IconRing";
+import { StatusChip } from "../data-display/Chip";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
-import { EmptyState } from "../data-display/EmptyState";
+import { ErrorMessage } from "../feedback/ErrorMessage";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { fmtDateTime } from "../tokens/format";
 
 /* Overview — Live activity feed ───────────────────────────────────────────
-   A live, auto-refreshing feed of workspace work — runs, edits, deploys,
+   A live, auto-refreshing feed of workspace work: runs, edits, deploys,
    facts, syncs, links, tasks. Slack chatter filtered out, capped at 8 rows,
    polled every 10s (simulated here by re-stamping times). Maps each item onto
-   the catalog <ActivityFeed>; local <PulseDot> header indicator.
-   Source: web/src/pages/Overview.tsx (feedQ, polling effect, .card.live). */
+   the catalog <ActivityFeed>.
+
+   The header state is the shared pulsing <StatusChip status="running">, not a
+   bespoke dot: a lone 2px dot at 60% opacity did not read as "this feed is
+   live", and a status marker must carry a label, not colour alone (§4, §6). */
 
 const FEED_ICONS: Record<string, ReactNode> = {
   run: <Workflow size={13} />,
@@ -47,28 +52,20 @@ const DEMO_FEED: FeedItem[] = [
 
 const isNoise = (e: FeedItem) => /slack/i.test(`${e.kind} ${e.text}`);
 
-/* ── PulseDot — the animated "live" status indicator ── */
-function PulseDot({ tone = "ok", pulsing = true }: { tone?: "ok" | "info"; pulsing?: boolean }) {
-  const bg = tone === "info" ? "bg-biscay-2" : "bg-moss";
-  return (
-    <span className="relative inline-flex w-2 h-2" aria-hidden>
-      {pulsing && <span className={`absolute inline-flex w-full h-full rounded-full opacity-60 animate-ping ${bg}`} />}
-      <span className={`relative inline-flex w-2 h-2 rounded-full ${bg}`} />
-    </span>
-  );
-}
-
 export type OverviewLiveActivityProps = {
   items?: FeedItem[];
   loading?: boolean;
   offline?: boolean;
   /** Poll interval in ms (re-stamps times to feel live). 0 disables. */
   pollMs?: number;
+  /** Wires the error banner's Retry control. Omitted = no button. */
+  onRetry?: () => void;
   className?: string;
 };
 
 export function OverviewLiveActivity({
-  items = DEMO_FEED, loading = false, offline = false, pollMs = 10_000, className = "",
+  items = DEMO_FEED, loading = false, offline = false, pollMs = 10_000,
+  onRetry, className = "",
 }: OverviewLiveActivityProps) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -79,6 +76,9 @@ export function OverviewLiveActivity({
   }, [pollMs]);
 
   const rows = items.filter((e) => !isNoise(e)).slice(0, 8);
+  // "Running" means the feed is live and has work to show; a feed with nothing
+  // in it reads as paused rather than pretending to be busy.
+  const running = !loading && !offline && rows.length > 0;
   const activityItems: ActivityItem[] = rows.map((e) => ({
     id: String(e.id),
     actor: e.actor,
@@ -90,9 +90,10 @@ export function OverviewLiveActivity({
   return (
     <Card
       className={className}
-      icon={<span className="grid place-items-center w-[31px] h-[31px]"><PulseDot /></span>}
-      title="Live"
-      hint="Runs & edits · refreshes every 10s"
+      icon={<IconRing><Activity size={16} /></IconRing>}
+      title="Live activity"
+      hint={<span className="text-ink/70">Runs and edits, refreshes every 10s</span>}
+      actions={running ? <StatusChip status="running" /> : <StatusChip status="paused" />}
     >
       {loading ? (
         <div className="space-y-3" aria-hidden="true">
@@ -105,9 +106,10 @@ export function OverviewLiveActivity({
           ))}
         </div>
       ) : offline ? (
-        <EmptyState>API offline — activity unavailable.</EmptyState>
+        /* §8: failure copy comes from the catalog, never a bespoke string. */
+        <ErrorMessage id="server.unavailable" onAction={onRetry} />
       ) : rows.length === 0 ? (
-        <p className="py-4 text-[13px] text-ink/55">Quiet for now — nothing running.</p>
+        <p className="py-4 text-[13px] text-ink/70">Quiet for now, nothing running.</p>
       ) : (
         <ActivityFeed items={activityItems} />
       )}

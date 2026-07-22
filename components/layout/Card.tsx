@@ -24,17 +24,20 @@ export function Card({ variant = "default", title, eyebrow, icon, actions, hint,
   return (
     <section className={`${card} ${className}`.trim()} {...rest}>
       {headed && (
-        <header className="flex items-center gap-3 px-4 pt-4 pb-3">
+        // flex-wrap + a min-width on the title block: at narrow widths the hint
+        // and actions drop to their own line instead of crushing the title into
+        // an ellipsis and overlapping the eyebrow.
+        <header className="flex flex-wrap items-start gap-x-3 gap-y-2 px-4 pt-4 pb-3">
           {icon}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[9rem] flex-1">
             {eyebrow && <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-0.5">{eyebrow}</span>}
-            {title && <h3 className="text-[15px] font-semibold text-ink truncate">{title}</h3>}
+            {title && <h3 className="text-[15px] font-semibold leading-snug text-ink break-words">{title}</h3>}
           </div>
-          {hint && <span className="font-term text-[11px] text-ink/55 whitespace-nowrap">{hint}</span>}
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {hint && <span className="font-term text-[11px] text-ink/65 whitespace-nowrap self-center">{hint}</span>}
+          {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
         </header>
       )}
-      <div className={headed ? (variant === "flush" ? "" : `${PAD[variant]} pt-0`) : PAD[variant]}>{children}</div>
+      <div className={`${headed ? (variant === "flush" ? "" : `${PAD[variant]} pt-0`) : PAD[variant]} min-w-0 break-words`}>{children}</div>
     </section>
   );
 }

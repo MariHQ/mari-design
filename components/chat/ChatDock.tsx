@@ -30,7 +30,7 @@ export type ChatDockProps = {
   className?: string;
 };
 
-/* ChatDock — the overall agent surface: a header, a scrollable transcript,
+/* ChatDock: the overall agent surface: a header, a scrollable transcript,
    and a composer. A faithful port of the source dock's structure and
    density, but abstracted away from routing and the network: it is driven
    entirely by `messages` / `isStreaming` props and an `onSend` callback.
@@ -82,7 +82,7 @@ export function ChatDock({
           <div className="my-auto text-center text-ink/70 px-1.5 py-2">
             {emptyState ?? (
               <p>
-                I can operate the console for you — search, edit and tag docs, sync
+                I can operate the console for you: search, edit and tag docs, sync
                 sources, run flows, and steer this screen.
               </p>
             )}
@@ -108,7 +108,7 @@ export function ChatDock({
       />
 
       {hint && (
-        <div className="px-3.5 pt-1.5 pb-2.5 font-term text-[10.5px] text-ink/50 text-center">
+        <div className="px-3.5 pt-1.5 pb-2.5 font-term text-[10.5px] text-ink/65">
           {hint}
         </div>
       )}

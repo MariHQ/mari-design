@@ -36,13 +36,13 @@ export function TagPicker({
       className={`w-64 p-0 ${className}`.trim()}
       trigger={(
         <Button compact={!compact} icon={compact} aria-label={compact ? "Edit tags" : undefined}>
-          <Tag size={14} />{!compact && "Edit tags"}
+          <Tag size={18} />{!compact && "Edit tags"}
         </Button>
       )}
     >
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-ink/10">
         <span className="text-[13px] font-semibold text-ink">Document tags</span>
-        <small className="font-term text-[11px] text-ink/50">{tags.length} applied</small>
+        <small className="font-term text-[11px] text-ink/65">{tags.length} applied</small>
       </div>
       <div className="p-1.5 flex flex-col gap-0.5 max-h-64 overflow-y-auto">
         {loading ? (
@@ -63,8 +63,8 @@ export function TagPicker({
               onClick={() => toggle(tag)}
               className={`flex items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left hover:bg-ink/[0.04] ${focusRing}`}
             >
-              <span className={`grid place-items-center w-4 h-4 rounded-[3px] border ${checked ? "border-biscay bg-biscay text-white" : "border-ink/25 text-transparent"}`}>
-                <Check size={11} />
+              <span className={`grid place-items-center w-[18px] h-[18px] rounded-[3px] border ${checked ? "border-biscay bg-biscay text-white" : "border-ink/25 text-transparent"}`}>
+                <Check size={13} strokeWidth={3} />
               </span>
               <TagChip tag={tag} />
             </button>
@@ -76,7 +76,7 @@ export function TagPicker({
           ? <button type="button" onClick={onManage} className={`font-term text-[11.5px] text-biscay-2 hover:text-ink hover:underline underline-offset-[3px] ${focusRing}`}>Manage definitions</button>
           : <span />}
         <RPop.Close asChild>
-          <button type="button" className={`font-term text-[11.5px] text-ink/60 hover:text-ink ${focusRing}`}>Done</button>
+          <button type="button" className={`font-term text-[11.5px] text-ink/70 hover:text-ink ${focusRing}`}>Done</button>
         </RPop.Close>
       </div>
     </Popover>

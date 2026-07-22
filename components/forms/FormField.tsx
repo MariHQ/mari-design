@@ -10,7 +10,7 @@ export function FormField({ label, hint, children }: { label: string; hint?: str
     <label className="flex flex-col gap-1.5">
       <SectionLabel>{label}</SectionLabel>
       {children}
-      {hint && <span className="text-[12px] text-ink/50">{hint}</span>}
+      {hint && <span className="text-[12px] text-ink/70">{hint}</span>}
     </label>
   );
 }

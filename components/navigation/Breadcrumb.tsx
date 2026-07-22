@@ -5,16 +5,16 @@ export type Crumb = { label: string; href?: string };
 
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12.5px]">
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
       {items.map((item, i) => {
         const last = i === items.length - 1;
         return (
-          <span key={i} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronRight size={12} className="text-ink/30" aria-hidden="true" />}
+          <span key={i} className="flex min-w-0 items-center gap-1.5">
+            {i > 0 && <ChevronRight size={16} className="text-ink/65" aria-hidden="true" />}
             {item.href && !last ? (
-              <a href={item.href} className={`text-ink/55 hover:text-ink rounded-[3px] ${focusRing}`}>{item.label}</a>
+              <a href={item.href} className={`min-w-0 max-w-[16rem] truncate rounded-[3px] text-ink/70 hover:text-ink ${focusRing}`}>{item.label}</a>
             ) : (
-              <span aria-current={last ? "page" : undefined} className={last ? "text-ink font-medium" : "text-ink/55"}>{item.label}</span>
+              <span aria-current={last ? "page" : undefined} className={`min-w-0 max-w-[16rem] truncate ${last ? "font-medium text-ink" : "text-ink/70"}`}>{item.label}</span>
             )}
           </span>
         );

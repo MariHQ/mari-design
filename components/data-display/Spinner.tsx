@@ -11,7 +11,7 @@ export function Spinner({ size = "sm", label = "Loading" }: { size?: "sm" | "md"
     <span
       role="status"
       aria-label={label}
-      className={`inline-block rounded-full border-ink/15 border-t-biscay-2 animate-spin ${SIZE[size]}`}
+      className={`inline-block rounded-full border-ink/25 border-t-biscay-2 animate-spin ${SIZE[size]}`}
     />
   );
 }

@@ -17,7 +17,8 @@ import {
 import { MarkdownView } from "../data-display/MarkdownView";
 import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
-import { Badge } from "../data-display/Badge";
+import { Chip } from "../data-display/Chip";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 
 /* ————— ported doc-specific helpers (not in the shared lib module) ————— */
@@ -157,14 +158,34 @@ const DEMO_FINDINGS: Finding[] = [
   { id: 3, kind: "freshness", severity: "warn", text: "every 24 hours", note: "rotation cadence unverified" },
 ];
 
+/* The diff sample is a whole paragraph so both sides can be rendered as real
+   prose (parallel MarkdownView renders), not as two clipped fragments. */
 const DIFF_SAMPLE = {
-  original: "…is expected to reduce login latency by roughly 40%…",
-  proposed: "…reduces measured login latency by 22%…",
+  original: "Tokens are signed with `RS256`. It is expected to reduce login latency by roughly 40%.",
+  proposed: "Tokens are signed with `RS256`. It reduces measured login latency by 22%.",
 };
 
-const TYPE_TONE: Record<BlockType, string> = {
-  h1: "info", h2: "info", h3: "info", p: "neutral", li: "attention", code: "blocked",
+/* Finding kinds carry their own chip tone and a plain-language gloss, so
+   "fact check" never reads the same as "hedge" (CONVENTIONS.md §4). The tones
+   match DocReviewEditor's margin annotations exactly. */
+const KIND_META: Record<string, { label: string; tone: string; legend: string }> = {
+  fact: { label: "Fact check", tone: "blocked", legend: "The claim disagrees with a verified fact in the knowledge base." },
+  prose: { label: "Hedge", tone: "attention", legend: "Wording that softens a claim (“expected to”, “roughly”) instead of stating it." },
+  freshness: { label: "Freshness", tone: "info", legend: "The supporting source is old enough that the number may have moved." },
 };
+const kindMeta = (kind: string) =>
+  KIND_META[kind] ?? { label: kind, tone: "neutral", legend: "No gloss for this finding kind." };
+
+/* Plain bold-mono block markers. Deliberately NOT chips: the right-hand
+   flags are chips, and when the type marker was a chip too the two read as
+   the same thing (CONVENTIONS.md §4). */
+const TYPE_MARK: Record<BlockType, string> = {
+  h1: "H1", h2: "H2", h3: "H3", p: "P", li: "LI", code: "CODE",
+};
+
+/** Tag-free preview of a block's inline html, for sorting and table cells. */
+const blockPreview = (html: string) =>
+  html.replace(/<[^>]*>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
 
 type EngineTab = "blocks" | "roundtrip" | "decorate" | "diff";
 
@@ -178,13 +199,16 @@ const MARKED =
 export function DocReviewMarkdown({
   markdown = DEMO_MD,
   findings = DEMO_FINDINGS,
+  defaultTab = "blocks",
   loading = false,
 }: {
   markdown?: string;
   findings?: Finding[];
+  /** Which engine tab opens first, so each tab can be reviewed on its own. */
+  defaultTab?: EngineTab;
   loading?: boolean;
 }) {
-  const [tab, setTab] = useState<EngineTab>("blocks");
+  const [tab, setTab] = useState<EngineTab>(defaultTab);
 
   const blocks = useMemo(() => parseMarkdown(markdown), [markdown]);
   const roundtrip = useMemo(() => serialize(blocks), [blocks]);
@@ -196,6 +220,21 @@ export function DocReviewMarkdown({
   }, [blocks, findings]);
 
   const diff = useMemo(() => diffChange(cleanText(DIFF_SAMPLE.original), cleanText(DIFF_SAMPLE.proposed)), []);
+
+  /* Both sides of the diff as real markdown, with the changed span bolded, so
+     the update is visible in a parallel MarkdownView render rather than in a
+     JSON dump. */
+  const diffMd = (changed: string) =>
+    [diff.pre, changed ? `**${changed}**` : "", diff.suf].filter(Boolean).join(" ");
+
+  /* Table rows for the Parse tab. */
+  const { sort, onSort, sorted } = useSort(blocks, {
+    type: (b) => b.type,
+    content: (b) => blockPreview(b.html),
+  });
+
+  /* One row per finding kind actually present, for the decorate legend. */
+  const legendKinds = Array.from(new Set(findings.map((f) => f.kind)));
 
   if (loading) {
     return (
@@ -233,14 +272,14 @@ export function DocReviewMarkdown({
       <div className="px-4 pt-4 pb-3 border-b border-ink/12">
         <div className="flex items-center gap-2">
           <h3 className="text-[15px] font-semibold text-ink">Markdown engine</h3>
-          <Badge label="pure module" tone="info" />
+          <Chip label="Pure module" tone="info" />
         </div>
-        <p className="mt-1 text-[12.5px] text-ink/60">
-          Dependency-free markdown ⇄ block conversion — parse, serialize, decorate findings, and word-diff.
+        <p className="mt-1 text-[12.5px] text-ink/70">
+          Dependency-free markdown to block conversion: parse, serialize, decorate findings, and word-diff.
         </p>
       </div>
 
-      <div className="px-4 pt-3">
+      <div className="overflow-x-auto px-4 pt-3">
         <Tabs<EngineTab>
           ariaLabel="Markdown engine"
           variant="underline"
@@ -257,27 +296,58 @@ export function DocReviewMarkdown({
 
       <div className="p-4">
         {tab === "blocks" && (
-          <div className="space-y-1.5">
-            {blocks.map((b) => (
-              <div key={b.id} className="flex items-start gap-3 rounded-[4px] border border-ink/10 bg-paper px-2.5 py-1.5">
-                <Badge label={b.type} tone={TYPE_TONE[b.type]} />
-                <code className="min-w-0 flex-1 font-term text-[12px] leading-[1.5] text-ink/80 break-words">
-                  {b.html || <span className="text-ink/35">·</span>}
-                </code>
-                <div className="flex shrink-0 gap-1.5">
-                  {b.tight && <Badge label="tight" tone="attention" />}
-                  {b.lang && <Badge label={b.lang} tone="neutral" />}
-                </div>
-              </div>
-            ))}
+          /* A real table with sortable column headers (CONVENTIONS.md §3).
+             The type marker is plain bold mono and sits in its own column, well
+             clear of the flag chips on the right. */
+          <div className="overflow-x-auto rounded-[6px] border border-ink/12">
+            {/* table-fixed so a 90-char unbreakable token wraps inside the
+                content column instead of widening the whole table. */}
+            <table className="w-full table-fixed border-collapse text-left">
+              <thead>
+                <tr>
+                  {/* Proportional widths, not pixels: at 320px a fixed 84/140
+                      split left the content column one character wide. */}
+                  <SortHeader label="Type" sortKey="type" sort={sort} onSort={onSort} className="w-[86px] border-t-0" />
+                  <SortHeader label="Content" sortKey="content" sort={sort} onSort={onSort} className="border-t-0" />
+                  <SortHeader label="Flags" align="right" sortable={false} className="w-[15%] border-t-0" />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((b) => (
+                  <tr key={b.id} className="border-b border-ink/10 last:border-0">
+                    <td className={`${tdPad} align-top font-term text-[11.5px] font-bold uppercase tracking-[0.08em] text-ink`}>
+                      {TYPE_MARK[b.type]}
+                    </td>
+                    <td className={`${tdPad} align-top`}>
+                      <code className="block min-w-0 font-term text-[12px] leading-[1.5] text-ink/80 break-words">
+                        {b.html || <span className="text-ink/65">Empty block</span>}
+                      </code>
+                    </td>
+                    <td className={`${tdPad} align-top`}>
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {b.tight && <Chip label="Tight" tone="attention" />}
+                        {b.lang && <Chip label={b.lang} tone="neutral" />}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {sorted.length === 0 && (
+                  <tr>
+                    <td className={`${tdPad} text-[12.5px] text-ink/70`} colSpan={3}>
+                      Nothing to parse yet. The document is empty.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
 
         {tab === "roundtrip" && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-[12.5px]">
-              <span className="text-ink/60">serialize(parseMarkdown(md)) === md</span>
-              <Badge label={faithful ? "byte-faithful ✓" : "differs"} tone={faithful ? "ok" : "blocked"} />
+              <span className="text-ink/70">serialize(parseMarkdown(md)) === md</span>
+              <Chip label={faithful ? "Byte faithful" : "Differs"} tone={faithful ? "ok" : "blocked"} dot />
             </div>
             <pre className={codeBox}>{roundtrip}</pre>
           </div>
@@ -305,48 +375,84 @@ export function DocReviewMarkdown({
                 return <div key={b.id} className={cls} dangerouslySetInnerHTML={{ __html: html }} />;
               })}
             </div>
+            {/* One row per finding: the kind chip sits INLINE with the quote and
+                uses its own tone, so the three kinds are told apart at a glance
+                (CONVENTIONS.md §4). */}
             <div className="space-y-1.5">
               {findings.map((f) => {
-                const red = f.kind === "fact" || f.severity === "error";
+                const m = kindMeta(f.kind);
                 return (
-                  <div key={f.id} className="flex items-center gap-2 text-[12.5px]">
-                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${red ? "bg-espelette" : "bg-clay"}`} />
-                    <span className="text-ink/80">“{cleanText(f.text)}”</span>
-                    <span className="text-ink/45">— {f.id < 0 && f.kind === "prose" ? f.note : f.kind === "fact" ? "fact-check" : f.kind}</span>
+                  <div key={f.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12.5px]">
+                    <Chip label={m.label} tone={m.tone} dot />
+                    <span className="min-w-0 break-words text-ink/80">“{cleanText(f.text)}”</span>
                   </div>
                 );
               })}
+              {findings.length === 0 && (
+                <p className="text-[12.5px] text-ink/70">No findings on this document, so nothing is decorated.</p>
+              )}
             </div>
+
+            {/* Legend: what each decoration kind actually means. */}
+            {legendKinds.length > 0 && (
+              <div className="rounded-[6px] border border-ink/12 bg-flysch/50 p-3">
+                <h4 className="mb-2 font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65">Legend</h4>
+                <dl className="space-y-1.5">
+                  {legendKinds.map((k) => {
+                    const m = kindMeta(k);
+                    return (
+                      <div key={k} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <dt className="shrink-0"><Chip label={m.label} tone={m.tone} dot /></dt>
+                        <dd className="min-w-0 flex-1 text-[12px] leading-snug text-ink/70">{m.legend}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </div>
+            )}
           </div>
         )}
 
         {tab === "diff" && (
+          /* Old and new rendered side by side as parallel MarkdownView renders,
+             so the update is legible as prose. The word-level result is stated
+             underneath in plain language rather than as a JSON dump. */
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/45">Original</span>
-                <p className="mt-1 font-term text-[13px] leading-[1.6] text-ink/80">
-                  {diff.pre && <>{diff.pre} </>}
-                  {diff.delA && <s className="text-espelette/80 decoration-espelette/60">{diff.delA}</s>}
-                  {diff.suf && <> {diff.suf}</>}
-                </p>
+              <div className="min-w-0">
+                <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>
+                <div className="mt-1.5 min-w-0 rounded-[6px] border border-espelette/25 bg-espelette/[0.04] p-3 [&_b]:bg-espelette/15 [&_b]:text-espelette [&_b]:rounded-[3px] [&_b]:px-1">
+                  <MarkdownView className="break-words">{diffMd(diff.delA)}</MarkdownView>
+                </div>
               </div>
-              <div>
-                <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/45">⇄ Proposed</span>
-                <p className="mt-1 font-term text-[13px] leading-[1.6] text-ink/80">
-                  {diff.pre && <>{diff.pre} </>}
-                  {diff.delB && <b className="text-moss">{diff.delB}</b>}
-                  {diff.suf && <> {diff.suf}</>}
-                </p>
+              <div className="min-w-0">
+                <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Proposed</span>
+                <div className="mt-1.5 min-w-0 rounded-[6px] border border-moss/30 bg-moss/[0.05] p-3 [&_b]:bg-moss/15 [&_b]:text-moss [&_b]:rounded-[3px] [&_b]:px-1">
+                  <MarkdownView className="break-words">{diffMd(diff.delB)}</MarkdownView>
+                </div>
               </div>
             </div>
-            <pre className={codeBox}>{JSON.stringify(diff, null, 2)}</pre>
+            <div className="space-y-1.5 text-[12.5px]">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Chip label="Removed" tone="blocked" dot />
+                <span className="min-w-0 break-words text-ink/80">{diff.delA || "Nothing removed."}</span>
+              </div>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Chip label="Added" tone="ok" dot />
+                <span className="min-w-0 break-words text-ink/80">{diff.delB || "Nothing added."}</span>
+              </div>
+              <p className="text-[12px] text-ink/70">
+                {diff.pre || diff.suf
+                  ? "The shared words on either side of the change are left untouched."
+                  : "The whole passage is rewritten, so there is no shared context."}
+              </p>
+            </div>
           </div>
         )}
       </div>
 
       <div className="px-4 pb-4">
-        <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/45">Blueprint render (MarkdownView)</span>
+        <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Blueprint render (MarkdownView)</span>
         <div className="mt-2 rounded-[6px] border border-ink/12 bg-paper p-4">
           <MarkdownView>{markdown}</MarkdownView>
         </div>

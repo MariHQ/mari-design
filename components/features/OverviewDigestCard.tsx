@@ -1,13 +1,26 @@
 import { useState } from "react";
-import { DigestCard as DigestCardUI, type DigestTopic } from "../data-display/DigestCard";
+import { Shuffle } from "lucide-react";
+import { Card } from "../layout/Card";
+import { Chip } from "../data-display/Chip";
+import { EmptyState } from "../data-display/EmptyState";
+import { ErrorMessage } from "../feedback/ErrorMessage";
+import { Spinner } from "../data-display/Spinner";
+import { Button } from "../actions/Button";
+import { CardBody, CardTitleBlock } from "../layout/CardShell";
+import type { DigestTopic } from "../data-display/DigestCard";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
 /* Overview — This week's digest ──────────────────────────────────────────
    Mari's weekly, AI-generated summary of what changed across the workspace's
    knowledge. Self-contained: owns demo topics and a manual "Refresh digest"
-   that simulates the server-side regenerate + refetch. Composes the catalog
-   <DigestCard>. Source: web/src/pages/overview/DigestCard.tsx. */
+   that simulates the server-side regenerate + refetch.
+
+   Renders its own topic rows rather than the catalog <DigestCard> so the
+   per-topic block can follow CONVENTIONS.md §1 ordering: title → summary →
+   source chips → impact. The source row carries an explicit "Source" /
+   "Sources" label (pluralized off the count), which the catalog card has no
+   slot for. Source: web/src/pages/overview/DigestCard.tsx. */
 
 const mark = (provider: string) => <SourceMark provider={provider} size={13} />;
 
@@ -42,7 +55,7 @@ const DEMO_TOPICS: DigestTopic[] = [
     title: "Incident retro synthesized into a runbook update",
     where: [{ source: "granola", label: "Postmortem sync", icon: mark("granola") }],
     summary:
-      "The Jul 14 latency incident's action items landed as a new escalation ladder. Mari cross-linked it from the on-call guide.",
+      "The Jul 14, 2026 latency incident's action items landed as a new escalation ladder. Mari cross-linked it from the on-call guide.",
     impact: [
       { name: "SRE", tone: "blocked" },
       { name: "On-call", tone: "attention" },
@@ -50,15 +63,43 @@ const DEMO_TOPICS: DigestTopic[] = [
   },
 ];
 
+/** The shared mono meta label used by both the Sources and Impact rows. */
+const metaLabel = "font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65";
+
+function TopicBlock({ topic, dim }: { topic: DigestTopic; dim: boolean }) {
+  return (
+    <div className="py-3.5 first:pt-0 last:pb-0" style={{ opacity: dim ? 0.55 : 1 }}>
+      <CardBody className="gap-2">
+        {/* §1: title, then summary, then the source badges, then impact. */}
+        <CardTitleBlock title={topic.title} summary={topic.summary} />
+        {topic.where.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={metaLabel}>{topic.where.length === 1 ? "Source" : "Sources"}</span>
+            {topic.where.map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+          </div>
+        )}
+        {topic.impact.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={metaLabel}>Impact</span>
+            {topic.impact.map((i) => <Chip key={i.name} label={i.name} tone={i.tone ?? "neutral"} dot />)}
+          </div>
+        )}
+      </CardBody>
+    </div>
+  );
+}
+
 export type OverviewDigestCardProps = {
   topics?: DigestTopic[];
   loading?: boolean;
   error?: boolean;
+  /** Wires the error banner's Retry control. Omitted = no button. */
+  onRetry?: () => void;
   className?: string;
 };
 
 export function OverviewDigestCard({
-  topics = DEMO_TOPICS, loading = false, error = false, className = "",
+  topics = DEMO_TOPICS, loading = false, error = false, onRetry, className = "",
 }: OverviewDigestCardProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [current, setCurrent] = useState<DigestTopic[]>(topics);
@@ -95,13 +136,30 @@ export function OverviewDigestCard({
   };
 
   return (
-    <DigestCardUI
+    <Card
       className={className}
-      topics={current}
-      loading={loading}
-      error={error}
-      regenerating={regenerating}
-      onRefresh={refresh}
-    />
+      title="This week's digest"
+      actions={
+        <Button compact onClick={refresh} disabled={regenerating}>
+          <Shuffle size={14} /> {regenerating ? "Refreshing…" : "Refresh digest"}
+        </Button>
+      }
+    >
+      {regenerating && (
+        <div className="mb-3 flex items-center gap-2 font-display italic text-[13px] text-moss">
+          <Spinner size="sm" /> Mari is re-reading the week…
+        </div>
+      )}
+      {error ? (
+        /* §8: failure copy comes from the catalog, never a bespoke string. */
+        <ErrorMessage id="server.unavailable" onAction={onRetry} />
+      ) : current.length === 0 ? (
+        <EmptyState>No digest yet. Refresh to have Mari read the week.</EmptyState>
+      ) : (
+        <div className="flex flex-col divide-y divide-ink/10">
+          {current.map((t) => <TopicBlock key={t.title} topic={t} dim={regenerating} />)}
+        </div>
+      )}
+    </Card>
   );
 }

@@ -154,16 +154,16 @@ function ConfigureBody({ c }: { c: Connector }) {
     return (
       <div>
         <div className="grid place-items-center gap-2 rounded-md border border-dashed border-ink/25 bg-ink/[0.015] px-4 py-8 text-center">
-          <span className="text-ink/40"><UploadCloud size={30} /></span>
+          <span className="text-ink/65"><UploadCloud size={30} /></span>
           <p className="text-[13px] text-ink/70">Drag files here, or <span className="text-biscay-2">browse</span></p>
-          <p className="font-term text-[11px] text-ink/45">PDF · Markdown · Word · text · up to 50 MB each</p>
+          <p className="font-term text-[11px] text-ink/65">PDF · Markdown · Word · text · up to 50 MB each</p>
         </div>
         <div className="mt-3">
           <SectionLabel>Selected files — {UPLOAD_FILES.length}</SectionLabel>
           <ul className="mt-1.5 grid gap-1">
             {UPLOAD_FILES.map((f) => (
               <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
-                <FileText size={13} className="text-ink/45" /> {f}
+                <FileText size={13} className="text-ink/65" /> {f}
               </li>
             ))}
           </ul>
@@ -183,7 +183,7 @@ function ConfigureBody({ c }: { c: Connector }) {
             ) : (
               <Input className="w-full font-term" type={f.secret ? "password" : "text"} readOnly value={f.value} />
             )}
-            {f.help && <p className="mt-1 text-[11.5px] text-ink/55">{f.help}</p>}
+            {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
           </Field>
         ))}
       </div>
@@ -251,7 +251,7 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
           ) : phase === "done" ? (
             <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
           ) : (
-            <span className="text-[12px] text-ink/55">Sync continues in the background.</span>
+            <span className="text-[12px] text-ink/65">Sync continues in the background.</span>
           )}
         </div>
       </div>
@@ -266,7 +266,7 @@ function syncPhaseSource(phase: "queued" | "syncing" | "done" | "error"): SyncSo
     case "queued": return { ...base, state: "queued" };
     case "syncing": return { ...base, state: "syncing", phase: "Chunking", done: 180, total: 512, chunkCount: 8912, embeddedCount: 3100 };
     case "done": return { ...base, state: "done", docCount: 500, chunkCount: 8912, embeddedCount: 8912, lastSyncAt: "2026-07-21T14:12:00" };
-    case "error": return { ...base, state: "error", error: "GET /repos/acme/handbook returned 401 — the token expired or was revoked." };
+    case "error": return { ...base, state: "error", error: "GET /repos/acme/handbook returned 401: the token expired or was revoked." };
   }
 }
 
@@ -319,7 +319,7 @@ function SourcesStressBody({ stress }: { stress: boolean }) {
               <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
             ))}
           </div>
-          <span className="min-w-0 break-words font-term text-[11px] text-ink/45">{MIXED_SCRIPT}</span>
+          <span className="min-w-0 break-words font-term text-[11px] text-ink/65">{MIXED_SCRIPT}</span>
         </div>
       )}
 

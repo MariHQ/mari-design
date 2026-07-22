@@ -16,7 +16,7 @@ import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonText } from "../data-di
    toggles on top. Purely client-side in the real console (localStorage);
    here it manages the same state locally and renders standalone. */
 
-type Guide = { id: string; name: string; description: string; rules: number; tone: IconRingTone; preview: string[] };
+export type Guide = { id: string; name: string; description: string; rules: number; tone: IconRingTone; preview: string[] };
 
 const GUIDES: Guide[] = [
   { id: "plain", name: "Plain language", tone: "ok", rules: 42, description: "Direct, concise, and accessible. Prefer familiar words and active voice.", preview: ["Prefer one- or two-syllable words when they carry the meaning", "Keep sentences under 25 words", "Address the reader as “you”", "Use active voice unless the actor is unknown"] },
@@ -113,10 +113,10 @@ export function LibraryGuidesPanel({
           {custom && (
             <div className="flex items-start gap-2.5 rounded-[4px] border border-clay/35 bg-clay/[0.06] px-3 py-2.5 text-[12.5px] text-ink/80">
               <span className="flex-1">
-                <b className="text-ink">Untitled custom guide</b> — draft created from Plain language. Custom packs are a
+                <b className="text-ink">Untitled custom guide</b>: draft created from Plain language. Custom packs are a
                 visual placeholder; nothing persists yet.
               </span>
-              <button type="button" aria-label="Dismiss" onClick={() => setCustom(false)} className="shrink-0 text-ink/50 hover:text-ink">
+              <button type="button" aria-label="Dismiss" onClick={() => setCustom(false)} className="shrink-0 text-ink/65 hover:text-ink">
                 <X size={14} />
               </button>
             </div>
@@ -125,7 +125,6 @@ export function LibraryGuidesPanel({
           {guides.map((g) => {
             const on = active === g.id;
             const open = expanded === g.id;
-            const shown = g.preview.length;
             return (
               <div key={g.id} className={`rounded-[5px] border px-3.5 py-3 ${on ? "border-biscay-2/50 bg-biscay-2/[0.04]" : "border-ink/12"}`}>
                 <div className="flex items-start gap-3">
@@ -135,7 +134,7 @@ export function LibraryGuidesPanel({
                       <span className="text-[14px] font-semibold text-ink">{g.name}</span>
                       {on && <Check size={14} className="text-moss" />}
                     </div>
-                    <div className="font-term text-[11px] text-ink/55">{on ? "Active · Project default" : "Built in"} · {g.rules} rules</div>
+                    <div className="font-term text-[11px] text-ink/65">{on ? "Active · Project default" : "Built in"} · {g.preview.length} rules</div>
                     <p className="mt-1 text-[12.5px] text-ink/70">{g.description}</p>
                   </div>
                 </div>
@@ -146,12 +145,12 @@ export function LibraryGuidesPanel({
                   </Button>
                   {on ? <Badge label="Project default" tone="ok" /> : <Button compact onClick={() => setActive(g.id)}>Set as default</Button>}
                 </div>
+                {/* The whole rule list, never clipped with an "and N more". */}
                 {open && (
-                  <ul className="mt-2 pl-[43px] flex flex-col gap-1">
+                  <ul className="mt-2 flex list-disc flex-col gap-1 pl-[59px] marker:text-ink/65">
                     {g.preview.map((r) => (
-                      <li key={r} className="text-[12.5px] text-ink/70 before:content-['—'] before:mr-1.5 before:text-ink/35">{r}</li>
+                      <li key={r} className="break-words text-[12.5px] text-ink/70">{r}</li>
                     ))}
-                    <li className="font-term text-[11px] text-ink/45">…and {g.rules - shown} more in the rule registry</li>
                   </ul>
                 )}
               </div>
@@ -169,7 +168,7 @@ export function LibraryGuidesPanel({
           </div>
           <div>
             <SectionLabel>Preferred terms</SectionLabel>
-            <div className="font-term text-[11px] text-ink/45 mb-1">One mapping per line</div>
+            <div className="mb-1 font-term text-[11px] text-ink/65">One mapping per line</div>
             <Textarea short className="font-term text-[12px]" value={layer.terms} onChange={(e) => setField("terms", e.target.value)} />
           </div>
           <div>
@@ -183,9 +182,11 @@ export function LibraryGuidesPanel({
             <Checkbox checked={layer.sentenceCase} onCheckedChange={(v) => setField("sentenceCase", v)} label="Sentence-case headings" />
           </div>
 
-          <div className="flex items-center justify-between pt-1 border-t border-ink/10">
-            <span className="font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
-            <Button variant="primary" compact onClick={save}>Save project guide</Button>
+          {/* Primary action bottom LEFT; the confirmation keeps a reserved
+              slot so saving never shifts the button (CONVENTIONS §2). */}
+          <div className="flex items-center gap-3 border-t border-ink/10 pt-3">
+            <Button variant="primary" compact onClick={save}>Save</Button>
+            <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
           </div>
         </div>
       </Card>

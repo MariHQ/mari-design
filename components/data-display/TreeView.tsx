@@ -19,14 +19,14 @@ function TreeRow({ node, depth, onSelect, selected }: { node: TreeNode; depth: n
           <button
             aria-label={open ? "Collapse" : "Expand"}
             onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-            className={`grid place-items-center w-4 h-4 shrink-0 text-ink/40 rounded-[2px] ${focusRing}`}
+            className={`grid place-items-center w-4 h-4 shrink-0 text-ink/65 rounded-[2px] ${focusRing}`}
           >
             <ChevronRight size={13} className={`transition-transform ${open ? "rotate-90" : ""}`} />
           </button>
         ) : (
           <span className="w-4 shrink-0" />
         )}
-        <span className="shrink-0 text-ink/40" aria-hidden="true">{node.icon ?? (hasChildren ? <Folder size={14} /> : <FileText size={14} />)}</span>
+        <span className="shrink-0 text-ink/65" aria-hidden="true">{node.icon ?? (hasChildren ? <Folder size={14} /> : <FileText size={14} />)}</span>
         <span className="truncate">{node.label}</span>
       </div>
       {hasChildren && open && (

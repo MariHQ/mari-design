@@ -73,7 +73,7 @@ const DEMO_HARVEST = {
   cssColors: [["#0B5CAD", 42], ["#F4A11C", 18], ["#12333E", 12], ["#E8EEF3", 9], ["#7A2E1F", 5]] as [string, number][],
   fonts: ["Sora", "Inter", "Source Serif Pro"],
   logo: null as string | null,
-  warnings: ["No favicon found — used the theme-color meta tag instead."],
+  warnings: ["No favicon found, used the theme-color meta tag instead."],
 };
 
 function ColorField({ label, value, onChange, onAuto, explicit }: { label: string; value: string; onChange: (v: string) => void; onAuto: () => void; explicit: boolean }) {
@@ -81,7 +81,7 @@ function ColorField({ label, value, onChange, onAuto, explicit }: { label: strin
     <div className="py-2.5 border-b border-ink/10 last:border-0">
       <div className="flex items-center justify-between">
         <SectionLabel>{label}</SectionLabel>
-        {explicit && <button type="button" onClick={onAuto} className={`font-term text-[10.5px] text-biscay-2 hover:text-ink rounded-[3px] ${focusRing}`}>auto</button>}
+        {explicit && <button type="button" onClick={onAuto} className={`font-term text-[10.5px] text-biscay-2 hover:text-ink rounded-[3px] ${focusRing}`}>Auto</button>}
       </div>
       <div className="mt-1.5 flex items-center gap-2">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-8 h-8 rounded-[4px] border border-ink/15 bg-transparent p-0.5 cursor-pointer" aria-label={label} />
@@ -152,17 +152,17 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader title="Branding" description="Tokens ARE the brand — re-skin every primitive from one place." />
+      <PageHeader title="Branding" description="Tokens are the brand. Re-skin every primitive from one place." />
 
       {/* 1 — Import */}
       <Card icon={<Sparkles size={16} className="text-clay" />} title="Import your brand">
         <div className="flex items-center gap-2">
           <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runImport()} placeholder="https://yourcompany.com" className="w-full" />
-          <Button variant="primary" disabled={importing || !url.trim()} onClick={runImport}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import brand"}</Button>
+          <Button variant="primary" disabled={importing || !url.trim()} onClick={runImport}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import"}</Button>
         </div>
         {evidence && (
           <div className="mt-4 flex flex-col gap-3">
-            <p className="text-[12.5px] text-ink/60">Harvested from “{evidence.title}”</p>
+            <p className="text-[12.5px] text-ink/70">Harvested from “{evidence.title}”</p>
             <Field label="Harvested colors">
               <div className="flex flex-wrap gap-1.5">
                 <Swatch color={evidence.themeColor} selected={draft.accent === evidence.themeColor} onClick={() => patch({ accent: evidence.themeColor })} />
@@ -205,7 +205,7 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
       <Card title="Live preview" hint="Rendered under your draft tokens">
         <div style={preview} className="rounded-md border border-ink/15 p-4">
           <div className="flex items-center justify-between border-b border-ink/10 pb-3">
-            <span className="text-[18px] font-bold" style={{ fontFamily: draft.displayFont ? `"${draft.displayFont}", serif` : undefined, color: "var(--b-accent)" }}>{draft.logoAlt || "Your Brand"}</span>
+            <span className="min-w-0 truncate text-[18px] font-bold" style={{ fontFamily: draft.displayFont ? `"${draft.displayFont}", serif` : undefined, color: "var(--b-accent)" }}>{draft.logoAlt || "Your Brand"}</span>
             <span className="inline-flex gap-2">
               <span className="inline-flex items-center h-8 px-3 rounded-[4px] text-[12.5px] font-semibold" style={{ background: "var(--b-accent)", color: "var(--b-accent-ink)" }}>Primary</span>
               <span className="inline-flex items-center h-8 px-3 rounded-[4px] border text-[12.5px] font-medium" style={{ borderColor: "var(--b-accent)", color: "var(--b-accent)" }}>Ghost</span>
@@ -220,9 +220,9 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
             {[["1,284", "documents"], ["98%", "verified"], ["3", "sites live"]].map(([v, l], i) => (
-              <div key={l} className="rounded-md border border-ink/15 p-3">
+              <div key={l} className="grid place-items-center rounded-md border border-ink/15 p-3 text-center">
                 <div className="text-[22px] font-bold" style={{ color: i === 0 ? "var(--b-accent)" : i === 1 ? "var(--b-green)" : "var(--b-blue)" }}>{v}</div>
-                <div className="text-[12px] text-ink/55">{l}</div>
+                <div className="text-[12px] text-ink/70">{l}</div>
               </div>
             ))}
           </div>

@@ -1,22 +1,25 @@
 import type { ButtonHTMLAttributes } from "react";
 import { forwardRef } from "react";
 import { focusRing } from "../tokens/focusRing";
+import { btnDisabled } from "./buttons";
 
 type ButtonVariant = "default" | "primary" | "success" | "danger" | "link";
 
-const BASE = `inline-flex items-center justify-center gap-1.5 rounded-[4px] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none ${focusRing}`;
+// `min-h` (not a fixed `h`) plus `break-words`: a long label wraps inside the
+// button instead of spilling out the top and bottom of a 36px box.
+const BASE = `inline-flex items-center justify-center gap-1.5 rounded-[4px] font-medium transition-colors max-w-full overflow-hidden [overflow-wrap:anywhere] ${btnDisabled} ${focusRing}`;
 
 const SIZE = {
-  normal: "h-9 px-3.5 text-[13px]",
-  compact: "h-7 px-2.5 text-[12.5px]",
-  icon: "w-9 h-9 p-0",
+  normal: "min-h-9 py-1.5 px-3.5 text-[13px]",
+  compact: "min-h-7 py-1 px-2.5 text-[12.5px]",
+  icon: "w-9 h-9 shrink-0 p-0",
 };
 
 const VARIANT: Record<ButtonVariant, string> = {
-  default: "border border-ink/20 bg-paper text-ink/80 hover:border-ink/45 hover:text-ink",
-  primary: "bg-biscay text-white font-semibold hover:bg-biscay-2",
-  success: "bg-moss text-white font-semibold hover:bg-[#235939]",
-  danger: "border border-espelette/40 bg-paper text-espelette hover:bg-espelette/[0.06] hover:border-espelette",
+  default: "border border-ink/25 bg-paper text-ink/85 hover:border-ink/45 hover:text-ink active:bg-ink/[0.05]",
+  primary: "bg-biscay text-white font-semibold hover:bg-biscay-2 active:bg-[#16334d]",
+  success: "bg-moss text-white font-semibold hover:bg-[#235939] active:bg-[#1d4a30]",
+  danger: "border border-espelette/50 bg-paper text-espelette hover:bg-espelette/[0.08] hover:border-espelette active:bg-espelette/[0.14]",
   link: "h-auto px-0 text-biscay-2 hover:text-ink hover:underline underline-offset-[3px] bg-transparent",
 };
 

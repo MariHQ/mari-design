@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { card } from "../tokens/card";
+import { Chip } from "../data-display/Chip";
 import { PipelineView, type WorkflowStep, type WorkflowSection } from "./PipelineView";
 import { RunHistory, type WorkflowRun } from "./RunHistory";
 import { RunPanel } from "./RunPanel";
 
-/* WorkflowScreen — the composite that ties the pipeline, run history, and run
+/* WorkflowScreen: the composite that ties the pipeline, run history, and run
    panel together with its own navigation state. It is the "screen that
    navigates you": clicking a stage swaps the stage detail into the right
    column, clicking a run swaps in the RunPanel. No router — selection lives
@@ -25,15 +26,16 @@ function StageDetail({ step }: { step: WorkflowStep }) {
         <div className={`font-term text-[10px] font-bold uppercase tracking-[0.14em] ${SECTION_ACCENT[step.section]}`}>
           {SECTION_TITLE[step.section]}
         </div>
-        <div className="mt-1 flex items-center gap-1.5 font-display text-[17px] font-bold text-ink">
+        <div className="mt-1 flex items-center gap-1.5 break-words font-display text-[17px] font-bold text-ink">
           {step.icon}{step.label}
         </div>
       </div>
-      <div className="px-5 py-4 text-[13px] leading-relaxed text-ink/70">
-        {step.summary || "This stage runs as configured — no further detail."}
+      <div className="px-5 py-4 break-words text-[13px] leading-relaxed text-ink/70">
+        {step.summary || "This stage runs as configured. There is no further detail."}
+        {/* One chip system everywhere (§4), not a bespoke rounded-full pill. */}
         {step.llm && (
-          <div className="mt-3 inline-flex items-center rounded-full border border-clay/35 bg-clay/[0.07] px-2.5 py-1 font-term text-[10.5px] font-medium tracking-[0.06em] text-clay">
-            LLM stage — runs the local model, slower
+          <div className="mt-3">
+            <Chip label="LLM stage: runs the local model, slower" tone="attention" />
           </div>
         )}
       </div>
@@ -95,7 +97,7 @@ export function WorkflowScreen({
         ) : selectedStage ? (
           <StageDetail step={selectedStage} />
         ) : (
-          <div className={`${card} px-5 py-6 text-[13px] text-ink/55`}>
+          <div className={`${card} px-5 py-6 text-[13px] text-ink/70`}>
             Select a stage or a run to see its detail here.
           </div>
         )}

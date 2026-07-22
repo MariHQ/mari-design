@@ -10,7 +10,8 @@ import { Chip } from "../data-display/Chip";
 import { Stat } from "../data-display/Stat";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skeleton";
-import { RulesPanel as RulesPanelUI, type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
+import { type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
+import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
 
 /* LibraryRulesPanel — the Library › Rules tab.
    Configures the deterministic prose engine: rules across four families
@@ -191,10 +192,10 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
     <div className={`flex flex-col gap-4 ${className}`.trim()}>
       {/* Project config strip */}
       <Card>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-end gap-4">
           <div className="min-w-[10rem]">
             <SectionLabel>Project</SectionLabel>
-            <div className="text-[14px] font-semibold text-ink">{workspace}</div>
+            <div className="mt-1 truncate text-[14px] font-semibold text-ink">{workspace}</div>
           </div>
           <div>
             <SectionLabel>Style pack</SectionLabel>
@@ -202,12 +203,18 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
               {PACKS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </Select>
           </div>
-          <div className="pt-4">
-            <Checkbox checked={grammar} onCheckedChange={(v) => { setGrammar(v); setDirty(true); }} label="Grammar" />
+          {/* Its own labelled column, on the same baseline as Style pack, so
+              toggling it no longer nudges the row around. */}
+          <div>
+            <SectionLabel>Grammar</SectionLabel>
+            <div className="mt-1 flex h-9 items-center">
+              <Checkbox checked={grammar} onCheckedChange={(v) => { setGrammar(v); setDirty(true); }} label="Check grammar" />
+            </div>
           </div>
+          {/* Primary bottom left of its group; "Saved" keeps a reserved slot. */}
           <div className="ml-auto flex items-center gap-3">
-            <span className="font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
-            <Button variant="primary" compact disabled={!dirty} onClick={save}>Save project rules</Button>
+            <Button variant="primary" compact disabled={!dirty} onClick={save}>Save</Button>
+            <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
           </div>
         </div>
       </Card>
@@ -219,11 +226,10 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
         ))}
       </div>
 
-      {/* Rule registry — reuse the library RulesPanel */}
-      <RulesPanelUI
+      {/* Rule registry — a local table so the columns keep one plumb line */}
+      <RuleTable
         rules={rulesForRegistry}
         onStatusChange={onStatusChange}
-        title="Rule registry"
         hint={`${RULE_CATALOG_COUNT}+ rules · every finding has an ID and span`}
       />
 
@@ -237,7 +243,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
                 {DOCS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
               </Select>
             </div>
-            <div className="font-term text-[11px] text-ink/50 pb-2">{doc.source}</div>
+            <div className="font-term text-[11px] text-ink/65 pb-2">{doc.source}</div>
             <Button variant="primary" compact className="ml-auto" onClick={check}>Run deterministic check</Button>
           </div>
 
@@ -278,6 +284,107 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
         </div>
       </Card>
     </div>
+  );
+}
+
+/* ── Rule registry table ───────────────────────────────────────────────
+   Local, so the family filter, the fixed column widths and the status
+   control all belong to this panel. Fixed-width columns are what keep the
+   rule / family / severity / status edges on one plumb line no matter how
+   long a description runs; every header goes through <SortHeader> so all
+   four columns sort (CONVENTIONS §3). */
+
+const SEVERITY_TONE: Record<RuleSeverity, string> = { error: "blocked", warn: "attention", advisory: "neutral" };
+const SEVERITY_RANK: Record<RuleSeverity, number> = { error: 0, warn: 1, advisory: 2 };
+const STATUS_STEPS: { id: RuleStatus; label: string }[] = [
+  { id: "active", label: "Active" },
+  { id: "zero", label: "Zero" },
+  { id: "ignored", label: "Ignore" },
+];
+const STATUS_RANK: Record<RuleStatus, number> = { active: 0, zero: 1, ignored: 2 };
+
+function RuleTable({
+  rules, onStatusChange, hint,
+}: { rules: RuleRow[]; onStatusChange: (id: string, status: RuleStatus) => void; hint: string }) {
+  const [family, setFamily] = useState<string | "All">("All");
+  const families = useMemo(() => Array.from(new Set(rules.map((r) => r.family))), [rules]);
+  const visible = useMemo(() => rules.filter((r) => family === "All" || r.family === family), [rules, family]);
+
+  const { sort, onSort, sorted } = useSort(visible, {
+    rule: (r) => r.id,
+    family: (r) => r.family,
+    severity: (r) => SEVERITY_RANK[r.severity],
+    status: (r) => STATUS_RANK[r.status ?? "active"],
+  });
+
+  return (
+    <Card variant="flush" title="Rule registry" hint={hint}>
+      <div className="border-t border-ink/10 px-4 pb-4 pt-3">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          <Chip label="All families" tone={family === "All" ? "info" : "neutral"} selected={family === "All"} onClick={() => setFamily("All")} />
+          {families.map((f) => (
+            <Chip key={f} label={f} tone={family === f ? "info" : "neutral"} selected={family === f} onClick={() => setFamily(f)} />
+          ))}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] table-fixed border-collapse text-left">
+            <colgroup>
+              <col />
+              <col style={{ width: "9.5rem" }} />
+              <col style={{ width: "7.5rem" }} />
+              <col style={{ width: "14.5rem" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <SortHeader label="Rule" sortKey="rule" sort={sort} onSort={onSort} />
+                <SortHeader label="Family" sortKey="family" sort={sort} onSort={onSort} />
+                <SortHeader label="Severity" sortKey="severity" sort={sort} onSort={onSort} />
+                <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => {
+                const current = r.status ?? "active";
+                return (
+                  <tr key={r.id} className="border-b border-ink/10 align-top last:border-0">
+                    <td className={tdPad}>
+                      <code className="break-words font-term text-[12px] font-medium text-ink">{r.id}</code>
+                      <div className="mt-0.5 break-words text-[12.5px] text-ink/70">{r.description}</div>
+                    </td>
+                    <td className={tdPad}>
+                      <div className="break-words text-[12.5px] font-medium text-ink/80">{r.family}</div>
+                      {r.pack && <div className="break-words font-term text-[11px] text-ink/65">{r.pack}</div>}
+                    </td>
+                    <td className={tdPad}><Chip label={r.severity} tone={SEVERITY_TONE[r.severity]} /></td>
+                    <td className={tdPad}>
+                      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`${r.id} status`}>
+                        {STATUS_STEPS.map((st) => (
+                          <Chip
+                            key={st.id}
+                            label={st.label}
+                            tone={current === st.id ? "info" : "neutral"}
+                            selected={current === st.id}
+                            onClick={() => onStatusChange(r.id, st.id)}
+                          />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {sorted.length === 0 && (
+                <tr>
+                  <td colSpan={4} className={thPad}>
+                    <EmptyState icon={<CheckCircle2 size={22} />}>No rules match this family.</EmptyState>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Card>
   );
 }
 

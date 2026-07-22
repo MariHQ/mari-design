@@ -28,16 +28,16 @@ import {
    lifecycle, content-volume variants, and the loading / error / empty edges. */
 
 const STATES = [
-  { id: "default", label: "Default — all facts + audit" },
+  { id: "default", label: "Default: all facts + audit" },
   { id: "verified", label: "Filter · Verified" },
   { id: "review", label: "Filter · Needs review" },
   { id: "contradicted", label: "Filter · Contradicted" },
   { id: "stale", label: "Filter · Stale candidates" },
-  { id: "impact", label: "Fact expanded — run impact" },
-  { id: "impact-analyzed", label: "Fact expanded — impact resolved" },
-  { id: "task-creating", label: "Create review task — creating" },
-  { id: "task-done", label: "Create review task — done" },
-  { id: "task-error", label: "Create review task — error" },
+  { id: "impact", label: "Fact expanded: run impact" },
+  { id: "impact-analyzed", label: "Fact expanded: impact resolved" },
+  { id: "task-creating", label: "Create review task: creating" },
+  { id: "task-done", label: "Create review task: done" },
+  { id: "task-error", label: "Create review task: error" },
   { id: "single", label: "Single fact" },
   { id: "many", label: "Many facts" },
   { id: "empty", label: "No facts yet" },
@@ -78,7 +78,7 @@ const MANY: Fact[] = [
    names, long sources. Exercises wrapping / truncation / line-clamp. */
 const OVERFLOW_FACTS: Fact[] = [
   { id: 1, claim: LONG_PARAGRAPH, source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-05-30" },
-  { id: 2, claim: LONG_TITLE, source: "Consolidated reliability, incident-response, and on-call escalation runbook — superseding all prior drafts", owner: LONG_NAME, status: "Needs review", verified: null },
+  { id: 2, claim: LONG_TITLE, source: "Consolidated reliability, incident-response, and on-call escalation runbook: superseding all prior drafts", owner: LONG_NAME, status: "Needs review", verified: null },
   { id: 3, claim: "The platform reliability guild reconciles every claim against the last four quarters of incident retrospectives before it is marked verified, and re-reviews after any Sev-1 incident anywhere in the fleet.", source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
 ];
 
@@ -87,7 +87,7 @@ const OVERFLOW_FACTS: Fact[] = [
 const STRESS_FACTS: Fact[] = [
   { id: 1, claim: UNBREAKABLE, source: LONG_URL, owner: LONG_WORD, status: "Verified", verified: "2026-05-30" },
   { id: 2, claim: MIXED_SCRIPT, source: LONG_DOC_TITLE, owner: MIXED_SCRIPT, status: "Needs review", verified: null },
-  { id: 3, claim: `${LONG_WORD} — ${HUGE_NUMBER_STR} requests/min at ${HUGE_PERCENT} availability`, source: UNBREAKABLE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
+  { id: 3, claim: `${LONG_WORD}, ${HUGE_NUMBER_STR} requests/min at ${HUGE_PERCENT} availability`, source: UNBREAKABLE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
 ];
 
 function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
@@ -120,16 +120,17 @@ function FactsTable({ facts }: { facts: Fact[] }) {
   }
   return (
     <Card variant="flush">
-      <Table head={["Claim", "Owner", "Status", "Verified"]} minW={640}>
+      {/* No clickable item in a row, so status is the last column (§3). */}
+      <Table head={["Claim", "Owner", "Verified", "Status"]} minW={640}>
         {facts.map((f) => (
           <tr key={f.id} className="border-b border-ink/[0.06] last:border-0">
             <td className="px-4 py-3 align-top">
-              <b className="text-[13px] font-medium text-ink">{f.claim}</b>
-              <div className="mt-0.5 font-term text-[11px] text-ink/45">{f.source}</div>
+              <b className="block break-words text-[13px] font-medium text-ink">{f.claim}</b>
+              <div className="mt-0.5 break-words font-term text-[11px] text-ink/65">{f.source}</div>
             </td>
-            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">{f.owner}</td>
+            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 break-words">{f.owner}</td>
+            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : ""}</td>
             <td className="px-4 py-3 align-top">{factChip(f.status)}</td>
-            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">{f.verified ? fmtDate(f.verified) : "—"}</td>
           </tr>
         ))}
       </Table>
@@ -144,17 +145,18 @@ function ReviewTaskAudit({ phase }: { phase: "creating" | "done" | "error" }) {
     <Card
       icon={<ShieldCheck size={17} className="text-moss" />}
       title="Verification audit"
-      hint="1 verified more than 60 days ago — stale candidate."
+      hint="1 verified more than 60 days ago: stale candidate."
       variant="flush"
     >
-      <Table head={["Status", "Claim", "Verified", ""]} minW={640}>
+      {/* The row carries a clickable action, so status is second-to-last (§3). */}
+      <Table head={["Claim", "Verified", "Status", ""]} minW={640}>
         <tr className="border-b border-ink/[0.06] last:border-0">
-          <td className="px-4 py-3 align-top"><Chip label="Stale candidate" tone="attention" dot /></td>
           <td className="px-4 py-3 align-top">
-            <b className="text-[13px] font-medium text-ink">Uploaded PDFs are OCR'd on ingest.</b>
-            <div className="mt-0.5 font-term text-[11px] text-ink/45">Sources docs · Dana R.</div>
+            <b className="block break-words text-[13px] font-medium text-ink">Uploaded PDFs are OCR'd on ingest.</b>
+            <div className="mt-0.5 font-term text-[11px] text-ink/65">Sources docs · Dana R.</div>
           </td>
-          <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">Feb 20, 2026 <span className="text-ink/45">· 148d ago</span></td>
+          <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">{fmtDate("2026-02-20")} <span className="text-ink/65">· 148d ago</span></td>
+          <td className="px-4 py-3 align-top"><Chip label="Stale candidate" tone="attention" dot /></td>
           <td className="px-4 py-3 align-top text-right">
             {phase === "error" ? (
               <span className="font-term text-[11.5px] text-espelette">Couldn’t reach Mari.</span>
@@ -187,7 +189,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "verified") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
         <FactsTable facts={FACTS.filter((f) => f.status === "Verified")} />
       </div>
@@ -195,7 +197,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "review") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="review" onChange={() => {}} />
         <FactsTable facts={FACTS.filter((f) => f.status === "Needs review")} />
       </div>
@@ -203,7 +205,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "contradicted") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="contradicted" onChange={() => {}} />
         <Alert tone="blocked" title="1 fact is contradicted by a newer source">
           A more recent document conflicts with this claim. Re-verify or supersede it.
@@ -214,7 +216,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "stale") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
         <FactsVerificationAudit />
       </div>
@@ -222,9 +224,9 @@ function Body({ state }: { state: string }) {
   }
   if (state === "impact") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
-        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact — expanded">
+        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
           <ImpactPanelFeature />
         </Card>
       </div>
@@ -232,9 +234,9 @@ function Body({ state }: { state: string }) {
   }
   if (state === "impact-analyzed") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
-        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact — expanded">
+        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
           <ImpactPanelFeature analyzed />
         </Card>
       </div>
@@ -243,7 +245,7 @@ function Body({ state }: { state: string }) {
   if (state === "task-creating" || state === "task-done" || state === "task-error") {
     const phase = state === "task-creating" ? "creating" : state === "task-done" ? "done" : "error";
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
         <ReviewTaskAudit phase={phase} />
       </div>
@@ -251,7 +253,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "overflow") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <StressExtras mode="overflow" />
         <FactsTable facts={OVERFLOW_FACTS} />
@@ -261,7 +263,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "stress") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <StressExtras mode="stress" />
         <FactsTable facts={STRESS_FACTS} />
@@ -271,7 +273,7 @@ function Body({ state }: { state: string }) {
   }
   if (state === "single") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <FactsTable facts={[FACTS[0]]} />
       </div>
@@ -279,14 +281,14 @@ function Body({ state }: { state: string }) {
   }
   if (state === "many") {
     return (
-      <div className="mt-5 space-y-4">
+      <div className="mt-6 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
         <FactsTable facts={MANY} />
       </div>
     );
   }
   return (
-    <div className="mt-5 space-y-4">
+    <div className="mt-6 space-y-4">
       <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
       <FactsTable facts={FACTS} />
       <FactsVerificationAudit />
@@ -302,21 +304,24 @@ function FactsPage({ state = "default", mobile = false }: PageProps) {
       </PageFrame>
     );
   }
+  const actions = (
+    <>
+      <Button variant="link">Scan for facts</Button>
+      <Button variant="default">Audit documents</Button>
+      <Button variant="primary">New fact</Button>
+    </>
+  );
   return (
     <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
       <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
+          eyebrow="Verification"
           title="Facts"
-          description="Every claim the team relies on — verified, owned, and traced to its impact across the corpus."
-          actions={
-            <>
-              <Button variant="link">Scan for facts</Button>
-              <Button variant="default">Audit documents</Button>
-              <Button variant="primary">New fact</Button>
-            </>
-          }
+          description="Every claim the team relies on: verified, owned, and traced to its impact across the corpus."
+          actions={mobile ? undefined : actions}
         />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <Body state={state} />
       </div>
     </PageFrame>

@@ -80,14 +80,14 @@ function SyncRow({ s, onRetry }: { s: SyncSource; onRetry?: (id: string) => void
             className="shrink-0"
           />
           {s.lastSyncAt != null && s.lastSyncAt !== "" && (
-            <span className="ml-auto shrink-0 font-term text-[11px] text-ink/45">{fmtAgo(s.lastSyncAt)}</span>
+            <span className="ml-auto shrink-0 font-term text-[11px] text-ink/65">{fmtAgo(s.lastSyncAt)}</span>
           )}
         </div>
 
         {(running || queued) && (
           <div className="mt-2.5">
             <Progress value={pct} tone={queued ? "info" : meta.progress} />
-            <div className="mt-1.5 font-term text-[11px] text-ink/55">
+            <div className="mt-1.5 font-term text-[11px] text-ink/65">
               {queued
                 ? "Waiting to start…"
                 : s.total && s.total > 0
@@ -131,7 +131,7 @@ export function SyncPanel({ sources, onRetry, loading = false, className = "" }:
   }
   if (sources.length === 0) {
     return (
-      <div className={`${card} px-4 py-6 text-center text-[13px] text-ink/55 ${className}`.trim()}>
+      <div className={`${card} px-4 py-6 text-center text-[13px] text-ink/65 ${className}`.trim()}>
         No sources are syncing.
       </div>
     );

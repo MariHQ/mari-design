@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { Send, ExternalLink, FileText, Check, Plus } from "lucide-react";
+import { Send, ExternalLink, FileText, Check, Plus, GripVertical } from "lucide-react";
 import { card } from "../tokens/card";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
@@ -18,6 +18,8 @@ import { CodeBlock } from "../data-display/CodeBlock";
 import { TokenReveal } from "../data-display/TokenReveal";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { ErrorMessage } from "../feedback/ErrorMessage";
+import { Switch } from "../forms/Switch";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers } from "../features/PublishMcpServers";
 import { Avatar } from "../data-display/Avatar";
@@ -75,7 +77,7 @@ function PublishStressBody({ stress }: { stress: boolean }) {
         <div className="flex flex-wrap items-center gap-2.5">
           <Chip label="Live" tone="ok" dot pulse caps />
           <span className="min-w-0 break-words text-[15px] font-semibold text-ink">{siteName}</span>
-          <span className="min-w-0 break-words font-term text-[12px] text-ink/50">{domain}</span>
+          <span className="min-w-0 break-words font-term text-[12px] text-ink/65">{domain}</span>
         </div>
         <p className="mt-2 text-[13px] text-ink/70">{stress ? MIXED_SCRIPT : LONG_PARAGRAPH}</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -137,25 +139,88 @@ function EditorTabs({ active }: { active: EditorTab }) {
     <div className="flex items-center gap-5 border-b border-ink/15 mb-4">
       {tabs.map((t) => (
         <span key={t.id} aria-current={t.id === active ? "page" : undefined}
-          className={`pb-2 text-[13px] font-medium border-b-2 -mb-px ${t.id === active ? "text-ink border-biscay-2" : "text-ink/55 border-transparent"}`}>{t.label}</span>
+          className={`pb-2 text-[13px] font-medium border-b-2 -mb-px ${t.id === active ? "text-ink border-biscay-2" : "text-ink/65 border-transparent"}`}>{t.label}</span>
       ))}
     </div>
   );
 }
 
+/* mkdocs-style site-builder controls: an editable nav tree plus the feature
+   switches a static-site generator exposes. Every control is wired to local
+   state so nothing here is inert (§2). */
+const SITE_FEATURES = [
+  { key: "search", label: "Client-side search", hint: "Lunr index built at deploy", on: true },
+  { key: "toc", label: "Page table of contents", hint: "Right rail, H2 and H3", on: true },
+  { key: "edit", label: "Edit this page links", hint: "Points back at the source repo", on: false },
+  { key: "versions", label: "Versioned docs", hint: "Keeps /v13 and /v14 side by side", on: false },
+];
+
 function ContentBody() {
+  const [nav, setNav] = useState<{ label: string; docs: number }[]>([
+    { label: "Getting started", docs: 12 },
+    { label: "Guides", docs: 74 },
+    { label: "Reference", docs: 62 },
+  ]);
+  const [features, setFeatures] = useState<Record<string, boolean>>(
+    Object.fromEntries(SITE_FEATURES.map((f) => [f.key, f.on])),
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>Sources</SectionLabel>
         <div className="mt-1.5 flex flex-wrap gap-1.5"><TagChip tag="customer-facing" /><TagChip tag="canonical" /></div>
-        <p className="mt-1.5 text-[12px] text-ink/50">Sources are set at creation and drive which docs are eligible.</p>
+        <p className="mt-1.5 text-[12px] text-ink/70">Sources are set at creation and drive which docs are eligible.</p>
       </div>
       <div className="flex items-center gap-2">
-        <FileText size={15} className="text-ink/50" />
+        <FileText size={15} className="text-ink/65" />
         <span className="text-[13px] text-ink/80">148 docs match</span>
         <Chip label="2 warnings" tone="attention" dot />
       </div>
+
+      <div>
+        <SectionLabel>Navigation</SectionLabel>
+        <ul className="mt-1.5 flex flex-col divide-y divide-ink/10 rounded-[5px] border border-ink/15">
+          {nav.map((n, i) => (
+            <li key={`${n.label}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
+              <GripVertical size={14} className="shrink-0 text-ink/65" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{n.label}</span>
+              <span className="shrink-0 font-term text-[11.5px] text-ink/65">{n.docs} docs</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            compact
+            onClick={() => setNav((ns) => [...ns, { label: `Section ${ns.length + 1}`, docs: 0 }])}
+          >
+            <Plus size={13} /> Add section
+          </Button>
+          <Button compact disabled={nav.length <= 1} onClick={() => setNav((ns) => ns.slice(0, -1))}>
+            Remove last
+          </Button>
+        </div>
+      </div>
+
+      <div>
+        <SectionLabel>Site features</SectionLabel>
+        <ul className="mt-1.5 flex flex-col gap-2">
+          {SITE_FEATURES.map((f) => (
+            <li key={f.key} className="flex items-start gap-2.5">
+              <Switch
+                checked={features[f.key]}
+                onCheckedChange={(v) => setFeatures((s) => ({ ...s, [f.key]: v }))}
+                aria-label={f.label}
+              />
+              <span className="min-w-0">
+                <span className="block text-[13px] text-ink">{f.label}</span>
+                <span className="block text-[11.5px] text-ink/65">{f.hint}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
       <div>
         <SectionLabel>Pre-publish gates</SectionLabel>
         <ul className="mt-1.5 flex flex-col gap-1.5">
@@ -163,7 +228,7 @@ function ContentBody() {
             <li key={g.name} className="flex items-center gap-2 text-[13px]">
               <Check size={14} className={g.ok ? "text-moss" : "text-clay"} />
               <span className="text-ink/85">{g.name}</span>
-              <span className={`font-term text-[11.5px] ${g.ok ? "text-ink/45" : "text-clay"}`}>· {g.note}</span>
+              <span className={`font-term text-[11.5px] ${g.ok ? "text-ink/70" : "text-clay"}`}>· {g.note}</span>
             </li>
           ))}
         </ul>
@@ -210,7 +275,7 @@ function PreviewBody() {
     <div className="rounded-md border border-ink/15 overflow-hidden" style={{ background: "#fcf9f1" }}>
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink/10 bg-black/[0.02]">
         <span className="w-2.5 h-2.5 rounded-full bg-ink/15" /><span className="w-2.5 h-2.5 rounded-full bg-ink/15" /><span className="w-2.5 h-2.5 rounded-full bg-ink/15" />
-        <span className="ml-2 font-term text-[11px] text-ink/45">docs.acme.com</span>
+        <span className="ml-2 font-term text-[11px] text-ink/65">docs.acme.com</span>
       </div>
       <div className="flex min-h-[260px]">
         <aside className="w-1/3 border-r border-ink/10 p-3">
@@ -245,7 +310,7 @@ function DomainsBody() {
       <div>
         <SectionLabel>Domain mapping</SectionLabel>
         <Input className="mt-1.5 w-full font-term" readOnly value="docs.acme.com" />
-        <p className="mt-1 text-[12px] text-ink/50">Point docs.acme.com → your S3 website endpoint. Without a bucket, deploys build locally.</p>
+        <p className="mt-1 text-[12px] text-ink/65">Point docs.acme.com → your S3 website endpoint. Without a bucket, deploys build locally.</p>
       </div>
       <div><Button compact>Save deploy config</Button></div>
     </div>
@@ -261,13 +326,15 @@ function SiteEditorInline({ tab }: { tab: EditorTab }) {
         actions={
           <>
             <Chip label="Live" tone="ok" dot pulse caps />
-            <span className="font-term text-[12px] text-ink/60 hidden sm:inline">docs.acme.com</span>
+            <span className="hidden font-term text-[12px] text-ink/70 sm:inline">docs.acme.com</span>
             <a href="#" className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80"><ExternalLink size={14} /> Open site</a>
             <Button variant="primary">Deploy</Button>
           </>
         }
       />
-      <div className="grid gap-5 lg:grid-cols-2">
+      {/* The Preview tab already IS the live preview: showing it twice side by
+          side reads as a rendering bug, so the rail drops out on that tab. */}
+      <div className={tab === "preview" ? "grid gap-5" : "grid gap-5 lg:grid-cols-2"}>
         <Card>
           <EditorTabs active={tab} />
           {tab === "content" && <ContentBody />}
@@ -275,12 +342,14 @@ function SiteEditorInline({ tab }: { tab: EditorTab }) {
           {tab === "preview" && <PreviewBody />}
           {tab === "domains" && <DomainsBody />}
         </Card>
-        <Card
-          icon={<span className="relative inline-flex w-2 h-2"><span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" /><span className="relative inline-flex w-2 h-2 rounded-full bg-moss" /></span>}
-          title="Live preview" hint="docs.acme.com"
-        >
-          <PreviewBody />
-        </Card>
+        {tab !== "preview" && (
+          <Card
+            icon={<span className="relative inline-flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full bg-moss opacity-60 animate-ping" /><span className="relative inline-flex h-2 w-2 rounded-full bg-moss" /></span>}
+            title="Live preview" hint="docs.acme.com"
+          >
+            <PreviewBody />
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -294,7 +363,9 @@ function PublishFlow({ phase }: { phase: PublishPhase }) {
     : phase === "publishing" ? <Chip label="Publishing" tone="info" dot caps />
     : <Chip label="Draft" tone="neutral" dot caps />;
   return (
-    <div className="mx-auto max-w-2xl flex flex-col gap-4">
+    /* Left-aligned on the same plumb line as every other page body: a centered
+       column under a left-aligned page header reads as a broken grid. */
+    <div className="flex max-w-2xl flex-col gap-4">
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3">
           <span className="text-[15px] font-semibold text-ink">Acme Docs · v14</span>
@@ -307,10 +378,18 @@ function PublishFlow({ phase }: { phase: PublishPhase }) {
         {phase === "published" && (
           <p className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-moss"><Check size={15} /> Released to docs.acme.com · 148 docs deployed</p>
         )}
-        <div className="mt-4">
+        {/* Primary action bottom left (§2), secondary to its right. */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {phase === "published"
             ? <a href="#" className="inline-flex items-center gap-1.5 text-[13px] text-biscay-2 hover:underline"><ExternalLink size={14} /> View live site</a>
-            : <Button block variant="primary">{phase === "publishing" ? "Publishing…" : "Deploy"}</Button>}
+            : (
+              <>
+                <Button variant="primary" disabled={phase === "publishing"}>
+                  {phase === "publishing" ? "Publishing…" : "Deploy"}
+                </Button>
+                <Button>Preview build</Button>
+              </>
+            )}
         </div>
       </div>
       <div className={`${card} p-4`}>
@@ -320,7 +399,7 @@ function PublishFlow({ phase }: { phase: PublishPhase }) {
             <li key={r.v} className="flex items-center gap-3 py-2.5">
               <span className="w-2 h-2 rounded-full bg-ink/30" />
               <span className="text-[13px] font-medium text-ink">{r.v}</span>
-              <span className="font-term text-[11.5px] text-ink/50 flex-1">{r.note}</span>
+              <span className="font-term text-[11.5px] text-ink/65 flex-1">{r.note}</span>
               <Button compact>Rollback</Button>
             </li>
           ))}
@@ -341,23 +420,37 @@ const MCP_CAPS = [
 function McpAddServer() {
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents — per-project, capability-scoped."
+      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents: per-project, capability-scoped."
         actions={<><CountChip count={3} /><Button variant="primary"><Plus size={15} /> New server</Button></>} />
       <Card title="New MCP server">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5"><SectionLabel>Name</SectionLabel><Input className="w-full" readOnly value="support-kb" /></label>
-          <label className="flex flex-col gap-1.5"><SectionLabel>Scope</SectionLabel><Select className="w-full" defaultValue="project"><option value="project">project</option></Select></label>
+          {/* Scope is granular: teams routinely run one server per product. */}
+          <label className="flex flex-col gap-1.5">
+            <SectionLabel>Scope</SectionLabel>
+            <Select className="w-full" defaultValue="product">
+              <option value="workspace">Whole workspace</option>
+              <option value="org">Organization</option>
+              <option value="product">Product</option>
+              <option value="project">Project</option>
+              <option value="team">Team</option>
+              <option value="tag">Single tag</option>
+            </Select>
+          </label>
         </div>
+        <p className="mt-1.5 text-[12px] text-ink/70">
+          Scope decides which documents the server can read. Narrower scopes let you run one server per product without leaking the rest of the knowledge base.
+        </p>
         <div className="mt-4">
-          <SectionLabel>Capabilities — 7 tools selected</SectionLabel>
+          <SectionLabel>Capabilities: 7 tools selected</SectionLabel>
           <div className="mt-1.5 grid gap-1.5">
             {MCP_CAPS.map((c) => (
               <div key={c.key} className={`flex items-start gap-2.5 p-2.5 rounded-[5px] border ${c.on ? "border-biscay-2 bg-biscay-2/[0.04]" : "border-ink/15"}`}>
                 <span className={`mt-0.5 grid place-items-center w-4 h-4 rounded-[3px] border text-[10px] text-white ${c.on ? "bg-biscay border-biscay" : "border-ink/30"}`}>{c.on ? "✓" : ""}</span>
                 <span className="min-w-0">
                   <span className="text-[13px] font-semibold text-ink">{c.key}</span>
-                  <span className="font-term text-[11.5px] text-ink/45"> · {c.tools} tools</span>
-                  <span className="block text-[12px] text-ink/55">{c.desc}</span>
+                  <span className="font-term text-[11.5px] text-ink/65"> · {c.tools} tools</span>
+                  <span className="block text-[12px] text-ink/65">{c.desc}</span>
                 </span>
               </div>
             ))}
@@ -376,15 +469,15 @@ function McpTokenCreated() {
   const snippet = `claude mcp add support-kb --transport http https://mcp.acme.com/s/support-kb \\\n  --header "Authorization: Bearer mcp_9f3a2b7c4d1e8f6a0b5c2d9e"`;
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents — per-project, capability-scoped."
+      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents: per-project, capability-scoped."
         actions={<><CountChip count={4} /><Button variant="primary"><Plus size={15} /> New server</Button></>} />
-      <TokenReveal token="mcp_9f3a2b7c4d1e8f6a0b5c2d9e77aa11bb" title="support-kb is live — here's your bearer token" />
+      <TokenReveal token="mcp_9f3a2b7c4d1e8f6a0b5c2d9e77aa11bb" title="support-kb is live: here's your bearer token" />
       <Card>
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-[#c9bda0]" />
+          <Chip label="Connected" tone="ok" dot caps />
           <span className="text-[14px] font-semibold text-ink">support-kb</span>
-          <Chip label="project" tone="neutral" caps />
-          <span className="font-term text-[11.5px] text-ink/50">7 tools</span>
+          <Chip label="Product" tone="neutral" caps />
+          <span className="font-term text-[11.5px] text-ink/65">7 tools</span>
         </div>
         <div className="mt-3">
           <SectionLabel>Connect from claude-code</SectionLabel>
@@ -397,7 +490,7 @@ function McpTokenCreated() {
 
 /* ── Page ──────────────────────────────────────────────────────────────────*/
 function Body({ state }: { state: string }): ReactNode {
-  if (state === "error") return <div className="mt-6"><EmptyState title="API offline">Publishing is temporarily unavailable — releases and deploys can't be reached. Retrying…</EmptyState></div>;
+  if (state === "error") return <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>;
   if (state === "empty") return <div className="mt-6"><EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState></div>;
   if (state === "overflow" || state === "stress") return <PublishStressBody stress={state === "stress"} />;
 

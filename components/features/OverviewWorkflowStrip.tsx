@@ -1,18 +1,27 @@
 import type { ReactNode } from "react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Workflow, Settings, Bell, FileText, Feather, ShieldCheck, Layers, Tag, GitFork, Clipboard, Send, Globe, RefreshCw, Calendar, type LucideIcon } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
-import { Badge } from "../data-display/Badge";
+import { Chip, StatusChip, type ChipStatus } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { ErrorMessage } from "../feedback/ErrorMessage";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
+import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
+import { fmtDateTime } from "../tokens/format";
 
 /* Overview — Workflow strip ───────────────────────────────────────────────
    A one-flow summary strip: the workspace's active flow shown as a horizontal
-   When/Do/Check/Then step sequence, plus its name, active/paused status, and
-   last-run time/outcome. Local <StepStrip> (section-toned icon bubbles with
-   dotted connectors — catalog Stepper is numbered/vertical).
+   When/Do/Check/Then step sequence, plus its name, run status, and last-run
+   time/outcome. Local <StepStrip> (section-toned icon bubbles with dotted
+   connectors — catalog Stepper is numbered/vertical).
+
+   Step labels are the flow's *configuration* and stay static text. Anything
+   that expresses run STATE — the flow's own status, the last run's outcome,
+   and each check step's result ("No contradictions") — is a real <StatusChip>,
+   so a reader can tell a setting from a result. Configure toggles the settings
+   panel below the strip (§2: no inert controls).
    Source: web/src/pages/Overview.tsx (wfQ, wfRunsQ, .card.wf); step metadata
    from web/src/pages/flows/data.ts. */
 
@@ -46,11 +55,17 @@ const SECTION_BUBBLE: Record<Section, string> = {
   then: "border-espelette/40 text-espelette bg-espelette/[0.06]",
 };
 
-export type WfStep = { kind: StepKind; label: string };
+export type WfStep = {
+  kind: StepKind;
+  label: string;
+  /** Result of this step on the last run. Renders as a StatusChip when set. */
+  state?: ChipStatus;
+};
 
 /* ── StepStrip — horizontal When/Do/Check/Then bubbles + dotted connectors ── */
 function StepStrip({ steps, max = 4 }: { steps: WfStep[]; max?: number }) {
   const shown = steps.slice(0, max);
+  const rest = steps.length - shown.length;
   return (
     <div className="flex flex-wrap items-start gap-1">
       {shown.map((s, i) => {
@@ -58,11 +73,15 @@ function StepStrip({ steps, max = 4 }: { steps: WfStep[]; max?: number }) {
         const sec = SECTION_OF[s.kind] ?? "then";
         return (
           <Fragment key={`${s.kind}-${i}`}>
-            <div className="flex w-[68px] flex-col items-center gap-1.5 text-center">
+            <div className="flex w-[86px] flex-col items-center gap-1.5 text-center">
               <span className={`grid place-items-center w-9 h-9 rounded-full border ${SECTION_BUBBLE[sec]}`}>
                 <Icon size={18} />
               </span>
-              <span className="font-term text-[10.5px] leading-tight text-ink/70">{s.label}</span>
+              {/* The bubble column is a fixed 68px. Without an explicit break
+                  a long unbreakable step name overprints its neighbours. */}
+              <span className="w-full break-words font-term text-[10.5px] leading-tight text-ink/70">
+                {s.label}
+              </span>
             </div>
             {i < shown.length - 1 && (
               <span className="mt-4 border-t border-dotted border-ink/30 min-w-[14px] flex-1 self-start" aria-hidden />
@@ -70,6 +89,19 @@ function StepStrip({ steps, max = 4 }: { steps: WfStep[]; max?: number }) {
           </Fragment>
         );
       })}
+      {rest > 0 && (
+        <>
+          <span className="mt-4 min-w-[14px] flex-1 self-start border-t border-dotted border-ink/30" aria-hidden />
+          <div className="flex w-[86px] flex-col items-center gap-1.5 text-center">
+            <span className="grid h-9 w-9 place-items-center rounded-full border border-ink/25 font-term text-[11px] text-ink/70">
+              +{rest}
+            </span>
+            <span className="w-full font-term text-[10.5px] leading-tight text-ink/70">
+              more {rest === 1 ? "step" : "steps"}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -82,18 +114,33 @@ export type WfFlow = {
 
 export type WfRun = { started: string; outcome: string } | null;
 
+/* Run outcomes arrive as free text from the API. Map the known words onto the
+   shared StatusChip vocabulary; anything unrecognized still renders as a real
+   chip (never a bare span) rather than being dropped. */
+const OUTCOME_STATUS: Record<string, ChipStatus> = {
+  passed: "succeeded", succeeded: "succeeded", success: "succeeded", ok: "succeeded",
+  failed: "failed", error: "failed",
+  skipped: "skipped", queued: "queued", running: "running",
+};
+
+function OutcomeChip({ outcome }: { outcome: string }) {
+  const status = OUTCOME_STATUS[outcome.trim().toLowerCase()];
+  if (status) return <StatusChip status={status} />;
+  return <Chip label={outcome} tone="neutral" className="max-w-[240px] truncate" />;
+}
+
 const DEMO_FLOW: WfFlow = {
   name: "Docs guardrail",
   status: "active",
   nodes: [
     { kind: "trigger", label: "When docs change" },
     { kind: "refine", label: "Tighten" },
-    { kind: "condition", label: "No contradictions" },
-    { kind: "notify", label: "Post to Slack" },
+    { kind: "condition", label: "No contradictions", state: "supported" },
+    { kind: "notify", label: "Post to Slack", state: "succeeded" },
   ],
 };
 
-const DEMO_RUN: WfRun = { started: "Jul 20, 2:57 PM", outcome: "Passed" };
+const DEMO_RUN: WfRun = { started: "2026-07-20T14:57:00", outcome: "Passed" };
 
 export type OverviewWorkflowStripProps = {
   flow?: WfFlow | null;
@@ -102,18 +149,33 @@ export type OverviewWorkflowStripProps = {
   offline?: boolean;
   runsLoading?: boolean;
   onConfigure?: () => void;
+  /** Wires the error banner's Retry control. Omitted = no button. */
+  onRetry?: () => void;
+  /** Start with the settings panel open. */
+  defaultConfiguring?: boolean;
   className?: string;
 };
 
 export function OverviewWorkflowStrip({
   flow = DEMO_FLOW, run = DEMO_RUN, loading = false, offline = false,
-  runsLoading = false, onConfigure, className = "",
+  runsLoading = false, onConfigure, onRetry, defaultConfiguring = false, className = "",
 }: OverviewWorkflowStripProps) {
+  const [configuring, setConfiguring] = useState(defaultConfiguring);
+
+  const toggleConfigure = () => {
+    setConfiguring((v) => !v);
+    onConfigure?.();
+  };
+
   const configure: ReactNode = (
-    <Button variant="link" onClick={onConfigure} className="text-[12.5px]">
-      <Settings size={14} /> Configure
+    <Button compact onClick={toggleConfigure} aria-expanded={configuring}>
+      <Settings size={14} /> {configuring ? "Hide settings" : "Configure"}
     </Button>
   );
+
+  /* "Last run checks" are results, so they only exist once a run has happened.
+     Showing green check chips next to "Never run" was a straight contradiction. */
+  const checks = run ? (flow?.nodes ?? []).filter((s) => s.state) : [];
 
   return (
     <Card
@@ -127,7 +189,7 @@ export function OverviewWorkflowStrip({
           <div className="flex flex-wrap items-start gap-1">
             {[0, 1, 2, 3].map((i) => (
               <Fragment key={i}>
-                <div className="flex w-[68px] flex-col items-center gap-1.5">
+                <div className="flex w-[86px] flex-col items-center gap-1.5">
                   <SkeletonCircle size={36} />
                   <SkeletonLine w="80%" h={9} />
                 </div>
@@ -141,27 +203,58 @@ export function OverviewWorkflowStrip({
           </div>
         </div>
       ) : offline ? (
-        <EmptyState>API offline — flows unavailable.</EmptyState>
+        /* §8: failure copy comes from the catalog, never a bespoke string. */
+        <ErrorMessage id="server.unavailable" onAction={onRetry} />
       ) : !flow ? (
-        <EmptyState>No flows yet — create one in Flows.</EmptyState>
+        <EmptyState>No flows yet. Create one in Flows.</EmptyState>
       ) : (
         <>
           <StepStrip steps={flow.nodes} />
+
           <div className="mt-4 border-t border-ink/10 pt-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[13.5px] font-semibold text-ink">{flow.name}</span>
-              <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/70">
-                <span className={`w-1.5 h-1.5 rounded-full ${flow.status === "active" ? "bg-moss" : "bg-ink/40"}`} />
-                {flow.status === "active" ? "Active" : "Paused"}
-              </span>
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 break-words text-[13.5px] font-semibold text-ink">{flow.name}</span>
+              <StatusChip status={flow.status === "active" ? "running" : "paused"} />
             </div>
-            <div className="mt-1 flex items-center justify-between">
-              <span className="font-term text-[11.5px] text-ink/55">
-                {run ? `Last run: ${run.started}` : runsLoading ? "Loading runs…" : "Never run"}
+            <div className="mt-1.5 flex items-center justify-between gap-3">
+              <span className="font-term text-[11.5px] text-ink/65">
+                {run ? `Last run: ${fmtDateTime(run.started)}` : runsLoading ? "Loading runs…" : "Never run"}
               </span>
-              {run && <Badge label={run.outcome} tone={run.outcome === "Passed" ? "ok" : "neutral"} />}
+              {run && <OutcomeChip outcome={run.outcome} />}
             </div>
           </div>
+
+          {checks.length > 0 && (
+            <CardSection label="Last run checks" className="mt-4 border-t border-ink/10 pt-3">
+              <ul className="flex flex-col gap-1.5">
+                {checks.map((s) => (
+                  <li key={s.label} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 break-words text-[13px] text-ink/70">{s.label}</span>
+                    <StatusChip status={s.state!} />
+                  </li>
+                ))}
+              </ul>
+            </CardSection>
+          )}
+
+          {configuring && (
+            <CardSection label="Settings" className="mt-4 border-t border-ink/10 pt-3">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+                <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">Trigger</dt>
+                <dd className="min-w-0 break-words text-ink/70">{flow.nodes[0]?.label ?? "Manual"}</dd>
+                <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">Steps</dt>
+                <dd className="text-ink/70">
+                  {flow.nodes.length} steps, {flow.nodes.filter((n) => n.state).length} checked
+                </dd>
+                <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">State</dt>
+                <dd className="text-ink/70">{flow.status === "active" ? "Runs on every doc change" : "Paused, no runs scheduled"}</dd>
+              </dl>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button variant="primary" compact onClick={() => setConfiguring(false)}>Save flow</Button>
+                <Button compact onClick={() => setConfiguring(false)}>Cancel</Button>
+              </div>
+            </CardSection>
+          )}
         </>
       )}
     </Card>

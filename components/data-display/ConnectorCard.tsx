@@ -100,8 +100,10 @@ export function ConnectorCard({
           </Menu>
         )}
       </div>
-      {counts && <div className="mt-3 font-term text-[11.5px] text-ink/60">{counts}</div>}
-      {sync && <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ink/70">{sync}</div>}
+      {/* text-ink/65 is the meta floor (§6); break-words keeps a long count or
+          error line inside the card instead of past its right edge. */}
+      {counts && <div className="mt-3 font-term text-[11.5px] text-ink/65 break-words">{counts}</div>}
+      {sync && <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ink/70 break-words">{sync}</div>}
       {bars && bars.length > 1 && (
         <div className="mt-3">
           <Sparkline values={bars} width={150} height={20} tone={SPARK_TONE[health]} />

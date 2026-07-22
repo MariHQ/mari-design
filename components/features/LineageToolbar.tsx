@@ -1,32 +1,34 @@
 import { useMemo, useState } from "react";
-import { Search, Minus, Plus, Maximize2, Sparkles, GitFork, Bookmark, ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
+import { Search, Minus, Plus, Maximize2, Sparkles, GitFork, Bookmark, ChevronDown, X } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
-import { btn } from "../actions/buttons";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
 import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
 import {
-  REL, REL_ORDER, SOURCE_ORDER, SOURCE_LABELS, LENSES, NodeGlyph,
-  DEMO_NODES, type LNode, type Lens, type LayoutMode, type RelKey,
+  REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
+  useLineageControls, clamp,
+  DEMO_NODES, type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage toolbar (feature: lineage-toolbar)
 
-   The graph card's top control bar: a typeahead graph search on the left, the
-   filter / lens / layout / views dropdowns and mode toggles, and on the right
-   the assert-impact + find-path modes and zoom controls. In the real console
-   it's fully controlled by the page; here it holds its own demo state so it
-   renders standalone.
+   Three explicit rows, one gap, no wrap-roulette:
+
+     1. FILTERS   search · Sources: · Relations: · Status: · zoom
+     2. VIEW      Color by: · Layout: · Flow: · Views:
+     3. ACTIONS   Assert impact · Find path · Derive links
+
+   Every control reads "Label: Selection" and carries its own accent color, and
+   every one of them writes to the shared lineage control store — so the canvas
+   below actually filters, recolors, relayouts and zooms. Nothing here is
+   decorative.
    ──────────────────────────────────────────────────────────────────────── */
 
 type SearchResult = { id: string; node: LNode };
-
-function filterLabel(all: number, on: number) {
-  return on >= all ? "All" : `${on}/${all}`;
-}
 
 export type LineageToolbarProps = {
   nodes?: LNode[];
@@ -35,25 +37,49 @@ export type LineageToolbarProps = {
   className?: string;
 };
 
+/** One filter/view control: accent bar, "Label:", then the live selection. */
+function ControlTrigger({ accent, label, value }: { accent: string; label: string; value: string }) {
+  return (
+    <button
+      type="button"
+      className={`inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85 transition-colors hover:border-ink/45 active:bg-ink/[0.05] data-[state=open]:border-ink/45 data-[state=open]:bg-flysch ${focusRing}`}
+    >
+      <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: accent }} aria-hidden />
+      <span className="pl-0.5 shrink-0 text-ink/70">{label}:</span>
+      <span className="max-w-[96px] truncate font-medium" style={{ color: accent }} title={value}>{value}</span>
+      <ChevronDown size={13} className="text-ink/65" />
+    </button>
+  );
+}
+
+/* One labelled band. The rows are separated by a hairline so the three
+   groups (filters / view / actions) read as three decisions, not one wall. */
+function Row({ label, children, divide = false }: { label: string; children: ReactNode; divide?: boolean }) {
+  return (
+    <div className={`flex items-start gap-3 ${divide ? "border-t border-ink/10 pt-2.5" : ""}`.trim()}>
+      <span className="w-[54px] shrink-0 pt-2 font-term text-[10px] font-medium uppercase tracking-[0.1em] text-ink/65">{label}</span>
+      <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-2">{children}</div>
+    </div>
+  );
+}
+
 export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className = "" }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
 
-  const [query, setQuery] = useState("");
-  const [onSources, setOnSources] = useState<Set<string>>(new Set(sources));
-  const [onRels, setOnRels] = useState<Set<RelKey>>(new Set(REL_ORDER));
-  const [status, setStatus] = useState<"all" | "warnings">("all");
-  const [lens, setLens] = useState<Lens>("source");
-  const [layout, setLayout] = useState<LayoutMode>("flow");
-  const [scope, setScope] = useState<"focus" | "all">("focus");
+  const [controls, setControls] = useLineageControls();
+  const [view, setView] = useState<string>("All documents");
   const [deriving, setDeriving] = useState(false);
+  const [derived, setDerived] = useState(0);
   const [assertOpen, setAssertOpen] = useState(false);
   const [pathMode, setPathMode] = useState(false);
   const [picks, setPicks] = useState(0);
-  const [zoomPct, setZoomPct] = useState(100);
+
+  const onSources = controls.sources ?? sources;
+  const onRels = controls.rels ?? REL_ORDER;
 
   const results: SearchResult[] = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = controls.query.trim().toLowerCase();
     if (!q) return [];
     return docs
       .filter((n) =>
@@ -65,192 +91,240 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
       .sort((a, b) => (b.inbound ?? 0) - (a.inbound ?? 0))
       .slice(0, 7)
       .map((node) => ({ id: node.id, node }));
-  }, [query, docs]);
+  }, [controls.query, docs]);
+
+  const toggleSource = (s: string, on: boolean) => {
+    const next = new Set(onSources);
+    if (on) next.add(s); else next.delete(s);
+    setControls({ sources: next.size === sources.length ? null : [...next] });
+    setView("Custom");
+  };
+
+  const toggleRel = (k: RelKey, on: boolean) => {
+    const next = new Set(onRels);
+    if (on) next.add(k); else next.delete(k);
+    setControls({ rels: next.size === REL_ORDER.length ? null : [...next] });
+    setView("Custom");
+  };
+
+  const applyView = (name: string, patch: Parameters<typeof setControls>[0]) => {
+    setControls(patch);
+    setView(name);
+  };
 
   const derive = () => {
     if (deriving) return;
     setDeriving(true);
-    setTimeout(() => setDeriving(false), 1800);
+    setTimeout(() => { setDeriving(false); setDerived((d) => d + 3); }, 1600);
   };
 
-  const pathLabel = !pathMode ? "Find path" : picks < 2 ? "Pick two nodes… (Esc)" : "Exit path";
+  const sourceValue = controls.sources === null
+    ? "All"
+    : controls.sources.length === 0
+      ? "None"
+      : controls.sources.map((s) => SOURCE_LABELS[s] ?? s).join(", ");
+  const relValue = controls.rels === null
+    ? "All"
+    : controls.rels.length === 0
+      ? "None"
+      : controls.rels.map((k) => REL[k].label).join(", ");
+  const statusValue = STATUS_FILTERS.find((s) => s.key === controls.status)?.label ?? "All";
+  const lensValue = LENSES.find((l) => l.key === controls.lens)?.label ?? "Source";
+  const layoutValue = controls.layout === "flow" ? "Flow" : "Timeline";
+  const flowValue = controls.scope === "focus" ? "Focal closure" : "Whole graph";
 
-  const trigger = (label: string) => (
-    <button type="button" className={`${btn} h-8`}>
-      {label} <ChevronDown size={13} className="text-ink/40" />
-    </button>
-  );
+  const setZoom = (z: number) => setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
+
+  const pathLabel = !pathMode ? "Find path" : picks < 2 ? "Pick two nodes (Esc)" : "Exit path";
 
   if (loading) {
     return (
-      <div className={`${card} flex flex-wrap items-center gap-2 p-2 ${className}`.trim()} aria-hidden="true">
-        <Skeleton width={236} height={32} rounded="rounded-[4px]" />
-        {Array.from({ length: 6 }).map((_, i) => <SkeletonButton key={i} w={90} />)}
-        <span className="ml-auto"><Skeleton width={150} height={32} rounded="rounded-[4px]" /></span>
+      <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 ${className}`.trim()} aria-hidden="true">
+        <div className="flex items-center gap-2">
+          <Skeleton width={236} height={32} rounded="rounded-[4px]" />
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonButton key={i} w={120} />)}
+        </div>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonButton key={i} w={128} />)}
+        </div>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonButton key={i} w={110} />)}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`${card} flex flex-wrap items-center gap-2 p-2 font-display ${className}`.trim()}>
-      {/* left group */}
-      <div className="flex flex-1 flex-wrap items-center gap-2">
-        {/* search */}
+    <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
+      {/* ── row 1: filters ─────────────────────────────────────────────── */}
+      <Row label="Filter">
         <div className="relative">
-          <div className="flex h-8 w-[236px] items-center gap-2 rounded-[4px] border border-ink/20 bg-paper px-2.5 focus-within:border-biscay-2/50 focus-within:ring-1 focus-within:ring-biscay-2/40">
-            <Search size={14} className="shrink-0 text-ink/40" />
+          <div className="flex h-8 w-[168px] items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2 focus-within:border-biscay-2/60 focus-within:ring-1 focus-within:ring-biscay-2/40">
+            <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.search }} aria-hidden />
+            <Search size={14} className="shrink-0 text-ink/65" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }}
-              placeholder="Search the graph…"
+              value={controls.query}
+              onChange={(e) => setControls({ query: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Escape") setControls({ query: "" }); }}
+              placeholder="Search graph"
               aria-label="Search the graph"
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/40"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65"
             />
+            {controls.query && (
+              <button
+                type="button"
+                onClick={() => setControls({ query: "" })}
+                aria-label="Clear search"
+                className={`grid h-4 w-4 shrink-0 place-items-center rounded-full text-ink/65 hover:bg-ink/10 hover:text-ink ${focusRing}`}
+              >
+                <X size={11} />
+              </button>
+            )}
           </div>
-          {query.trim() && (
-            <div className={`${card} absolute left-0 top-9 z-30 w-[320px] max-h-[300px] overflow-y-auto p-1 shadow-lg`}>
+          {controls.query.trim() && (
+            <div className={`${card} absolute left-0 top-9 z-30 max-h-[300px] w-[320px] overflow-y-auto p-1`}>
               {results.length === 0 ? (
-                <div className="px-3 py-3 text-[13px] text-ink/50">No matches in the graph.</div>
+                <div className="px-3 py-3 text-[13px] text-ink/70">No matches in the graph.</div>
               ) : results.map((r) => (
                 <button
                   key={r.id}
                   type="button"
-                  onMouseDown={(e) => { e.preventDefault(); setQuery(""); }}
-                  className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left hover:bg-flysch ${focusRing}`}
+                  onMouseDown={(e) => { e.preventDefault(); setControls({ query: r.node.title }); }}
+                  className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left hover:bg-flysch active:bg-ink/[0.07] ${focusRing}`}
                 >
-                  <span className="shrink-0 text-ink/70"><NodeGlyph node={r.node} size={16} /></span>
+                  <span className="shrink-0 text-ink/75"><NodeGlyph node={r.node} size={16} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-ink">{r.node.title}</span>
-                    <span className="block truncate font-term text-[11px] text-ink/50">
+                    <span className="block truncate font-term text-[11px] text-ink/70">
                       {[r.node.owner, SOURCE_LABELS[r.node.source] ?? r.node.source, r.node.date].filter(Boolean).join(" · ")}
                     </span>
                   </span>
-                  <span className="shrink-0 font-term text-[11px] text-ink/45">{r.node.inbound ?? 0}↩</span>
+                  <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} in</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* sources */}
-        <Menu align="start" trigger={trigger(`Sources ${filterLabel(sources.length, onSources.size)}`)}>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.sources} label="Sources" value={sourceValue} />}>
           {sources.map((s) => (
-            <MenuCheckboxItem
-              key={s}
-              checked={onSources.has(s)}
-              onCheckedChange={(c) => setOnSources((prev) => {
-                const next = new Set(prev);
-                c ? next.add(s) : next.delete(s);
-                return next;
-              })}
-            >
+            <MenuCheckboxItem key={s} checked={onSources.includes(s)} onCheckedChange={(c) => toggleSource(s, c)}>
               <span className="flex items-center gap-2">
                 <NodeGlyph node={{ source: s }} size={14} /> {SOURCE_LABELS[s] ?? s}
-                <span className="ml-auto font-term text-[11px] text-ink/40">{docs.filter((n) => n.source === s).length}</span>
+                <span className="ml-auto font-term text-[11px] text-ink/65">{docs.filter((n) => n.source === s).length}</span>
               </span>
             </MenuCheckboxItem>
           ))}
+          <MenuSeparator />
+          <MenuItem onSelect={() => applyView("All documents", { sources: null })}>All sources</MenuItem>
         </Menu>
 
-        {/* relations */}
-        <Menu align="start" trigger={trigger(`Relations ${filterLabel(REL_ORDER.length, onRels.size)}`)}>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.relations} label="Relations" value={relValue} />}>
           {REL_ORDER.map((k) => (
-            <MenuCheckboxItem
-              key={k}
-              checked={onRels.has(k)}
-              onCheckedChange={(c) => setOnRels((prev) => {
-                const next = new Set(prev);
-                c ? next.add(k) : next.delete(k);
-                return next;
-              })}
-            >
+            <MenuCheckboxItem key={k} checked={onRels.includes(k)} onCheckedChange={(c) => toggleRel(k, c)}>
               <span className="flex items-center gap-2">
-                <svg width={18} height={6} viewBox="0 0 18 6" aria-hidden>
-                  <line x1={1} y1={3} x2={17} y2={3} stroke={REL[k].color} strokeWidth={2} strokeLinecap="round" strokeDasharray={REL[k].dash ? "3 3" : undefined} />
+                <svg width={26} height={9} viewBox="0 0 26 9" aria-hidden>
+                  <line x1={1} y1={4.5} x2={25} y2={4.5} stroke={REL[k].color} strokeWidth={REL[k].width} strokeDasharray={REL[k].dash} />
                 </svg>
                 {REL[k].label}
+                <span className="ml-auto font-term text-[10.5px] text-ink/65">{REL[k].code}</span>
               </span>
             </MenuCheckboxItem>
           ))}
+          <MenuSeparator />
+          <MenuItem onSelect={() => setControls({ rels: null })}>All relations</MenuItem>
         </Menu>
 
-        {/* status */}
-        <Menu align="start" trigger={trigger(`Status ${status === "all" ? "All" : "Warnings"}`)}>
-          <MenuRadioGroup value={status} onValueChange={(v) => setStatus(v as "all" | "warnings")}>
-            <MenuRadioItem value="all">All</MenuRadioItem>
-            <MenuRadioItem value="warnings">Warnings</MenuRadioItem>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.status} label="Status" value={statusValue} />}>
+          <MenuRadioGroup value={controls.status} onValueChange={(v) => setControls({ status: v as StatusFilter })}>
+            {STATUS_FILTERS.map((s) => <MenuRadioItem key={s.key} value={s.key}>{s.label}</MenuRadioItem>)}
           </MenuRadioGroup>
         </Menu>
 
-        {/* lens */}
-        <Menu align="start" trigger={trigger(`Lens ${LENSES.find((l) => l.key === lens)?.label}`)}>
-          <MenuRadioGroup value={lens} onValueChange={(v) => setLens(v as Lens)}>
+        <div className="flex h-8 items-center gap-0.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-1">
+          <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.zoom }} aria-hidden />
+          <span className="pl-1.5 text-[13px] text-ink/70">Zoom:</span>
+          <span className="w-9 text-center font-term text-[12px] font-medium" style={{ color: CONTROL_ACCENT.zoom }}>
+            {Math.round(controls.zoom * 100)}%
+          </span>
+          <Button compact icon aria-label="Zoom out" className="h-6 w-6" onClick={() => setZoom(controls.zoom - 0.2)}><Minus size={14} /></Button>
+          <Button compact icon aria-label="Zoom in" className="h-6 w-6" onClick={() => setZoom(controls.zoom + 0.2)}><Plus size={14} /></Button>
+          <Button compact icon aria-label="Fit graph" className="h-6 w-6" onClick={() => setControls({ zoom: 1 })}><Maximize2 size={14} /></Button>
+        </div>
+      </Row>
+
+      {/* ── row 2: view ────────────────────────────────────────────────── */}
+      <Row label="View" divide>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.lens} label="Color by" value={lensValue} />}>
+          <MenuRadioGroup value={controls.lens} onValueChange={(v) => setControls({ lens: v as Lens })}>
             {LENSES.map((l) => <MenuRadioItem key={l.key} value={l.key}>{l.label}</MenuRadioItem>)}
           </MenuRadioGroup>
         </Menu>
 
-        {/* layout */}
-        <Menu align="start" trigger={trigger(`Layout ${layout === "flow" ? "Flow" : "Timeline"}`)}>
-          <MenuRadioGroup value={layout} onValueChange={(v) => setLayout(v as LayoutMode)}>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.layout} label="Layout" value={layoutValue} />}>
+          <MenuRadioGroup value={controls.layout} onValueChange={(v) => setControls({ layout: v as LayoutMode })}>
             <MenuRadioItem value="flow">Flow</MenuRadioItem>
             <MenuRadioItem value="timeline">Timeline</MenuRadioItem>
           </MenuRadioGroup>
         </Menu>
 
-        {/* scope */}
-        <Button
-          compact
-          onClick={() => setScope((s) => (s === "focus" ? "all" : "focus"))}
-          title={scope === "focus" ? "Showing the focal closure — click for everything" : "Showing everything — click to focus"}
-        >
-          <Maximize2 size={14} /> {scope === "focus" ? "Focus" : "Everything"}
-        </Button>
-
-        {/* views */}
-        <Menu align="start" trigger={trigger("Views")}>
-          <MenuItem icon={<Bookmark size={14} />}>Customer-facing docs</MenuItem>
-          <MenuItem icon={<Bookmark size={14} />}>Stale &gt; 45 days</MenuItem>
-          <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />}>Save current view…</MenuItem>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.flow} label="Flow" value={flowValue} />}>
+          <MenuRadioGroup value={controls.scope} onValueChange={(v) => setControls({ scope: v as "focus" | "all" })}>
+            <MenuRadioItem value="focus">Focal closure</MenuRadioItem>
+            <MenuRadioItem value="all">Whole graph</MenuRadioItem>
+          </MenuRadioGroup>
         </Menu>
 
-        {/* derive */}
-        <Button compact onClick={derive} disabled={deriving} className={deriving ? "text-clay" : ""}>
-          <Sparkles size={14} /> {deriving ? "Mari is reading…" : "Derive links"}
-        </Button>
-      </div>
+        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.views} label="Views" value={view} />}>
+          <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("All documents", { sources: null, rels: null, status: "all", scope: "all", query: "" })}>
+            All documents
+          </MenuItem>
+          <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("Customer-facing docs", { sources: ["docs", "docsite", "notion"], status: "all" })}>
+            Customer-facing docs
+          </MenuItem>
+          <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("Needs review", { sources: null, status: "review" })}>
+            Needs review
+          </MenuItem>
+          <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("Contradictions", { sources: null, status: "all", rels: ["contradicts"] })}>
+            Contradictions only
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={<Plus size={14} />} onSelect={() => applyView("Saved view", {})}>Save current view</MenuItem>
+        </Menu>
+      </Row>
 
-      {/* right group */}
-      <div className="ml-auto flex items-center gap-1.5">
+      {/* ── row 3: actions ─────────────────────────────────────────────── */}
+      <Row label="Actions" divide>
         <Button
-          compact
           onClick={() => setAssertOpen((a) => !a)}
-          className={assertOpen ? "border-biscay-2 text-biscay-2" : ""}
+          className={assertOpen ? "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2" : ""}
         >
           <Sparkles size={14} /> Assert impact
         </Button>
         <Button
-          compact
           onClick={() => { setPathMode((p) => !p); setPicks(0); }}
-          className={pathMode ? "border-biscay-2 text-biscay-2" : ""}
+          className={pathMode ? "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2" : ""}
         >
           <GitFork size={14} /> {pathLabel}
         </Button>
+        <Button onClick={derive} disabled={deriving}>
+          <Sparkles size={14} /> {deriving ? "Mari is reading" : "Derive links"}
+        </Button>
+        {derived > 0 && !deriving && (
+          <Badge tone="ok" label={`${derived} links proposed`} />
+        )}
+        {assertOpen && <Badge tone="info" label="Impact analysis open" />}
+      </Row>
 
-        <div className="ml-1 flex items-center gap-1 rounded-[4px] border border-ink/15 p-0.5">
-          <Button icon aria-label="Zoom out" onClick={() => setZoomPct((z) => Math.max(30, z - 20))}><Minus size={15} /></Button>
-          <span className="w-10 text-center font-term text-[11px] text-ink/60">{zoomPct}%</span>
-          <Button icon aria-label="Zoom in" onClick={() => setZoomPct((z) => Math.min(250, z + 20))}><Plus size={15} /></Button>
-          <Button icon aria-label="Fit graph" onClick={() => setZoomPct(100)}><Maximize2 size={15} /></Button>
-        </div>
-      </div>
-
-      {/* path-mode hint badge — surfaces the pick state in a static gallery */}
+      {/* path-mode pick state */}
       {pathMode && (
-        <div className="w-full">
+        <div className="flex items-center gap-2 pl-[66px]">
           <Badge tone="info" label={`Path mode · ${picks}/2 picked`} />
-          <button type="button" className="ml-2 font-term text-[11px] text-ink/45 underline" onClick={() => setPicks((p) => Math.min(2, p + 1))}>
+          <button
+            type="button"
+            className={`font-term text-[11px] text-ink/65 underline ${focusRing}`}
+            onClick={() => setPicks((p) => Math.min(2, p + 1))}
+          >
             simulate pick
           </button>
         </div>

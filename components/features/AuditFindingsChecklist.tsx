@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
-import { Select } from "../forms/Select";
+import { Combobox } from "../forms/Combobox";
 import { Switch } from "../forms/Switch";
 import { Progress } from "../data-display/Progress";
 import { CountChip } from "../data-display/Chip";
@@ -50,8 +50,8 @@ const DEMO_MEMBERS = [{ id: 1, name: "Aki K." }, { id: 2, name: "Dana R." }, { i
 
 const DEMO_FINDINGS: AuditFinding[] = [
   { id: 1, kind: "Localization", title: "onboarding.fr.md has no source translation link", detail: "French doc exists but isn't linked to its English source.", fixAction: "link_translation", status: "open" },
-  { id: 2, kind: "Localization", title: "pricing.md changed — translations stale", detail: "3 locale copies are older than the source.", fixAction: "translation_task", status: "open" },
-  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags — won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "open" },
+  { id: 2, kind: "Localization", title: "pricing.md changed, translations stale", detail: "3 locale copies are older than the source.", fixAction: "translation_task", status: "open" },
+  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags, so it won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "open" },
   { id: 4, kind: "Tags", title: "billing.md missing 'customer-facing'", detail: "Suggested by content classifier.", fixAction: "apply_tag", fixPayload: { suggest: "customer-facing" }, status: "open" },
   { id: 5, kind: "Authorship", title: "Unknown author 'jsmith' on 6 docs", detail: "Git author not mapped to a team member.", fixAction: "invite_member", status: "open" },
   { id: 6, kind: "Coverage", title: "webhooks.md referenced but not indexed", detail: "Linked from 4 docs; never ingested.", fixAction: "ingest", status: "open" },
@@ -156,7 +156,7 @@ export function AuditFindingsChecklist({
       <PageHeader
         eyebrow="Repository audit"
         title="Findings"
-        description={`${provider} · ${repo} — last run ${ranAt}`}
+        description={`${provider} · ${repo} · last run ${ranAt}`}
         actions={<Button variant="primary" disabled={scanning} onClick={reaudit}><RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}</Button>}
       />
 
@@ -169,7 +169,7 @@ export function AuditFindingsChecklist({
               key={k} type="button" onClick={() => jumpTo(k)}
               className={`${card} inline-flex items-center gap-2 px-3 py-2 transition-colors hover:border-ink/30 ${open === 0 ? "opacity-60" : ""} ${focusRing}`}
             >
-              <span className="text-ink/55">{KIND_ICON[k]}</span>
+              <span className="text-ink/70">{KIND_ICON[k]}</span>
               <b className="font-term text-[15px] tabular-nums text-ink">{open}</b>
               <span className="text-[12.5px] text-ink/70">{k}</span>
             </button>
@@ -194,10 +194,10 @@ export function AuditFindingsChecklist({
         return (
           <Card key={k} variant="flush" className={pulse === k ? "ring-2 ring-biscay-2/40 transition-shadow" : ""}>
             <div className="flex items-center gap-3 px-4 py-3">
-              <button type="button" onClick={() => toggle(k)} aria-expanded={!isCollapsed} className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/50 hover:bg-flysch ${focusRing}`}>
+              <button type="button" onClick={() => toggle(k)} aria-expanded={!isCollapsed} className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/70 hover:bg-flysch ${focusRing}`}>
                 <ChevronDown size={16} className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
               </button>
-              <span className="text-ink/55">{KIND_ICON[k]}</span>
+              <span className="text-ink/70">{KIND_ICON[k]}</span>
               <span className="text-[14px] font-semibold text-ink">{k}</span>
               <CountChip count={open} tone={open === 0 ? "ok" : "attention"} />
               <span className="flex-1" />
@@ -207,7 +207,7 @@ export function AuditFindingsChecklist({
             {!isCollapsed && (
               <div className="border-t border-ink/10">
                 {visible.length === 0 ? (
-                  <div className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-moss"><Check size={14} /> All handled — tidy.</div>
+                  <div className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-moss"><Check size={14} /> All handled.</div>
                 ) : (
                   <ul className="divide-y divide-ink/10">
                     {visible.map((f) => {
@@ -218,14 +218,14 @@ export function AuditFindingsChecklist({
                           <StatusMarker status={st} />
                           <div className="min-w-0 flex-1">
                             <div className="text-[13.5px] font-medium text-ink">{f.title}</div>
-                            <div className="mt-0.5 text-[12.5px] leading-snug text-ink/55">{f.detail}</div>
+                            <div className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{f.detail}</div>
                             {st === "fixed" && <div className="mt-1 font-term text-[11.5px] text-moss">→ {ov && "summary" in ov ? ov.summary : summaryFor(f)}</div>}
-                            {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/40">dismissed</div>}
+                            {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/65">dismissed</div>}
                           </div>
                           {st === "open" && (
                             <div className="flex shrink-0 items-center gap-1.5">
                               {fixControl(f, members, pick[f.id] ?? "", (v) => setPick((p) => ({ ...p, [f.id]: v })), fixFinding)}
-                              <button type="button" aria-label="Dismiss finding" title="Dismiss" onClick={() => dismiss(f)} className={`grid h-7 w-7 place-items-center rounded-[4px] text-ink/40 hover:bg-flysch hover:text-ink ${focusRing}`}>
+                              <button type="button" aria-label="Dismiss finding" title="Dismiss" onClick={() => dismiss(f)} className={`grid h-7 w-7 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink ${focusRing}`}>
                                 <X size={14} />
                               </button>
                             </div>
@@ -255,10 +255,17 @@ function summaryFor(f: AuditFinding): string {
   }
 }
 
+/* A square checkbox-shaped marker, never a circle: a round marker reads as
+   "choose one of these", and these are states, not options (CONVENTIONS §6). */
 function StatusMarker({ status }: { status: FindingStatus }) {
-  if (status === "fixed") return <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-moss/50 bg-moss/[0.08] text-moss"><Check size={12} strokeWidth={2.6} /></span>;
-  if (status === "dismissed") return <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-ink/20 bg-ink/[0.03] text-ink/40"><X size={12} /></span>;
-  return <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full border border-ink/25" aria-hidden />;
+  const base = "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[4px] border";
+  if (status === "fixed") {
+    return <span className={`${base} border-moss/60 bg-moss/[0.10] text-moss`} title="Fixed"><Check size={13} strokeWidth={2.8} /></span>;
+  }
+  if (status === "dismissed") {
+    return <span className={`${base} border-ink/25 bg-ink/[0.04] text-ink/65`} title="Dismissed"><X size={12} strokeWidth={2.4} /></span>;
+  }
+  return <span className={`${base} border-ink/35 bg-paper`} title="Open" aria-hidden />;
 }
 
 function fixControl(
@@ -270,15 +277,22 @@ function fixControl(
 ) {
   if (f.fixAction === "apply_tag") {
     const tag = f.fixPayload?.tag ?? f.fixPayload?.suggest ?? "tag";
-    return <Button compact onClick={() => fix(f)}>Apply ‘{tag}’</Button>;
+    return <Button compact onClick={() => fix(f)}>Apply “{tag}”</Button>;
   }
   if (f.fixAction === "invite_member") {
     return (
       <span className="flex items-center gap-1.5">
-        <Select value={picked} onChange={(e) => onPick(e.target.value)} className="h-7 py-0 text-[12.5px]">
-          <option value="">Map to member…</option>
-          {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
-        </Select>
+        {/* A member picker is always a searchable combobox (CONVENTIONS §7). */}
+        <span className="w-[190px]">
+          <Combobox
+            ariaLabel="Map to member"
+            placeholder="Map to member"
+            searchPlaceholder="Search members"
+            value={picked || null}
+            onChange={onPick}
+            options={members.map((m) => ({ value: m.name, label: m.name }))}
+          />
+        </span>
         <Button compact disabled={!picked} onClick={() => fix(f, picked)}>Map</Button>
         <Button variant="link" onClick={() => fix(f)}>Invite as new</Button>
       </span>

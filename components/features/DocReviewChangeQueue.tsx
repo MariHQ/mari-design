@@ -46,23 +46,26 @@ const DEMO_BODY =
   "We will roll out the change in three phases across the fleet.";
 
 const DEMO_CHANGES: Change[] = [
-  { id: 1, original: "It is expected to reduce login latency by roughly 40%", proposed: "It reduces measured login latency by 22%", rule: "Fact check — align with staging measurement", state: "pending" },
-  { id: 2, original: "roll out the change in three phases across the fleet", proposed: "roll out the change in three phases", rule: "Tighten — cut vague scope", state: "pending" },
-  { id: 3, original: "replaces the legacy session store", proposed: "supersedes the legacy session store", rule: "Sharpen — stronger verb", state: "pending" },
-  { id: 4, original: "remove the shared-session bottleneck", proposed: "eliminate the shared-session bottleneck", rule: "Sharpen — stronger verb", state: "accepted" },
-  { id: 5, original: "signed with RS256 and rotated every 24 hours", proposed: "signed with RS256, rotated daily", rule: "Deslop — reduce wordiness", state: "rejected" },
+  { id: 1, original: "It is expected to reduce login latency by roughly 40%", proposed: "It reduces measured login latency by 22%", rule: "Fact check, align with staging measurement", state: "pending" },
+  { id: 2, original: "roll out the change in three phases across the fleet", proposed: "roll out the change in three phases", rule: "Tighten, cut vague scope", state: "pending" },
+  { id: 3, original: "replaces the legacy session store", proposed: "supersedes the legacy session store", rule: "Sharpen, stronger verb", state: "pending" },
+  { id: 4, original: "remove the shared-session bottleneck", proposed: "eliminate the shared-session bottleneck", rule: "Sharpen, stronger verb", state: "accepted" },
+  { id: 5, original: "signed with RS256 and rotated every 24 hours", proposed: "signed with RS256, rotated daily", rule: "Deslop, reduce wordiness", state: "rejected" },
 ];
 
 export function DocReviewChangeQueue({
   changes: initialChanges = DEMO_CHANGES,
   body = DEMO_BODY,
+  defaultTab = "review",
   loading = false,
 }: {
   changes?: Change[];
   body?: string;
+  /** Which tab opens first, so each tab can be reviewed on its own. */
+  defaultTab?: ChangeTab;
   loading?: boolean;
 }) {
-  const [tab, setTab] = useState<ChangeTab>("review");
+  const [tab, setTab] = useState<ChangeTab>(defaultTab);
   const [changes, setChanges] = useState<Change[]>(initialChanges);
   const [bodyText, setBodyText] = useState(body);
 
@@ -130,8 +133,8 @@ export function DocReviewChangeQueue({
 
       {visible.length > 0 && (
         <div className="grid grid-cols-[1fr_1fr_150px] gap-3 px-4 pt-3 pb-1.5 border-b border-ink/10">
-          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/45">Original</span>
-          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/45">⇄ Proposed</span>
+          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>
+          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Proposed</span>
           <span />
         </div>
       )}
@@ -145,24 +148,24 @@ export function DocReviewChangeQueue({
               key={c.id}
               className={`grid grid-cols-[1fr_1fr_150px] gap-3 px-4 py-3 border-b border-ink/8 ${c.state === "rejected" ? "opacity-50" : ""}`}
             >
-              <div className="font-term text-[12.5px] leading-[1.55] text-ink/70">
+              <div className="min-w-0 break-words font-term text-[12.5px] leading-[1.55] text-ink/70">
                 {d.pre && <>{d.pre} </>}
                 {d.delA && <s className="text-espelette/80 decoration-espelette/60">{d.delA}</s>}
                 {d.suf && <> {d.suf}</>}
               </div>
-              <div className={`font-term text-[12.5px] leading-[1.55] ${c.state === "accepted" ? "text-moss" : "text-ink/70"}`}>
+              <div className={`font-term text-[12.5px] leading-[1.55] ${c.state === "accepted" ? "text-moss" : "text-ink/70"} min-w-0 break-words`}>
                 {d.pre && <>{d.pre} </>}
                 {d.delB && <b className="text-moss">{d.delB}</b>}
                 {d.suf && <> {d.suf}</>}
               </div>
               <div className="flex flex-col items-start gap-1.5">
-                <span className="text-[11px] leading-tight text-ink/45">
-                  Motivated by:<br /><b className="text-ink/70">{c.rule}</b>
+                <span className="text-[11px] leading-tight text-ink/65">
+                  Suggestion:<br /><b className="text-ink/80">{c.rule}</b>
                 </span>
                 {c.state === "pending" ? (
                   applied ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-ink/45">already applied</span>
+                      <span className="text-[11px] text-ink/65">already applied</span>
                       <Button compact onClick={() => reject(c)}>Dismiss</Button>
                     </div>
                   ) : (
@@ -183,15 +186,17 @@ export function DocReviewChangeQueue({
           );
         })}
         {visible.length === 0 && (
-          <EmptyState>No pending changes — run a refinement or switch to “All changes”.</EmptyState>
+          <EmptyState>No pending changes. Run a refinement, or switch to “All changes”.</EmptyState>
         )}
       </div>
 
+      {/* Primary action bottom LEFT, the count reading bottom right
+          (CONVENTIONS.md §2). */}
       <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <span className="text-[11px] text-ink/50">Showing {visible.length} of {changes.length} changes</span>
-        <Button onClick={acceptAll} disabled={pending.length === 0}>
+        <Button variant="primary" onClick={acceptAll} disabled={pending.length === 0}>
           Accept all {pending.length || ""} changes
         </Button>
+        <span className="text-[11px] text-ink/65">Showing {visible.length} of {changes.length} changes</span>
       </div>
     </Card>
   );

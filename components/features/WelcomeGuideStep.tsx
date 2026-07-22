@@ -4,6 +4,7 @@ import { Button } from "../actions/Button";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
+import { card } from "../tokens/card";
 
 /* WelcomeGuideStep — the Welcome wizard's Step 2 style-guide picker: a
    radio-card list of built-in guide packs (mirroring the Library's GUIDES
@@ -47,7 +48,7 @@ export function WelcomeGuideStep({
 
   if (loading) {
     return (
-      <div className={`grid gap-2 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} grid gap-2 p-4 ${className}`.trim()} aria-hidden="true">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 rounded-md border border-ink/15 p-3">
             <SkeletonCircle size={16} />
@@ -65,9 +66,11 @@ export function WelcomeGuideStep({
 
   if (packs.length === 0) {
     return (
-      <EmptyState icon={<Feather size={26} />} title="No style guides yet" action={<Button compact>Open Library → Style guides</Button>}>
-        Add a style guide in the Library to use it as your project default.
-      </EmptyState>
+      <div className={`${card} ${className}`.trim()}>
+        <EmptyState icon={<Feather size={26} />} title="No style guides yet" action={<Button compact>Open Library</Button>}>
+          Add a style guide in the Library to use it as your project default.
+        </EmptyState>
+      </div>
     );
   }
 
@@ -76,27 +79,35 @@ export function WelcomeGuideStep({
     return (
       <label
         key={id}
-        className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${focusRing} ${
-          saving ? "opacity-60 pointer-events-none" : ""
+        className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${focusRing} ${
+          saving ? "pointer-events-none bg-flysch" : "cursor-pointer"
         } ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"}`}
       >
-        <input type="radio" name="wc-guide" className="accent-biscay shrink-0" disabled={saving} checked={active} onChange={() => pick(id)} />
-        <span className="grid place-items-center w-8 h-8 rounded-full border border-ink/15 text-ink/55 shrink-0">{icon}</span>
+        <input type="radio" name="wc-guide" className="mt-1 accent-biscay shrink-0" disabled={saving} checked={active} onChange={() => pick(id)} />
+        <span className="grid place-items-center w-8 h-8 rounded-full border border-ink/15 text-ink/65 shrink-0">{icon}</span>
         <span className="min-w-0 flex-1">
-          <b className="text-[13.5px] font-semibold text-ink">{name}</b>
-          <span className="block text-[12px] text-ink/60">{description}</span>
+          <b className="block break-all text-[13.5px] font-semibold text-ink">{name}</b>
+          <span className="block break-words text-[12px] text-ink/70">{description}</span>
         </span>
-        {rules != null && <span className="font-term text-[11px] text-ink/45 shrink-0">{rules} rules</span>}
-        {active && <CheckCircle2 size={16} className="text-moss shrink-0" />}
+        {rules != null && <span className="mt-0.5 font-term text-[11px] text-ink/65 shrink-0">{rules} rules</span>}
+        {active && <CheckCircle2 size={16} className="mt-0.5 text-moss shrink-0" />}
       </label>
     );
   };
 
+  /* Same paper card as "Fill glossary": these two steps sit side by side in
+     the Welcome flow and used to render on two different backgrounds. */
   return (
-    <div className={`grid gap-2 ${className}`.trim()} role="radiogroup" aria-label="Style guide">
-      {packs.map((p) => row(p.id, p.name, p.description, <Feather size={16} />, p.rules))}
-      <div className="mt-1 pt-2 border-t border-ink/10">
-        {row(SCRATCH_ID, "Start from scratch", "Build your own rules as you go.", <Pencil size={16} />)}
+    <div className={`${card} p-4 ${className}`.trim()}>
+      <div className="mb-3">
+        <h2 className="text-[15px] font-semibold text-ink">Pick a style guide</h2>
+        <p className="mt-0.5 text-[12.5px] text-ink/70">It becomes the default every document is reviewed against. You can change it later.</p>
+      </div>
+      <div className="grid gap-2" role="radiogroup" aria-label="Style guide">
+        {packs.map((p) => row(p.id, p.name, p.description, <Feather size={16} />, p.rules))}
+        <div className="mt-1 pt-2 border-t border-ink/10">
+          {row(SCRATCH_ID, "Start from scratch", "Build your own rules as you go.", <Pencil size={16} />)}
+        </div>
       </div>
     </div>
   );

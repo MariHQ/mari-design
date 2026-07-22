@@ -8,6 +8,9 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { SkeletonCard, SkeletonStat } from "../data-display/Skeleton";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
+import { PageHeader } from "../layout/PageHeader";
+import { ErrorMessage } from "../feedback/ErrorMessage";
+import { fmtDateTime } from "../tokens/format";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD, MIXED_SCRIPT,
   HUGE_NUMBER, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
@@ -30,12 +33,12 @@ const STATES = [
   { id: "error", label: "API offline" },
   { id: "empty", label: "Empty / no data" },
   { id: "no-freshness", label: "Freshness unavailable" },
-  { id: "freshness-empty", label: "Freshness — no sources" },
+  { id: "freshness-empty", label: "Freshness: no sources" },
   { id: "readability-spread", label: "Readability grade spread" },
   { id: "glossary-review", label: "Glossary suggestions" },
   { id: "glossary-clear", label: "Glossary all clear" },
   { id: "audit-active", label: "Audit activity" },
-  { id: "audit-empty", label: "Audit — nothing logged" },
+  { id: "audit-empty", label: "Audit: nothing logged" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -82,7 +85,7 @@ function stressActivity(p: boolean): ActivityItem[] {
     id: `a${i}`,
     actor: p ? UNBREAKABLE : LONG_NAME,
     action: p ? `${MIXED_SCRIPT} ${HUGE_NUMBER_STR}` : LONG_PARAGRAPH,
-    time: "May 11, 4:12 PM",
+    time: fmtDateTime("2026-05-11T16:12:00"),
     icon: <Sparkles size={12} />,
   }), 5);
 }
@@ -122,48 +125,64 @@ const REVIEW_GLOSSARY = [
 ];
 
 const ACTIVE_ACTIVITY: ActivityItem[] = [
-  { id: "a1", actor: "Aki K.", action: "accepted glossary term “Drift”", time: "May 11, 4:12 PM", icon: <BookOpen size={12} /> },
-  { id: "a2", actor: "Priya S.", action: "fixed 3 readability findings", time: "May 11, 2:03 PM", icon: <FileCheck size={12} /> },
-  { id: "a3", actor: "Mari", action: "scored 42 documents", time: "May 11, 9:20 AM", icon: <Sparkles size={12} /> },
-  { id: "a4", actor: "Dana R.", action: "dismissed a coverage finding", time: "May 10, 5:41 PM" },
-  { id: "a5", actor: "Mari", action: "harvested 6 candidate terms", time: "May 10, 11:02 AM", icon: <BookOpen size={12} /> },
-  { id: "a6", actor: "Aki K.", action: "re-scored the API docs after edits", time: "May 9, 3:30 PM", icon: <FileCheck size={12} /> },
+  { id: "a1", actor: "Aki K.", action: "accepted glossary term “Drift”", time: fmtDateTime("2026-05-11T16:12:00"), icon: <BookOpen size={12} /> },
+  { id: "a2", actor: "Priya S.", action: "fixed 3 readability findings", time: fmtDateTime("2026-05-11T14:03:00"), icon: <FileCheck size={12} /> },
+  { id: "a3", actor: "Mari", action: "scored 42 documents", time: fmtDateTime("2026-05-11T09:20:00"), icon: <Sparkles size={12} /> },
+  { id: "a4", actor: "Dana R.", action: "dismissed a coverage finding", time: fmtDateTime("2026-05-10T17:41:00") },
+  { id: "a5", actor: "Mari", action: "harvested 6 candidate terms", time: fmtDateTime("2026-05-10T11:02:00"), icon: <BookOpen size={12} /> },
+  { id: "a6", actor: "Aki K.", action: "re-scored the API docs after edits", time: fmtDateTime("2026-05-09T15:30:00"), icon: <FileCheck size={12} /> },
 ];
 
 const NO_FRESHNESS: Freshness[] = [];
 
+/* <InsightsWidgets/> carries the page header (eyebrow, title, "counting
+   since…"), so it must be the FIRST thing on the page and the freshness chart
+   goes under it. The bare states below have no widgets, so the page supplies
+   the same header itself and keeps every Insights state on one rhythm. */
+function BareHeader() {
+  return (
+    <PageHeader
+      eyebrow="Insights"
+      title="Insights"
+      description="Usage, quality, and coverage across your knowledge base."
+    />
+  );
+}
+
 function Body({ state }: { state: string }) {
   if (state === "error") {
     return (
-      <div className="mt-6">
-        <EmptyState icon={<Sparkles size={22} />} title="API offline">
-          Insights are temporarily unavailable. Retrying…
-        </EmptyState>
-      </div>
+      <>
+        <BareHeader />
+        <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>
+      </>
     );
   }
   if (state === "empty") {
     return (
-      <div className="mt-6">
-        <EmptyState icon={<Sparkles size={22} />} title="Nothing to measure yet">
-          Sync a source and run a few searches to start collecting insights.
-        </EmptyState>
-      </div>
+      <>
+        <BareHeader />
+        <div className="mt-6">
+          <EmptyState icon={<Sparkles size={22} />} title="Nothing to measure yet">
+            Sync a source and run a few searches to start collecting insights.
+          </EmptyState>
+        </div>
+      </>
     );
   }
 
   if (state === "overflow" || state === "stress") {
     const p = state === "stress";
     return (
-      <div className="mt-2 space-y-5">
-        <StressExtras pathological={p} />
-        <InsightsFreshnessChart />
+      <div className="space-y-5">
         <InsightsWidgets
           stats={stressStats(p)}
           readability={stressReadability(p)}
           glossary={stressGlossary(p)}
           activity={stressActivity(p)}
         />
+        <InsightsFreshnessChart />
+        <StressExtras pathological={p} />
       </div>
     );
   }
@@ -172,8 +191,7 @@ function Body({ state }: { state: string }) {
   // still resolving — inline skeletons hold their place in the grid.
   if (state === "widgets-loading") {
     return (
-      <div className="mt-2 space-y-5">
-        <InsightsFreshnessChart />
+      <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
@@ -182,6 +200,7 @@ function Body({ state }: { state: string }) {
           <SkeletonCard lines={4} footer />
         </div>
         <SkeletonCard lines={4} />
+        <InsightsFreshnessChart />
       </div>
     );
   }
@@ -197,9 +216,9 @@ function Body({ state }: { state: string }) {
   if (state === "audit-empty") widgetProps.activity = [];
 
   return (
-    <div className="mt-2 space-y-5">
-      {showFreshness && <InsightsFreshnessChart freshness={freshness} />}
+    <div className="space-y-5">
       <InsightsWidgets {...widgetProps} />
+      {showFreshness && <InsightsFreshnessChart freshness={freshness} />}
     </div>
   );
 }

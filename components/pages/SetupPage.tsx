@@ -35,7 +35,7 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-const LOG_SAMPLE = `mari-cloud  ┃ workspace has no admin — one-time setup required
+const LOG_SAMPLE = `mari-cloud  ┃ workspace has no admin: one-time setup required
 mari-cloud  ┃ admin token:  3f9c-7b21-e04d-a41b   ← yours will differ
 mari-cloud  ┃ open http://localhost:8787/setup to claim this workspace`;
 
@@ -50,8 +50,10 @@ function TokenStep() {
       <Field label="Admin token">
         <Input placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false} />
       </Field>
-      <div className="flex justify-end">
+      {/* Next-step action bottom LEFT (§2). */}
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary">Continue <ArrowRight size={14} /></Button>
+        <Button variant="link">Where do I find this?</Button>
       </div>
     </div>
   );
@@ -69,8 +71,8 @@ function AdminStep({ saving = false, error = false }: { saving?: boolean; error?
         </Alert>
       )}
       {error && (
-        <Alert tone="blocked" title="Invalid token — check the server logs">
-          The server rejected that token. It may be mistyped or already used —
+        <Alert tone="blocked" title="Invalid token: check the server logs">
+          The server rejected that token. It may be mistyped or already used: 
           copy it fresh from the <code className="font-term">admin token:</code> log line.
         </Alert>
       )}
@@ -86,12 +88,12 @@ function AdminStep({ saving = false, error = false }: { saving?: boolean; error?
       <Field label="Workspace name">
         <Input placeholder="Acme Product" defaultValue="Acme Product" />
       </Field>
-      <p className="-mt-2 text-[12px] text-ink/50">Shown in the sidebar and on published pages.</p>
-      <div className="flex items-center justify-between pt-1">
-        <Button variant="link" disabled={saving}>← Back to token</Button>
+      <p className="-mt-2 text-[12px] text-ink/65">Shown in the sidebar and on published pages.</p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
         <Button variant="primary" disabled={saving}>
           {saving ? "Setting up…" : "Finish setup"}
         </Button>
+        <Button variant="link" disabled={saving}>← Back to token</Button>
       </div>
     </div>
   );
@@ -99,16 +101,22 @@ function AdminStep({ saving = false, error = false }: { saving?: boolean; error?
 
 function SuccessStep() {
   return (
-    <div className="flex flex-col items-center gap-3 py-4 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-full border border-moss/35 text-moss"><CheckCircle2 size={30} /></span>
-      <div>
-        <h3 className="text-[17px] font-semibold text-ink">Your workspace is ready</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-ink/60">
-          <b className="text-ink/80">Acme Product</b> is claimed and you’re signed in as its admin.
-          Next, connect a source to start building your knowledge base.
-        </p>
+    <div className="flex flex-col gap-3 py-2">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full border border-moss/35 text-moss"><CheckCircle2 size={30} /></span>
+        <div>
+          <h3 className="text-[17px] font-semibold text-ink">Your workspace is ready</h3>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">
+            <b className="text-ink/80">Acme Product</b> is claimed and you’re signed in as its admin.
+            Next, connect a source to start building your knowledge base.
+          </p>
+        </div>
       </div>
-      <Button variant="primary">Go to Overview <ArrowRight size={14} /></Button>
+      {/* Biggest action last, and bottom left (§1, §2). */}
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <Button variant="primary">Go to Overview <ArrowRight size={14} /></Button>
+        <Button variant="link">Connect a source first</Button>
+      </div>
     </div>
   );
 }
@@ -130,10 +138,10 @@ function OverflowStep() {
       <Field label="Workspace name">
         <Input defaultValue={LONG_TITLE} />
       </Field>
-      <p className="-mt-2 text-[12px] leading-relaxed text-ink/50">{LONG_PARAGRAPH}</p>
-      <div className="flex items-center justify-between pt-1">
-        <Button variant="link">← Back to token</Button>
+      <p className="-mt-2 text-[12px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
         <Button variant="primary">Finish setting up {LONG_TITLE}</Button>
+        <Button variant="link">← Back to token</Button>
       </div>
     </div>
   );
@@ -147,7 +155,7 @@ function StressStep() {
   return (
     <div className="space-y-4">
       <CodeBlock code={UNBREAKABLE} language="log" title="admin token" copy={false} />
-      <Alert tone="blocked" title={UNBREAKABLE}>{MIXED_SCRIPT} — {LONG_URL}</Alert>
+      <Alert tone="blocked" title={UNBREAKABLE}>{MIXED_SCRIPT}, {LONG_URL}</Alert>
       <Field label="Admin token">
         <Input defaultValue={UNBREAKABLE} spellCheck={false} />
       </Field>
@@ -158,10 +166,10 @@ function StressStep() {
         {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
       </div>
       <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-      <p className="break-words font-term text-[12px] text-ink/55">{HUGE_NUMBER_STR} workspaces · {MIXED_SCRIPT}</p>
-      <div className="flex items-center justify-between pt-1">
-        <Button variant="link">← Back to token</Button>
+      <p className="break-words font-term text-[12px] text-ink/65">{HUGE_NUMBER_STR} workspaces · {MIXED_SCRIPT}</p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
         <Button variant="primary">{LONG_WORD}</Button>
+        <Button variant="link">← Back to token</Button>
       </div>
     </div>
   );
@@ -193,7 +201,7 @@ function SetupPage({ state = "default", mobile = false }: PageProps) {
         <div className="mb-7 flex flex-col items-center text-center">
           <span className="text-biscay"><Logo size={34} /></span>
           <h1 className="mt-4 font-display text-[24px] font-bold tracking-[-0.01em] text-ink">
-            {success ? "Workspace claimed" : "Welcome to Mari Cloud"}
+            {success ? "Workspace claimed" : "Welcome to Mari"}
           </h1>
         </div>
 

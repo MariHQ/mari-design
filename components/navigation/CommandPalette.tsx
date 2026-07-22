@@ -48,24 +48,24 @@ export function CommandPalette({
         >
           <RD.Title className="sr-only">Command palette</RD.Title>
           <div className="flex items-center gap-2.5 px-4 h-12 border-b border-ink/10">
-            <Search size={15} className="text-ink/40 shrink-0" />
+            <Search size={18} className="text-ink/65 shrink-0" aria-hidden />
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={placeholder}
-              className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink/40 outline-none"
+              className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink/65 outline-none"
             />
-            <span className="font-term text-[10px] text-ink/35 border border-ink/15 rounded-[3px] px-1.5 py-0.5">ESC</span>
+            <span className="font-term text-[10px] text-ink/65 border border-ink/15 rounded-[3px] px-1.5 py-0.5">ESC</span>
           </div>
           <div role="listbox" className="max-h-[320px] overflow-y-auto p-1.5">
-            {filtered.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-ink/45">No matches</div>}
+            {filtered.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-ink/70">No matches</div>}
             {filtered.map((item, i) => {
               const showGroup = item.group !== undefined && item.group !== lastGroup;
               lastGroup = item.group;
               return (
                 <div key={item.id}>
-                  {showGroup && <div className="px-2.5 pt-2.5 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/40">{item.group}</div>}
+                  {showGroup && <div className="px-2.5 pt-2.5 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/65">{item.group}</div>}
                   <div
                     role="option"
                     aria-selected={i === active}
@@ -73,9 +73,9 @@ export function CommandPalette({
                     onClick={() => select(item)}
                     className={`flex items-center gap-2.5 px-2.5 py-2 rounded-[4px] text-[13px] text-ink/85 cursor-pointer ${i === active ? "bg-flysch text-ink" : ""}`}
                   >
-                    {item.icon && <span className="shrink-0 text-ink/45">{item.icon}</span>}
+                    {item.icon && <span className="shrink-0 text-ink/65">{item.icon}</span>}
                     <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                    {item.hint && <span className="font-term text-[11px] text-ink/40">{item.hint}</span>}
+                    {item.hint && <span className="font-term text-[11px] text-ink/65">{item.hint}</span>}
                   </div>
                 </div>
               );

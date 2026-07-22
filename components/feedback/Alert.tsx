@@ -10,7 +10,7 @@ const STYLE: Record<AlertTone, { border: string; bg: string; icon: ReactNode }> 
   attention: { border: "border-clay/35", bg: "bg-clay/[0.06]", icon: <AlertTriangle size={16} className="text-clay" /> },
   blocked: { border: "border-espelette/30", bg: "bg-espelette/[0.05]", icon: <XCircle size={16} className="text-espelette" /> },
   info: { border: "border-biscay-2/35", bg: "bg-biscay-2/[0.05]", icon: <Info size={16} className="text-biscay-2" /> },
-  neutral: { border: "border-ink/15", bg: "bg-ink/[0.03]", icon: <Info size={16} className="text-ink/50" /> },
+  neutral: { border: "border-ink/15", bg: "bg-ink/[0.03]", icon: <Info size={16} className="text-ink/65" /> },
 };
 
 /* A persistent inline banner — Toast's non-transient sibling. Same 5-tone
@@ -28,13 +28,13 @@ export function Alert({
   return (
     <div role="status" className={`flex gap-3 rounded-md border px-4 py-3 ${t.border} ${t.bg}`}>
       <span className="shrink-0 mt-0.5" aria-hidden="true">{t.icon}</span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 break-words">
         {title && <div className="text-[13px] font-semibold text-ink">{title}</div>}
         <div className="text-[13px] text-ink/70 mt-0.5">{children}</div>
         {action && <div className="mt-2">{action}</div>}
       </div>
       {onDismiss && (
-        <button onClick={onDismiss} aria-label="Dismiss" className={`shrink-0 grid place-items-center w-6 h-6 rounded-[4px] text-ink/40 hover:bg-ink/5 hover:text-ink/70 ${focusRing}`}>
+        <button onClick={onDismiss} aria-label="Dismiss" className={`shrink-0 grid place-items-center w-6 h-6 rounded-[4px] text-ink/65 hover:bg-ink/5 hover:text-ink/70 ${focusRing}`}>
           <X size={13} />
         </button>
       )}

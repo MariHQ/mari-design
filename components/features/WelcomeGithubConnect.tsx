@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitFork, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Drawer } from "../layout/Drawer";
 import { Button } from "../actions/Button";
+import { Alert } from "../feedback/Alert";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
@@ -39,7 +40,7 @@ function RepoPicker({
     <div>
       <Input className="w-full mb-2" placeholder="Filter repositories…" value={filter} onChange={(e) => setFilter(e.target.value)} />
       {shown.length === 0 ? (
-        <p className="text-[12.5px] text-ink/55 py-3">No repositories match "{filter}".</p>
+        <p className="text-[12.5px] text-ink/70 py-3">No repositories match "{filter}".</p>
       ) : (
         <div role="radiogroup" aria-label="Repositories" className="grid gap-1.5 max-h-[300px] overflow-y-auto">
           {shown.map((r) => {
@@ -48,21 +49,21 @@ function RepoPicker({
               <label
                 key={r.fullName}
                 className={`flex items-center gap-2.5 p-2.5 rounded-md border cursor-pointer transition-colors ${focusRing} ${
-                  r.connected ? "opacity-55 cursor-not-allowed border-ink/12" : active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
+                  r.connected ? "cursor-not-allowed border-ink/12 bg-flysch text-ink/70" : active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
                 }`}
               >
                 <input type="radio" name="wc-repo" className="accent-biscay" disabled={r.connected} checked={active} onChange={() => onSelect(r.fullName)} />
-                <GitFork size={14} className="text-ink/45 shrink-0" />
+                <GitFork size={14} className="text-ink/65 shrink-0" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <b className="text-[13px] font-semibold text-ink truncate">{r.fullName}</b>
+                    <b className="min-w-0 break-all text-[13px] font-semibold text-ink">{r.fullName}</b>
                     {r.private && <Chip label="Private" tone="neutral" icon={<Lock size={10} />} />}
                   </span>
-                  <span className="block text-[11.5px] text-ink/55 truncate">{r.description}</span>
+                  <span className="block break-words text-[11.5px] text-ink/70 line-clamp-2">{r.description}</span>
                 </span>
                 {r.connected
                   ? <Chip label="Connected" tone="ok" className="shrink-0" />
-                  : <span className="shrink-0 font-term text-[11px] text-ink/45">{r.defaultBranch}</span>}
+                  : <span className="shrink-0 font-term text-[11px] text-ink/65">{r.defaultBranch}</span>}
               </label>
             );
           })}
@@ -121,6 +122,7 @@ export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, loadin
   const [repo, setRepo] = useState<string | null>(null);
   const [paths, setPaths] = useState(DEFAULT_PATHS);
   const [sync, setSync] = useState<SyncSource | null>(null);
+  const [landed, setLanded] = useState<string | null>(null);
 
   const reset = () => { setRepo(null); setPaths(DEFAULT_PATHS); setSync(null); };
 
@@ -138,15 +140,16 @@ export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, loadin
   };
 
   const connected = sync != null;
+  /* Primary action bottom LEFT, supporting copy to its right (§2). */
   const footer = connected ? (
     <div className="flex-1 flex items-center gap-3">
-      <span className="text-[12px] text-ink/55 flex-1">Sync continues on the server — closing won't interrupt it.</span>
-      <Button variant="primary" onClick={() => { setOpen(false); reset(); }}>Done <CheckCircle2 size={14} /></Button>
+      <Button variant="primary" onClick={() => { setOpen(false); setLanded(repo); reset(); }}>Done <CheckCircle2 size={14} /></Button>
+      <span className="text-[12px] text-ink/70">Sync continues on the server. Closing will not interrupt it.</span>
     </div>
   ) : (
     <div className="flex-1 flex items-center gap-3">
-      <span className="text-[12px] text-ink/55 flex-1">Mari Cloud syncs Markdown docs read-only.</span>
-      <Button variant="primary" disabled={!repo} onClick={connect}>Connect &amp; sync <ArrowRight size={14} /></Button>
+      <Button variant="primary" disabled={!repo} onClick={connect}>Connect and sync <ArrowRight size={14} /></Button>
+      <span className="text-[12px] text-ink/70">Mari syncs Markdown docs read-only.</span>
     </div>
   );
 
@@ -155,11 +158,19 @@ export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, loadin
   return (
     <div className={className}>
       <Button variant="primary" onClick={() => { reset(); setOpen(true); }}><GithubMark size={15} /> Connect GitHub</Button>
+      {landed && !open && (
+        <div className="mt-3">
+          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}
+            action={<Button compact onClick={() => setLanded(null)}>Open Connectors</Button>}>
+            GitHub · {landed} now lives on Sources, under the Connectors tab. Its first sync keeps running there.
+          </Alert>
+        </div>
+      )}
       <Drawer open={open} onClose={() => { setOpen(false); reset(); }} title="Connect GitHub" subtitle="Connector setup"
         icon={<GithubMark size={20} />} footer={footer}>
         {connected ? (
           <>
-            <p className="text-[13px] text-ink/70 mb-3">The initial sync runs on the server — live status below.</p>
+            <p className="text-[13px] text-ink/70 mb-3">The initial sync runs on the server. Live status below.</p>
             <SyncPanel sources={[sync!]} onRetry={() => setSync((s) => (s ? { ...s, state: "syncing" } : s))} />
           </>
         ) : (

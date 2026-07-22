@@ -65,9 +65,15 @@ function Section({ id, title, children }: { id: string; title: string; children:
   );
 }
 
+/** Slug used as the row's DOM id, so QA tooling can screenshot ONE component
+    demo in isolation: `node scripts/shot.mjs comp:<slug>`. */
+function rowId(label: string) {
+  return "c-" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-start gap-4 px-5 py-4">
+    <div id={rowId(label)} className="grid grid-cols-[10rem_minmax(0,1fr)] items-start gap-4 px-5 py-4 scroll-mt-4">
       <span className="pt-1.5 text-[11px] font-mono text-ink/40 leading-none">{label}</span>
       <div className="flex flex-wrap items-center gap-3 min-w-0">{children}</div>
     </div>
@@ -324,7 +330,7 @@ const SHELL_SECTIONS = [
     ] },
     { id: "publish", label: "Publish", icon: <Rocket size={17} />, badge: <CountChip count={2} /> },
   ] },
-  { heading: "Admin", items: [
+  { divider: true, items: [
     { id: "settings", label: "Settings", icon: <Settings size={17} /> },
   ] },
 ];

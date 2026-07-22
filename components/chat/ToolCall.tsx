@@ -28,8 +28,10 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
 
   return (
     <div
+      /* 16px of padding behind a 2px rule lands the trace text on the same
+         18px indent as the assistant's reply text (CHAT_INDENT). */
       className={[
-        "ml-1.5 pl-2.5 border-l-2",
+        "pl-4 border-l-2",
         failed ? "border-espelette/45" : "border-ink/10",
       ].join(" ")}
     >
@@ -57,23 +59,23 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
         <span className="shrink-0 font-term font-semibold text-ink group-hover:underline decoration-wavy">
           {tool.name}
         </span>
-        <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-term text-ink/50">
+        <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-term text-ink/65">
           ({shortArgs(args)})
         </span>
         <span
-          className={`ml-auto shrink-0 inline-flex text-ink/50 transition-transform ${expanded ? "rotate-90" : ""}`}
+          className={`ml-auto shrink-0 inline-flex text-ink/65 transition-transform ${expanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           <ChevronRight size={12} />
         </span>
       </button>
 
-      <div className="pl-[23px] pb-0.5 text-[12.5px] text-ink/70 overflow-hidden text-ellipsis whitespace-nowrap">
+      <div className="pb-0.5 pl-[22px] text-[12.5px] text-ink/70 overflow-hidden text-ellipsis whitespace-nowrap">
         {running ? "Running…" : tool.summary}
       </div>
 
       {expanded && (
-        <pre className="ml-[23px] mb-1.5 px-2.5 py-2 rounded-[4px] border border-ink/10 bg-flysch font-term text-[11.5px] leading-relaxed text-ink/70 overflow-x-auto">
+        <pre className="ml-[22px] mb-1.5 px-2.5 py-2 rounded-[4px] border border-ink/10 bg-flysch font-term text-[11.5px] leading-relaxed text-ink/70 overflow-x-auto">
           {JSON.stringify({ args, result: tool.summary, ok: tool.ok }, null, 2)}
         </pre>
       )}

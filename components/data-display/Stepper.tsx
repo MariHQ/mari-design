@@ -13,23 +13,25 @@ export function Stepper({
       {labels.map((label, index) => {
         const state = index === current ? "active" : index < current ? "complete" : "upcoming";
         return (
-          <li key={label}>
+          <li key={label} className="min-w-0">
             <button
               type="button"
               onClick={onSelect ? () => onSelect(index) : undefined}
               aria-current={index === current ? "step" : undefined}
-              className={`w-full flex flex-col items-center gap-1.5 pt-2.5 border-t-2 ${
+              className={`w-full min-w-0 flex flex-col items-center gap-1.5 pt-2.5 border-t-2 ${
                 state === "active" ? "border-biscay" : state === "complete" ? "border-moss" : "border-ink/15"
               } ${onSelect ? "cursor-pointer" : "cursor-default"}`}
             >
               <span
                 className={`grid place-items-center w-6 h-6 rounded-full font-term text-[11px] font-medium ${
-                  state === "active" ? "bg-biscay text-white" : state === "complete" ? "bg-moss text-white" : "bg-ink/[0.06] text-ink/45"
+                  state === "active" ? "bg-biscay text-white" : state === "complete" ? "bg-moss text-white" : "bg-ink/[0.08] text-ink/70"
                 }`}
               >
                 {state === "complete" ? "✓" : index + 1}
               </span>
-              <span className={`text-[11.5px] font-medium text-center ${state === "upcoming" ? "text-ink/45" : "text-ink"}`}>{label}</span>
+              {/* w-full, not just min-w-0: a long single-word label must be constrained
+                  so it breaks instead of overflowing into the next step. */}
+              <span className={`w-full break-words text-center text-[11.5px] font-medium ${state === "upcoming" ? "text-ink/70" : "text-ink"}`}>{label}</span>
             </button>
           </li>
         );

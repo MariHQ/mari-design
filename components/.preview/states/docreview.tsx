@@ -1,0 +1,218 @@
+import type { ComponentSpec } from "./types";
+import {
+  DocReviewMarkdown, DocReviewEditor, DocReviewFindingsPanel,
+  DocReviewChangeQueue, DocReviewRefinePanel, DocReviewOutlinePanel,
+} from "../../features";
+
+/* State matrix for the docreview group. Author EVERY state worth reviewing:
+   default, each variant, loading, empty, error, disabled, selected, and the
+   overflow cases (very long text, unbreakable strings, too many items, a
+   frame too narrow). Overflow states are where layout actually breaks. */
+
+const LONG =
+  "Quarterly revenue recognition policy for multi-year enterprise authentication agreements with usage-based true-ups and a staged regional rollout";
+const HUGE =
+  "Supercalifragilisticexpialidocious_configuration_parameter_value_that_never_wraps_anywhere";
+
+/* ————— markdown fixtures ————— */
+
+const MD = `# Authentication Service Migration
+
+##1. Overview
+The new authentication service replaces the legacy session store with stateless **JWT** tokens. It is expected to reduce login latency by roughly 40% and remove the shared-session bottleneck.
+
+Tokens are signed with \`RS256\` and rotated every 24 hours.
+
+## 2. Rollout phases
+- Canary at *5%* of traffic for 48 hours
+- Ramp to 50% once the canary is stable
+- Full cutover after a clean week
+
+\`\`\`bash
+POST /auth/token
+Authorization: Basic <credentials>
+\`\`\`
+`;
+
+const MD_LONG = `# ${LONG}
+
+## ${LONG}
+${LONG}. ${LONG}. The unbreakable identifier is ${HUGE} and it must not push the frame open.
+
+- ${LONG}
+- ${HUGE}
+
+\`\`\`bash
+GET /auth/${HUGE}?scope=${HUGE}
+\`\`\`
+`;
+
+const MD_HEADINGS = `# Root
+
+## One
+a
+
+## Two
+b
+
+### Two point one
+c
+
+### Two point two
+d
+
+## 3. Already numbered
+e
+
+## Four
+f
+
+### Four point one
+g
+
+## ${LONG}
+h
+
+### ${HUGE}
+i
+`;
+
+/* ————— findings / claims / changes ————— */
+
+const FINDINGS = [
+  { id: 1, kind: "fact", severity: "error", text: "reduce login latency by roughly 40%", note: "Contradicts verified fact: measured reduction was 22%." },
+  { id: -2, kind: "prose", severity: "warn", text: "expected to", note: "hedge" },
+  { id: 3, kind: "freshness", severity: "warn", text: "every 24 hours", note: "rotation cadence unverified" },
+];
+
+const MANY_FINDINGS = [
+  ...FINDINGS,
+  { id: 4, kind: "fact", severity: "error", text: "stateless", note: "Contradicts verified fact: a refresh-token table is still read on every renewal." },
+  { id: 5, kind: "prose", severity: "warn", text: "roughly", note: "hedge" },
+  { id: 6, kind: "freshness", severity: "warn", text: "Full cutover", note: "cutover date last confirmed 9 months ago" },
+  { id: 7, kind: "fact", severity: "warn", text: "Canary at", note: "No verified source for the canary percentage." },
+  { id: 8, kind: "prose", severity: "warn", text: "remove the shared-session bottleneck", note: "hedge" },
+  { id: 9, kind: "freshness", severity: "warn", text: "Ramp to 50%", note: "ramp plan is 11 months old" },
+  { id: 10, kind: "fact", severity: "error", text: LONG, note: `Contradicts verified fact: ${LONG}` },
+];
+
+const CLAIMS = [
+  { claim: "Tokens are signed with RS256.", source: "Auth RFC v1.2", status: "Verified", verified: "May 1, 2024" },
+  { claim: "Login latency drops by 40%.", source: "Migration brief", status: "Contradicted", verified: "Not verified" },
+  { claim: "All downstream services validate against JWKS.", source: "Platform wiki", status: "Verified", verified: "Apr 12, 2024" },
+  { claim: "Tokens rotate every 24 hours.", source: "No source", status: "Unsupported", verified: "Not verified" },
+  { claim: "Rollback drains every active token.", source: "Runbook", status: "Verified", verified: "Mar 3, 2024" },
+];
+
+const LONG_CLAIMS = [
+  { claim: `${LONG}.`, source: LONG, status: "Contradicted", verified: "Not verified" },
+  { claim: HUGE, source: HUGE, status: "Unsupported", verified: "Not verified" },
+  ...CLAIMS,
+  ...CLAIMS.map((c, i) => ({ ...c, claim: `${c.claim} (duplicate ${i + 1})` })),
+];
+
+type ChangeState = "pending" | "accepted" | "rejected";
+const CHANGES: { id: number; original: string; proposed: string; rule: string; state: ChangeState }[] = [
+  { id: 1, original: "It is expected to reduce login latency by roughly 40%", proposed: "It reduces measured login latency by 22%", rule: "Fact check, align with staging measurement", state: "pending" },
+  { id: 2, original: "roll out the change in three phases across the fleet", proposed: "roll out the change in three phases", rule: "Tighten, cut vague scope", state: "pending" },
+  { id: 3, original: "replaces the legacy session store", proposed: "supersedes the legacy session store", rule: "Sharpen, stronger verb", state: "pending" },
+  { id: 4, original: "remove the shared-session bottleneck", proposed: "eliminate the shared-session bottleneck", rule: "Sharpen, stronger verb", state: "accepted" },
+  { id: 5, original: "signed with RS256 and rotated every 24 hours", proposed: "signed with RS256, rotated daily", rule: "Deslop, reduce wordiness", state: "rejected" },
+];
+
+const LONG_CHANGES: typeof CHANGES = [
+  { id: 1, original: `${LONG} ${HUGE}`, proposed: `${LONG} rewritten in place with ${HUGE}`, rule: `Fact check, ${LONG}`, state: "pending" },
+  ...CHANGES.map((c) => ({ ...c, id: c.id + 10 })),
+];
+
+const REVISIONS = [
+  { id: 1, actor: "Aki Kim", verb: "edited Overview", at: "Jul 21, 2026, 2:40 PM" },
+  { id: 2, actor: "Lena Shah", verb: "ran Tighten", at: "Jul 20, 2026, 4:12 PM" },
+  { id: 3, actor: "Maya Chen", verb: "accepted 3 changes", at: "Jul 18, 2026, 11:03 AM" },
+  { id: 4, actor: "Aki Kim", verb: "ran fact check", at: "Jul 17, 2026, 9:40 AM" },
+  { id: 5, actor: "Sam Ortiz", verb: "created the document", at: "Jul 15, 2026, 2:15 PM" },
+  { id: 6, actor: "Lena Shah", verb: "imported from docs", at: "Jul 15, 2026, 2:14 PM" },
+];
+
+const LONG_REVISIONS = [
+  { id: 1, actor: "Aleksandra Konstantinopoulou-Whitfield", verb: `ran ${LONG}`, at: "Jul 21, 2026, 4:12 PM" },
+  { id: 2, actor: "Sam Ortiz", verb: HUGE, at: "Jul 20, 2026, 9:00 AM" },
+  ...REVISIONS.map((r) => ({ ...r, id: r.id + 10 })),
+];
+
+export const DOCREVIEW: ComponentSpec[] = [
+  {
+    id: "DocReviewMarkdown", title: "DocReviewMarkdown", width: 880,
+    states: [
+      { id: "default", label: "Default (Parse tab)", node: <DocReviewMarkdown /> },
+      { id: "serialize", label: "Variant: Serialize tab", node: <DocReviewMarkdown defaultTab="roundtrip" /> },
+      { id: "decorate", label: "Variant: Decorate tab", node: <DocReviewMarkdown defaultTab="decorate" /> },
+      { id: "decorate-many", label: "Variant: Decorate tab, too many findings", node: <DocReviewMarkdown defaultTab="decorate" findings={MANY_FINDINGS} /> },
+      { id: "diff", label: "Variant: Word diff tab", node: <DocReviewMarkdown defaultTab="diff" /> },
+      { id: "loading", label: "Loading", node: <DocReviewMarkdown loading /> },
+      { id: "empty", label: "Empty document, no findings", node: <DocReviewMarkdown markdown="" findings={[]} /> },
+      { id: "headings", label: "Heading-heavy doc", node: <DocReviewMarkdown markdown={MD_HEADINGS} findings={[]} /> },
+      { id: "many", label: "Overflow: far too many findings", node: <DocReviewMarkdown markdown={MD} findings={MANY_FINDINGS} /> },
+      { id: "long", label: "Overflow: long text + 90-char unbreakable string", node: <DocReviewMarkdown markdown={MD_LONG} findings={MANY_FINDINGS} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewMarkdown markdown={MD_LONG} findings={MANY_FINDINGS} /> },
+    ],
+  },
+  {
+    id: "DocReviewFindingsPanel", title: "DocReviewFindingsPanel", width: 480,
+    states: [
+      { id: "default", label: "Default (Fact check tab)", node: <DocReviewFindingsPanel /> },
+      { id: "claims", label: "Variant: All claims tab", node: <DocReviewFindingsPanel defaultTab="claims" /> },
+      { id: "claims-long", label: "Variant: All claims, long text", node: <DocReviewFindingsPanel defaultTab="claims" claims={LONG_CLAIMS} /> },
+      { id: "loading", label: "Loading", node: <DocReviewFindingsPanel loading /> },
+      { id: "empty", label: "Empty: no findings, no claims", node: <DocReviewFindingsPanel findings={[]} claims={[]} /> },
+      { id: "clean", label: "No contradiction, claims all verified", node: <DocReviewFindingsPanel findings={FINDINGS.filter((f) => f.severity !== "error")} claims={CLAIMS.filter((c) => c.status === "Verified")} /> },
+      { id: "many", label: "Overflow: too many findings and claims", node: <DocReviewFindingsPanel findings={MANY_FINDINGS} claims={LONG_CLAIMS} /> },
+      { id: "long", label: "Overflow: long claim text + unbreakable string", node: <DocReviewFindingsPanel findings={[{ id: 1, kind: "fact", severity: "error", text: LONG, note: `Contradicts verified fact: ${LONG} ${HUGE}` }]} claims={LONG_CLAIMS} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewFindingsPanel findings={MANY_FINDINGS} claims={LONG_CLAIMS} /> },
+    ],
+  },
+  {
+    id: "DocReviewRefinePanel", title: "DocReviewRefinePanel", width: 380,
+    states: [
+      { id: "default", label: "Default", node: <DocReviewRefinePanel /> },
+      { id: "loading", label: "Loading", node: <DocReviewRefinePanel loading /> },
+      { id: "empty", label: "Empty: no findings", node: <DocReviewRefinePanel errorN={0} warnN={0} advisoryN={0} /> },
+      { id: "many", label: "Overflow: four-digit tallies", node: <DocReviewRefinePanel errorN={1284} warnN={9612} advisoryN={4470} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewRefinePanel errorN={128} warnN={961} advisoryN={447} /> },
+    ],
+  },
+  {
+    id: "DocReviewOutlinePanel", title: "DocReviewOutlinePanel", width: 340,
+    states: [
+      { id: "default", label: "Default", node: <DocReviewOutlinePanel /> },
+      { id: "loading", label: "Loading", node: <DocReviewOutlinePanel loading /> },
+      { id: "empty", label: "Empty: no headings, no revisions", node: <DocReviewOutlinePanel body="Just a paragraph, no headings at all." revisions={[]} /> },
+      { id: "deep", label: "Deep outline with own-numbered headings", node: <DocReviewOutlinePanel body={MD_HEADINGS} revisions={REVISIONS} /> },
+      { id: "many", label: "Overflow: long headings, long revisions", node: <DocReviewOutlinePanel body={MD_LONG} revisions={LONG_REVISIONS} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewOutlinePanel body={MD_LONG} revisions={LONG_REVISIONS} /> },
+    ],
+  },
+  {
+    id: "DocReviewChangeQueue", title: "DocReviewChangeQueue", width: 760,
+    states: [
+      { id: "default", label: "Default (Review before apply)", node: <DocReviewChangeQueue /> },
+      { id: "all", label: "Variant: All changes tab", node: <DocReviewChangeQueue defaultTab="all" /> },
+      { id: "loading", label: "Loading", node: <DocReviewChangeQueue loading /> },
+      { id: "empty", label: "Empty: nothing proposed", node: <DocReviewChangeQueue changes={[]} /> },
+      { id: "resolved", label: "All changes already resolved", node: <DocReviewChangeQueue changes={CHANGES.filter((c) => c.state !== "pending")} /> },
+      { id: "long", label: "Overflow: long diff + unbreakable string", node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
+    ],
+  },
+  {
+    id: "DocReviewEditor", title: "DocReviewEditor", width: 900,
+    states: [
+      { id: "default", label: "Default", node: <DocReviewEditor /> },
+      { id: "loading", label: "Loading", node: <DocReviewEditor loading /> },
+      { id: "empty", label: "Empty document, no findings", node: <DocReviewEditor body="" findings={[]} /> },
+      { id: "many", label: "Overflow: far too many annotations", node: <DocReviewEditor body={MD} findings={MANY_FINDINGS} /> },
+      { id: "long", label: "Overflow: long text + unbreakable string", node: <DocReviewEditor body={MD_LONG} findings={MANY_FINDINGS} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewEditor body={MD_LONG} findings={MANY_FINDINGS} /> },
+    ],
+  },
+];

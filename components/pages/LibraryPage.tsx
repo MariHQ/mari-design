@@ -3,10 +3,11 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { BookOpen, FileText } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
-import { Avatar } from "../data-display/Avatar";
+import { Card } from "../layout/Card";
+import { Chip, AvatarGroup, Breadcrumb } from "../index";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_URL, UNBREAKABLE, LONG_WORD,
-  HUGE_NUMBER, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS, repeat,
+  HUGE_NUMBER, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
 } from "./stress";
 import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
@@ -60,7 +61,7 @@ const STATES = [
    the Library panels via their data props so the real composed features render
    under stress, catching wrapping / truncation / flex-blowout bugs. */
 const OVERFLOW_TAGS = [
-  { id: "canonical", name: "Canonical — consolidated across every service, region, and on-call team", tone: "ok" as const, evidence: "Preferred evidence, superseding all prior evidence policies across the org", weight: 1.6, usage: 142, behaviors: ["Ranks first in every search surface and published documentation site", "Trusted for facts extracted during the quarterly reliability review"], standard: true, description: LONG_PARAGRAPH },
+  { id: "canonical", name: "Canonical: consolidated across every service, region, and on-call team", tone: "ok" as const, evidence: "Preferred evidence, superseding all prior evidence policies across the org", weight: 1.6, usage: 142, behaviors: ["Ranks first in every search surface and published documentation site", "Trusted for facts extracted during the quarterly reliability review"], standard: true, description: LONG_PARAGRAPH },
   { id: "incident-response", name: "Incident-response and on-call escalation runbook", tone: "attention" as const, evidence: "Flagged for a human reviewer, never used as silent evidence", weight: 0.6, usage: 27, behaviors: ["Routed to the reliability guild for a judgment call", "Re-reviewed every quarter or immediately after any Sev-1 incident"], standard: true, description: LONG_TITLE },
   { id: "runbook", name: LONG_TITLE, tone: "info" as const, evidence: "Operational runbooks and on-call documentation for every service tier", weight: 1.1, usage: 34, behaviors: ["Operational workflows", "On-call escalation ladder"], standard: false, description: LONG_PARAGRAPH },
 ];
@@ -70,7 +71,7 @@ const STRESS_TAGS = [
 ];
 
 const OVERFLOW_TERMS = [
-  { id: "t1", term: "Escalation ladder and paging policy — the consolidated runbook definition", definition: LONG_PARAGRAPH, owner: LONG_NAME, updated: "2026-07-14" },
+  { id: "t1", term: "Escalation ladder and paging policy: the consolidated runbook definition", definition: LONG_PARAGRAPH, owner: LONG_NAME, updated: "2026-07-14" },
   { id: "t2", term: LONG_TITLE, definition: LONG_PARAGRAPH, owner: LONG_NAME, updated: "2026-07-09" },
 ];
 const STRESS_TERMS = [
@@ -80,7 +81,7 @@ const STRESS_TERMS = [
 
 const OVERFLOW_TEMPLATES = [
   { id: "o1", name: LONG_TITLE, category: "Operations", description: LONG_PARAGRAPH, sections: repeat((i) => `${i + 1}. Escalation ladder, paging policy, severity rubric, and communication templates for responders`, 10), standard: true, icon: FileText },
-  { id: "o2", name: "Consolidated platform reliability and incident-response scaffold", category: "Governance", description: LONG_TITLE, sections: repeat((i) => `Reviewed section ${i + 1} — reconciled against the last four quarters of incident retrospectives`, 8), standard: false, icon: FileText },
+  { id: "o2", name: "Consolidated platform reliability and incident-response scaffold", category: "Governance", description: LONG_TITLE, sections: repeat((i) => `Reviewed section ${i + 1}: reconciled against the last four quarters of incident retrospectives`, 8), standard: false, icon: FileText },
 ];
 const STRESS_TEMPLATES = [
   { id: "s1", name: UNBREAKABLE, category: "Governance", description: LONG_URL, sections: [UNBREAKABLE, LONG_URL, LONG_WORD, MIXED_SCRIPT], standard: false, icon: FileText },
@@ -90,17 +91,21 @@ const STRESS_TEMPLATES = [
 function StressBody({ variant }: { variant: "overflow" | "stress" }) {
   const stress = variant === "stress";
   return (
-    <div className="mt-5 flex flex-col gap-6">
-      {stress && (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex -space-x-2">
-            {MANY_INITIALS.map((ini, n) => (
-              <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
+    <div className="mt-6 flex flex-col gap-6">
+      <Card variant="plain" title="Contributors & labels">
+        <div className="space-y-3">
+          <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+          <div className="flex flex-wrap gap-1.5">
+            {(stress ? [...MANY_TAGS, MIXED_SCRIPT] : MANY_TAGS.slice(0, 6)).map((t, i) => (
+              <Chip key={i} label={t} tone="info" />
             ))}
           </div>
-          <span className="min-w-0 break-words font-term text-[11px] text-ink/45">{MIXED_SCRIPT}</span>
+          <AvatarGroup
+            people={(stress ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }))}
+            max={stress ? 5 : 6}
+          />
         </div>
-      )}
+      </Card>
       <LibraryTagsPanel tags={stress ? STRESS_TAGS : OVERFLOW_TAGS} />
       <LibraryGlossaryPanel terms={stress ? STRESS_TERMS : OVERFLOW_TERMS} />
       <LibraryTemplatesPanel templates={stress ? STRESS_TEMPLATES : OVERFLOW_TEMPLATES} />
@@ -151,13 +156,15 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
   } else {
     body = (
       <>
-        <div className="mt-5">
+        <div className="mt-6">
           <Tabs<Tab> ariaLabel="Library sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={setTab} />
         </div>
         <div className="mt-5"><Panel tab={tab} state={state} /></div>
       </>
     );
   }
+
+  const actions = <Button variant="default">Setup guide</Button>;
 
   return (
     <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
@@ -167,8 +174,9 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
           title="Library"
           description="Project-wide vocabulary, deterministic rules, voice, and scaffolds for every document."
           icon={<span className="text-moss"><BookOpen size={24} /></span>}
-          actions={<Button variant="default">Setup guide</Button>}
+          actions={mobile ? undefined : actions}
         />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         {body}
       </div>
     </PageFrame>

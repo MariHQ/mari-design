@@ -10,7 +10,7 @@ const SUB_TONE: Record<StatTone, string> = {
   attention: "text-clay",
   blocked: "text-espelette",
   info: "text-biscay-2",
-  neutral: "text-ink/55",
+  neutral: "text-ink/65",
 };
 
 /* The one stat card — big display number + label + sub note. Pass onClick
@@ -32,7 +32,7 @@ export function Stat({
 }) {
   if (loading) {
     return (
-      <div className={`${card} flex items-start justify-between gap-3 p-4 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-4 ${className}`.trim()} aria-hidden="true">
         <span className="flex flex-col gap-2">
           <Skeleton width={72} height={26} />
           <SkeletonLine w={90} h={10} />
@@ -46,13 +46,13 @@ export function Stat({
     <>
       <span className="flex flex-col gap-0.5">
         <span className="text-[24px] font-bold tracking-[-0.02em] text-ink leading-none">{value}</span>
-        <span className="text-[12.5px] text-ink/60">{label}</span>
+        <span className="text-[12.5px] text-ink/65">{label}</span>
         {sub && <span className={`font-term text-[11.5px] mt-0.5 ${SUB_TONE[tone]}`}>{sub}</span>}
       </span>
       {icon && <span className="text-ink/30" aria-hidden="true">{icon}</span>}
     </>
   );
-  const shared = `${card} flex items-start justify-between gap-3 p-4 text-left ${className}`.trim();
+  const shared = `${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-4 text-left ${className}`.trim();
   if (onClick) {
     return (
       <button type="button" onClick={onClick} className={`${shared} hover:border-ink/30 transition-colors ${focusRing}`}>

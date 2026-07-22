@@ -25,7 +25,7 @@ export function AvatarGroup({ people, max = 4, className = "" }: AvatarGroupProp
       ))}
       {overflow > 0 && (
         <span
-          className="-ml-1.5 grid place-items-center w-[26px] h-[26px] rounded-full ring-2 ring-paper bg-ink/[0.08] border border-ink/15 font-term text-[10px] font-semibold text-ink/70"
+          className="-ml-1.5 grid place-items-center w-[26px] h-[26px] rounded-full ring-2 ring-paper bg-ink/[0.08] border border-ink/15 font-term text-[10px] font-semibold text-ink/80"
           title={`${overflow} more`}
         >
           +{overflow}

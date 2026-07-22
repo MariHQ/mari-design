@@ -23,10 +23,10 @@ export function CodeBlock({ code, language, title, copy = true, wrap = false, cl
     <div className={`rounded-md border border-ink/15 bg-ink/[0.025] overflow-hidden ${className}`.trim()}>
       {header && (
         <div className="flex items-center gap-3 px-3 py-2 border-b border-ink/10 bg-ink/[0.02]">
-          <span className="flex-1 min-w-0 truncate font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/50">
+          <span className="flex-1 min-w-0 truncate font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/65">
             {title ?? language}
           </span>
-          {copy && <CopyButton value={code} variant="link" className="text-ink/50 hover:text-ink" />}
+          {copy && <CopyButton value={code} variant="link" className="text-ink/70 hover:text-ink" />}
         </div>
       )}
       <div className="relative">

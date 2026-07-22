@@ -35,7 +35,7 @@ export { TagInput } from "./forms/TagInput";
 export { Badge, resolveTone, resolveToneKey } from "./data-display/Badge";
 export { Table } from "./data-display/Table";
 export { DataTable, type Column } from "./data-display/DataTable";
-export { Chip, StatusChip, SeverityChip, CountChip, type ChipProps, type ChipTone, type ChipStatus, type ChipSeverity } from "./data-display/Chip";
+export { Chip, StatusChip, SeverityChip, CountChip, DryChip, type ChipProps, type ChipTone, type ChipStatus, type ChipSeverity } from "./data-display/Chip";
 export { EmptyState } from "./data-display/EmptyState";
 export { Spinner } from "./data-display/Spinner";
 export { Stepper } from "./data-display/Stepper";
@@ -130,6 +130,7 @@ export { SyncPanel, SyncStatusLine, type SyncPanelProps, type SyncStatusLineProp
 export { Pill, type PillKind, type PillProps } from "./data-display/Pill";
 export { GradeChip, type GradeChipProps } from "./data-display/GradeChip";
 export { FreshBar, LegendSwatch, type FreshBarProps, type FreshSegment } from "./data-display/FreshBar";
+export { DateRangePicker, DATE_RANGE_PRESETS, dateRangeStart, dateRangeLabel, type DateRangePickerProps, type DateRange, type DateRangePreset } from "./data-display/DateRangePicker";
 export { Scrubber, type ScrubberProps, type ScrubberActivity } from "./data-display/Scrubber";
 export { Inspector, type InspectorProps, type InspectorSection } from "./data-display/Inspector";
 export { GlossaryPanel, type GlossaryPanelProps, type GlossaryEntry } from "./data-display/GlossaryPanel";
@@ -140,3 +141,16 @@ export { CopyButton, type CopyButtonProps } from "./actions/CopyButton";
 export { CodeBlock, type CodeBlockProps } from "./data-display/CodeBlock";
 export { Timeline, type TimelineProps, type TimelineItem } from "./data-display/Timeline";
 export { AvatarGroup, type AvatarGroupProps } from "./data-display/AvatarGroup";
+
+// ── Shared design-system foundations (CONVENTIONS.md) ──────────────────
+// Table chrome: sortable headers + uniform cell padding.
+export { SortHeader, useSort, thClass, thPad, tdPad, type SortState, type SortDir, type Align } from "./data-display/sortable";
+// Card/drawer content ordering.
+export { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "./layout/CardShell";
+// Canonical error copy.
+export { ERRORS, ERROR_LIST, type ErrorId, type ErrorSpec, type ErrorTone } from "./feedback/errors";
+export { ErrorMessage, FieldError } from "./feedback/ErrorMessage";
+// Canonical server/region vocabulary.
+export { REGIONS, REGION_OPTIONS, regionLabel, regionShort, type RegionCode } from "./tokens/regions";
+// Disabled-state token for hand-rolled buttons.
+export { btnDisabled } from "./actions/buttons";

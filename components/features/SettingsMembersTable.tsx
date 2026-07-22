@@ -10,6 +10,9 @@ import { Field } from "../forms/Field";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
+import { EmptyState } from "../data-display/EmptyState";
+import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons/marks";
 
 /* Settings — Members table & provisioning ────────────────────────────────
@@ -40,7 +43,10 @@ const DEMO_MEMBERS: Member[] = [
   { id: 4, name: "Sam Okafor", initials: "SO", email: "sam@team.com", role: "user", status: "invited", joined: "2025-06-30" },
 ];
 
-const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
+/** Role ids are lowercase on the wire; the dropdown shows them Capitalized
+    (CONVENTIONS.md §7). */
+const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", user: "User" };
+const roleLabel = (r: Role) => ROLE_LABEL[r] ?? (String(r).charAt(0).toUpperCase() + String(r).slice(1));
 
 export type SettingsMembersTableProps = {
   members?: Member[];
@@ -92,6 +98,14 @@ export function SettingsMembersTable({
 
   const roleOptions = (r: Role): Role[] => (ROLES.includes(r as never) ? [...ROLES] : [r, ...ROLES]);
 
+  const { sort, onSort, sorted } = useSort(members, {
+    member: (m) => m.name,
+    email: (m) => m.email,
+    role: (m) => roleLabel(m.role),
+    joined: (m) => m.joined,
+    status: (m) => m.status,
+  });
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
@@ -111,17 +125,17 @@ export function SettingsMembersTable({
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
       <PageHeader
-        title="Members & roles"
-        description={`Manage access to ${name}`}
+        title="Admin"
+        description={`Manage who can reach ${name}, and how they get in`}
         actions={<Button variant="primary" onClick={() => setInviting((v) => !v)}><UserPlus size={15} /> Invite member</Button>}
       />
 
       {inviting && (
-        <Card title="Invite a teammate" hint="They appear below with an amber dot until they sign in.">
+        <Card title="Invite a teammate" hint="They appear below with an Invited chip until they sign in.">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Name"><Input value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Jordan Lee" className="w-full" /></Field>
             <Field label="Email"><Input type="email" value={invEmail} onChange={(e) => setInvEmail(e.target.value)} placeholder="jordan@team.com" className="w-full" /></Field>
-            <Field label="Role"><Select value={invRole} onChange={(e) => setInvRole(e.target.value)} className="w-full">{ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</Select></Field>
+            <Field label="Role"><Select value={invRole} onChange={(e) => setInvRole(e.target.value)} className="w-full">{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</Select></Field>
           </div>
           <div className="mt-3 flex items-center gap-2">
             <Button variant="primary" disabled={sending || !invName.trim() || !invEmail.trim()} onClick={sendInvite}>{sending ? "Sending…" : "Send invite"}</Button>
@@ -144,24 +158,50 @@ export function SettingsMembersTable({
       </Card>
 
       <Card variant="flush" title="Members" hint={`${members.length} people`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse" style={{ minWidth: 720 }}>
-            <thead><tr>{["Member", "Email", "Role", "Status", "Joined", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 5 ? { width: 140 } : undefined}>{h}</th>)}</tr></thead>
-            <tbody>
-              {members.map((m) => (
-                <tr key={m.id} className="border-b border-ink/10 last:border-0">
-                  <td className="px-4 py-3"><span className="inline-flex items-center gap-2.5"><Avatar initials={m.initials} /><span className="text-[13px] font-medium text-ink">{m.name}</span></span></td>
-                  <td className="px-4 py-3 text-[13px] text-ink/70">{m.email}</td>
-                  <td className="px-4 py-3"><Select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8">{roleOptions(m.role).map((r) => <option key={r} value={r}>{r}</option>)}</Select></td>
-                  <td className="px-4 py-3"><Chip label={m.status === "invited" ? "Invited" : "Active"} tone={m.status === "invited" ? "attention" : "ok"} dot caps /></td>
-                  <td className="px-4 py-3 font-term text-[12px] text-ink/60">{m.joined}</td>
-                  <td className="px-4 py-3"><ConfirmButton compact confirmLabel="Remove?" onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
+        {members.length === 0 ? (
+          <EmptyState title="No members yet">Send the first invite to bring someone into this workspace.</EmptyState>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: 760 }}>
+              <colgroup>
+                <col style={{ width: "24%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
+                <col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <SortHeader label="Member" sortKey="member" sort={sort} onSort={onSort} />
+                  <SortHeader label="Email" sortKey="email" sort={sort} onSort={onSort} />
+                  <SortHeader label="Role" sortKey="role" sort={sort} onSort={onSort} align="center" />
+                  <SortHeader label="Joined" sortKey="joined" sort={sort} onSort={onSort} align="center" />
+                  {/* Rows carry a clickable action, so status is second to last. */}
+                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
+                  <SortHeader label="Actions" sortable={false} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {members.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-ink/55">No members yet — send the first invite.</p>}
+              </thead>
+              <tbody>
+                {sorted.map((m) => (
+                  <tr key={m.id} className="border-b border-ink/10 last:border-0 align-top">
+                    <td className={tdPad}>
+                      <span className="flex items-start gap-2.5">
+                        <Avatar initials={m.initials} />
+                        <span className="min-w-0 break-words text-[13px] font-medium text-ink">{m.name}</span>
+                      </span>
+                    </td>
+                    <td className={`${tdPad} break-all text-[13px] text-ink/70`}>{m.email}</td>
+                    <td className={`${tdPad} text-center`}>
+                      <Select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8">
+                        {roleOptions(m.role).map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+                      </Select>
+                    </td>
+                    <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(m.joined)}</td>
+                    <td className={tdPad}><Chip label={m.status === "invited" ? "Invited" : "Active"} tone={m.status === "invited" ? "attention" : "ok"} dot caps /></td>
+                    <td className={tdPad}><ConfirmButton compact confirmLabel="Remove?" onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
@@ -173,7 +213,7 @@ export function SettingsMembersTable({
             <Field label="Team slug"><Input value={ghDraft} onChange={(e) => setGhDraft(e.target.value)} placeholder="org/team" className="w-full font-term" /></Field>
           ) : (
             <p className="text-[13px] text-ink/70">
-              {ghConnected ? <>Members of <span className="font-term text-ink">{gh.team}</span> are auto-provisioned as they sign in.</> : <span className="text-ink/45">Not connected — configure a team to auto-provision members.</span>}
+              {ghConnected ? <>Members of <span className="font-term text-ink">{gh.team}</span> are auto-provisioned as they sign in.</> : <span className="text-ink/70">Not connected. Configure a team to auto-provision members.</span>}
             </p>
           )}
         </Card>

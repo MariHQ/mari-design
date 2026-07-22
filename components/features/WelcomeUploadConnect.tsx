@@ -1,5 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Send, FileText, CheckCircle2 } from "lucide-react";
+import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ERRORS, type ErrorId } from "../feedback/errors";
 import { Drawer } from "../layout/Drawer";
 import { Button } from "../actions/Button";
 import { Spinner } from "../data-display/Spinner";
@@ -15,15 +17,26 @@ import { focusRing } from "../tokens/focusRing";
    POST /onboard/upload is simulated. Standalone: opens by default. */
 
 const MAX_FILES = 20;
-const MAX_BYTES = 1_000_000;
+const MAX_BYTES = 25_000_000;
+
+/* One list, used by the accept attribute, the validator, and the spec line
+   under the Browse button. It used to accept only .md/.txt, which greyed out
+   every other file in the picker while the copy promised more. */
+const ACCEPTED_EXT = [".pdf", ".md", ".mdx", ".markdown", ".txt", ".html", ".htm", ".docx", ".csv"];
+const ACCEPT_ATTR = ACCEPTED_EXT.join(",");
+const SPEC_LINE = "PDF, Markdown, plain text, HTML, DOCX, or CSV. Up to 20 files, 25 MB each.";
 
 type FileResult = { name: string; docId: number | null; chunks: number; embedded: number; error?: string };
 type UploadResult = { files: FileResult[] };
 
 // Deterministic per-name demo counts so re-dropping the same file skips embeds.
 const seen = new Set<string>();
+function supported(name: string): boolean {
+  return ACCEPTED_EXT.some((ext) => name.toLowerCase().endsWith(ext));
+}
+
 function fakeIngest(name: string, size: number): FileResult {
-  if (!/\.(md|mdx|markdown|txt)$/i.test(name)) return { name, docId: null, chunks: 0, embedded: 0, error: "unsupported file type" };
+  if (!supported(name)) return { name, docId: null, chunks: 0, embedded: 0, error: ERRORS["upload.unsupportedType"].title };
   const chunks = Math.max(1, Math.round(size / 1800) || 3 + (name.length % 5));
   const first = !seen.has(name);
   seen.add(name);
@@ -55,11 +68,14 @@ function FileDropzone({
         <span className="inline-flex items-center gap-2 text-[13px] text-ink/65"><Spinner size="md" /> Uploading and embedding…</span>
       ) : (
         <>
-          <Send size={22} className="text-ink/35 -rotate-45" />
-          <span className="text-[13px] text-ink/60">Drag files here, or</span>
+          <Send size={22} className="text-ink/65 -rotate-45" />
+          <span className="text-[13px] text-ink/70">Drag files here, or</span>
           <Button compact onClick={() => inputRef.current?.click()}>Browse files</Button>
+          {/* The spec sits directly under the button, where you look before
+              you pick a file, not buried in the drawer footer. */}
+          <span className="mt-1 max-w-[380px] text-[12.5px] font-medium text-ink/80">{SPEC_LINE}</span>
           <input
-            ref={inputRef} type="file" multiple hidden accept=".md,.mdx,.markdown,.txt"
+            ref={inputRef} type="file" multiple hidden accept={ACCEPT_ATTR}
             className={focusRing}
             onChange={(e) => { onFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }}
           />
@@ -75,18 +91,23 @@ function UploadResultList({ result }: { result: UploadResult }) {
   const totalEmbedded = ok.reduce((n, f) => n + f.embedded, 0);
   return (
     <div className="mt-3">
-      <p className="text-[12.5px] text-ink/70">
-        {ok.length} file{ok.length === 1 ? "" : "s"} ingested · {totalChunks} chunks · {totalEmbedded} embedded
-        {totalEmbedded < totalChunks && <span className="text-ink/50"> (unchanged chunks skipped by content hash)</span>}
-      </p>
+      <div className="rounded-[4px] border border-moss/40 bg-moss/[0.06] px-3 py-2.5">
+        <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-moss">
+          <CheckCircle2 size={15} /> {ok.length} file{ok.length === 1 ? "" : "s"} added to your shared library
+        </p>
+        <p className="mt-1 text-[12.5px] text-ink/70">
+          Find them under Knowledge, filtered to the Upload source. {totalChunks} chunks, {totalEmbedded} embedded
+          {totalEmbedded < totalChunks && <span className="text-ink/65"> (unchanged chunks skipped by content hash)</span>}.
+        </p>
+      </div>
       <div className="mt-2 grid gap-1.5">
         {result.files.map((f, i) => (
           <div key={i} className="flex items-center gap-2 p-2 rounded-md border border-ink/12">
-            <FileText size={14} className="text-ink/45 shrink-0" />
+            <FileText size={14} className="text-ink/65 shrink-0" />
             <span className="text-[13px] text-ink truncate flex-1">{f.name}</span>
             {f.docId != null
-              ? <span className="font-term text-[11px] text-ink/55 shrink-0">{f.chunks} chunks · {f.embedded} embedded</span>
-              : <Chip label={f.error ?? "failed"} tone="blocked" className="shrink-0" />}
+              ? <span className="font-term text-[11px] text-ink/65 shrink-0">{f.chunks} chunks · {f.embedded} embedded</span>
+              : <Chip label={f.error ?? "Upload failed"} tone="blocked" dot className="shrink-0 max-w-[220px] [&>span]:truncate" />}
           </div>
         ))}
       </div>
@@ -133,15 +154,18 @@ function UploadConnectSkeleton({ className = "" }: { className?: string }) {
 export function WelcomeUploadConnect({ defaultOpen = true, loading = false, className = "" }: WelcomeUploadConnectProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ErrorId | null>(null);
+  const [errorDetail, setErrorDetail] = useState("");
   const [result, setResult] = useState<UploadResult | null>(null);
 
   const upload = (files: File[]) => {
     if (files.length === 0) return;
-    setError("");
-    if (files.length > MAX_FILES) { setError(`At most ${MAX_FILES} files per upload — you picked ${files.length}.`); return; }
+    setError(null); setErrorDetail("");
+    const bad = files.find((f) => !supported(f.name));
+    if (bad) { setError("upload.unsupportedType"); setErrorDetail(bad.name); return; }
+    if (files.length > MAX_FILES) { setError("upload.tooLarge"); setErrorDetail(`You picked ${files.length} files; the limit is ${MAX_FILES}.`); return; }
     const over = files.find((f) => f.size > MAX_BYTES);
-    if (over) { setError(`"${over.name}" is over the 1 MB per-file limit.`); return; }
+    if (over) { setError("upload.tooLarge"); setErrorDetail(over.name); return; }
     setUploading(true);
     window.setTimeout(() => {
       setResult({ files: files.map((f) => fakeIngest(f.name, f.size)) });
@@ -151,10 +175,10 @@ export function WelcomeUploadConnect({ defaultOpen = true, loading = false, clas
 
   const footer = (
     <div className="flex-1 flex items-center gap-3">
-      <span className="text-[12px] text-ink/55 flex-1">.md / .txt · up to 20 files · 1 MB each</span>
       <Button variant="primary" onClick={() => setOpen(false)}>
         {result ? <>Done <CheckCircle2 size={14} /></> : "Close"}
       </Button>
+      <span className="text-[12px] text-ink/70 flex-1">{SPEC_LINE}</span>
     </div>
   );
 
@@ -162,18 +186,20 @@ export function WelcomeUploadConnect({ defaultOpen = true, loading = false, clas
 
   return (
     <div className={className}>
-      <Button variant="primary" onClick={() => { setResult(null); setError(""); setOpen(true); }}>
+      <Button variant="primary" onClick={() => { setResult(null); setError(null); setErrorDetail(""); setOpen(true); }}>
         <Send size={14} className="-rotate-45" /> Upload files
       </Button>
       <Drawer open={open} onClose={() => !uploading && setOpen(false)} title="Upload files" subtitle="Connector setup"
         icon={<Send size={18} className="-rotate-45" />} footer={footer}>
         <p className="text-[13px] text-ink/70 mb-3">
-          Files run the same document → chunk → embed pipeline as GitHub sync and land in your shared library.
+          Files run the same document, chunk, embed pipeline as GitHub sync and land in your shared library.
         </p>
         <FileDropzone uploading={uploading} onFiles={upload} />
         {error && (
-          <div className="mt-3 rounded-[4px] border border-espelette/30 bg-espelette/[0.05] px-3 py-2 text-[12.5px] text-espelette" role="alert">
-            {error}
+          <div className="mt-3">
+            <ErrorMessage id={error} onDismiss={() => { setError(null); setErrorDetail(""); }}>
+              {errorDetail}
+            </ErrorMessage>
           </div>
         )}
         {result && <UploadResultList result={result} />}

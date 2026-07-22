@@ -33,7 +33,7 @@ function GoogleMark({ size = 17 }: { size?: number }) {
   );
 }
 
-const DIVIDER = "flex items-center gap-3 text-center font-term text-[11px] uppercase tracking-[0.08em] text-ink/40 before:h-px before:flex-1 before:bg-ink/12 after:h-px after:flex-1 after:bg-ink/12";
+const DIVIDER = "flex items-center gap-3 text-center font-term text-[11px] uppercase tracking-[0.08em] text-ink/65 before:h-px before:flex-1 before:bg-ink/12 after:h-px after:flex-1 after:bg-ink/12";
 
 export type AuthSessionProps = {
   /** Start in the signed-in session view. */
@@ -100,17 +100,22 @@ export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = 
     return (
       <div className={`mx-auto max-w-[380px] ${className}`.trim()}>
         <Card>
-          <div className="flex flex-col items-center gap-3 py-3 text-center">
-            <span className="scale-125"><Avatar initials={user.initials} /></span>
-            <div>
-              <div className="text-[15px] font-semibold text-ink">{user.name}</div>
-              <div className="text-[13px] text-ink/60">{user.email}</div>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <span className="scale-125"><Avatar initials={user.initials} /></span>
+              <div className="min-w-0 w-full">
+                <div className="break-words text-[15px] font-semibold text-ink">{user.name}</div>
+                <div className="break-all text-[13px] text-ink/70">{user.email}</div>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Chip label={user.role} tone="info" caps />
+                <Chip label={`via ${user.provider}`} tone="neutral" />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Chip label={user.role} tone="info" caps />
-              <Chip label={`via ${user.provider}`} tone="neutral" />
+            {/* Action bottom LEFT (CONVENTIONS.md §2). */}
+            <div className="flex border-t border-ink/10 pt-3">
+              <Button variant="danger" onClick={() => { setUser(null); setPassword(""); }}><LogOut size={14} /> Sign out</Button>
             </div>
-            <Button variant="danger" onClick={() => { setUser(null); setPassword(""); }}><LogOut size={14} /> Sign out</Button>
           </div>
         </Card>
       </div>
@@ -122,8 +127,8 @@ export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = 
       <Card>
         <div className="flex flex-col items-center gap-1.5 pt-2 pb-4 text-center">
           <Logo size={40} wordmark="" />
-          <h1 className="text-[19px] font-bold text-ink font-display">Mari Cloud</h1>
-          <p className="text-[13px] text-ink/55">Your product knowledge, curated.</p>
+          <h1 className="text-[19px] font-bold text-ink font-display">Mari</h1>
+          <p className="text-[13px] text-ink/70">Your product knowledge, curated.</p>
         </div>
 
         <form className="flex flex-col gap-3" onSubmit={submit}>
@@ -146,12 +151,12 @@ export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = 
         <div className={`my-3.5 ${DIVIDER}`}>or continue with</div>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" disabled={!oauth.github || busy} onClick={() => oauth.github && signIn("github")} title={oauth.github ? undefined : "GitHub OAuth not configured"}
-            className={`inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:opacity-45 disabled:pointer-events-none ${focusRing}`}><GithubMark size={16} /> GitHub</button>
+            className={`inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:opacity-100 disabled:bg-flysch disabled:text-ink/65 disabled:border-ink/15 disabled:pointer-events-none ${focusRing}`}><GithubMark size={16} /> GitHub</button>
           <button type="button" disabled={!oauth.google || busy} onClick={() => oauth.google && signIn("google")} title={oauth.google ? undefined : "Google OAuth not configured"}
-            className={`inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:opacity-45 disabled:pointer-events-none ${focusRing}`}><GoogleMark /> Google</button>
+            className={`inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:opacity-100 disabled:bg-flysch disabled:text-ink/65 disabled:border-ink/15 disabled:pointer-events-none ${focusRing}`}><GoogleMark /> Google</button>
         </div>
 
-        <p className="mt-4 text-center text-[12.5px] text-ink/60">
+        <p className="mt-4 text-center text-[12.5px] text-ink/70">
           {mode === "signin"
             ? <>New here? <button type="button" onClick={() => { setMode("register"); setError(null); }} className={`font-medium text-biscay-2 hover:text-ink rounded-[3px] ${focusRing}`}>Create an account</button></>
             : <>Already have an account? <button type="button" onClick={() => { setMode("signin"); setError(null); }} className={`font-medium text-biscay-2 hover:text-ink rounded-[3px] ${focusRing}`}>Sign in</button></>}

@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 export type IconRingTone = "ink" | "ok" | "attention" | "blocked" | "info";
 
 const TONE: Record<IconRingTone, string> = {
-  ink: "border-ink/20 text-ink/70",
+  ink: "border-ink/25 text-ink/80",
   ok: "border-moss/35 text-moss",
   attention: "border-clay/35 text-clay",
   blocked: "border-espelette/35 text-espelette",

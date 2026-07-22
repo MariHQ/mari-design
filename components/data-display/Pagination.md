@@ -26,3 +26,10 @@ import { Pagination } from "@mari-design/components";
 ## Notes
 
 - Same button treatment as `DataTable`'s built-in pager (`w-7 h-7 rounded-[4px] border border-ink/20`) — kept identical on purpose so both read as the same control.
+
+## Disabled arrows
+
+At the first/last page the arrow keeps its (slightly darker) outline and greys out
+only the inside, so it still reads as a control instead of dissolving into the
+page. The class is exported as `pagerBtn` and shared with `DataTable`'s built-in
+pager.

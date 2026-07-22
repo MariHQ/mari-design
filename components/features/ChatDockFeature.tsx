@@ -20,7 +20,7 @@ const SUGGESTIONS = [
   "Which facts are stale?",
 ];
 
-const OFFLINE_MSG = "I can't reach the agent backend right now — this is a local demo, so I'll narrate instead of actually running tools.";
+const OFFLINE_MSG = "I can't reach the agent backend right now. This is a local demo, so I'll narrate instead of actually running tools.";
 
 let uid = 0;
 const nextId = () => `m${++uid}`;
@@ -38,7 +38,7 @@ function seedTranscript(): ChatMessageData[] {
         { id: "t2", name: "tag_document", args: { doc: "pricing.md", tag: "needs-review" }, summary: "tagged pricing.md needs-review", ok: true },
       ],
     },
-    { id: nextId(), role: "warning", content: "Rate limit near — 8 of 10 tool calls used this minute." },
+    { id: nextId(), role: "warning", content: "Rate limit near: 8 of 10 tool calls used this minute." },
   ];
 }
 
@@ -90,7 +90,7 @@ export function ChatDockFeature({ defaultOpen = true, loading = false, className
       patchLast((m) => ({ ...m, tools: [{ ...tool, summary: "4 matching documents", ok: true }] }));
     });
 
-    const reply = "Done — I searched the knowledge base and pulled the relevant documents. Ask me to tag, edit, or open any of them.";
+    const reply = "Done. I searched the knowledge base and pulled the relevant documents. Ask me to tag, edit, or open any of them.";
     const words = reply.split(" ");
     words.forEach((_, i) => {
       after(1500 + i * 55, () => {
@@ -190,7 +190,7 @@ export function ChatDockFeature({ defaultOpen = true, loading = false, className
       {/* Mock app shell topbar with the dock toggle */}
       <div className="flex items-center gap-2 border-b border-ink/12 bg-paper px-4 py-2.5">
         <span className="font-display text-[14px] text-ink">Console</span>
-        <span className="font-term text-[11px] text-ink/40">/ overview</span>
+        <span className="font-term text-[11px] text-ink/65">/ overview</span>
         <button
           type="button"
           aria-pressed={open}
@@ -229,7 +229,7 @@ export function ChatDockFeature({ defaultOpen = true, loading = false, className
         <button
           type="button"
           onClick={() => setOpen(true)}
-          title="Mari agent — it can act on Mari for you"
+          title="Mari agent, it can act on Mari for you"
           aria-label="Open Mari agent"
           className={`absolute bottom-5 right-5 grid h-12 w-12 place-items-center rounded-full border border-biscay-2/40 bg-biscay text-white hover:bg-biscay-2 ${focusRing}`}
         >

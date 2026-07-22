@@ -45,7 +45,7 @@ export function MarkdownEditor({
   return (
     <div className={`flex flex-col rounded-md border border-ink/15 bg-paper overflow-hidden ${className}`.trim()}>
       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-ink/12 bg-flysch/60">
-        <span className="font-term text-[11px] uppercase tracking-wide text-ink/50">Markdown</span>
+        <span className="font-term text-[11px] uppercase tracking-wide text-ink/65">Markdown</span>
         <div className="flex items-center gap-1">
           {MODES.map(({ mode: m, label, icon: Icon }) => (
             <Button

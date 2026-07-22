@@ -110,7 +110,9 @@ function slug(s: string) {
 function FeatureBlock({ name, title, props }: Entry) {
   const Cmp = F[name] as React.ComponentType<Record<string, unknown>>;
   return (
-    <div className="mb-8">
+    // id = the feature's export name, so QA tooling can screenshot exactly one
+    // feature (`node scripts/shot.mjs psec:<Name>`).
+    <div id={name} className="mb-8 scroll-mt-4">
       <div className="flex items-baseline gap-3 mb-2">
         <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
         <span className="font-mono text-[10.5px] text-ink/35">{name}</span>

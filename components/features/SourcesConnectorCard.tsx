@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Plug } from "lucide-react";
+import { EmptyState } from "../data-display/EmptyState";
 import { ConnectorCard as ConnectorCardUI, type ConnectorHealth } from "../data-display/ConnectorCard";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
@@ -74,7 +75,7 @@ const DEMO: Source[] = [
     id: "conf", provider: "confluence", name: "Confluence · Ops", tier: "live", state: "failed",
     docCount: 512, chunkCount: 3100, embeddedCount: 2870,
     lastSyncAt: "2026-07-20T22:15:00",
-    lastError: "GET /rest/api/content returned 401 — token expired.",
+    lastError: "GET /rest/api/content returned 401, the token expired.",
   },
 ];
 
@@ -99,6 +100,7 @@ export type SourcesConnectorCardProps = {
 
 export function SourcesConnectorCard({ sources = DEMO, loading = false, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   if (loading) {
     return (
@@ -118,7 +120,6 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
       </div>
     );
   }
-  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const patch = (id: string, next: Partial<Source>) =>
     setItems((xs) => xs.map((s) => (s.id === id ? { ...s, ...next } : s)));
@@ -141,7 +142,7 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
           disabled={isBusy}
           onClick={() => kick(s.id, {})}
         >
-          Paused — resume syncing
+          Paused. Resume syncing
         </Button>
       );
     }
@@ -149,7 +150,7 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
     if (s.tier === "actionless") {
       return s.lastSyncAt
         ? <>Last sync: {fmtDateTime(s.lastSyncAt)}</>
-        : <span className="text-ink/45">Sync status unavailable</span>;
+        : <span className="text-ink/65">Sync status unavailable</span>;
     }
     if (s.state === "running") {
       const tail = s.total && s.total > 0 ? ` · ${s.done ?? 0}/${s.total} items` : "…";
@@ -157,14 +158,24 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
     }
     if (s.state === "failed") {
       return (
-        <span className="text-espelette" title={s.lastError}>
-          Sync failed — {s.lastError ?? "no details"}
+        <span className="min-w-0 break-words text-espelette" title={s.lastError}>
+          Sync failed. {s.lastError ?? "No details were reported."}
         </span>
       );
     }
     if (s.tier === "legacy" && !s.lastSyncAt) return null; // never fabricate a last-sync
     return s.lastSyncAt ? <>Last sync: {fmtDateTime(s.lastSyncAt)}</> : <>Never synced</>;
   };
+
+  if (items.length === 0) {
+    return (
+      <div className={`rounded-md border border-ink/12 bg-paper ${className}`.trim()}>
+        <EmptyState icon={<Plug size={24} />} title="No sources connected">
+          Add a source to start syncing documents into your knowledge library.
+        </EmptyState>
+      </div>
+    );
+  }
 
   return (
     <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
@@ -185,20 +196,20 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
             busy={isBusy}
             running={running}
             paused={paused}
-            canResync={isConnectorKind && s.tier !== "actionless"}
-            onSyncNow={s.tier === "actionless" ? undefined : () => kick(s.id, {})}
-            onFullResync={isConnectorKind && s.tier !== "actionless" ? () => kick(s.id, {}) : undefined}
-            onPause={
-              !isConnectorKind && !paused
-                ? () => patch(s.id, { state: "paused" })
-                : undefined
-            }
-            onResume={!isConnectorKind && paused ? () => kick(s.id, {}) : undefined}
+            /* Every card carries the SAME action menu. Google Drive used to
+               render no kebab at all because its tier has no sync id, which
+               made one square in the grid look broken. It now offers the same
+               menu; the actions it cannot honour are simply disabled. */
+            canResync={isConnectorKind}
+            onSyncNow={() => kick(s.id, {})}
+            onFullResync={isConnectorKind ? () => kick(s.id, {}) : undefined}
+            onPause={!paused ? () => patch(s.id, { state: "paused" }) : undefined}
+            onResume={paused ? () => kick(s.id, {}) : undefined}
           />
         );
       })}
       {/* keep the Clock import referenced for the paused-tier legend below */}
-      <p className="col-span-full mt-1 flex items-center gap-1.5 font-term text-[11px] text-ink/45">
+      <p className="col-span-full mt-1 flex items-center gap-1.5 font-term text-[11px] text-ink/65">
         <Clock size={12} /> Live sources poll while a sync runs; legacy sources show only what the server reports.
       </p>
     </div>

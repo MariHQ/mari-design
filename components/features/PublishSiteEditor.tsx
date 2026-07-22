@@ -160,7 +160,7 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
           <div className="flex items-center gap-5 border-b border-ink/15 mb-4">
             {TABS.map((t) => (
               <button key={t.id} type="button" onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}
-                className={`pb-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${focusRing} ${tab === t.id ? "text-ink border-biscay-2" : "text-ink/55 border-transparent hover:text-ink"}`}>{t.label}</button>
+                className={`pb-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${focusRing} ${tab === t.id ? "text-ink border-biscay-2" : "text-ink/65 border-transparent hover:text-ink"}`}>{t.label}</button>
             ))}
           </div>
 
@@ -169,10 +169,10 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
               <div>
                 <SectionLabel>Sources</SectionLabel>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">{site.sources.map((s) => <TagChip key={s} tag={s} />)}</div>
-                <p className="mt-1.5 text-[12px] text-ink/50">Sources are set at creation and drive which docs are eligible.</p>
+                <p className="mt-1.5 text-[12px] text-ink/65">Sources are set at creation and drive which docs are eligible.</p>
               </div>
               <div className="flex items-center gap-2">
-                <FileText size={15} className="text-ink/50" />
+                <FileText size={15} className="text-ink/65" />
                 <span className="text-[13px] text-ink/80">{site.docs} docs match</span>
                 {site.warnings > 0 && <Chip label={`${site.warnings} warnings`} tone="attention" dot />}
               </div>
@@ -183,7 +183,7 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
                     <li key={g.name} className="flex items-center gap-2 text-[13px]">
                       <Check size={14} className={g.ok ? "text-moss" : "text-clay"} />
                       <span className="text-ink/85">{g.name}</span>
-                      <span className={`font-term text-[11.5px] ${g.ok ? "text-ink/45" : "text-clay"}`}>· {g.note}</span>
+                      <span className={`font-term text-[11.5px] ${g.ok ? "text-ink/65" : "text-clay"}`}>· {g.note}</span>
                     </li>
                   ))}
                 </ul>
@@ -195,11 +195,11 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
             <div className="flex flex-col gap-2">
               {site.nav.map((n) => (
                 <div key={n.label}>
-                  <div className={`flex items-center gap-2 text-[13px] font-medium ${n.active ? "text-biscay-2" : "text-ink"}`}><FileText size={14} className="text-ink/40" /> {n.label}</div>
-                  {n.children && <div className="ml-6 mt-1 flex flex-col gap-0.5">{n.children.map((c) => <span key={c} className="text-[12.5px] text-ink/55">{c}</span>)}</div>}
+                  <div className={`flex items-center gap-2 text-[13px] font-medium ${n.active ? "text-biscay-2" : "text-ink"}`}><FileText size={14} className="text-ink/65" /> {n.label}</div>
+                  {n.children && <div className="ml-6 mt-1 flex flex-col gap-0.5">{n.children.map((c) => <span key={c} className="text-[12.5px] text-ink/65">{c}</span>)}</div>}
                 </div>
               ))}
-              <p className="mt-2 text-[12px] text-ink/50">Drag to reorder. Empty sections derive from doc headings at build time.</p>
+              <p className="mt-2 text-[12px] text-ink/65">Drag to reorder. Empty sections derive from doc headings at build time.</p>
             </div>
           )}
 
@@ -260,7 +260,7 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
               <div>
                 <SectionLabel>Domain mapping</SectionLabel>
                 <Input value={cname} onChange={(e) => setCname(e.target.value)} placeholder="CNAME target" className="mt-1.5 w-full font-term" />
-                <p className="mt-1 text-[12px] text-ink/50">Point {site.domain} → your S3 website endpoint. Without a bucket, deploys build locally.</p>
+                <p className="mt-1 text-[12px] text-ink/65">Point {site.domain} → your S3 website endpoint. Without a bucket, deploys build locally.</p>
               </div>
               <div className="flex items-center gap-3"><Button compact onClick={() => { setCfgSaved(true); setTimeout(() => setCfgSaved(false), 1600); }}>Save deploy config</Button>{cfgSaved && <span className="font-term text-[11.5px] text-moss">✓ Saved</span>}</div>
 
@@ -276,11 +276,11 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
               <div>
                 <SectionLabel>Release history</SectionLabel>
                 <ul className="mt-1.5 flex flex-col divide-y divide-ink/10">
-                  {history.length === 0 ? <li className="py-3 text-[13px] text-ink/55">No previous releases.</li> : history.map((r) => (
+                  {history.length === 0 ? <li className="py-3 text-[13px] text-ink/65">No previous releases.</li> : history.map((r) => (
                     <li key={r.id} className="flex items-center gap-3 py-2.5">
                       <span className="w-2 h-2 rounded-full bg-ink/30" />
                       <span className="text-[13px] font-medium text-ink">{r.version}</span>
-                      <span className="font-term text-[11.5px] text-ink/50 flex-1">{r.notes ?? "deployed"}</span>
+                      <span className="font-term text-[11.5px] text-ink/65 flex-1">{r.notes ?? "deployed"}</span>
                       <Button compact onClick={() => { setRollingBack(r.id); setTimeout(() => setRollingBack(null), 900); }}>{rollingBack === r.id ? "Rolling back…" : "Rollback"}</Button>
                     </li>
                   ))}
@@ -298,12 +298,12 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
         >
           {dirty && (
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-clay/[0.07] border-b border-clay/25">
-              <span className="text-[12.5px] text-clay">Theme changed — rebuild to see it</span>
+              <span className="text-[12.5px] text-clay">Theme changed. Rebuild to see it.</span>
               <Button compact onClick={rebuild}>Rebuild</Button>
             </div>
           )}
           <MockPreview key={buildNonce} accent={accent} bg={theme.bg} name={site.name} nav={site.nav} dark={mode === "Dark"} radius={radius} />
-          <p className="px-4 py-2.5 border-t border-ink/10 font-term text-[11px] text-ink/45">The built site carries a floating ✎ Customize menu.</p>
+          <p className="px-4 py-2.5 border-t border-ink/10 font-term text-[11px] text-ink/65">The built site carries a floating ✎ Customize menu.</p>
         </Card>
       </div>
     </div>

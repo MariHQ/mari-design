@@ -16,7 +16,8 @@ The interactive table: search, per-column sort, one facet filter, pagination, ro
 | `rowKey` | `(row: T) => string` | yes | — | Stable React key per row. |
 | `search` | `(row: T) => string` | no | — | If set, shows a search box; searches the string this returns (case-insensitive substring match). |
 | `searchPlaceholder` | `string` | no | `"Search…"` | |
-| `facet` | `{ label: string; get: (row: T) => string }` | no | — | If set, shows a single `<select>` filter. Options are derived automatically from `get`'s distinct values across `rows`. |
+| `facet` | `{ label, get, allLabel?, optionLabel? }` | no | — | If set, shows a single `<select>` filter. Options come from `get`'s distinct values. The default option is sentence case and pluralised ("Region" gives "All regions"); override with `allLabel`. Use `optionLabel` to map raw values to display text (e.g. `regionLabel` from `tokens/regions.ts`). |
+| `actions` | `ReactNode` | no | — | Table-level action button. Rendered top right of the toolbar (CONVENTIONS §2). |
 | `onRowClick` | `(row: T) => void` | no | — | If set, rows become clickable (cursor pointer, hover highlight). |
 | `pageSize` | `number` | no | `8` | Rows per page. |
 | `minW` | `number` | no | `720` | Minimum table width before horizontal scroll. |
@@ -28,10 +29,10 @@ The interactive table: search, per-column sort, one facet filter, pagination, ro
 |---|---|---|---|
 | `key` | `string` | yes | Unique per column. |
 | `header` | `string` | yes | Column header text. |
-| `sortable` | `boolean` | no | Shows sort chevrons and enables click-to-sort on the header. |
-| `sort` | `(row: T) => string \| number` | no | Required if `sortable` is `true` — the value to sort by. |
+| `sortable` | `boolean` | no | Defaults to **true**: every column shows the standard sort affordance. Set `false` for action/decoration columns. |
+| `sort` | `(row: T) => string \| number` | no | The value to sort by. Falls back to the text of the rendered cell, so simple columns need nothing. |
 | `render` | `(row: T) => ReactNode` | yes | Cell content. |
-| `align` | `"right"` | no | Right-aligns header + cell (numbers, counts). |
+| `align` | `"left" \| "center" \| "right"` | no | Aligns header + cell. Numeric / middle "server"-type fields use `"center"` (CONVENTIONS §3). |
 | `cell` | `string` | no | Extra className appended to the `<td>`. |
 
 ## Usage
@@ -55,7 +56,7 @@ const columns: Column<Row>[] = [
   columns={columns}
   rowKey={(r) => r.id}
   search={(r) => r.name}
-  facet={{ label: "sources", get: (r) => r.source }}
+  facet={{ label: "Sources", get: (r) => r.source }}
   onRowClick={(r) => openDrawer(r.id)}
 />
 ```

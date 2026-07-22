@@ -6,18 +6,21 @@ import { card } from "../tokens/card";
 import { fmtDateTime } from "../tokens/format";
 import { RunStatusChip, type RunStatus, type WorkflowRun } from "./RunHistory";
 
-/* Run panel — detail of one selected run: its step timeline, recorded stats,
+/* Run panel: detail of one selected run: its step timeline, recorded stats,
    and (when waiting) the approval affordance. Self-contained: actions are
    surfaced as optional callbacks, so the parent decides what "approve" and
    "re-run" mean. */
 
+/* Step markers are squares with a glyph, never circles: a circle in a list of
+   steps reads as a radio button, i.e. "pick me" (CONVENTIONS.md §6). The
+   pending marker is a bar, not an empty ring, for the same reason. */
 function TimelineIcon({ status }: { status: RunStatus }) {
   if (status === "passed") return <Check size={12} strokeWidth={2.4} className="text-moss" />;
   if (status === "running") return <Spinner size="sm" label="Step running" />;
   if (status === "waiting") return <Clock size={12} className="text-clay" />;
   if (status === "failed") return <X size={12} strokeWidth={2.2} className="text-espelette" />;
-  if (status === "skipped") return <CornerDownRight size={12} className="text-ink/35" />;
-  return <span className="inline-block h-2 w-2 rounded-full border border-ink/30" />;
+  if (status === "skipped") return <CornerDownRight size={12} className="text-ink/65" />;
+  return <span className="inline-block h-[2px] w-2.5 rounded-full bg-ink/40" />;
 }
 
 const RING: Record<RunStatus, string> = {
@@ -68,8 +71,10 @@ export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note,
   }
   if (!run) {
     return (
-      <div className={`${card} flex items-center gap-2 px-5 py-6 text-[13px] text-ink/55 ${className}`}>
-        <Spinner size="sm" label="Waiting" /> Select a run to inspect its steps.
+      /* No spinner here: nothing is loading, and a lone ring read as a radio
+         button waiting to be picked (§6). */
+      <div className={`${card} px-5 py-6 text-[13px] text-ink/70 ${className}`}>
+        Select a run to inspect its steps.
       </div>
     );
   }
@@ -78,21 +83,22 @@ export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note,
 
   return (
     <div className={`${card} overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2 border-b border-ink/10 px-5 py-3.5">
-        <span className="font-display text-[17px] font-bold text-ink">Run #{run.number}</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-5 py-3.5">
+        <span className="font-display text-[17px] font-bold text-ink whitespace-nowrap">Run #{run.number}</span>
         <RunStatusChip status={run.status} dry={run.dry} />
         <span className="flex-1" />
         {onClose && <Button variant="link" onClick={onClose} aria-label="Close run panel"><X size={15} /></Button>}
       </div>
 
       <div className="px-5 py-4">
-        <div className="font-term text-[11.5px] text-ink/55">
+        <div className="font-term text-[11.5px] text-ink/70 [overflow-wrap:anywhere]">
           {run.workflowName} · started {fmtDateTime(run.started)}{run.duration ? ` · ${run.duration}` : ""}
           {run.dry && " · no side effects were written"}
         </div>
         {run.triggeredBy && (
-          <div className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-moss">
-            <Bell size={12} /> {run.triggeredBy}
+          <div className="mt-1.5 flex items-start gap-1.5 text-[12px] text-moss">
+            <Bell size={12} className="mt-[2px] shrink-0" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{run.triggeredBy}</span>
           </div>
         )}
 
@@ -100,22 +106,22 @@ export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note,
           <ol className="mt-4 flex flex-col gap-2">
             {run.rows.map((r, i) => (
               <li key={`${r.step}-${i}`} className="flex items-start gap-2.5">
-                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border ${RING[r.status]}`}>
+                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-[5px] border ${RING[r.status]}`}>
                   <TimelineIcon status={r.status} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
-                    <span className={`text-[13.5px] font-medium ${r.status === "skipped" ? "text-ink/45" : "text-ink"}`}>{r.step}</span>
-                    {r.duration && <span className="font-term text-[10.5px] text-ink/40">{r.duration}</span>}
+                  <span className="flex flex-wrap items-baseline gap-2">
+                    <span className={`min-w-0 break-words text-[13.5px] font-medium ${r.status === "skipped" ? "text-ink/65" : "text-ink"}`}>{r.step}</span>
+                    {r.duration && <span className="shrink-0 font-term text-[10.5px] text-ink/65">{r.duration}</span>}
                   </span>
-                  <div className="text-[12px] leading-snug text-ink/55">{r.detail || "—"}</div>
+                  <div className="text-[12px] leading-snug text-ink/70 break-words">{r.detail || "No detail recorded"}</div>
                 </span>
               </li>
             ))}
           </ol>
         ) : (
-          <div className="mt-4 text-[12.5px] text-ink/55">
-            The step log wasn't retained for this run — the stats below are the recorded outcome.
+          <div className="mt-4 text-[12.5px] text-ink/70">
+            The step log wasn't retained for this run. The stats below are the recorded outcome.
           </div>
         )}
 
@@ -125,8 +131,8 @@ export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note,
             style={{ gridTemplateColumns: `repeat(${Math.min(4, run.stats.length)}, minmax(0,1fr))` }}
           >
             {run.stats.map((s) => (
-              <div key={s.label} className="bg-paper px-3 py-2.5">
-                <div className="font-term text-[10px] uppercase tracking-[0.08em] text-ink/50">{s.label}</div>
+              <div key={s.label} className="min-w-0 bg-paper px-3 py-2.5">
+                <div className="font-term text-[10px] uppercase tracking-[0.08em] text-ink/65 break-words">{s.label}</div>
                 <div className={`text-[20px] font-bold leading-tight ${s.bad ? "text-espelette" : "text-ink"}`}>{s.value}</div>
               </div>
             ))}
@@ -134,28 +140,30 @@ export function RunPanel({ run, onClose, onApprove, onRerun, busy = false, note,
         )}
 
         {run.status === "waiting" && (
-          <div className="mt-4 rounded-[6px] border border-dashed border-clay/45 bg-clay/[0.06] px-3.5 py-3 text-[12.5px] text-clay">
-            Paused for approval{waitingRow?.detail ? ` — ${waitingRow.detail}` : ""}. Nothing downstream runs until someone approves.
+          <div className="mt-4 rounded-[6px] border border-dashed border-clay/45 bg-clay/[0.06] px-3.5 py-3 text-[12.5px] text-clay [overflow-wrap:anywhere]">
+            Paused for approval{waitingRow?.detail ? `: ${waitingRow.detail}` : ""}. Nothing downstream runs until someone approves.
           </div>
         )}
       </div>
 
+      {/* Biggest action last and bottom LEFT (§2): the two re-run buttons sit
+          on their own line above, "Approve and resume" ends the panel. */}
       {(onApprove || onRerun) && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-5 py-3">
-          {run.status === "waiting" && onApprove && (
-            <Button variant="primary" compact disabled={busy} onClick={() => onApprove(run)}>
-              <Check size={13} /> Approve & resume
-            </Button>
-          )}
+        <div className="flex flex-col items-start gap-2 border-t border-ink/10 px-5 py-3">
           {onRerun && (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <Button compact disabled={busy} title="Re-runs every step for real, including side effects" onClick={() => onRerun(run, false)}>
                 <RefreshCw size={13} /> Re-run
               </Button>
               <Button compact disabled={busy} title="Re-runs transforms for real; side effects become previews" onClick={() => onRerun(run, true)}>
                 <Eye size={13} /> Re-run as test
               </Button>
-            </>
+            </div>
+          )}
+          {run.status === "waiting" && onApprove && (
+            <Button variant="primary" compact disabled={busy} onClick={() => onApprove(run)}>
+              <Check size={13} /> Approve and resume
+            </Button>
           )}
           {note && <span className="font-term text-[11.5px] text-moss">{note}</span>}
         </div>

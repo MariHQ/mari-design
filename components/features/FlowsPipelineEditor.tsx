@@ -4,11 +4,14 @@ import {
   Search, Filter, GitBranch, Tag, CheckSquare, Bell, FileText, Send, Globe, RefreshCw,
 } from "lucide-react";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
+import { DryChip } from "../data-display/Chip";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Switch } from "../forms/Switch";
-import { RunHistory, type WorkflowRun } from "../workflow/RunHistory";
+import { type WorkflowRun } from "../workflow/RunHistory";
+import { FlowRunsTable } from "./FlowsRunHistory";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -57,10 +60,10 @@ const KIND_META: Record<StepKind, KindMeta> = {
   fetch_docs: { name: "Fetch docs", desc: "Pulls matching documents into the run by query, tag, or both, capped at k.", defLabel: "Fetch docs", defConfig: { query: "", k: 3 }, icon: I(<Search size={15} />) },
   refine: { name: "Prose refine", llm: true, desc: "Runs a Mari writing skill over each fetched doc and proposes edits as findings.", defLabel: "Refine prose", defConfig: { skill: "tighten" }, icon: I(<Sparkles size={15} />) },
   fact_check: { name: "Fact check", llm: true, desc: "Checks claims against accepted facts and reports contradictions with citations.", defLabel: "Verify facts", defConfig: {}, icon: I(<CheckSquare size={15} />) },
-  summarize: { name: "Summarize", llm: true, desc: "Drafts a summary of the fetched documents — useful for digests and drafts.", defLabel: "Summarize", defConfig: {}, icon: I(<FileText size={15} />) },
+  summarize: { name: "Summarize", llm: true, desc: "Drafts a summary of the fetched documents: useful for digests and drafts.", defLabel: "Summarize", defConfig: {}, icon: I(<FileText size={15} />) },
   tag: { name: "Tag docs", desc: "Applies a tag to every fetched document. Dry runs preview the tagging.", defLabel: "Tag docs", defConfig: { tag: "needs-review" }, icon: I(<Tag size={15} />) },
   derive_links: { name: "Derive links", llm: true, desc: "Suggests lineage links between the fetched docs and related knowledge.", defLabel: "Derive links", defConfig: {}, icon: I(<GitBranch size={15} />) },
-  condition: { name: "Condition", desc: "Branches on a run stat (e.g. contradictions > 0). Yes-branch steps run when it passes.", defLabel: "Contradictions?", defConfig: { field: "contradictions", greater_than: 0 }, icon: I(<Filter size={15} />) },
+  condition: { name: "Condition", desc: "Branches on a run stat (for example contradictions > 0). Yes-branch steps run when it passes.", defLabel: "Contradictions?", defConfig: { field: "contradictions", greater_than: 0 }, icon: I(<Filter size={15} />) },
   approval: { name: "Approval", desc: "Pauses the run as waiting until the assignee approves it from the run panel.", defLabel: "Approval", defConfig: { assignee: "Aki K." }, icon: I(<CheckSquare size={15} />) },
   create_task: { name: "Create task", desc: "Opens a task on the Tasks board. Dry runs preview the task.", defLabel: "Create task", defConfig: { title: "", kind: "review", kind_label: "Review" }, icon: I(<CheckSquare size={15} />) },
   notify: { name: "Notify", desc: "Sends an in-app notification. Dry runs preview the message.", defLabel: "Notify", defConfig: { text: "", detail: "" }, icon: I(<Bell size={15} />) },
@@ -83,7 +86,7 @@ const PICKER_SECTIONS: { section: Section; tagline: string; kinds: StepKind[] }[
 ];
 
 const DEMO_MEMBERS = ["Aki K.", "Dana R.", "Priya S."];
-const DEMO_SITES = [{ id: 1, name: "Docs — production" }, { id: 2, name: "Docs — staging" }];
+const DEMO_SITES = [{ id: 1, name: "Docs, production" }, { id: 2, name: "Docs, staging" }];
 const DEMO_TAGS = ["needs-review", "customer-facing", "internal", "stale"];
 
 const DEMO_STEPS: EditorStep[] = [
@@ -96,8 +99,8 @@ const DEMO_STEPS: EditorStep[] = [
 
 const DEMO_RUNS: WorkflowRun[] = [
   { id: "r145", number: 145, workflowName: "Docs guardrail", status: "passed", started: "2026-07-20T14:12:00", duration: "00:00:41", headline: "No contradictions found across 5 docs" },
-  { id: "r143", number: 143, workflowName: "Docs guardrail", status: "failed", started: "2026-07-19T10:02:00", duration: "00:01:12", headline: "2 contradictions — review task opened" },
-  { id: "r140", number: 140, workflowName: "Docs guardrail", status: "passed", started: "2026-07-18T16:44:00", duration: "00:00:38", dry: true, headline: "Dry run — 1 task previewed" },
+  { id: "r143", number: 143, workflowName: "Docs guardrail", status: "failed", started: "2026-07-19T10:02:00", duration: "00:01:12", headline: "2 contradictions, review task opened" },
+  { id: "r140", number: 140, workflowName: "Docs guardrail", status: "passed", started: "2026-07-18T16:44:00", duration: "00:00:38", dry: true, headline: "Dry run, 1 task previewed" },
 ];
 
 const asNum = (v: unknown, f = 0) => { const n = Number(v); return Number.isNaN(n) ? f : n; };
@@ -193,7 +196,7 @@ export function FlowsPipelineEditor({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="link" className="text-ink/60"><ChevronLeft size={15} /> Flows</Button>
-        <span className="font-term text-[12px] text-ink/40">/</span>
+        <span className="font-term text-[12px] text-ink/65">/</span>
         <span className="text-[14px] font-semibold text-ink">{flowName || "Untitled flow"}</span>
         <span className="flex-1" />
         <Switch checked={enabled} onCheckedChange={setEnabled} label={enabled ? "Enabled" : "Paused"} />
@@ -247,21 +250,26 @@ export function FlowsPipelineEditor({
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex shrink-0 items-center rounded-[4px] border px-1.5 py-[2px] font-term text-[9px] font-bold uppercase tracking-[0.12em] ${SECTION_CHIP[sec]}`}>{SECTION_TITLE[sec]}</span>
                         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[14px] font-semibold text-ink">
-                          <span className="text-ink/60">{meta.icon}</span>
+                          <span className="text-ink/70">{meta.icon}</span>
                           <span className="truncate">{s.label}</span>
                         </span>
                         {i > 0 && (
                           <span className="flex shrink-0 items-center gap-0.5">
                             <IconTool label="Move up" disabled={i <= 1} onClick={() => moveStep(i, -1)}><ArrowUp size={13} /></IconTool>
                             <IconTool label="Move down" disabled={i >= steps.length - 1} onClick={() => moveStep(i, 1)}><ArrowDown size={13} /></IconTool>
-                            <IconTool label="Delete step" onClick={() => deleteStep(i)}><Trash2 size={13} /></IconTool>
+                            {/* Destructive, so it arms first (CONVENTIONS §2). */}
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <ConfirmButton compact aria-label="Delete step" title="Delete step" confirmLabel="Delete?" onConfirm={() => deleteStep(i)}>
+                                <Trash2 size={13} />
+                              </ConfirmButton>
+                            </span>
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-[12px] leading-snug text-ink/55">{stepSummary(s)}</div>
+                      <div className="mt-1 text-[12px] leading-snug text-ink/70">{stepSummary(s)}</div>
                       {meta.llm && (
                         <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-clay/35 bg-clay/[0.07] px-2 py-[2px] font-term text-[10px] font-medium tracking-[0.06em] text-clay">
-                          <Sparkles size={10} /> LLM — runs the local model, slower
+                          <Sparkles size={10} /> LLM: runs the local model, slower
                         </span>
                       )}
                     </div>
@@ -276,7 +284,15 @@ export function FlowsPipelineEditor({
 
         {/* Config panel */}
         <div className="lg:sticky lg:top-4">
-          <ConfigPanel key={`${selIdx}-${selStep?.kind}`} step={selStep} idx={selIdx} onLabel={(v) => patch(selIdx, { label: v })} onConfig={(k, v) => setConfig(selIdx, k, v)} onBranch={(v) => patch(selIdx, { only_if_branch: v })} />
+          <ConfigPanel
+            key={`${selIdx}-${selStep?.kind}`}
+            step={selStep}
+            idx={selIdx}
+            onLabel={(v) => patch(selIdx, { label: v })}
+            onConfig={(k, v) => setConfig(selIdx, k, v)}
+            onBranch={(v) => patch(selIdx, { only_if_branch: v })}
+            onSave={() => setDirty(false)}
+          />
         </div>
       </div>
 
@@ -285,13 +301,15 @@ export function FlowsPipelineEditor({
         <Button variant="primary" compact disabled={!dirty} onClick={() => setDirty(false)}>Save flow</Button>
         <Button compact><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
         <Button compact><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
+        <DryChip />
+        <span className="font-term text-[11.5px] text-ink/70">is what a test run records.</span>
         <span className="flex-1" />
-        <span className="font-term text-[11.5px] text-ink/50">
-          {dirty ? "Unsaved changes — runs use the saved version, so Run saves first." : "Saved."}
+        <span className="font-term text-[11.5px] text-ink/70">
+          {dirty ? "Unsaved changes: runs use the saved version, so Run saves first." : "Saved."}
         </span>
       </div>
 
-      <RunHistory runs={runs} title="Run history" />
+      <FlowRunsTable runs={runs} title="Run history" />
     </div>
   );
 }
@@ -301,11 +319,11 @@ function stepSummary(s: EditorStep): string {
   const c = s.config;
   switch (s.kind) {
     case "trigger": return asStr(c.query) ? `Watches ${asStr(c.query)}` : "Watches a scope of documents";
-    case "fetch_docs": return `Query "${asStr(c.query) || "—"}", top ${asNum(c.k, 3)} docs`;
+    case "fetch_docs": return `Query "${asStr(c.query) || "any"}", top ${asNum(c.k, 3)} docs`;
     case "refine": return `Mari skill: ${asStr(c.skill) || "tighten"}`;
     case "tag": return `Applies "${asStr(c.tag) || "needs-review"}"`;
     case "condition": return `if ${asStr(c.field)} > ${asNum(c.greater_than)}`;
-    case "approval": return `Approver: ${asStr(c.assignee) || "—"}`;
+    case "approval": return `Approver: ${asStr(c.assignee) || "unassigned"}`;
     case "create_task": return `${asStr(c.kind_label) || "Task"}: ${asStr(c.title) || "untitled"}`;
     case "notify": return asStr(c.text) || "Sends an in-app notification";
     case "deploy_site": return `Publishes site #${asNum(c.site_id, 1)}`;
@@ -319,7 +337,7 @@ function Inserter({ onClick }: { onClick: () => void }) {
   return (
     <div className="relative flex h-6 items-center">
       <button type="button" onClick={onClick} aria-label="Add a step"
-        className={`grid h-5 w-5 place-items-center rounded-full border border-ink/25 bg-paper text-ink/50 hover:border-biscay-2 hover:text-biscay-2 ${focusRing}`}>
+        className={`grid h-5 w-5 place-items-center rounded-full border border-ink/25 bg-paper text-ink/65 hover:border-biscay-2 hover:text-biscay-2 ${focusRing}`}>
         <Plus size={12} />
       </button>
     </div>
@@ -330,7 +348,7 @@ function IconTool({ label, disabled, onClick, children }: { label: string; disab
   return (
     <button type="button" title={label} aria-label={label} disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/45 hover:bg-flysch hover:text-ink disabled:opacity-30 disabled:pointer-events-none ${focusRing}`}>
+      className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink disabled:opacity-30 disabled:pointer-events-none ${focusRing}`}>
       {children}
     </button>
   );
@@ -342,13 +360,13 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
     <div className={`${card} my-2 p-3`}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[13px] font-semibold text-ink">Add a step</span>
-        <button type="button" onClick={onClose} aria-label="Close picker" className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/50 hover:bg-flysch ${focusRing}`}><X size={14} /></button>
+        <button type="button" onClick={onClose} aria-label="Close picker" className={`grid h-6 w-6 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch ${focusRing}`}><X size={14} /></button>
       </div>
       <div className="flex flex-col gap-3">
         {PICKER_SECTIONS.map((sec) => (
           <div key={sec.section}>
-            <div className="mb-1.5 font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink/50">
-              {SECTION_TITLE[sec.section]} <span className="text-ink/35">— {sec.tagline}</span>
+            <div className="mb-1.5 font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink/65">
+              {SECTION_TITLE[sec.section]} <span className="text-ink/65">{sec.tagline}</span>
             </div>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {sec.kinds.map((k) => {
@@ -356,13 +374,13 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
                 return (
                   <button key={k} type="button" onClick={() => onPick(k)}
                     className={`${card} flex items-start gap-2 p-2.5 text-left hover:border-biscay-2/50 ${focusRing}`}>
-                    <span className="mt-0.5 text-ink/55">{meta.icon}</span>
+                    <span className="mt-0.5 text-ink/70">{meta.icon}</span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
                         {meta.name}
                         {meta.llm && <Sparkles size={11} className="text-clay" />}
                       </span>
-                      <span className="block text-[11.5px] leading-snug text-ink/55">{meta.desc}</span>
+                      <span className="block text-[11.5px] leading-snug text-ink/70">{meta.desc}</span>
                     </span>
                   </button>
                 );
@@ -377,12 +395,14 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
 
 /* ── config panel ──────────────────────────────────────────────────────── */
 function ConfigPanel({
-  step, idx, onLabel, onConfig, onBranch,
+  step, idx, onLabel, onConfig, onBranch, onSave,
 }: {
   step: EditorStep | undefined; idx: number;
   onLabel: (v: string) => void; onConfig: (key: string, value: unknown) => void; onBranch: (v: boolean) => void;
+  onSave: () => void;
 }) {
-  if (!step) return <div className={`${card} px-5 py-6 text-[13px] text-ink/55`}>Select a step to configure it.</div>;
+  const [saved, setSaved] = useState(false);
+  if (!step) return <div className={`${card} px-5 py-6 text-[13px] text-ink/70`}>Select a step to configure it.</div>;
   const meta = KIND_META[step.kind];
   const sec = SECTION_OF[step.kind];
   const c = step.config;
@@ -394,10 +414,10 @@ function ConfigPanel({
           <span className={`inline-flex items-center rounded-[4px] border px-1.5 py-[2px] font-term text-[9px] font-bold uppercase tracking-[0.12em] ${SECTION_CHIP[sec]}`}>{SECTION_TITLE[sec]}</span>
           <span className="text-[15px] font-semibold text-ink">{meta.name}</span>
         </div>
-        <p className="mt-1.5 text-[12px] leading-snug text-ink/55">{meta.desc}</p>
+        <p className="mt-1.5 text-[12px] leading-snug text-ink/70">{meta.desc}</p>
         {meta.llm && (
           <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-clay/35 bg-clay/[0.07] px-2 py-[2px] font-term text-[10px] font-medium tracking-[0.06em] text-clay">
-            <Sparkles size={10} /> LLM — slower
+            <Sparkles size={10} /> LLM: slower
           </span>
         )}
       </div>
@@ -419,14 +439,14 @@ function ConfigPanel({
             <Field label="Search query"><Input value={asStr(c.query)} onChange={(e) => onConfig("query", e.target.value)} className="w-full" /></Field>
             <Field label="Tag filter">
               <Select value={asStr(c.tag)} onChange={(e) => onConfig("tag", e.target.value)} className="w-full">
-                <option value="">— any tag —</option>
+                <option value="">Any tag</option>
                 {DEMO_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
             </Field>
             <Field label="Max documents (k)">
               <Input type="number" min={1} max={25} value={asNum(c.k, 3)} onChange={(e) => onConfig("k", Math.max(1, asNum(e.target.value, 1)))} className="w-full" />
             </Field>
-            <HydrationHint query={asStr(c.query)} tail={`— top ${asNum(c.k, 3)} enter the run`} />
+            <HydrationHint query={asStr(c.query)} tail={`, top ${asNum(c.k, 3)} enter the run`} />
           </>
         )}
 
@@ -464,7 +484,7 @@ function ConfigPanel({
             <Field label="Task title"><Input value={asStr(c.title)} onChange={(e) => onConfig("title", e.target.value)} className="w-full" /></Field>
             <Field label="Assignee">
               <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
-                <option value="">— anyone / unassigned —</option>
+                <option value="">Anyone, unassigned</option>
                 {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
             </Field>
@@ -482,7 +502,7 @@ function ConfigPanel({
         {step.kind === "approval" && (
           <Field label="Approver">
             <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
-              <option value="">— choose —</option>
+              <option value="">Choose an approver</option>
               {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
             </Select>
           </Field>
@@ -492,7 +512,7 @@ function ConfigPanel({
           <>
             <Field label="Notify">
               <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
-                <option value="">— optional —</option>
+                <option value="">Optional</option>
                 {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
             </Field>
@@ -510,10 +530,18 @@ function ConfigPanel({
         )}
 
         {(step.kind === "fact_check" || step.kind === "summarize" || step.kind === "derive_links" || step.kind === "refresh_digest") && (
-          <div className="py-3 text-[12px] leading-snug text-ink/55">
-            No configuration — this step operates over the fetched set from earlier in the flow. Position it after a Fetch docs step.
+          <div className="py-3 text-[12px] leading-snug text-ink/65">
+            No configuration for this step: it operates over the fetched set from earlier in the flow. Position it after a Fetch docs step.
           </div>
         )}
+      </div>
+
+      {/* The affirmative action is BOTTOM LEFT (CONVENTIONS §2). */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-3">
+        <Button variant="primary" compact onClick={() => { onSave(); setSaved(true); window.setTimeout(() => setSaved(false), 1800); }}>
+          Save step
+        </Button>
+        {saved && <span className="font-term text-[11.5px] text-moss">Step saved.</span>}
       </div>
     </div>
   );
@@ -521,7 +549,7 @@ function ConfigPanel({
 
 function HydrationHint({ query, tail = "" }: { query: string; tail?: string }) {
   const q = query.trim();
-  if (!q) return <div className="px-1 pb-3 pt-1 font-term text-[11px] text-ink/40">Enter a query to preview the matching documents.</div>;
+  if (!q) return <div className="px-1 pb-3 pt-1 font-term text-[11px] text-ink/65">Enter a query to preview the matching documents.</div>;
   // Deterministic pseudo-count from the query so the demo reads as live.
   const n = 3 + (q.length % 22);
   return (

@@ -47,9 +47,9 @@ export function MenuItem({
 }) {
   return (
     <DM.Item className={`${ITEM} ${danger ? ITEM_DANGER : ""}`.trim()} disabled={disabled} onSelect={onSelect}>
-      {icon && <span className="shrink-0 text-ink/50" aria-hidden="true">{icon}</span>}
+      {icon && <span className="shrink-0 text-ink/70" aria-hidden="true">{icon}</span>}
       <span className="flex-1 min-w-0 truncate">{children}</span>
-      {end && <span className="shrink-0 text-ink/40" aria-hidden="true">{end}</span>}
+      {end && <span className="shrink-0 text-ink/65" aria-hidden="true">{end}</span>}
     </DM.Item>
   );
 }
@@ -64,8 +64,8 @@ export function MenuCheckboxItem({
 }) {
   return (
     <DM.CheckboxItem className={ITEM} checked={checked} onCheckedChange={onCheckedChange} onSelect={(e) => e.preventDefault()}>
-      <span className="grid place-items-center w-3.5 shrink-0" aria-hidden="true">
-        <DM.ItemIndicator><Check size={13} strokeWidth={2.4} /></DM.ItemIndicator>
+      <span className="grid place-items-center w-4 shrink-0" aria-hidden="true">
+        <DM.ItemIndicator><Check size={16} strokeWidth={2.4} /></DM.ItemIndicator>
       </span>
       <span className="flex-1 min-w-0 truncate">{children}</span>
     </DM.CheckboxItem>
@@ -86,8 +86,8 @@ export function MenuRadioGroup({
 export function MenuRadioItem({ value, children }: { value: string; children: ReactNode }) {
   return (
     <DM.RadioItem className={ITEM} value={value}>
-      <span className="grid place-items-center w-3.5 shrink-0" aria-hidden="true">
-        <DM.ItemIndicator><Check size={13} strokeWidth={2.4} /></DM.ItemIndicator>
+      <span className="grid place-items-center w-4 shrink-0" aria-hidden="true">
+        <DM.ItemIndicator><Check size={16} strokeWidth={2.4} /></DM.ItemIndicator>
       </span>
       <span className="flex-1 min-w-0 truncate">{children}</span>
     </DM.RadioItem>
@@ -95,7 +95,7 @@ export function MenuRadioItem({ value, children }: { value: string; children: Re
 }
 
 export function MenuLabel({ children }: { children: ReactNode }) {
-  return <DM.Label className="px-2.5 pt-1.5 pb-1 font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink/45">{children}</DM.Label>;
+  return <DM.Label className="px-2.5 pt-1.5 pb-1 font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink/65">{children}</DM.Label>;
 }
 
 export function MenuSeparator() {
