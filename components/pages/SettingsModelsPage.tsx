@@ -13,7 +13,13 @@ import { Spinner } from "../data-display/Spinner";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { AvatarGroup } from "../data-display/AvatarGroup";
+import { PropertyList } from "../data-display/PropertyList";
 import { SettingsModelsConfig } from "../features/SettingsModelsConfig";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT,
+  HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Settings → Models (pages/settings-models.md). Configure the embedding model,
    LLM provider + keys, connection test, and per-source chunking. The default
@@ -34,6 +40,8 @@ const STATES = [
   { id: "test-ok", label: "Connection OK" },
   { id: "test-fail", label: "Connection failed" },
   { id: "saved", label: "Saved" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type SettingsTab =
@@ -164,7 +172,51 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
 
 const INLINE: ModelsVariant[] = ["editing-embedding", "editing-llm", "test-idle", "test-testing", "test-ok", "test-fail", "saved"];
 
+function StressModels({ extreme }: { extreme: boolean }) {
+  const opt = extreme ? UNBREAKABLE : LONG_SOURCE;
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card icon={<Layers size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : LONG_TITLE} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+          <Field label="Model">
+            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
+          </Field>
+        </Card>
+        <Card icon={<Sparkles size={16} className="text-clay" />} title={extreme ? MIXED_SCRIPT : LONG_TITLE} hint={extreme ? UNBREAKABLE : LONG_PARAGRAPH}>
+          <Field label="Provider">
+            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
+          </Field>
+        </Card>
+      </div>
+      <Card icon={<KeyRound size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : "Provider keys, endpoints, and every model label"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="OpenAI (sk-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
+          <Field label="Anthropic (sk-ant-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
+        </div>
+        <PropertyList
+          className="mt-4"
+          items={[
+            { label: "Endpoint", value: extreme ? UNBREAKABLE : LONG_SOURCE, stacked: true },
+            { label: "Documents", value: extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} embedded` },
+            { label: "Notes", value: extreme ? `${LONG_WORD} ${MIXED_SCRIPT}` : LONG_PARAGRAPH, stacked: true },
+          ]}
+        />
+      </Card>
+      <Card title={extreme ? UNBREAKABLE : "Reviewers and every capability tag"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className="flex items-center gap-3">
+          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} tokens/day`}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function Body({ state }: { state: string }) {
+  if (state === "overflow" || state === "stress") return <StressModels extreme={state === "stress"} />;
   if (state === "error") {
     return (
       <div className="mt-5">

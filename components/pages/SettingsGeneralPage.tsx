@@ -16,6 +16,13 @@ import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { BrandingEditor } from "../features/BrandingEditor";
+import { Chip } from "../data-display/Chip";
+import { AvatarGroup } from "../data-display/AvatarGroup";
+import { PropertyList } from "../data-display/PropertyList";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_SOURCE, LONG_URL, LONG_WORD,
+  UNBREAKABLE, MIXED_SCRIPT, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Settings → General (pages/settings-general.md). Workspace identity form
    (name / slug / plan / timezone / language) plus the two sign-post link
@@ -34,6 +41,8 @@ const STATES = [
   { id: "invalid", label: "Validation error" },
   { id: "branding", label: "Branding sub-section" },
   { id: "danger", label: "Danger zone" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type SettingsTab =
@@ -162,7 +171,48 @@ function DangerZone() {
   );
 }
 
+/* General has no data-driven feature — render inline compositions that
+   exercise the same form / link-card / detail-list layouts with stress text. */
+function StressGeneral({ extreme }: { extreme: boolean }) {
+  const long = extreme ? UNBREAKABLE : LONG_NAME;
+  const blurb = extreme ? `${LONG_WORD} ${MIXED_SCRIPT}` : LONG_PARAGRAPH;
+  return (
+    <div className="space-y-4">
+      <Card title={extreme ? UNBREAKABLE : LONG_TITLE} eyebrow="Identity" hint={extreme ? MIXED_SCRIPT : LONG_PARAGRAPH}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field label="Workspace name"><Input defaultValue={long} className="w-full" /></Field>
+          <Field label="Slug"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
+          <Field label="Primary URL"><Input defaultValue={extreme ? UNBREAKABLE : LONG_URL} className="w-full font-term" /></Field>
+        </div>
+        <PropertyList
+          className="mt-4"
+          items={[
+            { label: "Workspace", value: long },
+            { label: "Homepage", value: extreme ? UNBREAKABLE : LONG_URL, stacked: true },
+            { label: "Members", value: extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} across every region` },
+            { label: "Description", value: blurb, stacked: true },
+          ]}
+        />
+      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <LinkCard icon={<Tag size={18} />} title={extreme ? UNBREAKABLE : LONG_TITLE} blurb={blurb} cta={extreme ? LONG_WORD : "Open the very long editorial library destination"} />
+        <LinkCard icon={<Clock size={18} />} title={extreme ? MIXED_SCRIPT : LONG_NAME} blurb={blurb} cta={extreme ? UNBREAKABLE : "Open Flows"} />
+      </div>
+      <Card title={extreme ? UNBREAKABLE : "Everyone with access and every label applied"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className="flex items-center gap-3">
+          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} members`}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function Body({ state }: { state: string }) {
+  if (state === "overflow" || state === "stress") return <StressGeneral extreme={state === "stress"} />;
   if (state === "error") {
     return (
       <div className="mt-5">

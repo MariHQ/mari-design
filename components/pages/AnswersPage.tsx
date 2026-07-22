@@ -6,6 +6,10 @@ import { AnswerCard } from "../features/AnswerCard";
 import { AnswersHarvestWizard } from "../features/AnswersHarvestWizard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, repeat,
+} from "./stress";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
@@ -81,6 +85,68 @@ const RETIRED: Answer = {
   updated: "2026-06-30",
 };
 
+/* ── overflow / stress answers ─────────────────────────────────────────── */
+
+const OVERFLOW_ANSWER: Answer = {
+  id: 101,
+  question: LONG_TITLE,
+  answer: LONG_PARAGRAPH,
+  status: "approved",
+  owner: LONG_NAME,
+  channels: ["slack-bot", "support-widget", "docs-site"],
+  sources: [
+    { source: "docs", title: LONG_DOC_TITLE },
+    { source: "github", title: LONG_SOURCE },
+    { source: "notion", title: LONG_TITLE },
+  ],
+  served: 482913,
+  spark: [4, 6, 5, 9, 8, 12, 11, 15, 14, 18],
+  updated: "2026-07-16",
+};
+
+const OVERFLOW_ANSWER_2: Answer = {
+  id: 102,
+  question: "What is the full end-to-end escalation, paging, and post-incident-review procedure for a Sev-1 during a multi-region outage?",
+  answer: LONG_PARAGRAPH,
+  status: "draft",
+  owner: LONG_NAME,
+  channels: [],
+  sources: [{ source: "slack", title: LONG_TITLE }],
+  served: 0,
+  spark: [],
+  updated: "2026-07-08",
+};
+
+const STRESS_ANSWER: Answer = {
+  id: 111,
+  question: UNBREAKABLE,
+  answer: `${UNBREAKABLE} ${MIXED_SCRIPT} ${LONG_URL}`,
+  status: "approved",
+  owner: LONG_WORD,
+  channels: ["slack-bot", "support-widget", "docs-site"],
+  sources: [
+    { source: "slack", title: LONG_URL },
+    { source: "github", title: UNBREAKABLE },
+    { source: "docs", title: MIXED_SCRIPT },
+  ],
+  served: HUGE_NUMBER,
+  spark: repeat((i) => (i % 5) + 1, 24),
+  updated: HUGE_NUMBER_STR,
+};
+
+const STRESS_ANSWER_2: Answer = {
+  id: 112,
+  question: `${MIXED_SCRIPT} ${LONG_WORD}`,
+  answer: LONG_URL,
+  status: "draft",
+  owner: MIXED_SCRIPT,
+  channels: [],
+  sources: [{ source: "notion", title: LONG_WORD }],
+  served: 0,
+  spark: [],
+  updated: "2026-07-01",
+};
+
 const STATES = [
   { id: "default", label: "Default · all" },
   { id: "approved", label: "Approved tab" },
@@ -97,6 +163,8 @@ const STATES = [
   { id: "empty", label: "No answers" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type Filter = "all" | "approved" | "drafts" | "retired";
@@ -114,6 +182,8 @@ function cardsFor(state: string): Answer[] {
     case "drafts": return [DRAFT, DRAFT_2];
     case "retired": return [RETIRED];
     case "single-answer": return [APPROVED];
+    case "overflow": return [OVERFLOW_ANSWER, OVERFLOW_ANSWER_2];
+    case "stress": return [STRESS_ANSWER, STRESS_ANSWER_2];
     default: return [APPROVED, DRAFT, APPROVED_2];
   }
 }

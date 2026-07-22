@@ -9,6 +9,14 @@ import { Card } from "../layout/Card";
 import { Alert } from "../feedback/Alert";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Chip } from "../index";
+import { AvatarGroup } from "../index";
+import { Breadcrumb } from "../index";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
+  MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
+} from "./stress";
 
 /* Repository Audit (pages/audit.md). An onboarding / re-audit workflow: Mari
    scans a connected repo's docs, localization, authorship, tags and hygiene,
@@ -32,6 +40,8 @@ const STATES = [
   { id: "loading", label: "Scanning" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No repo connected" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 const REPO = "acme/product-docs";
@@ -72,6 +82,40 @@ const MOSTLY_HANDLED: AuditFinding[] = FINDINGS.map((f, i) =>
 );
 
 const section = (kind: AuditFinding["kind"]) => MANY.filter((f) => f.kind === kind);
+
+/* Overflow — one finding per kind, natural but very long titles + details. */
+const OVERFLOW_FINDINGS: AuditFinding[] = [
+  { id: 1, kind: "Localization", title: "The French onboarding document onboarding.fr.md has no source-translation link back to its consolidated English source of truth", detail: LONG_PARAGRAPH, fixAction: "link_translation", status: "open" },
+  { id: 2, kind: "Tags", title: LONG_TITLE, detail: "Suggested by the content classifier after reconciling against the last four quarters of documentation drift across every service, region, and team.", fixAction: "apply_tag", fixPayload: { suggest: "customer-facing" }, status: "open" },
+  { id: 3, kind: "Authorship", title: `Unknown git author "${LONG_NAME}" is credited on the platform reliability, incident-response, and on-call escalation runbook`, detail: LONG_PARAGRAPH, fixAction: "invite_member", status: "open" },
+  { id: 4, kind: "Coverage", title: `${LONG_DOC_TITLE} is referenced from many documents but has never been ingested or indexed`, detail: LONG_PARAGRAPH, fixAction: "ingest", status: "open" },
+  { id: 5, kind: "Hygiene", title: "The consolidated quarterly platform reliability runbook has a broken anchor that no longer resolves to any heading anywhere in the corpus", detail: LONG_PARAGRAPH, fixAction: "hygiene_task", status: "open" },
+];
+
+/* Stress — pathological: unbreakable tokens, long word, huge numbers, scripts. */
+const STRESS_FINDINGS: AuditFinding[] = [
+  { id: 1, kind: "Localization", title: UNBREAKABLE, detail: LONG_URL, fixAction: "link_translation", status: "open" },
+  { id: 2, kind: "Tags", title: MIXED_SCRIPT, detail: LONG_WORD, fixAction: "apply_tag", fixPayload: { suggest: UNBREAKABLE }, status: "open" },
+  { id: 3, kind: "Authorship", title: `${LONG_WORD} committed to ${HUGE_NUMBER_STR} docs`, detail: MIXED_SCRIPT, fixAction: "invite_member", status: "open" },
+  { id: 4, kind: "Coverage", title: LONG_DOC_TITLE, detail: `Referenced ${HUGE_NUMBER_STR} times at ${HUGE_PERCENT} confidence`, fixAction: "ingest", status: "open" },
+  { id: 5, kind: "Hygiene", title: LONG_WORD, detail: UNBREAKABLE, fixAction: "hygiene_task", status: "open" },
+];
+
+function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
+  const tags = mode === "stress" ? [...MANY_TAGS, MIXED_SCRIPT, UNBREAKABLE] : MANY_TAGS.slice(0, 6);
+  const people = (mode === "stress" ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }));
+  return (
+    <Card variant="plain" title="Contributors & labels">
+      <div className="space-y-3">
+        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
+        </div>
+        <AvatarGroup people={people} max={mode === "stress" ? 5 : 6} />
+      </div>
+    </Card>
+  );
+}
 
 function HistoryRail() {
   return (
@@ -153,6 +197,22 @@ function Body({ state }: { state: string }) {
           Fixed and dismissed findings are collapsed — only what still needs attention shows.
         </Alert>
         <AuditFindingsChecklist repo={REPO} findings={MOSTLY_HANDLED} />
+      </div>,
+    );
+  }
+  if (state === "overflow") {
+    return withRail(
+      <div className="space-y-4">
+        <StressExtras mode="overflow" />
+        <AuditFindingsChecklist repo={LONG_SOURCE} findings={OVERFLOW_FINDINGS} />
+      </div>,
+    );
+  }
+  if (state === "stress") {
+    return withRail(
+      <div className="space-y-4">
+        <StressExtras mode="stress" />
+        <AuditFindingsChecklist repo={UNBREAKABLE} findings={STRESS_FINDINGS} />
       </div>,
     );
   }

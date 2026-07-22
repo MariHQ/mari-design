@@ -2,8 +2,12 @@ import { useState, type ReactNode } from "react";
 import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { PageHeader, Card, Button, Input, Select, Avatar, Pill, IconRing, Badge, Chip, EmptyState } from "../index";
+import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_DOC_TITLE, LONG_URL, UNBREAKABLE, LONG_WORD,
+  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -25,6 +29,8 @@ const STATES = [
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No tasks" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type Task = {
@@ -71,8 +77,25 @@ const MANY: Task[] = [
   { id: 38, title: "Approve the support macros refresh", who: "MG", kind: "approval", kindLabel: "Approval", done: true },
 ];
 
+const OVERFLOW_TASKS: Task[] = [
+  { id: 41, title: LONG_TITLE, who: "AW", kind: "factcheck", kindLabel: "Fact check — reconcile against the last four incident retrospectives", done: false, due: "Due by end of the third fiscal quarter, 2026" },
+  { id: 42, title: `Approve ${LONG_DOC_TITLE} for publish across every connected workspace and region`, who: "DR", kind: "approval", kindLabel: "Needs a second approver", done: false, due: "Tomorrow morning before the platform-wide freeze" },
+  { id: 43, title: LONG_PARAGRAPH, who: "MC", kind: "needs-review", kindLabel: "Needs review", done: false },
+  { id: 44, title: "Retire the deprecated single-sign-on migration screenshots scattered across the authentication README and the onboarding guide", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
+  { id: 45, title: "Tag the consolidated quarterly platform reliability runbook as the canonical source of truth", who: "SL", kind: "canonical", kindLabel: "Canonical", done: true },
+];
+
+const STRESS_TASKS: Task[] = [
+  { id: 51, title: UNBREAKABLE, who: "ABCDEFGH", kind: "factcheck", kindLabel: LONG_WORD, done: false, due: HUGE_NUMBER_STR },
+  { id: 52, title: LONG_WORD, who: "日本語ABC", kind: "approval", kindLabel: MIXED_SCRIPT, done: false, due: MIXED_SCRIPT },
+  { id: 53, title: LONG_URL, who: "MM", kind: "stale", kindLabel: "stale", done: false, due: HUGE_NUMBER_STR },
+  { id: 54, title: `${MIXED_SCRIPT} ${UNBREAKABLE}`, who: MANY_INITIALS.slice(0, 4).join(""), kind: "canonical", kindLabel: HUGE_NUMBER_STR, done: true },
+];
+
 function seedFor(state: string): Task[] {
   switch (state) {
+    case "overflow": return OVERFLOW_TASKS;
+    case "stress": return STRESS_TASKS;
     case "open-only": return SEED.map((t) => ({ ...t, done: false }));
     case "all-done": return SEED.map((t) => ({ ...t, done: true }));
     case "single": return SEED.slice(0, 1);
@@ -135,6 +158,27 @@ function Column({
   );
 }
 
+/* Inline strip exercising chip-row / avatar-stack / huge-number / mixed-script
+   overflow that the two-column task list can't show on its own. */
+function StressStrip({ pathological }: { pathological: boolean }) {
+  const tags = pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10);
+  const people = (pathological ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((i) => ({ initials: i }));
+  return (
+    <Card className="space-y-3">
+      <div className="min-w-0 text-[13.5px] font-semibold text-ink break-words">
+        {pathological ? MIXED_SCRIPT : "Every reviewer, tag, and label on this task — wrapped rather than clipped"}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {tags.map((t) => <Chip key={t} label={t} tone="neutral" />)}
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <AvatarGroup people={people} max={6} />
+        <Stat value={pathological ? HUGE_NUMBER_STR : "482,913"} label="times reopened" tone="info" />
+      </div>
+    </Card>
+  );
+}
+
 function Body({ state }: { state: string }) {
   const composerOpen = state === "composer-open";
   const saving = state === "saving";
@@ -184,6 +228,8 @@ function Body({ state }: { state: string }) {
           <Plus size={15} /> {saving ? "Adding…" : "Add task"}
         </Button>
       </Card>
+
+      {(state === "overflow" || state === "stress") && <StressStrip pathological={state === "stress"} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>

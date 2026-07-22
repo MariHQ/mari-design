@@ -14,7 +14,12 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SettingsMembersTable, type Member } from "../features/SettingsMembersTable";
+import {
+  LONG_NAME, LONG_SOURCE, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT, HUGE_NUMBER_STR,
+  MANY_TAGS, MANY_INITIALS, repeat,
+} from "./stress";
 
 /* Settings → Members (pages/settings-members.md). The list variants render the
    SettingsMembersTable feature (members table + invite panel + workspace name +
@@ -35,6 +40,8 @@ const STATES = [
   { id: "pending", label: "Pending invite" },
   { id: "invite-sent", label: "Invitation sent" },
   { id: "remove-confirm", label: "Remove member (confirm)" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type SettingsTab =
@@ -164,7 +171,52 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
   );
 }
 
+/* Extra composition to exercise chip-row / avatar-stack overflow that the
+   members table (one avatar + one status chip per row) doesn't reach. */
+function StressExtras({ extreme }: { extreme: boolean }) {
+  return (
+    <Card className="mt-4" title={extreme ? UNBREAKABLE : "Team-wide roles, labels, and everyone with access"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+      <div className="flex items-center gap-3">
+        <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} members across every region and team`}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
+      </div>
+    </Card>
+  );
+}
+
+function StressMembers({ extreme }: { extreme: boolean }) {
+  const members: Member[] = extreme
+    ? repeat((i) => ({
+        id: i + 1,
+        name: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3],
+        initials: MANY_INITIALS[i % MANY_INITIALS.length],
+        email: `${UNBREAKABLE}@${LONG_WORD}.example`,
+        role: ["admin", "manager", "user"][i % 3],
+        status: i % 2 === 0 ? "active" : "invited",
+        joined: "2025-01-01",
+      }), 5)
+    : repeat((i) => ({
+        id: i + 1,
+        name: LONG_NAME,
+        initials: MANY_INITIALS[i % MANY_INITIALS.length],
+        email: `${LONG_WORD}.${i}@${LONG_SOURCE}`,
+        role: ["admin", "manager", "user"][i % 3],
+        status: i % 2 === 0 ? "active" : "invited",
+        joined: "2025-01-01",
+      }), 4);
+  return (
+    <>
+      <SettingsMembersTable members={members} workspaceName={extreme ? UNBREAKABLE : LONG_NAME} githubTeam={{ connected: true, team: extreme ? UNBREAKABLE : LONG_SOURCE }} />
+      <StressExtras extreme={extreme} />
+    </>
+  );
+}
+
 function Body({ state }: { state: string }) {
+  if (state === "overflow" || state === "stress") return <StressMembers extreme={state === "stress"} />;
   if (state === "error") {
     return (
       <div className="mt-5">

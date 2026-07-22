@@ -12,7 +12,12 @@ import { Pagination } from "../data-display/Pagination";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { fmtDateTime } from "../tokens/format";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SettingsAuditLog, type AuditEvent } from "../features/SettingsAuditLog";
+import {
+  LONG_NAME, LONG_SOURCE, LONG_PARAGRAPH, LONG_URL, LONG_WORD, UNBREAKABLE,
+  MIXED_SCRIPT, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, repeat,
+} from "./stress";
 
 /* Settings → Audit log (pages/settings-audit-log.md). Read-only record of the
    last 50 workspace changes with a client-side filter and manual refresh. The
@@ -32,6 +37,8 @@ const STATES = [
   { id: "no-match", label: "Filter — no matches" },
   { id: "expanded", label: "Expanded entry" },
   { id: "many", label: "Many events (paginated)" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type SettingsTab =
@@ -151,7 +158,40 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
 
 const INLINE: AuditVariant[] = ["filtered-actor", "filtered-action", "filtered-date", "no-match", "expanded", "many"];
 
+function StressAudit({ extreme }: { extreme: boolean }) {
+  const events: AuditEvent[] = extreme
+    ? repeat((i) => ({
+        id: i + 1,
+        actor: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3],
+        verb: UNBREAKABLE,
+        target: `${LONG_WORD} → ${MIXED_SCRIPT} ${HUGE_NUMBER_STR}`,
+        at: "2025-07-20T15:42:00",
+      }), 6)
+    : repeat((i) => ({
+        id: i + 1,
+        actor: LONG_NAME,
+        verb: "updated a very long-named workspace setting and reconciled it across regions",
+        target: `${LONG_SOURCE} → ${LONG_URL}`,
+        at: "2025-07-20T15:42:00",
+      }), 6);
+  return (
+    <div className="flex flex-col gap-5">
+      <SettingsAuditLog events={events} total={extreme ? 987654321 : 214} />
+      <Card title={extreme ? UNBREAKABLE : "Everyone who touched the workspace this quarter"} hint={extreme ? MIXED_SCRIPT : LONG_PARAGRAPH}>
+        <div className="flex items-center gap-3">
+          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} events recorded across all sources`}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function Body({ state }: { state: string }) {
+  if (state === "overflow" || state === "stress") return <StressAudit extreme={state === "stress"} />;
   if (state === "error") {
     return (
       <div className="mt-5">

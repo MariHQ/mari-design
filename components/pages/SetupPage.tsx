@@ -7,7 +7,16 @@ import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { Alert } from "../feedback/Alert";
+import { Chip } from "../data-display/Chip";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SkeletonPage } from "../data-display/Skeletons";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_URL, UNBREAKABLE, LONG_WORD,
+  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
+
+const LONG_EMAIL =
+  "alexandra.wilhelmina.featherstonehaugh-montgomery@platform-reliability-and-incident-response.enterprise-workspace.example.com";
 
 /* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
    has no admin yet; renders OUTSIDE the console shell on the same full-bleed
@@ -22,6 +31,8 @@ const STATES = [
   { id: "saving", label: "Setting up…" },
   { id: "error", label: "Invalid token" },
   { id: "success", label: "Complete" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 const LOG_SAMPLE = `mari-cloud  ┃ workspace has no admin — one-time setup required
@@ -102,11 +113,67 @@ function SuccessStep() {
   );
 }
 
+/* `overflow` — the admin step stuffed with very long NATURAL text: long name,
+   long workspace name, long email, and a long validation message. Catches
+   wrapping, truncation, and vertical overflow. */
+function OverflowStep() {
+  return (
+    <div className="space-y-4">
+      <p className="text-[13.5px] leading-relaxed text-ink/70">{LONG_PARAGRAPH}</p>
+      <Alert tone="blocked" title={LONG_TITLE}>{LONG_PARAGRAPH}</Alert>
+      <Field label="Your name">
+        <Input defaultValue={LONG_NAME} autoComplete="name" />
+      </Field>
+      <Field label="Email">
+        <Input type="email" defaultValue={LONG_EMAIL} autoComplete="email" />
+      </Field>
+      <Field label="Workspace name">
+        <Input defaultValue={LONG_TITLE} />
+      </Field>
+      <p className="-mt-2 text-[12px] leading-relaxed text-ink/50">{LONG_PARAGRAPH}</p>
+      <div className="flex items-center justify-between pt-1">
+        <Button variant="link">← Back to token</Button>
+        <Button variant="primary">Finish setting up {LONG_TITLE}</Button>
+      </div>
+    </div>
+  );
+}
+
+/* `stress` — PATHOLOGICAL content: an unbreakable token, a huge URL, a single
+   long word, huge numbers, a 20+ chip row, a long avatar stack, and mixed
+   scripts + emoji. Catches horizontal overflow, missing break-words/truncate,
+   and flex blowouts. */
+function StressStep() {
+  return (
+    <div className="space-y-4">
+      <CodeBlock code={UNBREAKABLE} language="log" title="admin token" copy={false} />
+      <Alert tone="blocked" title={UNBREAKABLE}>{MIXED_SCRIPT} — {LONG_URL}</Alert>
+      <Field label="Admin token">
+        <Input defaultValue={UNBREAKABLE} spellCheck={false} />
+      </Field>
+      <Field label="Workspace name">
+        <Input defaultValue={LONG_WORD} />
+      </Field>
+      <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+        {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
+      </div>
+      <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
+      <p className="break-words font-term text-[12px] text-ink/55">{HUGE_NUMBER_STR} workspaces · {MIXED_SCRIPT}</p>
+      <div className="flex items-center justify-between pt-1">
+        <Button variant="link">← Back to token</Button>
+        <Button variant="primary">{LONG_WORD}</Button>
+      </div>
+    </div>
+  );
+}
+
 function SetupPage({ state = "default", mobile = false }: PageProps) {
   const saving = state === "saving";
   const error = state === "error";
   const success = state === "success";
-  const onAdmin = state === "admin" || saving || error;
+  const overflow = state === "overflow";
+  const stress = state === "stress";
+  const onAdmin = state === "admin" || saving || error || overflow || stress;
   const step = success ? 2 : onAdmin ? 1 : 0;
 
   if (saving) {
@@ -134,7 +201,7 @@ function SetupPage({ state = "default", mobile = false }: PageProps) {
           <div className="mb-5">
             <Stepper labels={["Token", "Admin account"]} current={Math.min(step, 1)} ariaLabel="Setup steps" />
           </div>
-          {success ? <SuccessStep /> : step === 0 ? <TokenStep /> : <AdminStep saving={saving} error={error} />}
+          {success ? <SuccessStep /> : overflow ? <OverflowStep /> : stress ? <StressStep /> : step === 0 ? <TokenStep /> : <AdminStep saving={saving} error={error} />}
         </div>
       </div>
     </div>

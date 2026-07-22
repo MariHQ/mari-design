@@ -5,6 +5,12 @@ import { FlowsList } from "../features/FlowsList";
 import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
 import { FlowsRunPanel } from "../features/FlowsRunPanel";
+import type { WorkflowRun } from "../workflow/RunHistory";
+import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT,
+  HUGE_NUMBER, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
+} from "./stress";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { Drawer } from "../layout/Drawer";
@@ -39,7 +45,49 @@ const STATES = [
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No flows yet" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/* Overflow / stress runs: long headlines, workflow names, and step labels
+   injected as data props into the run-history table + panel. `overflow` uses
+   natural long text; `stress` uses pathological tokens + huge run numbers. */
+function stressRuns(pathological: boolean): WorkflowRun[] {
+  const STATUS = ["passed", "running", "waiting", "failed", "skipped"] as const;
+  return repeat((i) => ({
+    id: `sr${i}`,
+    number: pathological ? HUGE_NUMBER + i : 1000 + i,
+    workflowName: pathological ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3] : LONG_TITLE,
+    status: STATUS[i % STATUS.length],
+    dry: i % 2 === 0,
+    started: "2026-07-21T08:30:00",
+    duration: "00:01:04",
+    triggeredBy: `Triggered by: ${pathological ? UNBREAKABLE : LONG_SOURCE}`,
+    headline: pathological ? `${MIXED_SCRIPT} ${HUGE_NUMBER_STR}` : LONG_PARAGRAPH,
+    rows: [
+      { step: pathological ? UNBREAKABLE : LONG_TITLE, status: "passed", detail: pathological ? LONG_WORD : LONG_SOURCE, duration: "0.2s" },
+      { step: pathological ? LONG_WORD : "Fetch every document across every source and region", status: "running", detail: pathological ? HUGE_NUMBER_STR : LONG_PARAGRAPH },
+    ],
+    stats: [
+      { label: pathological ? LONG_WORD : "Contradictions found", value: pathological ? HUGE_NUMBER : 128, bad: true },
+      { label: "Facts", value: pathological ? HUGE_NUMBER + i : 9 },
+    ],
+  }), pathological ? 24 : 6);
+}
+
+function StressExtras({ pathological }: { pathological: boolean }) {
+  return (
+    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE} className="mb-5">
+      <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
+      </div>
+      <div className="mt-3">
+        <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={pathological ? 4 : 6} />
+      </div>
+    </Card>
+  );
+}
 
 const BRANCH_STEPS: EditorStep[] = [
   { kind: "trigger", label: "Weekly scan", config: { label: "Weekly scan", query: "stale" } },
@@ -151,6 +199,16 @@ function Body({ state }: { state: string }) {
         <EmptyState icon={<Workflow size={22} />} title="No flows yet">
           Start from a template or create one to automate editorial work.
         </EmptyState>
+      </div>
+    );
+  }
+
+  if (state === "overflow" || state === "stress") {
+    const p = state === "stress";
+    return (
+      <div className="mt-5">
+        <StressExtras pathological={p} />
+        <FlowsRunHistory runs={stressRuns(p)} limit={p ? 24 : 6} />
       </div>
     );
   }

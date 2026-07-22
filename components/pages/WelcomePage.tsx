@@ -13,11 +13,16 @@ import { Textarea } from "../forms/Textarea";
 import { Chip } from "../data-display/Chip";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark, GithubMark } from "../icons/marks";
-import { WelcomeGuideStep } from "../features/WelcomeGuideStep";
+import { WelcomeGuideStep, type GuidePack } from "../features/WelcomeGuideStep";
 import { WelcomeGlossaryStep } from "../features/WelcomeGlossaryStep";
 import { WelcomeSyncPanel } from "../features/WelcomeSyncPanel";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { focusRing } from "../tokens/focusRing";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_SOURCE, LONG_URL, UNBREAKABLE,
+  LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Welcome — onboarding wizard (pages/welcome.md). Post-auth, renders OUTSIDE
    the console shell: a single-column wizard with a five-step Stepper
@@ -43,6 +48,8 @@ const STEP: Record<string, number> = {
   glossary: 3,
   syncing: 4,
   done: 4,
+  overflow: 1,
+  stress: 1,
 };
 
 const STATES = [
@@ -58,6 +65,8 @@ const STATES = [
   { id: "glossary", label: "Glossary" },
   { id: "syncing", label: "Finish · initial sync" },
   { id: "done", label: "Finish · complete" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 /* ── Step 0: hero ─────────────────────────────────────────────────────── */
@@ -109,7 +118,7 @@ const TILES: Tile[] = [
   { key: "jira", name: "Jira", blurb: "Issues and project docs." },
 ];
 
-function ConnectGrid() {
+function ConnectGrid({ tiles = TILES }: { tiles?: Tile[] }) {
   return (
     <div className="space-y-5">
       <div>
@@ -119,7 +128,7 @@ function ConnectGrid() {
         </p>
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {TILES.map((t) => (
+        {tiles.map((t) => (
           <div key={t.key}
             className={`flex items-center gap-3 rounded-md border p-3 text-left ${
               t.active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
@@ -417,10 +426,110 @@ function DoneStep() {
   );
 }
 
+/* ── Overflow / stress stress-test steps ──────────────────────────────── */
+
+/* A small glossary preview list (long terms/definitions/evidence) so the
+   glossary surface is exercised without driving the feature's internal scan. */
+function GlossaryPreview({ items }: { items: { term: string; def: string; ev: string }[] }) {
+  return (
+    <div className="grid gap-1.5">
+      {items.map((c) => (
+        <div key={c.term} className="flex items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
+          <BookOpen size={14} className="mt-0.5 shrink-0 text-ink/45" />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <b className="break-words text-[13px] font-semibold text-ink">{c.term}</b>
+              <Chip label={c.ev} tone="neutral" icon={<FileText size={10} />} />
+            </span>
+            <span className="mt-0.5 block break-words text-[12.5px] text-ink/65">{c.def}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* `overflow` — the Connect/guide/glossary/sync surfaces stuffed with very long
+   NATURAL text. Catches wrapping, truncation, line-clamp, and vertical
+   overflow. */
+function OverflowStep() {
+  const tiles: Tile[] = [
+    { key: "github", name: LONG_TITLE, blurb: LONG_PARAGRAPH, active: true },
+    { key: "confluence", name: LONG_NAME, blurb: LONG_PARAGRAPH, connected: true },
+    { key: "slack", name: "Slack workspace with an extraordinarily long organization name", blurb: LONG_PARAGRAPH },
+    { key: "gdrive", name: LONG_SOURCE, blurb: LONG_PARAGRAPH },
+  ];
+  const packs: GuidePack[] = [
+    { id: "plain", name: LONG_TITLE, description: LONG_PARAGRAPH, rules: 42 },
+    { id: "microsoft", name: LONG_NAME, description: LONG_PARAGRAPH, rules: 38 },
+  ];
+  const sources: SyncSource[] = [
+    { id: "gh", name: LONG_SOURCE, mark: <GithubMark size={24} />, state: "syncing", phase: LONG_TITLE, done: 340, total: 512, chunkCount: 8912, embeddedCount: 5780 },
+    { id: "conf", name: LONG_NAME, mark: <SourceMark provider="confluence" size={24} />, state: "error", error: LONG_PARAGRAPH },
+  ];
+  const glossary = [
+    { term: LONG_NAME, def: LONG_PARAGRAPH, ev: LONG_SOURCE },
+    { term: LONG_TITLE, def: LONG_PARAGRAPH, ev: LONG_SOURCE },
+  ];
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-[20px] font-semibold text-ink">{LONG_TITLE}</h2>
+        <p className="mt-1 text-[13.5px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
+      </div>
+      <ConnectGrid tiles={tiles} />
+      <WelcomeGuideStep packs={packs} />
+      <GlossaryPreview items={glossary} />
+      <WelcomeSyncPanel sources={sources} />
+    </div>
+  );
+}
+
+/* `stress` — PATHOLOGICAL content: unbreakable tokens/URLs, a single long word,
+   huge numbers, a 20+ chip row, a long avatar stack, and mixed scripts + emoji.
+   Catches horizontal overflow, missing min-w-0/break-words/truncate, and flex
+   blowouts. */
+function StressStep() {
+  const tiles: Tile[] = [
+    { key: "github", name: UNBREAKABLE, blurb: LONG_URL, active: true },
+    { key: "slack", name: MIXED_SCRIPT, blurb: LONG_WORD },
+    { key: "notion", name: LONG_WORD, blurb: UNBREAKABLE, connected: true },
+  ];
+  const sources: SyncSource[] = [
+    { id: "gh", name: UNBREAKABLE, mark: <GithubMark size={24} />, state: "syncing", phase: LONG_WORD, done: HUGE_NUMBER, total: 99999999, chunkCount: HUGE_NUMBER, embeddedCount: 5780 },
+    { id: "x", name: MIXED_SCRIPT, mark: <SourceMark provider="slack" size={24} />, state: "error", error: LONG_URL },
+  ];
+  const glossary = [
+    { term: LONG_WORD, def: UNBREAKABLE, ev: LONG_URL },
+    { term: MIXED_SCRIPT, def: LONG_URL, ev: UNBREAKABLE },
+  ];
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="break-words font-display text-[20px] font-semibold text-ink">{MIXED_SCRIPT}</h2>
+        <code className="mt-1 block break-all font-term text-[12px] text-biscay-2">{UNBREAKABLE}</code>
+        <p className="mt-2 break-words text-[13.5px] text-ink/65">{LONG_URL}</p>
+      </div>
+      <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+        {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
+      </div>
+      <div className="flex items-center gap-4">
+        <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
+        <span className="font-term text-[12px] text-ink/55">{HUGE_NUMBER_STR} members</span>
+      </div>
+      <ConnectGrid tiles={tiles} />
+      <GlossaryPreview items={glossary} />
+      <WelcomeSyncPanel sources={sources} />
+    </div>
+  );
+}
+
 /* ── Body dispatch ────────────────────────────────────────────────────── */
 
 function StepBody({ state }: { state: string }) {
   switch (state) {
+    case "overflow": return <OverflowStep />;
+    case "stress": return <StressStep />;
     case "connect": return <ConnectGrid />;
     case "connect-github": return <GithubConnect />;
     case "connect-slack": return <SlackConnect />;

@@ -7,6 +7,11 @@ import type { ActivityItem } from "../data-display/ActivityFeed";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { SkeletonCard, SkeletonStat } from "../data-display/Skeleton";
+import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD, MIXED_SCRIPT,
+  HUGE_NUMBER, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
+} from "./stress";
 
 /* Insights (pages/insights.md). Read-mostly dashboard proving the knowledge
    cloud is working: the headline stat row + evidence panels (readability,
@@ -31,7 +36,70 @@ const STATES = [
   { id: "glossary-clear", label: "Glossary all clear" },
   { id: "audit-active", label: "Audit activity" },
   { id: "audit-empty", label: "Audit — nothing logged" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/* Overflow / stress content injected into the Insights widgets via data props:
+   long stat labels + huge numbers, long readability titles/notes, glossary
+   terms/definitions with many variants, and long audit-activity lines.
+   `overflow` = natural long text; `stress` = pathological tokens. */
+function stressStats(p: boolean) {
+  const TONE = ["ok", "info", "blocked", "attention"] as const;
+  const LABELS = p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, HUGE_NUMBER_STR] : [LONG_TITLE];
+  return repeat((i) => ({
+    key: `s${i}`,
+    value: HUGE_NUMBER + i,
+    label: LABELS[i % LABELS.length],
+    tone: TONE[i % TONE.length],
+    icon: <Sparkles size={16} />,
+  }), 4);
+}
+
+function stressReadability(p: boolean) {
+  const TITLES = p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT] : [LONG_TITLE];
+  const GRADES = ["A", "B", "C", "D"];
+  return repeat((i) => ({
+    id: i + 1,
+    title: TITLES[i % TITLES.length],
+    source: "github",
+    grade: GRADES[i % GRADES.length],
+    note: p ? LONG_WORD : LONG_PARAGRAPH,
+  }), 4);
+}
+
+function stressGlossary(p: boolean) {
+  return repeat((i) => ({
+    id: i + 1,
+    term: p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3] : LONG_TITLE,
+    variants: p ? MANY_TAGS : MANY_TAGS.slice(0, 8),
+    definition: p ? `${MIXED_SCRIPT} ${LONG_WORD}` : LONG_PARAGRAPH,
+  }), 3);
+}
+
+function stressActivity(p: boolean): ActivityItem[] {
+  return repeat((i) => ({
+    id: `a${i}`,
+    actor: p ? UNBREAKABLE : LONG_NAME,
+    action: p ? `${MIXED_SCRIPT} ${HUGE_NUMBER_STR}` : LONG_PARAGRAPH,
+    time: "May 11, 4:12 PM",
+    icon: <Sparkles size={12} />,
+  }), 5);
+}
+
+function StressExtras({ pathological }: { pathological: boolean }) {
+  return (
+    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE}>
+      <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
+      </div>
+      <div className="mt-3">
+        <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={pathological ? 4 : 6} />
+      </div>
+    </Card>
+  );
+}
 
 /* ── content variants ─────────────────────────────────────────────────────── */
 
@@ -80,6 +148,22 @@ function Body({ state }: { state: string }) {
         <EmptyState icon={<Sparkles size={22} />} title="Nothing to measure yet">
           Sync a source and run a few searches to start collecting insights.
         </EmptyState>
+      </div>
+    );
+  }
+
+  if (state === "overflow" || state === "stress") {
+    const p = state === "stress";
+    return (
+      <div className="mt-2 space-y-5">
+        <StressExtras pathological={p} />
+        <InsightsFreshnessChart />
+        <InsightsWidgets
+          stats={stressStats(p)}
+          readability={stressReadability(p)}
+          glossary={stressGlossary(p)}
+          activity={stressActivity(p)}
+        />
       </div>
     );
   }

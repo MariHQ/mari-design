@@ -12,7 +12,14 @@ import { Chip, StatusChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
+import { AvatarGroup } from "../index";
+import { Breadcrumb } from "../index";
 import { fmtDate } from "../tokens/format";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
+  MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
+} from "./stress";
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
@@ -36,6 +43,8 @@ const STATES = [
   { id: "empty", label: "No facts yet" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 const FILTERS = [
@@ -64,6 +73,38 @@ const MANY: Fact[] = [
   { id: 11, claim: "Custom domains require a paid plan.", source: "Billing page", owner: "Dana R.", status: "Verified", verified: "2026-05-11" },
   { id: 12, claim: "Search covers up to 50k documents per workspace.", source: "Limits table", owner: "Priya S.", status: "Verified", verified: "2026-03-22" },
 ];
+
+/* Overflow — natural but very long text: multi-sentence claims, long owner
+   names, long sources. Exercises wrapping / truncation / line-clamp. */
+const OVERFLOW_FACTS: Fact[] = [
+  { id: 1, claim: LONG_PARAGRAPH, source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-05-30" },
+  { id: 2, claim: LONG_TITLE, source: "Consolidated reliability, incident-response, and on-call escalation runbook — superseding all prior drafts", owner: LONG_NAME, status: "Needs review", verified: null },
+  { id: 3, claim: "The platform reliability guild reconciles every claim against the last four quarters of incident retrospectives before it is marked verified, and re-reviews after any Sev-1 incident anywhere in the fleet.", source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
+];
+
+/* Stress — pathological content: unbreakable tokens, single long word, huge
+   numbers, mixed scripts + emoji. Exercises horizontal overflow / break-words. */
+const STRESS_FACTS: Fact[] = [
+  { id: 1, claim: UNBREAKABLE, source: LONG_URL, owner: LONG_WORD, status: "Verified", verified: "2026-05-30" },
+  { id: 2, claim: MIXED_SCRIPT, source: LONG_DOC_TITLE, owner: MIXED_SCRIPT, status: "Needs review", verified: null },
+  { id: 3, claim: `${LONG_WORD} — ${HUGE_NUMBER_STR} requests/min at ${HUGE_PERCENT} availability`, source: UNBREAKABLE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
+];
+
+function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
+  const tags = mode === "stress" ? [...MANY_TAGS, MIXED_SCRIPT, UNBREAKABLE] : MANY_TAGS.slice(0, 6);
+  const people = (mode === "stress" ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }));
+  return (
+    <Card variant="plain" title="Owners & tags">
+      <div className="space-y-3">
+        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
+        </div>
+        <AvatarGroup people={people} max={mode === "stress" ? 5 : 6} />
+      </div>
+    </Card>
+  );
+}
 
 function factChip(status: string) {
   if (status === "Verified") return <StatusChip status="verified" />;
@@ -205,6 +246,26 @@ function Body({ state }: { state: string }) {
       <div className="mt-5 space-y-4">
         <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
         <ReviewTaskAudit phase={phase} />
+      </div>
+    );
+  }
+  if (state === "overflow") {
+    return (
+      <div className="mt-5 space-y-4">
+        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
+        <StressExtras mode="overflow" />
+        <FactsTable facts={OVERFLOW_FACTS} />
+        <FactsVerificationAudit facts={OVERFLOW_FACTS} />
+      </div>
+    );
+  }
+  if (state === "stress") {
+    return (
+      <div className="mt-5 space-y-4">
+        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
+        <StressExtras mode="stress" />
+        <FactsTable facts={STRESS_FACTS} />
+        <FactsVerificationAudit facts={STRESS_FACTS} />
       </div>
     );
   }

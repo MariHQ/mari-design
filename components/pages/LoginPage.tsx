@@ -8,8 +8,17 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Chip } from "../data-display/Chip";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { GithubMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD,
+  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
+
+const LONG_EMAIL =
+  "alexandra.wilhelmina.featherstonehaugh-montgomery@platform-reliability-and-incident-response.enterprise-workspace.example.com";
 
 /* Login (pages/login.md). Unauthenticated route — renders OUTSIDE the console
    shell. A centered auth card on a full-bleed backdrop with decorative brand
@@ -27,6 +36,8 @@ const STATES = [
   { id: "oauth-google", label: "OAuth · Google" },
   { id: "magic-link", label: "Magic link sent" },
   { id: "2fa", label: "Two-factor" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 function GoogleMark({ size = 17 }: { size?: number }) {
@@ -172,6 +183,48 @@ function Body({ state }: { state: string }) {
           </p>
         </Card>
       );
+    case "overflow":
+      return (
+        <Card>
+          <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+            <Field label="Name">
+              <Input className="w-full" defaultValue={LONG_NAME} />
+            </Field>
+            <Field label="Email">
+              <Input className="w-full" type="email" defaultValue={LONG_EMAIL} />
+            </Field>
+            <Field label="Workspace">
+              <Input className="w-full" defaultValue={LONG_TITLE} />
+            </Field>
+            <p role="alert" className="text-[12.5px] leading-relaxed text-espelette">{LONG_PARAGRAPH}</p>
+            <Button type="submit" variant="primary" block>Sign in to {LONG_TITLE}</Button>
+          </form>
+          <OAuthRow />
+          <ModeToggle />
+        </Card>
+      );
+    case "stress":
+      return (
+        <Card>
+          <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+            <Field label="Email">
+              <Input className="w-full" defaultValue={`${UNBREAKABLE}@example.com`} />
+            </Field>
+            <Field label="Password">
+              <Input className="w-full" type="password" defaultValue={LONG_WORD} />
+            </Field>
+            <p role="alert" className="break-words text-[12.5px] leading-relaxed text-espelette">
+              {MIXED_SCRIPT} — {UNBREAKABLE}
+            </p>
+            <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+              {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
+            </div>
+            <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
+            <p className="font-term text-[11px] text-ink/50">{HUGE_NUMBER_STR} sign-ins</p>
+            <Button type="submit" variant="primary" block>{LONG_WORD}</Button>
+          </form>
+        </Card>
+      );
     default: {
       const register = state === "register";
       const busy = state === "loading";
@@ -197,6 +250,8 @@ function Body({ state }: { state: string }) {
 function heading(state: string): { title: string; sub: string } {
   if (state === "register") return { title: "Create your account", sub: "Your product knowledge, curated." };
   if (state === "2fa") return { title: "Verify it’s you", sub: "One more step to keep your workspace secure." };
+  if (state === "overflow") return { title: LONG_NAME, sub: LONG_PARAGRAPH };
+  if (state === "stress") return { title: MIXED_SCRIPT, sub: UNBREAKABLE };
   return { title: "Mari Cloud", sub: "Your product knowledge, curated." };
 }
 

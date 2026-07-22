@@ -5,6 +5,10 @@ import { KnowledgeBrowser } from "../features/KnowledgeBrowser";
 import { KnowledgeInspector } from "../features/KnowledgeInspector";
 import { PageHeader, Card, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS,
+} from "./stress";
 
 /* Knowledge search surface (pages/knowledge.md). A workspace that pairs the
    faceted results browser (filter rail + search + result cards + footer stats)
@@ -61,6 +65,69 @@ const SLACK_DOC: Doc = {
   ],
 };
 
+/* ── overflow / stress corpora ─────────────────────────────────────────── */
+
+const OVERFLOW_RESULTS: Result[] = [
+  { id: "o1", kind: "page", source: "notion", title: LONG_TITLE, snippet: LONG_PARAGRAPH, author: LONG_NAME, date: "2026-07-16", tags: MANY_TAGS.slice(0, 8), status: "canonical" },
+  { id: "o2", kind: "pr", source: "github", title: LONG_DOC_TITLE, snippet: LONG_PARAGRAPH, author: LONG_NAME, date: "2026-07-14", tags: MANY_TAGS.slice(0, 5), status: "needs-review" },
+  { id: "o3", kind: "thread", source: "slack", title: LONG_TITLE, snippet: LONG_PARAGRAPH, author: "#platform-reliability-and-incident-response-coordination", date: "2026-07-12", tags: [], status: "verified", messageCount: 1284, participantCount: 96 },
+  { id: "o4", kind: "page", source: "docs", title: LONG_DOC_TITLE, snippet: LONG_PARAGRAPH, author: "Dana Osei", date: "2026-07-11", tags: MANY_TAGS.slice(0, 6), status: "verified" },
+];
+
+const STRESS_RESULTS: Result[] = [
+  { id: "s1", kind: "page", source: "notion", title: UNBREAKABLE, snippet: `${MIXED_SCRIPT} ${LONG_URL}`, author: LONG_WORD, date: "2026-07-16", tags: MANY_TAGS, status: "canonical" },
+  { id: "s2", kind: "pr", source: "github", title: LONG_WORD, snippet: UNBREAKABLE, author: LONG_NAME, date: "2026-07-15", tags: MANY_TAGS, status: "needs-review" },
+  { id: "s3", kind: "thread", source: "slack", title: `${MIXED_SCRIPT} ${UNBREAKABLE}`, snippet: LONG_URL, author: `#${LONG_WORD}`, date: "2026-07-14", tags: [], status: "verified", messageCount: HUGE_NUMBER, participantCount: HUGE_NUMBER },
+  { id: "s4", kind: "page", source: "docs", title: LONG_URL, snippet: `${UNBREAKABLE} ${MIXED_SCRIPT} ${HUGE_NUMBER_STR}`, author: MIXED_SCRIPT, date: "2026-07-13", tags: MANY_TAGS, status: "stale" },
+];
+
+const OVERFLOW_DOC: Doc = {
+  id: "doc_overflow_consolidated_reliability_runbook_revision",
+  title: LONG_TITLE,
+  source: "notion",
+  kind: "Page",
+  owner: LONG_NAME,
+  updated: "2026-07-16",
+  summary: LONG_PARAGRAPH,
+  tags: MANY_TAGS.slice(0, 8),
+  facts: [
+    { text: LONG_PARAGRAPH },
+    { text: "Escalation to the on-call incident commander happens automatically at Sev-1, and the paging policy re-pages the secondary responder after ten minutes without an acknowledgement from the primary." },
+  ],
+  related: [
+    { source: "github", title: LONG_DOC_TITLE },
+    { source: "docs", title: LONG_TITLE },
+    { source: "slack", title: LONG_SOURCE },
+  ],
+  timeline: [
+    { at: "Jul 16, 4:12 PM", actor: LONG_NAME, verb: "verified the consolidated runbook after reconciling it against four quarters of incident retrospectives" },
+    { at: "Jul 11, 9:38 AM", actor: LONG_NAME, verb: "added the end-of-business-day rollback window" },
+  ],
+};
+
+const STRESS_DOC: Doc = {
+  id: UNBREAKABLE,
+  title: `${UNBREAKABLE} ${MIXED_SCRIPT}`,
+  source: "docs",
+  kind: LONG_WORD,
+  owner: LONG_WORD,
+  updated: HUGE_NUMBER_STR,
+  summary: `${UNBREAKABLE} ${MIXED_SCRIPT} ${LONG_URL}`,
+  tags: MANY_TAGS,
+  facts: [
+    { text: UNBREAKABLE },
+    { text: `${MIXED_SCRIPT} — ${LONG_URL}` },
+    { text: LONG_WORD },
+  ],
+  related: [
+    { source: "github", title: LONG_URL },
+    { source: "slack", title: UNBREAKABLE },
+  ],
+  timeline: [
+    { at: HUGE_NUMBER_STR, actor: LONG_WORD, verb: MIXED_SCRIPT },
+  ],
+};
+
 const STATES = [
   { id: "default", label: "Default" },
   { id: "documents", label: "Documents tab" },
@@ -74,6 +141,8 @@ const STATES = [
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No results" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 function resultsFor(state: string): Result[] {
@@ -84,6 +153,8 @@ function resultsFor(state: string): Result[] {
     case "pull-requests": return RESULTS.filter((r) => r.kind === "pr");
     case "single-result": return RESULTS.slice(0, 1);
     case "many-results": return MANY;
+    case "overflow": return OVERFLOW_RESULTS;
+    case "stress": return STRESS_RESULTS;
     default: return RESULTS;
   }
 }
@@ -127,6 +198,12 @@ function Inspector({ state }: { state: string }) {
   }
   if (state === "inspector-slack" || state === "conversations") {
     return <KnowledgeInspector key={state} doc={SLACK_DOC} />;
+  }
+  if (state === "overflow") {
+    return <KnowledgeInspector key={state} doc={OVERFLOW_DOC} />;
+  }
+  if (state === "stress") {
+    return <KnowledgeInspector key={state} doc={STRESS_DOC} />;
   }
   return <KnowledgeInspector key={state} />;
 }

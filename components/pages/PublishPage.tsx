@@ -20,6 +20,11 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers } from "../features/PublishMcpServers";
+import { Avatar } from "../data-display/Avatar";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_DOC_TITLE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Publish (pages/publish.md). The doc-site product: turn the knowledge base
    into a static documentation website, or expose it to Claude/agents over MCP.
@@ -53,7 +58,54 @@ const STATES = [
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No sites yet" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/* ── Overflow / stress fixtures (see pages/stress.ts) ───────────────────────
+   An inline site header (long site + domain names) plus the real MCP-servers
+   feature fed long/pathological server names, URLs, and capability chips. */
+function PublishStressBody({ stress }: { stress: boolean }) {
+  const siteName = stress ? UNBREAKABLE : LONG_TITLE;
+  const domain = stress ? LONG_URL : LONG_SOURCE;
+  const chips = stress ? MANY_TAGS : ["customer-facing", "canonical", "incident-response", "reliability"];
+  return (
+    <div className="mt-6 flex flex-col gap-5">
+      <Card>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Chip label="Live" tone="ok" dot pulse caps />
+          <span className="min-w-0 break-words text-[15px] font-semibold text-ink">{siteName}</span>
+          <span className="min-w-0 break-words font-term text-[12px] text-ink/50">{domain}</span>
+        </div>
+        <p className="mt-2 text-[13px] text-ink/70">{stress ? MIXED_SCRIPT : LONG_PARAGRAPH}</p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {chips.map((c, i) => <Chip key={i} label={c} tone="neutral" />)}
+        </div>
+        {stress && (
+          <div className="mt-3 flex -space-x-2">
+            {MANY_INITIALS.map((ini, n) => (
+              <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <PublishMcpServers
+        servers={
+          stress
+            ? [
+                { id: 1, name: UNBREAKABLE, url: LONG_URL, scope: "project", status: "connected", capabilities: MANY_TAGS },
+                { id: 2, name: LONG_WORD, url: LONG_URL, scope: "org", status: "idle", capabilities: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT] },
+              ]
+            : [
+                { id: 1, name: "support-kb-consolidated-across-every-service-and-region", url: `https://mcp.mari.guru/s/${LONG_DOC_TITLE}`, scope: "project", status: "connected", capabilities: ["search", "facts", "answers", "glossary", "chat", "lineage"] },
+                { id: 2, name: LONG_DOC_TITLE, url: `https://mcp.mari.guru/servers/${LONG_DOC_TITLE}`, scope: "org", status: "idle", capabilities: ["search", "lineage"] },
+              ]
+        }
+      />
+    </div>
+  );
+}
 
 const ACCENTS = ["#b04e2c", "#35549d", "#43663c", "#6a5a9c", "#8a8171"];
 const THEMES = [
@@ -347,6 +399,7 @@ function McpTokenCreated() {
 function Body({ state }: { state: string }): ReactNode {
   if (state === "error") return <div className="mt-6"><EmptyState title="API offline">Publishing is temporarily unavailable — releases and deploys can't be reached. Retrying…</EmptyState></div>;
   if (state === "empty") return <div className="mt-6"><EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState></div>;
+  if (state === "overflow" || state === "stress") return <PublishStressBody stress={state === "stress"} />;
 
   if (state.startsWith("publish-")) return <div className="mt-6"><PublishFlow phase={state.slice("publish-".length) as PublishPhase} /></div>;
   if (state === "mcp-add") return <div className="mt-6"><McpAddServer /></div>;

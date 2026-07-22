@@ -21,6 +21,11 @@ import { SourcesConnectorCard } from "../features/SourcesConnectorCard";
 import { SourcesConnectorWizard } from "../features/SourcesConnectorWizard";
 import { SourcesSyncStatus, PhaseTracker } from "../features/SourcesSyncStatus";
 import { SourcesBots } from "../features/SourcesBots";
+import { Avatar } from "../data-display/Avatar";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_DOC_TITLE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, MIXED_SCRIPT, MANY_INITIALS,
+} from "./stress";
 
 /* Sources & connectors (pages/sources.md). Settings → Sources: the hub for
    bringing every product conversation into one trusted library. Two tabs —
@@ -296,7 +301,72 @@ const STATES = [
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
   { id: "empty", label: "No sources connected" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/* ── Overflow / stress fixtures (see pages/stress.ts) ───────────────────────
+   Long connector names + the credential token/URL fields are the prime
+   horizontal-overflow cases here. Injected via data props into the real
+   connector grid, the SyncPanel row, and an inline connect flow. */
+function SourcesStressBody({ stress }: { stress: boolean }) {
+  return (
+    <div className="mt-6 flex flex-col gap-6">
+      {stress && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex -space-x-2">
+            {MANY_INITIALS.map((ini, n) => (
+              <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
+            ))}
+          </div>
+          <span className="min-w-0 break-words font-term text-[11px] text-ink/45">{MIXED_SCRIPT}</span>
+        </div>
+      )}
+
+      <SourcesConnectorCard
+        sources={
+          stress
+            ? [
+                { id: "gh", provider: "github", name: UNBREAKABLE, tier: "live", state: "running", phase: "embedding", done: 340, total: 512, docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER, lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11] },
+                { id: "conf", provider: "confluence", name: LONG_WORD, tier: "live", state: "failed", docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER, lastSyncAt: "2026-07-20T22:15:00", lastError: `${UNBREAKABLE} ${LONG_URL}` },
+                { id: "mix", provider: "slack", name: MIXED_SCRIPT, tier: "legacy", state: "healthy", docsCount: HUGE_NUMBER, lastSyncAt: "2026-07-19T18:02:00" },
+              ]
+            : [
+                { id: "gh", provider: "github", name: `GitHub · ${LONG_SOURCE}`, tier: "live", state: "running", phase: "embedding", done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340, lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11] },
+                { id: "conf", provider: "confluence", name: `Confluence · ${LONG_TITLE}`, tier: "live", state: "failed", docCount: 512, chunkCount: 3100, embeddedCount: 2870, lastSyncAt: "2026-07-20T22:15:00", lastError: LONG_PARAGRAPH },
+                { id: "web", provider: "website", name: LONG_DOC_TITLE, tier: "legacy", state: "paused", docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3] },
+              ]
+        }
+      />
+
+      <SyncPanel
+        sources={[
+          stress
+            ? { id: "gh", name: MIXED_SCRIPT, mark: <SourceMark provider="github" size={24} />, state: "error", error: `${UNBREAKABLE} ${LONG_URL}` }
+            : { id: "gh", name: `GitHub · ${LONG_SOURCE}`, mark: <SourceMark provider="github" size={24} />, state: "syncing", phase: "Embedding chunks across every service, region, and on-call team", done: 340, total: 512, chunkCount: 8912, embeddedCount: 8340 },
+        ]}
+        onRetry={() => {}}
+      />
+
+      <ConnectFlow
+        c={
+          stress
+            ? { key: "github", name: UNBREAKABLE, blurb: MIXED_SCRIPT, detail: LONG_URL, fields: [
+                { label: "Base URL", value: LONG_URL },
+                { label: "Access token", value: UNBREAKABLE, secret: true, help: LONG_URL },
+                { label: "Service account JSON", value: `${MIXED_SCRIPT} ${UNBREAKABLE}`, secret: true, multiline: true },
+              ], sync: { done: 340, total: 512, docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER } }
+            : { key: "github", name: LONG_SOURCE, blurb: LONG_PARAGRAPH, docsUrl: LONG_URL, detail: LONG_TITLE, fields: [
+                { label: "Repository", value: LONG_SOURCE, help: LONG_PARAGRAPH },
+                { label: "Access token", value: "ghp_R8xQ2v••••••••••••••", secret: true },
+                { label: "Paths filter (glob)", value: "docs/**/runbooks/**/incident-response/**/*.md" },
+              ], sync: { done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340 } }
+        }
+        phase="configure"
+      />
+    </div>
+  );
+}
 
 function tabForState(state: string): Tab {
   return state === "bots" ? "bots" : "connectors";
@@ -319,6 +389,7 @@ function parseConnect(state: string): { c: Connector; phase: "configure" | "sync
 function Body({ state, tab }: { state: string; tab: Tab }): ReactNode {
   if (state === "error") return <div className="mt-6"><EmptyState title="API offline">The API didn't answer. If the server is still starting up, retry in a moment.</EmptyState></div>;
   if (state === "empty") return <div className="mt-6"><EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState></div>;
+  if (state === "overflow" || state === "stress") return <SourcesStressBody stress={state === "stress"} />;
 
   const connect = parseConnect(state);
   if (connect) return <div className="mt-6"><ConnectFlow c={connect.c} phase={connect.phase} /></div>;

@@ -25,7 +25,13 @@ import { Checkbox } from "../forms/Checkbox";
 import { RadioGroup } from "../forms/RadioGroup";
 import { Tabs } from "../navigation/Tabs";
 import { GlobalIconsArt } from "../features/GlobalIconsArt";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { Sparkles, BookOpen, ShieldCheck, Inbox } from "lucide-react";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
+  MANY_TAGS, MANY_INITIALS,
+} from "./stress";
 
 /* Lookbook (pages/lookbook.md). A live design-system showcase — the one
    auth/onboarding-adjacent page that renders INSIDE the console frame. Each
@@ -43,6 +49,8 @@ const STATES = [
   { id: "feedback", label: "Feedback" },
   { id: "icons", label: "Icons & art" },
   { id: "loading", label: "Loading" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 function Exhibit({ title, rule, imp, children }: {
@@ -282,6 +290,78 @@ function IconsArt() {
   );
 }
 
+/* ── Overflow / stress stress-test sections ───────────────────────────── */
+
+/* `overflow` — the gallery stuffed with very long NATURAL text: long titles,
+   paragraphs, names, and huge stat values. Catches wrapping, truncation,
+   line-clamp, and vertical-overflow failures. */
+function OverflowSection() {
+  return (
+    <div className="space-y-4">
+      <Exhibit
+        title={LONG_TITLE}
+        rule={LONG_PARAGRAPH}
+        imp={`import { Everything } from "${LONG_SOURCE}"`}
+      >
+        <Button variant="primary">{LONG_TITLE}</Button>
+        <Chip label={LONG_DOC_TITLE} tone="neutral" />
+        <Badge label={LONG_NAME} tone="info" />
+        <StatusChip status="canonical" />
+      </Exhibit>
+
+      <Card title={LONG_TITLE}>
+        <p className="text-[13px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Stat value={HUGE_NUMBER_STR} label={LONG_TITLE} sub={LONG_PARAGRAPH} tone="ok" icon={<BookOpen size={18} />} />
+          <Stat value={HUGE_PERCENT} label="Facts passing across every service, region, and team" sub="3 need review" tone="attention" icon={<ShieldCheck size={18} />} />
+          <Stat value={HUGE_NUMBER_STR} label={LONG_NAME} sub="live" tone="info" icon={<Sparkles size={18} />} />
+        </div>
+        <div className="mt-4 space-y-3">
+          <Progress value={68} label={`Embedding · ${LONG_TITLE}`} tone="info" />
+          <Alert tone="attention" title={LONG_TITLE}>{LONG_PARAGRAPH}</Alert>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* `stress` — PATHOLOGICAL content: unbreakable tokens/URLs, a single long word,
+   huge numbers, a 20+ chip row that will not wrap, a long avatar stack, and
+   mixed scripts + emoji. Catches horizontal overflow, missing
+   min-w-0 / break-words / truncate, and flex blowouts. */
+function StressSection() {
+  return (
+    <div className="space-y-4">
+      <Exhibit
+        title="Chip-row overflow — 20+ tags, no wrap"
+        rule="A single non-wrapping row of every tag: it must scroll inside its own container, never push the page body sideways."
+        imp={LONG_URL}
+      >
+        <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+          {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
+        </div>
+        <CountChip count={MANY_TAGS.length} />
+      </Exhibit>
+
+      <Card title="Unbreakable tokens, mixed scripts & huge numbers">
+        <code className="mt-1 block break-all font-term text-[11.5px] text-biscay-2">{UNBREAKABLE}</code>
+        <p className="mt-3 break-words text-[13px] text-ink/70">{MIXED_SCRIPT}</p>
+        <p className="mt-2 break-words text-[13px] text-ink/70">{LONG_WORD}</p>
+        <div className="mt-4">
+          <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Stat value={HUGE_NUMBER_STR} label={LONG_WORD} tone="ok" icon={<BookOpen size={18} />} />
+          <Stat value={HUGE_PERCENT} label={UNBREAKABLE} tone="info" icon={<Sparkles size={18} />} />
+          <Stat value={HUGE_NUMBER_STR} label={MIXED_SCRIPT} tone="attention" icon={<ShieldCheck size={18} />} />
+        </div>
+        <div className="mt-4"><Progress value={99} label={UNBREAKABLE} tone="info" /></div>
+        <div className="mt-4"><Alert tone="blocked" title={UNBREAKABLE}>{LONG_URL}</Alert></div>
+      </Card>
+    </div>
+  );
+}
+
 /* ── Page ─────────────────────────────────────────────────────────────── */
 
 function Sections({ state }: { state: string }) {
@@ -292,6 +372,8 @@ function Sections({ state }: { state: string }) {
     case "data-display": return <DataDisplay />;
     case "feedback": return <Feedback />;
     case "icons": return <div className="space-y-4"><IconsArt /></div>;
+    case "overflow": return <OverflowSection />;
+    case "stress": return <StressSection />;
     default:
       return (
         <div className="space-y-4">

@@ -11,6 +11,14 @@ import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Chip } from "../index";
+import { AvatarGroup } from "../index";
+import { Breadcrumb } from "../index";
+import {
+  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
+  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT,
+  MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
+} from "./stress";
 
 /* Decisions (pages/decisions.md). A decision ledger — one decision, one record,
    ratified by the people accountable. The main column is a timeline of decision
@@ -34,6 +42,8 @@ const STATES = [
   { id: "empty", label: "No decisions yet" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 const FILTERS = [
@@ -78,6 +88,47 @@ const SUPERSEDED: Decisions = [
   { id: 4, statement: "Use REST for the public API surface", status: "superseded", source: "Founders memo", provider: "docs", owners: ["Sam Rowe"], decidedOn: "2025-11-14", supersededBy: "Expose a typed GraphQL gateway in front of the internal services", impact: { ...NO_IMPACT } },
   { id: 5, statement: "Expose a typed GraphQL gateway in front of the internal services", context: "Replaces the REST-only decision; unifies typing across clients.", status: "ratified", source: "Architecture sync", provider: "gdocs", owners: ["Sam Rowe", "Wei Zhang"], decidedOn: "2026-05-02", impact: { ...NO_IMPACT } },
 ];
+
+/* Overflow — long statements, multi-sentence context, long owner names. */
+const OVERFLOW_DECISIONS: Decisions = [
+  { id: 1, statement: LONG_TITLE, context: LONG_PARAGRAPH, status: "ratified", fresh: true, source: LONG_SOURCE, provider: "slack", owners: [LONG_NAME, "Priya Nair", "Alexandra Featherstonehaugh-Montgomery"], decidedOn: "2026-07-21", impact: { ...NO_IMPACT, count: 5, summary: LONG_PARAGRAPH } },
+  { id: 2, statement: "Freeze the entire public API surface for v2 until every downstream team has migrated off the legacy header and onto the typed gateway contract", context: LONG_PARAGRAPH, status: "proposed", source: "Architecture sync spanning the platform, reliability, and security guilds across every region", provider: "gdocs", owners: [LONG_NAME], impact: { ...NO_IMPACT } },
+];
+
+/* Stress — unbreakable tokens, mixed scripts, huge numbers, long owner stack. */
+const STRESS_DECISIONS: Decisions = [
+  { id: 1, statement: UNBREAKABLE, context: LONG_URL, status: "ratified", fresh: true, source: UNBREAKABLE, provider: "slack", owners: MANY_INITIALS, decidedOn: "2026-07-21", impact: { ...NO_IMPACT, count: HUGE_NUMBER, summary: `${HUGE_NUMBER_STR} documents reference ${MIXED_SCRIPT}` } },
+  { id: 2, statement: MIXED_SCRIPT, context: LONG_WORD, status: "proposed", source: LONG_DOC_TITLE, provider: "gdocs", owners: MANY_INITIALS, impact: { ...NO_IMPACT } },
+  { id: 3, statement: LONG_WORD, status: "superseded", source: UNBREAKABLE, provider: "docs", owners: [LONG_NAME], decidedOn: "2025-11-14", supersededBy: UNBREAKABLE, impact: { ...NO_IMPACT } },
+];
+
+function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
+  const tags = mode === "stress" ? [...MANY_TAGS, MIXED_SCRIPT, UNBREAKABLE] : MANY_TAGS.slice(0, 6);
+  const people = (mode === "stress" ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }));
+  return (
+    <Card variant="plain" title="Accountable & tags">
+      <div className="space-y-3">
+        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
+        </div>
+        <AvatarGroup people={people} max={mode === "stress" ? 5 : 6} />
+      </div>
+    </Card>
+  );
+}
+
+function StressLedger({ mode }: { mode: "overflow" | "stress" }) {
+  return (
+    <div className="mt-6 flex items-start gap-6">
+      <div className="min-w-0 flex-1 space-y-4">
+        <StressExtras mode={mode} />
+        <DecisionCardFeature decisions={mode === "stress" ? STRESS_DECISIONS : OVERFLOW_DECISIONS} />
+      </div>
+      <Rail filter="all" />
+    </div>
+  );
+}
 
 function Rail({ filter = "all" }: { filter?: string }) {
   return (
@@ -169,6 +220,8 @@ function Body({ state }: { state: string }) {
   if (state === "impact-loading") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: true, loading: true })} filter="ratified" />;
   if (state === "impact-docs") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: true, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
   if (state === "impact-collapsed") return <Ledger decisions={impactDecision({ ...NO_IMPACT, open: false, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
+  if (state === "overflow") return <StressLedger mode="overflow" />;
+  if (state === "stress") return <StressLedger mode="stress" />;
   if (state === "superseded") return <Ledger decisions={SUPERSEDED} filter="superseded" />;
   if (state === "filtered") return <Ledger decisions={RATIFIED_ONLY} filter="ratified" />;
   if (state === "ratifying") {

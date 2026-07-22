@@ -14,7 +14,12 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { TokenReveal } from "../data-display/TokenReveal";
 import { fmtDate } from "../tokens/format";
+import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SettingsApiKeys, type ApiKey } from "../features/SettingsApiKeys";
+import {
+  LONG_TITLE, LONG_SOURCE, LONG_URL, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT,
+  HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, repeat,
+} from "./stress";
 
 /* Settings → API keys (pages/settings-api-keys.md). Create and revoke
    programmatic-access keys. List variants render the SettingsApiKeys feature;
@@ -33,6 +38,8 @@ const STATES = [
   { id: "key-created", label: "Key created (revealed)" },
   { id: "revoke-confirm", label: "Revoke key (confirm)" },
   { id: "revoked", label: "Revoked key in list" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
 ] as const;
 
 type SettingsTab =
@@ -103,7 +110,44 @@ function KeysTable({ keys, confirmId }: { keys: ApiKey[]; confirmId?: number }) 
   );
 }
 
+function StressKeys({ extreme }: { extreme: boolean }) {
+  const keys: ApiKey[] = extreme
+    ? repeat((i) => ({
+        id: i + 1,
+        name: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3],
+        prefix: UNBREAKABLE,
+        scopes: MANY_TAGS.join(" "),
+        created: "2025-01-01",
+        lastUsed: i % 2 === 0 ? "2025-07-20" : null,
+        revoked: i % 3 === 0,
+      }), 5)
+    : repeat((i) => ({
+        id: i + 1,
+        name: LONG_TITLE,
+        prefix: LONG_URL,
+        scopes: MANY_TAGS.slice(0, 10).map((t) => `${t}:read`).join(" "),
+        created: "2025-01-01",
+        lastUsed: i % 2 === 0 ? "2025-07-20" : null,
+        revoked: i % 3 === 0,
+      }), 4);
+  return (
+    <div className="flex flex-col gap-5">
+      <SettingsApiKeys keys={keys} />
+      <Card title={extreme ? UNBREAKABLE : "Scopes granted across every key in this workspace"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
+        <div className="flex items-center gap-3">
+          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} requests served last month`}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function Body({ state }: { state: string }) {
+  if (state === "overflow" || state === "stress") return <StressKeys extreme={state === "stress"} />;
   if (state === "error") {
     return (
       <div className="mt-5">
