@@ -17,6 +17,8 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, ".preview/index.html"),
         pages: resolve(__dirname, ".preview/pages.html"),
+        canvas: resolve(__dirname, ".preview/canvas.html"),
+        render: resolve(__dirname, ".preview/render.html"),
       },
     },
   },

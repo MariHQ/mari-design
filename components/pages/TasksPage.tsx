@@ -1,0 +1,232 @@
+import { useState, type ReactNode } from "react";
+import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock } from "lucide-react";
+import type { PageModule, PageProps } from "./types";
+import { PageFrame, navFor } from "./PageFrame";
+import { PageHeader, Card, Button, Input, Select, Avatar, Pill, IconRing, Badge, Chip, EmptyState, Spinner } from "../index";
+
+/* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
+   "Today's review" card: a composer at the top, then Open and Done columns of
+   task rows (check toggle + strikethrough title + assignee + kind pill). States
+   walk content variants (mixed / open-only / all-done / single / many),
+   overdue and assigned-to-me filters, the composer-open and saving lifecycle,
+   and the loading / offline / empty edges. */
+
+const STATES = [
+  { id: "default", label: "Default · mixed" },
+  { id: "open-only", label: "All open" },
+  { id: "all-done", label: "All caught up" },
+  { id: "single", label: "Single task" },
+  { id: "many", label: "Many tasks" },
+  { id: "overdue", label: "Overdue" },
+  { id: "assigned-to-me", label: "Assigned to me" },
+  { id: "composer-open", label: "Composer · drafting" },
+  { id: "saving", label: "Adding task…" },
+  { id: "loading", label: "Loading" },
+  { id: "error", label: "API offline" },
+  { id: "empty", label: "No tasks" },
+] as const;
+
+type Task = {
+  id: number;
+  title: string;
+  who: string;
+  kind: string;
+  kindLabel: string;
+  done: boolean;
+  due?: string;
+  overdue?: boolean;
+};
+
+const SEED: Task[] = [
+  { id: 1, title: "Verify the new proration rule in the billing runbook", who: "DR", kind: "factcheck", kindLabel: "Fact check", done: false },
+  { id: 2, title: "Approve the SSO onboarding guide for publish", who: "MG", kind: "approval", kindLabel: "Approval", done: false },
+  { id: 3, title: "Review the incident escalation ladder", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false },
+  { id: 4, title: "Retire two stale screenshots in auth/README", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
+  { id: 5, title: "Tag the pricing FAQ as canonical", who: "DR", kind: "canonical", kindLabel: "Canonical", done: true },
+];
+
+const OVERDUE: Task[] = [
+  { id: 11, title: "Re-verify the SLA uptime fact — source expired", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false, due: "3 days ago", overdue: true },
+  { id: 12, title: "Approve the refund policy update", who: "MG", kind: "approval", kindLabel: "Approval", done: false, due: "Yesterday", overdue: true },
+  { id: 13, title: "Review the on-call rotation doc", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false, due: "Today" },
+  { id: 14, title: "Retire the deprecated v1 export guide", who: "PK", kind: "stale", kindLabel: "Stale", done: true, due: "Jul 12" },
+];
+
+const MINE: Task[] = [
+  { id: 21, title: "Fact-check the new webhook retry cadence", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false, due: "Tomorrow" },
+  { id: 22, title: "Draft an answer for 'How do I rotate my API key?'", who: "MM", kind: "needs-review", kindLabel: "Needs review", done: false, due: "Fri" },
+  { id: 23, title: "Approve the billing proration runbook", who: "MM", kind: "approval", kindLabel: "Approval", done: true },
+];
+
+const MANY: Task[] = [
+  ...SEED,
+  { id: 31, title: "Reconcile the pricing table against Stripe", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false },
+  { id: 32, title: "Publish the SSO enforcement announcement", who: "MG", kind: "approval", kindLabel: "Approval", done: false },
+  { id: 33, title: "Prune 6 stale onboarding screenshots", who: "PK", kind: "stale", kindLabel: "Stale", done: false },
+  { id: 34, title: "Verify JWKS rotation cadence in the auth doc", who: "AK", kind: "factcheck", kindLabel: "Fact check", done: false },
+  { id: 35, title: "Review the data-retention policy update", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false },
+  { id: 36, title: "Tag the incident postmortem as canonical", who: "DR", kind: "canonical", kindLabel: "Canonical", done: true },
+  { id: 37, title: "Retire the legacy billing FAQ", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
+  { id: 38, title: "Approve the support macros refresh", who: "MG", kind: "approval", kindLabel: "Approval", done: true },
+];
+
+function seedFor(state: string): Task[] {
+  switch (state) {
+    case "open-only": return SEED.map((t) => ({ ...t, done: false }));
+    case "all-done": return SEED.map((t) => ({ ...t, done: true }));
+    case "single": return SEED.slice(0, 1);
+    case "many": return MANY;
+    case "overdue": return OVERDUE;
+    case "assigned-to-me": return MINE;
+    default: return SEED;
+  }
+}
+
+function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number) => void }) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <button
+        type="button"
+        aria-label={task.done ? "Mark not done" : "Mark done"}
+        onClick={() => onToggle(task.id)}
+        className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors ${
+          task.done ? "border-moss bg-moss text-white" : "border-ink/30 text-transparent hover:border-ink/50"
+        }`}
+      >
+        <Check size={12} />
+      </button>
+      <span className={`flex-1 text-[13.5px] ${task.done ? "text-ink/40 line-through" : "text-ink"}`}>
+        {task.title}
+      </span>
+      {task.due && !task.done && (
+        <Chip
+          label={task.due}
+          tone={task.overdue ? "blocked" : "neutral"}
+          icon={<CalendarClock size={12} />}
+        />
+      )}
+      <Avatar initials={task.who} />
+      <Pill kind={task.kind} text={task.kindLabel} />
+    </div>
+  );
+}
+
+function Column({
+  title, icon, tone, count, action, children,
+}: {
+  title: string;
+  icon: ReactNode;
+  tone: "ink" | "ok";
+  count: number;
+  action?: React.ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <div className="mb-1 flex items-center gap-2.5">
+        <IconRing tone={tone}>{icon}</IconRing>
+        <span className="text-[15px] font-semibold text-ink">{title}</span>
+        <Badge tone="neutral" label={String(count)} />
+        {action && <span className="ml-auto">{action}</span>}
+      </div>
+      <div className="divide-y divide-ink/10">{children}</div>
+    </Card>
+  );
+}
+
+function Body({ state }: { state: string }) {
+  const composerOpen = state === "composer-open";
+  const saving = state === "saving";
+  const [tasks, setTasks] = useState<Task[]>(() => seedFor(state));
+  const [draft, setDraft] = useState(
+    composerOpen ? "Re-verify the enterprise SLA uptime fact against the status page" : "",
+  );
+
+  const toggle = (id: number) =>
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const add = () => {
+    const title = draft.trim();
+    if (!title) return;
+    setTasks((ts) => [...ts, { id: Date.now(), title, who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false }]);
+    setDraft("");
+  };
+  const clearDone = () => setTasks((ts) => ts.filter((t) => !t.done));
+
+  const loading = state === "loading";
+  const offline = state === "error";
+  const isEmpty = state === "empty";
+
+  const open = isEmpty ? [] : tasks.filter((t) => !t.done);
+  const done = isEmpty ? [] : tasks.filter((t) => t.done);
+
+  const listBody = (rows: Task[], emptyText: string) => {
+    if (loading) return <div className="grid place-items-center py-10"><Spinner size="sm" label="Loading" /></div>;
+    if (offline) return <div className="py-4"><EmptyState title="API offline">Tasks unavailable.</EmptyState></div>;
+    if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/50">{emptyText}</div>;
+    return rows.map((t) => <TaskRow key={t.id} task={t} onToggle={toggle} />);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className={`flex flex-col gap-3 sm:flex-row sm:items-center ${composerOpen || saving ? "ring-1 ring-biscay-2/40" : ""}`.trim()}>
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="New task — e.g. Re-verify SLA uptime fact"
+          className="flex-1"
+        />
+        <Select defaultValue="factcheck" className="sm:w-40">
+          <option value="approval">Approval</option>
+          <option value="factcheck">Fact check</option>
+          <option value="stale">Stale</option>
+        </Select>
+        <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
+          <Plus size={15} /> {saving ? "Adding…" : "Add task"}
+        </Button>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
+          {listBody(open, "Nothing open — all caught up.")}
+        </Column>
+        <Column
+          title="Done"
+          icon={<CheckCircle2 size={16} />}
+          tone="ok"
+          count={done.length}
+          action={
+            done.length > 0 && !loading && !offline ? (
+              <Button variant="link" compact onClick={clearDone}>
+                <Trash2 size={14} /> Clear done
+              </Button>
+            ) : null
+          }
+        >
+          {listBody(done, "No completed tasks yet.")}
+        </Column>
+      </div>
+    </div>
+  );
+}
+
+function TasksPage({ state = "default", mobile = false }: PageProps) {
+  return (
+    <PageFrame active={navFor("tasks")} title="Tasks" mobile={mobile}>
+      <div className="mx-auto max-w-4xl px-5 py-6 sm:px-8">
+        <PageHeader title="Tasks" backLink={{ href: "/", label: "Overview" }} />
+        <div className="mt-6">
+          <Body key={state} state={state} />
+        </div>
+      </div>
+    </PageFrame>
+  );
+}
+
+export const page: PageModule = {
+  id: "tasks",
+  title: "Tasks",
+  route: "/tasks",
+  component: TasksPage,
+  states: STATES.map((s) => ({ ...s })),
+};

@@ -603,7 +603,10 @@ function Gallery() {
       <header className="mb-10">
         <div className="flex items-center justify-between gap-4">
           <div className="font-mono text-[11px] uppercase tracking-widest text-espelette">Mari Design</div>
-          <a href="./pages.html" className="font-mono text-[11px] uppercase tracking-widest text-biscay-2 hover:text-ink underline underline-offset-4 decoration-biscay-2/40">Page components →</a>
+          <div className="flex items-center gap-4">
+            <a href="./pages.html" className="font-mono text-[11px] uppercase tracking-widest text-biscay-2 hover:text-ink underline underline-offset-4 decoration-biscay-2/40">Page components →</a>
+            <a href="./canvas.html" className="font-mono text-[11px] uppercase tracking-widest text-biscay-2 hover:text-ink underline underline-offset-4 decoration-biscay-2/40">Page canvas →</a>
+          </div>
         </div>
         <h1 className="text-2xl font-semibold text-ink mt-1">Component Preview — full library</h1>
         <p className="text-[13px] text-ink/55 mt-1">Every exported component, live. Edit any source file and it hot-reloads.</p>

@@ -40,9 +40,13 @@ jobs:
         working-directory: components
         run: npm ci
 
-      - name: Build static site
+      - name: Install Playwright Chromium (for canvas prerender)
         working-directory: components
-        run: npm run build
+        run: npx playwright install --with-deps chromium
+
+      - name: Build static site + prerender page canvas
+        working-directory: components
+        run: npm run build:canvas
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -53,13 +57,16 @@ jobs:
       - name: Sync to S3
         working-directory: components
         run: |
-          # Long-cache the fingerprinted assets, no-cache the HTML entry.
+          # Long-cache the fingerprinted assets + prerendered canvas PNGs;
+          # no-cache every HTML entry point so redeploys show immediately.
           aws s3 sync dist "s3://${S3_BUCKET}" --delete \
-            --exclude "index.html" \
+            --exclude "*.html" \
             --cache-control "public,max-age=31536000,immutable"
-          aws s3 cp dist/index.html "s3://${S3_BUCKET}/index.html" \
-            --cache-control "no-cache,no-store,must-revalidate" \
-            --content-type "text/html"
+          for f in index.html pages.html canvas.html render.html; do
+            aws s3 cp "dist/$f" "s3://${S3_BUCKET}/$f" \
+              --cache-control "no-cache,no-store,must-revalidate" \
+              --content-type "text/html"
+          done
 
       - name: Invalidate CloudFront
         run: |
