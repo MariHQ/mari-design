@@ -1,24 +1,31 @@
 // Prerender pipeline: screenshot every page × state × view (FULL page height)
-// into PNGs that the infinite canvas displays. Runs against a `vite preview`
+// into images the infinite canvas displays. Runs against a `vite preview`
 // server of the built dist so the render route + code-split chunks resolve
 // exactly as deployed.
 //
 //   node scripts/prerender.mjs
 //
-// Output: .preview/public/canvas/<page>__<state>__<view>.png + manifest.json
+// Output: .preview/public/canvas/<page>__<state>__<view>.jpg + manifest.json
 // (a subsequent `vite build` copies public/canvas/* into dist/canvas/).
+//
+// Fast: a pool of browser pages captures frames concurrently, `waitUntil:load`
+// + a `body[data-ready]` flag instead of networkidle, and JPEG encoding (much
+// faster than PNG for tall full-page shots, and far smaller to upload/load).
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import os from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const OUT_DIR = resolve(ROOT, ".preview/public/canvas");
 const PORT = 4318;
 const BASE = `http://localhost:${PORT}`;
+const CONCURRENCY = Math.max(2, Math.min(8, (os.cpus()?.length || 4) - 1));
+const JPEG_QUALITY = 88;
 
 const SIZES = { desktop: { w: 1440, h: 900 }, mobile: { w: 390, h: 844 } };
 
@@ -56,47 +63,63 @@ async function main() {
     await waitForServer(`${BASE}/render.html`);
     const browser = await chromium.launch();
     const ctx = await browser.newContext({ deviceScaleFactor: 1 });
-    const page = await ctx.newPage();
 
-    await page.goto(`${BASE}/render.html?list=1`, { waitUntil: "networkidle" });
-    const frames = await page.evaluate(() => window.__FRAMES__);
-    const pages = await page.evaluate(() => window.__PAGES__);
+    // Enumerate frames from the registry.
+    const listPage = await ctx.newPage();
+    await listPage.goto(`${BASE}/render.html?list=1`, { waitUntil: "load" });
+    const frames = await listPage.evaluate(() => window.__FRAMES__);
+    const pages = await listPage.evaluate(() => window.__PAGES__);
+    await listPage.close();
     if (!frames?.length) throw new Error("no frames enumerated — is the registry empty?");
-    console.log(`Prerendering ${frames.length} frames across ${pages.length} pages…`);
+    console.log(`Prerendering ${frames.length} frames across ${pages.length} pages with ${CONCURRENCY} workers…`);
 
-    // Capture each frame at full page height.
     const ordered = [...frames].sort((a, b) =>
       a.row - b.row || (a.view === b.view ? 0 : a.view === "desktop" ? -1 : 1),
     );
-    const captured = [];
-    for (const f of ordered) {
-      const { w, h: devH } = SIZES[f.view];
-      const file = `${f.page}__${f.state}__${f.view}.png`;
-      const url = `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}`;
-      await page.setViewportSize({ width: w, height: devH });
-      await page.goto(url, { waitUntil: "networkidle" });
-      await page.waitForSelector("body[data-ready]", { timeout: 15000 }).catch(() => {});
-      await page.waitForTimeout(250);
-      const fullH = Math.max(devH, await page.evaluate(() =>
-        Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
-      ));
-      await page.screenshot({ path: resolve(OUT_DIR, file), fullPage: true });
-      captured.push({
-        file, page: f.page, pageTitle: f.pageTitle, row: f.row,
-        state: f.state, stateLabel: f.stateLabel, view: f.view, w, h: fullH,
-      });
-      process.stdout.write(".");
+
+    // Worker pool: each page pulls frames off a shared cursor.
+    const results = new Array(ordered.length);
+    let cursor = 0;
+    let done = 0;
+    async function worker() {
+      const p = await ctx.newPage();
+      for (;;) {
+        const i = cursor++;
+        if (i >= ordered.length) break;
+        const f = ordered[i];
+        const { w, h: devH } = SIZES[f.view];
+        const file = `${f.page}__${f.state}__${f.view}.jpg`;
+        const url = `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}`;
+        await p.setViewportSize({ width: w, height: devH });
+        await p.goto(url, { waitUntil: "load" });
+        await p.waitForSelector("body[data-ready]", { timeout: 15000 }).catch(() => {});
+        await p.waitForTimeout(120);
+        const fullH = Math.max(devH, await p.evaluate(() =>
+          Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+        ));
+        await p.screenshot({ path: resolve(OUT_DIR, file), fullPage: true, type: "jpeg", quality: JPEG_QUALITY });
+        results[i] = {
+          file, page: f.page, pageTitle: f.pageTitle, row: f.row,
+          state: f.state, stateLabel: f.stateLabel, view: f.view, w, h: fullH,
+        };
+        done++;
+        if (done % 25 === 0) process.stdout.write(`${done}/${ordered.length} `);
+      }
+      await p.close();
     }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     process.stdout.write("\n");
+
+    const captured = results.filter(Boolean);
 
     // Layout: one row per page, desktop states then mobile states; rows stack
     // with cumulative (variable) heights.
-    const rows = [...new Set(captured.map((c) => c.row))].sort((a, b) => a - b);
     const byRow = new Map();
     for (const c of captured) {
       if (!byRow.has(c.row)) byRow.set(c.row, []);
       byRow.get(c.row).push(c);
     }
+    const rows = [...byRow.keys()].sort((a, b) => a - b);
     let y = TOP_PAD;
     const pagesOut = [];
     for (const r of rows) {
@@ -116,7 +139,7 @@ async function main() {
 
     const manifest = { generatedFrames: captured.length, pages: pagesOut, frames: captured };
     await writeFile(resolve(OUT_DIR, "manifest.json"), JSON.stringify(manifest, null, 2));
-    console.log(`Wrote ${captured.length} full-page PNGs + manifest.json to ${OUT_DIR}`);
+    console.log(`Wrote ${captured.length} JPEG frames + manifest.json to ${OUT_DIR}`);
 
     await browser.close();
   } finally {
