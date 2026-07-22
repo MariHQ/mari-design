@@ -55,6 +55,35 @@ function Ready() {
   return null;
 }
 
+/* Floating "back to the board" control on the full-screen view. Closes the
+   tab if the canvas opened it (window.opener), otherwise navigates back. */
+function BackToCanvas() {
+  const onClick = () => {
+    if (window.opener) window.close();
+    else window.location.href = "./canvas.html";
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClick(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <button
+      onClick={onClick}
+      title="Back to the page canvas (Esc)"
+      style={{
+        position: "fixed", left: 16, bottom: 16, zIndex: 99999,
+        display: "inline-flex", alignItems: "center", gap: 8,
+        font: "600 13px ui-sans-serif, system-ui", color: "#fff",
+        background: "#10263B", border: "none", borderRadius: 999,
+        padding: "9px 16px", cursor: "pointer", boxShadow: "0 10px 30px -8px #10263B99",
+      }}
+    >
+      ← Canvas
+    </button>
+  );
+}
+
 function Frame() {
   if (!mod) {
     return <div style={{ padding: 24, fontFamily: "monospace" }}>Unknown page: {pageId || "(none)"}</div>;
@@ -70,12 +99,14 @@ function Frame() {
           <div style={{ width: 390, height: "min(880px, 100vh)", overflow: "hidden", borderRadius: 22, border: "8px solid #0a1826", boxShadow: "0 30px 80px -20px #000" }} className="bg-paper text-ink">
             <Cmp state={stateId} mobile />
           </div>
+          <BackToCanvas />
         </div>
       );
     }
     return (
       <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }} className="bg-paper text-ink">
         <Cmp state={stateId} mobile={false} />
+        <BackToCanvas />
       </div>
     );
   }
