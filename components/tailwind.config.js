@@ -1,9 +1,15 @@
 /** Tailwind theme for the preview server. Brand colors mirror
  *  BRAND-STYLE-GUIDE.md (light mode). Used only by `.preview`. */
 export default {
+  // Scan ALL source (excluding build/vendor dirs) rather than a hand-maintained
+  // directory list — a stale list silently purges utility classes only used in
+  // an unlisted dir, which makes those elements fall back to default sizing
+  // (e.g. text-[26px] rendering at 16px). Robust so new dirs never break styles.
   content: [
     "./.preview/**/*.{ts,tsx,html}",
-    "./{actions,chat,data-display,feedback,forms,icons,layout,navigation,pages,features,shell,workflow,tokens}/**/*.{ts,tsx}",
+    "./**/*.{ts,tsx}",
+    "!./node_modules/**",
+    "!./dist/**",
   ],
   theme: {
     extend: {
