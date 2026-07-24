@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import { IconRing } from "../data-display/IconRing";
+import { Scrollable } from "../data-display/Scrollable";
 import { Chip } from "../data-display/Chip";
 import { ChatMessage } from "./ChatMessage";
 import { Composer } from "./Composer";
@@ -74,9 +75,13 @@ export function ChatDock({
         {headerActions}
       </header>
 
-      <div
-        ref={streamRef}
-        className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 flex flex-col gap-2 text-[13.5px] leading-normal"
+      {/* h-full on the scroll box so a short transcript still fills the pane
+          and the empty state's my-auto keeps centering. */}
+      <Scrollable
+        axis="y"
+        scrollerRef={streamRef}
+        className="flex-1 min-h-0"
+        scrollerClassName="h-full px-3.5 py-3 flex flex-col gap-2 text-[13.5px] leading-normal"
       >
         {messages.length === 0 ? (
           <div className="my-auto text-center text-ink/70 px-1.5 py-2">
@@ -98,7 +103,7 @@ export function ChatDock({
           messages.map((m) => <ChatMessage key={m.id} message={m} />)
         )}
         {showWorking && <TypingIndicator />}
-      </div>
+      </Scrollable>
 
       <Composer
         onSend={onSend}

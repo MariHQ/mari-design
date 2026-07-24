@@ -9,6 +9,7 @@ import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
 import { Button } from "../actions/Button";
 import { fmtDate } from "../tokens/format";
 import { focusRing } from "../tokens/focusRing";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* Overview — Recent docs ──────────────────────────────────────────────────
    The most recently touched documents. A real table, not a bare list, so it
@@ -110,7 +111,7 @@ export function OverviewRecentDocs({
         /* §8: failure copy comes from the catalog, never a bespoke string. */
         <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
@@ -153,7 +154,7 @@ export function OverviewRecentDocs({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
 
       {!loading && !offline && docs.length > 0 && (

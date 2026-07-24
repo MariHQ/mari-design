@@ -12,6 +12,7 @@ import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
+import { Scrollable } from "../data-display/Scrollable";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons/marks";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
@@ -169,7 +170,7 @@ export function SettingsMembersTable({
              single unbreakable email collapsed the address column to ~80px and
              stacked it a character at a time. The table keeps its 760px floor
              and scrolls inside this card instead. */
-          <div className="min-w-0 overflow-x-auto">
+          <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
                 <col style={{ width: "24%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
@@ -208,7 +209,7 @@ export function SettingsMembersTable({
                 ))}
               </tbody>
             </table>
-          </div>
+          </Scrollable>
         )}
       </Card>
 

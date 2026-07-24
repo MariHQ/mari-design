@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from
 import * as RD from "@radix-ui/react-dialog";
 import { Search, Clock, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
 import { Kbd } from "./Kbd";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* GlobalSearch — the scoped, grouped search overlay. It's the higher-level
    sibling of CommandPalette (navigation/CommandPalette.tsx): same Radix
@@ -121,16 +122,17 @@ export function GlobalSearch({
 
           {/* Scope filter */}
           {scopeList.length > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink/10 overflow-x-auto shrink-0">
+            <Scrollable className="shrink-0 border-b border-ink/10" scrollerClassName="flex items-center gap-1.5 px-3 py-2">
               <ScopeChip label="All" active={scope === null} onClick={() => setScope(null)} />
               {scopeList.map((s) => (
                 <ScopeChip key={s.id} label={s.label} icon={s.icon} active={scope === s.id} onClick={() => setScope(s.id)} />
               ))}
-            </div>
+            </Scrollable>
           )}
 
           {/* Body */}
-          <div role="listbox" className="flex-1 min-h-0 overflow-y-auto p-1.5">
+          <Scrollable axis="y" className="flex-1 min-h-0">
+            <div role="listbox" className="p-1.5">
             {!hasQuery && recentSearches.length > 0 && (
               <div>
                 <div className="px-2.5 pt-2 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/65">Recent</div>
@@ -190,7 +192,8 @@ export function GlobalSearch({
                 })}
               </div>
             ))}
-          </div>
+            </div>
+          </Scrollable>
 
           {/* Footer */}
           <div className="flex items-center gap-4 px-4 h-9 border-t border-ink/10 font-term text-[10.5px] text-ink/65 shrink-0">

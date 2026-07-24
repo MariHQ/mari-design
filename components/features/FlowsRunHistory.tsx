@@ -4,6 +4,7 @@ import { Button } from "../actions/Button";
 import { StatusChip, DryChip } from "../data-display/Chip";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonTable, SkeletonCard } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import { type WorkflowRun, type RunStatus } from "../workflow/RunHistory";
 import { RUN_CHIP, RunStatusChips, RunInspector } from "./FlowsRunPanel";
 import { card } from "../tokens/card";
@@ -100,7 +101,7 @@ export function FlowRunsTable({
       ) : sorted.length === 0 ? (
         <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full border-collapse text-left" style={{ minWidth: onSelect ? 720 : 620 }}>
             <thead>
               <tr>
@@ -139,7 +140,7 @@ export function FlowRunsTable({
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
     </div>
   );

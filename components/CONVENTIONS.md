@@ -254,3 +254,22 @@ Copy and interaction patterns follow Nielsen Norman Group guidance:
 - Modes: https://www.nngroup.com/articles/modes/
 - Confirmation dialogs: https://www.nngroup.com/articles/confirmation-dialog/
 - Testing content: https://www.nngroup.com/articles/testing-content-websites/
+
+## 20. Scrollable regions show a scroll indicator
+
+Any component region that can scroll must show that it scrolls. macOS hides
+scrollbars until the user is already scrolling, so a table cut off
+mid-column or a list cut off mid-row reads as "that's all there is".
+
+- Every scrollable region inside a component renders through
+  `<Scrollable>` (`data-display/Scrollable.tsx`), never a bare
+  `overflow-x-auto` / `overflow-y-auto` div. It overlays a fade plus a
+  chevron on any edge with hidden content, live-measured on scroll and
+  resize.
+- The indicator appears only when content is actually cut off in that
+  direction, and disappears at the end of the scroll range.
+- Match the fade to the surface: `fade="flysch"` inside code boxes and
+  tinted panels, default paper elsewhere.
+- Page-level scrolling (the app shell's main column, full-page auth
+  shells) is the browser's own scroll and keeps the native scrollbar; the
+  rule is about regions inside components.

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import * as RPop from "@radix-ui/react-popover";
 import { Bell } from "lucide-react";
 import { card } from "../tokens/card";
+import { Scrollable } from "../data-display/Scrollable";
 import { focusRing } from "../tokens/focusRing";
 import { SkeletonCircle, SkeletonLine } from "../data-display/Skeleton";
 
@@ -24,7 +25,8 @@ export function NotificationBell({ items, onItemClick, loading = false }: { item
         </button>
       </RPop.Trigger>
       <RPop.Portal>
-        <RPop.Content align="end" sideOffset={7} className={`${card} w-[340px] max-h-[420px] overflow-y-auto z-50 p-0`}>
+        <RPop.Content align="end" sideOffset={7} className={`${card} w-[340px] z-50 p-0`}>
+          <Scrollable axis="y" className="max-h-[420px]">
           <div className="px-4 py-3 border-b border-ink/10 text-[13px] font-semibold text-ink">Notifications</div>
           {loading ? (
             <div aria-hidden="true">
@@ -58,6 +60,7 @@ export function NotificationBell({ items, onItemClick, loading = false }: { item
               </button>
             ))
           )}
+          </Scrollable>
         </RPop.Content>
       </RPop.Portal>
     </RPop.Root>

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { card } from "../tokens/card";
 import { cellText } from "./Table";
 import { pagerBtn } from "./Pagination";
+import { Scrollable } from "./Scrollable";
 import { SkeletonTable } from "./Skeleton";
 import { SortHeader, tdPad, type Align, type SortState } from "./sortable";
 
@@ -152,7 +153,7 @@ export function DataTable<T>({
           <p className="mt-2 text-[13px] text-ink/70">{query || facetVal ? "No matches. Try clearing filters." : empty}</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
             <thead>
               <tr>
@@ -177,7 +178,7 @@ export function DataTable<T>({
               ))}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
 
       {filtered.length > pageSize && (

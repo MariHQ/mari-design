@@ -11,6 +11,7 @@ import { Skeleton, SkeletonLine, SkeletonCard, SkeletonTable } from "../data-dis
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { ErrorMessage } from "../feedback/ErrorMessage";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* Settings — Models configuration ─────────────────────────────────────────
    Choose which models embed, search, and answer for the workspace: the
@@ -189,7 +190,7 @@ export function SettingsModelsConfig({
         {chunk.length === 0 ? (
           <EmptyState title="No chunking rules">Rules appear here once a source has synced at least once.</EmptyState>
         ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full text-left border-collapse" style={{ minWidth: 680 }}>
             <colgroup><col style={{ width: "40%" }} /><col style={{ width: "22%" }} /><col style={{ width: "19%" }} /><col style={{ width: "19%" }} /></colgroup>
             <thead>
@@ -218,7 +219,7 @@ export function SettingsModelsConfig({
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
         )}
         <div className="flex items-center gap-3 px-4 py-3 border-t border-ink/10"><Button variant="primary" compact onClick={() => flash(setChunkSaved)}>Save</Button><SavedNote show={chunkSaved} /></div>
       </Card>

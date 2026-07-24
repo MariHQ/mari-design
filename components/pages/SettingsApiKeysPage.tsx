@@ -8,6 +8,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
 import { Field } from "../forms/Field";
+import { Scrollable } from "../data-display/Scrollable";
 import { Chip } from "../data-display/Chip";
 import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
@@ -103,7 +104,7 @@ const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] t
 function KeysTable({ keys, confirmId }: { keys: ApiKey[]; confirmId?: number }) {
   return (
     <Card variant="flush" title="Keys" hint="Rate-limited per key. Revocation is immediate.">
-      <div className="overflow-x-auto">
+      <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: 780 }}>
           <thead><tr>{["Name", "Key", "Scopes", "Created", "Last used", "Status", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 6 ? { width: 110 } : undefined}>{h}</th>)}</tr></thead>
           <tbody>
@@ -120,7 +121,7 @@ function KeysTable({ keys, confirmId }: { keys: ApiKey[]; confirmId?: number }) 
             ))}
           </tbody>
         </table>
-      </div>
+      </Scrollable>
     </Card>
   );
 }

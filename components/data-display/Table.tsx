@@ -1,5 +1,6 @@
 import { Children, cloneElement, isValidElement, useMemo, type ReactElement, type ReactNode } from "react";
 import { card } from "../tokens/card";
+import { Scrollable } from "./Scrollable";
 import { SkeletonLine } from "./Skeleton";
 import { SortHeader, tdPad, useSort, type Align } from "./sortable";
 
@@ -134,7 +135,7 @@ export function Table({
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      <div className="overflow-x-auto">
+      <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
           <thead>
             <tr>
@@ -165,7 +166,7 @@ export function Table({
               : body}
           </tbody>
         </table>
-      </div>
+      </Scrollable>
       {!loading && footer}
     </div>
   );

@@ -3,6 +3,7 @@ import { ChevronRight, Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { cellClass, sortRows, type Column } from "./DataTable";
+import { Scrollable } from "./Scrollable";
 import { SkeletonTable } from "./Skeleton";
 import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 
@@ -53,7 +54,7 @@ export function ExpandableTable<T>({
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>
-      <div className="overflow-x-auto">
+      <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
           <thead>
             <tr>
@@ -115,7 +116,7 @@ export function ExpandableTable<T>({
             })}
           </tbody>
         </table>
-      </div>
+      </Scrollable>
     </div>
   );
 }

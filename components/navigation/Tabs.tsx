@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import * as RTabs from "@radix-ui/react-tabs";
+import { Scrollable } from "../data-display/Scrollable";
 import { focusRing } from "../tokens/focusRing";
 
 export type TabOption<T extends string> = {
@@ -31,34 +32,46 @@ export type TabsProps<T extends string> = {
 export function Tabs<T extends string>({ ariaLabel, options, value, onChange, variant = "seg", className = "" }: TabsProps<T>) {
   return (
     <RTabs.Root value={value} onValueChange={(v) => onChange(v as T)} activationMode="manual">
-      <RTabs.List
-        aria-label={ariaLabel}
+      {/* The seg frame (border/bg/padding) lives on the Scrollable wrapper so
+          it stays put while the tab row scrolls inside it; inline-block keeps
+          the control hugging its tabs like the old inline-flex List did. */}
+      <Scrollable
+        fade={variant === "seg" ? "flysch" : "paper"}
         className={
           variant === "seg"
-            ? `inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-md border border-ink/15 bg-flysch p-1 ${className}`
-            : `flex max-w-full items-center gap-5 overflow-x-auto border-b border-ink/15 ${className}`
+            ? `inline-block max-w-full rounded-md border border-ink/15 bg-flysch p-1 ${className}`
+            : `max-w-full ${className}`
         }
       >
-        {options.map((opt) => (
-          <RTabs.Trigger
-            key={opt.id}
-            value={opt.id}
-            className={
-              variant === "seg"
-                ? `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[4px] px-3 py-1.5 text-[13px] font-medium text-ink/70 transition-colors hover:text-ink data-[state=active]:border data-[state=active]:border-ink/15 data-[state=active]:bg-paper data-[state=active]:text-ink ${focusRing}`
-                : `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent pb-2 text-[13px] font-medium text-ink/70 transition-colors hover:text-ink data-[state=active]:border-biscay-2 data-[state=active]:text-ink ${focusRing}`
-            }
-          >
-            {opt.icon}
-            {opt.label}
-            {opt.count != null && (
-              <span className="font-term text-[10.5px] font-medium text-ink/70 bg-ink/[0.06] rounded-[3px] px-1.5 py-0.5">
-                {opt.count}
-              </span>
-            )}
-          </RTabs.Trigger>
-        ))}
-      </RTabs.List>
+        <RTabs.List
+          aria-label={ariaLabel}
+          className={
+            variant === "seg"
+              ? "inline-flex items-center gap-1"
+              : "flex items-center gap-5 border-b border-ink/15"
+          }
+        >
+          {options.map((opt) => (
+            <RTabs.Trigger
+              key={opt.id}
+              value={opt.id}
+              className={
+                variant === "seg"
+                  ? `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[4px] px-3 py-1.5 text-[13px] font-medium text-ink/70 transition-colors hover:text-ink data-[state=active]:border data-[state=active]:border-ink/15 data-[state=active]:bg-paper data-[state=active]:text-ink ${focusRing}`
+                  : `inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent pb-2 text-[13px] font-medium text-ink/70 transition-colors hover:text-ink data-[state=active]:border-biscay-2 data-[state=active]:text-ink ${focusRing}`
+              }
+            >
+              {opt.icon}
+              {opt.label}
+              {opt.count != null && (
+                <span className="font-term text-[10.5px] font-medium text-ink/70 bg-ink/[0.06] rounded-[3px] px-1.5 py-0.5">
+                  {opt.count}
+                </span>
+              )}
+            </RTabs.Trigger>
+          ))}
+        </RTabs.List>
+      </Scrollable>
     </RTabs.Root>
   );
 }

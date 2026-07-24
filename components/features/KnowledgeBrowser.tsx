@@ -13,6 +13,7 @@ import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* KnowledgeBrowser — the filter rail + results feed of the Knowledge page.
    A faceted filter rail, a debounced search box, result-type tabs, sort, and
@@ -257,7 +258,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           {/* min-w-0 + its own scroll box: without it the 5-tab row sets the
               min-content width of the whole results column and pushes the feed
               past the card edge on a narrow viewport. */}
-          <div className="min-w-0 flex-1 overflow-x-auto">
+          <Scrollable className="flex-1">
           <Tabs
             ariaLabel="Result type"
             variant="underline"
@@ -271,7 +272,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
               { id: "prs", label: "PRs", count: count((r) => r.kind === "pr") },
             ]}
           />
-          </div>
+          </Scrollable>
           <div className="ml-auto shrink-0">
             {/* The label collapses to just "Sort" so it can never cover the
                 tabs on its line; the dropdown carries the options and shows

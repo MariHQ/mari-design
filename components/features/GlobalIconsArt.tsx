@@ -3,6 +3,7 @@ import { ICONS, type IconName } from "../icons/ui";
 import { SourceMark, PROVIDERS, PROVIDER_NAME } from "../icons/marks";
 import { TagChip, TAG_OPTIONS } from "../data-display/TagChip";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* GlobalIconsArt — the shared visual-primitive showcase: the full bespoke
    line-art icon set (from the icons/ module's ICONS registry), the brand-
@@ -288,10 +289,10 @@ export function GlobalIconsArt({ loading = false, className = "" }: GlobalIconsA
             <Cell label="Ticks"><Ticks n={10} width={120} /></Cell>
             <Cell label="TexturePlaceholder"><TexturePlaceholder width={80} height={44} /></Cell>
           </div>
-          <div className="mt-2 flex items-end gap-4 overflow-x-auto rounded-[6px] border border-ink/10 bg-flysch/50 px-4 py-3">
+          <Scrollable className="mt-2 rounded-[6px] border border-ink/10 bg-flysch/50" scrollerClassName="flex items-end gap-4 px-4 py-3" fade="flysch">
             <Mountains />
             <FadedSprigLarge size={90} />
-          </div>
+          </Scrollable>
         </Section>
       </div>
     </div>

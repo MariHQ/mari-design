@@ -6,6 +6,7 @@ import { focusRing } from "../tokens/focusRing";
 import { Chip, StatusChip } from "../data-display/Chip";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage data model (feature: lineage-data-model)
@@ -437,7 +438,7 @@ export function LgDrawerShell({
         </div>
         {pills && <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{pills}</div>}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+      <Scrollable axis="y" className="min-h-0 flex-1" scrollerClassName="px-4 py-4">{children}</Scrollable>
       {footer && <footer className="shrink-0 border-t border-ink/10 px-4 py-3">{footer}</footer>}
     </aside>
   );

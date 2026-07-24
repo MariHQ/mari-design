@@ -13,6 +13,7 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { focusRing } from "../tokens/focusRing";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* Overview — Today's review (task inbox) ──────────────────────────────────
    The open/near-term task inbox, rendered as a real table so it spaces and
@@ -139,7 +140,7 @@ export function OverviewTodayReview({
         /* §8: failure copy comes from the catalog, never a bespoke string. */
         <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
@@ -202,7 +203,7 @@ export function OverviewTodayReview({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
 
       {!loading && !offline && (

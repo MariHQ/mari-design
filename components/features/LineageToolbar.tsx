@@ -7,6 +7,7 @@ import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
 import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
   useLineageControls, clamp,
@@ -182,7 +183,7 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
             )}
           </div>
           {controls.query.trim() && (
-            <div className={`${card} absolute left-0 top-9 z-30 max-h-[300px] w-[320px] overflow-y-auto p-1`}>
+            <Scrollable axis="y" className={`${card} absolute left-0 top-9 z-30 max-h-[300px] w-[320px]`} scrollerClassName="p-1">
               {results.length === 0 ? (
                 <div className="px-3 py-3 text-[13px] text-ink/70">No matches in the graph.</div>
               ) : results.map((r) => (
@@ -202,7 +203,7 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
                   <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} in</span>
                 </button>
               ))}
-            </div>
+            </Scrollable>
           )}
         </div>
 

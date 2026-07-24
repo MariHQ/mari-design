@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Chip, type ChipTone } from "./Chip";
 import { EmptyState } from "./EmptyState";
+import { Scrollable } from "./Scrollable";
 import { SortHeader, useSort, thPad, tdPad } from "./sortable";
 
 /* RulesPanel — a searchable rule catalog with severity. Ported from the
@@ -110,7 +111,7 @@ export function RulesPanel({
           ))}
         </div>
 
-        <div className="overflow-x-auto">
+        <Scrollable>
           {/* Explicit min width (not a utility class) so the fixed layout always has
               room for four columns and the wrapper scrolls, instead of the first
               column collapsing to one character per line. */}
@@ -173,7 +174,7 @@ export function RulesPanel({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
     </Card>
   );

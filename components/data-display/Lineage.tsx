@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { focusRing } from "../tokens/focusRing";
+import { Scrollable } from "./Scrollable";
 
 /* ── Lineage: upstream → focus → downstream dependency view ────────────────
    A horizontal graph for showing what a node depends on and what depends on
@@ -109,7 +110,7 @@ function Connector({ count, dir }: { count: number; dir: "in" | "out" }) {
 
 export function Lineage({ upstream = [], focus, downstream = [], onSelect, ariaLabel = "Lineage" }: LineageProps) {
   return (
-    <div aria-label={ariaLabel} className="overflow-x-auto">
+    <Scrollable aria-label={ariaLabel}>
       <div className="inline-flex items-center gap-0 py-2">
         {upstream.length > 0 && (
           <>
@@ -131,6 +132,6 @@ export function Lineage({ upstream = [], focus, downstream = [], onSelect, ariaL
           </>
         )}
       </div>
-    </div>
+    </Scrollable>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import * as RD from "@radix-ui/react-dialog";
 import { Search } from "lucide-react";
+import { Scrollable } from "../data-display/Scrollable";
 
 export type CommandItem = { id: string; label: string; hint?: string; icon?: ReactNode; group?: string; onSelect: () => void };
 
@@ -58,7 +59,8 @@ export function CommandPalette({
             />
             <span className="font-term text-[10px] text-ink/65 border border-ink/15 rounded-[3px] px-1.5 py-0.5">ESC</span>
           </div>
-          <div role="listbox" className="max-h-[320px] overflow-y-auto p-1.5">
+          <Scrollable axis="y" className="max-h-[320px]">
+            <div role="listbox" className="p-1.5">
             {filtered.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-ink/70">No matches</div>}
             {filtered.map((item, i) => {
               const showGroup = item.group !== undefined && item.group !== lastGroup;
@@ -80,7 +82,8 @@ export function CommandPalette({
                 </div>
               );
             })}
-          </div>
+            </div>
+          </Scrollable>
         </RD.Content>
       </RD.Portal>
     </RD.Root>

@@ -8,6 +8,7 @@ import { Chip } from "../data-display/Chip";
 import { Truncate } from "../data-display/Truncate";
 import { EmptyState } from "../data-display/EmptyState";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
+import { Scrollable } from "../data-display/Scrollable";
 import { Switch } from "../forms/Switch";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
@@ -303,7 +304,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
             Start from a template or create one.
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <Scrollable>
             <table className="w-full border-collapse text-left" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
@@ -368,7 +369,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
                 })}
               </tbody>
             </table>
-          </div>
+          </Scrollable>
         )}
         {note && <div className="border-t border-ink/10 px-4 py-2.5 font-term text-[11.5px] text-moss">{note}</div>}
       </div>

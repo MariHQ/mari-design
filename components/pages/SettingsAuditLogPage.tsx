@@ -7,6 +7,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
+import { Scrollable } from "../data-display/Scrollable";
 import { PropertyList } from "../data-display/PropertyList";
 import { Avatar } from "../data-display/Avatar";
 import { Pagination } from "../data-display/Pagination";
@@ -131,7 +132,7 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
       {rows.length === 0 ? (
         <EmptyState icon={<ScrollText size={24} />} title="No matches">No events match that filter.</EmptyState>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full text-left border-collapse" style={{ minWidth: 700 }}>
             <thead><tr>{["Actor", "Action", "Target", "When", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 3 ? { width: 160 } : i === 4 ? { width: 40 } : undefined}>{h}</th>)}</tr></thead>
             <tbody>
@@ -159,7 +160,7 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
       {variant === "many" && (
         <div className="px-4 py-3 border-t border-ink/10">

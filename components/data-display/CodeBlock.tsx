@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CopyButton } from "../actions/CopyButton";
+import { Scrollable } from "./Scrollable";
 
 /* CodeBlock — a monospace code block with an optional header (language /
    title) and a copy affordance. Wide content scrolls horizontally inside
@@ -35,9 +36,12 @@ export function CodeBlock({ code, language, title, copy = true, wrap = false, cl
             <CopyButton value={code} className="bg-paper/80 backdrop-blur-sm" />
           </div>
         )}
-        <pre className={`overflow-x-auto p-3.5 font-term text-[12.5px] leading-relaxed text-ink ${wrap ? "whitespace-pre-wrap break-words" : ""}`}>
-          <code>{code}</code>
-        </pre>
+        {/* With `wrap` there is never horizontal overflow; the indicator just stays hidden. */}
+        <Scrollable>
+          <pre className={`p-3.5 font-term text-[12.5px] leading-relaxed text-ink ${wrap ? "whitespace-pre-wrap break-words" : ""}`}>
+            <code>{code}</code>
+          </pre>
+        </Scrollable>
       </div>
     </div>
   );

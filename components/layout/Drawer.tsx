@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { Scrollable } from "../data-display/Scrollable";
 import { focusRing } from "../tokens/focusRing";
 
 /* ── Drawer: right-side detail panel ───────────────────────────────────────
@@ -53,7 +54,7 @@ function DrawerBody({
           <button onClick={onClose} className={`grid place-items-center w-8 h-8 rounded-[4px] text-ink/60 hover:bg-flysch hover:text-ink ${focusRing}`} aria-label="Close"><X size={16} /></button>
         )}
       </header>
-      <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      <Scrollable axis="y" className="flex-1 min-h-0" scrollerClassName="p-5">{children}</Scrollable>
       {footer && <footer className="shrink-0 p-4 border-t border-ink/10 flex gap-2">{footer}</footer>}
     </aside>
   );

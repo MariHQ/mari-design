@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { Chip } from "./Chip";
+import { Scrollable } from "./Scrollable";
 import { SortHeader, useSort, tdPad } from "./sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
@@ -100,7 +101,7 @@ export function ImpactPanel({
       {summary && <p className="mt-1.5 max-w-[640px] break-words text-ink/70">{summary}</p>}
       {docs.length === 0 && !summary && <span className="font-term text-[11px] text-ink/65">No impacted documents found.</span>}
       {docs.length > 0 && (
-        <div className="mt-2 overflow-x-auto">
+        <Scrollable className="mt-2">
           {/* table-fixed + a colgroup: column widths are declared, not derived
               from the longest word, so one unbroken token can neither widen
               the table nor squeeze its neighbours to a letter per line. */}
@@ -140,7 +141,7 @@ export function ImpactPanel({
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
       {footer && <div className="mt-2.5 flex flex-wrap items-center gap-2">{footer}</div>}
     </div>
