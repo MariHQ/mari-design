@@ -19,6 +19,10 @@ import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { ResultCount } from "../data-display/Pagination";
+import { FieldError } from "../feedback/ErrorMessage";
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /** One fact-check finding. */
 export type DocFinding = { id: number; kind: string; severity: string; text: string; note: string };
@@ -28,7 +32,13 @@ type FactTab = "check" | "claims";
 
 /* ————— demo data ————— */
 
-const daysFromNow = (days: number) => fmtDate(new Date(Date.now() + days * 86400000));
+/* A due date is a value with two faces: the ISO date a task is stored with,
+   and the label the picker shows (§5 — always with a year). Carrying both
+   means the menu can never hand a mutation the display string. */
+const daysFromNow = (days: number) => {
+  const at = new Date(Date.now() + days * 86400000);
+  return { iso: at.toISOString().slice(0, 10), label: fmtDate(at) };
+};
 /* Owner picker is a searchable Combobox (CONVENTIONS.md §7), so the roster can
    grow past the three demo names without becoming a scroll hunt. */
 const TASK_OWNERS = [
@@ -48,14 +58,27 @@ const TASK_PRIS: [string, string][] = [
   ["Low", "#2C6E49"],
 ];
 
+/** The two writes this panel offers. Optional: with neither, Run fact check and
+    Create review task keep the local behaviour the canvas renders. */
+export type FindingsActions = {
+  /** Re-check the document's claims against the verified facts. Resolves to
+      the number of contradictions found, which the panel reports. */
+  runFactCheck?: () => Promise<number>;
+  /** Open a review task on this document, assigned and dated by the row above
+      the button. */
+  createReviewTask?: (args: { assignee: string; due: string }) => void | Promise<void>;
+};
+
 export function DocReviewFindingsPanel({
   findings,
   claims,
+  actions,
   defaultTab = "check",
   loading = false,
 }: {
   findings: DocFinding[];
   claims: DocClaim[];
+  actions?: FindingsActions;
   /** Which tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: FactTab;
   loading?: boolean;
@@ -69,6 +92,8 @@ export function DocReviewFindingsPanel({
   const [flashId, setFlashId] = useState<number | null>(null);
   /* The tally row is the claim filter: picking one narrows the claim list. */
   const [claimFilter, setClaimFilter] = useState<string | null>(null);
+  const [checked, setChecked] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const contra = findings.find((f) => f.kind === "fact" && f.severity === "error") ?? null;
   const evidence = contra ? contra.note.replace(/^Contradicts verified fact:\s*/i, "") : "";
@@ -77,15 +102,41 @@ export function DocReviewFindingsPanel({
   const supportedN = claims.filter((f) => f.status === "Verified").length;
   const allClaimsN = supportedN + contradictionN + unsupportedN;
 
-  const runCheck = () => {
+  const runCheck = async () => {
     if (checking) return;
     setChecking(true);
-    setTimeout(() => setChecking(false), 1400);
+    setFailed(null);
+    if (!actions?.runFactCheck) {
+      setTimeout(() => setChecking(false), 1400);
+      return;
+    }
+    try {
+      const found = await actions.runFactCheck();
+      setChecked(found === 0
+        ? "No contradictions found against the verified facts."
+        : `${found} contradiction${found === 1 ? "" : "s"} recorded. Reopen the document to read them.`);
+    } catch (e) {
+      setFailed(why(e, "The fact check could not be run."));
+    } finally {
+      setChecking(false);
+    }
   };
-  const createTask = () => {
+
+  const createTask = async () => {
     if (taskState !== "idle") return;
     setTaskState("creating");
-    setTimeout(() => setTaskState("done"), 900);
+    setFailed(null);
+    if (!actions?.createReviewTask) {
+      setTimeout(() => setTaskState("done"), 900);
+      return;
+    }
+    try {
+      await actions.createReviewTask({ assignee: TASK_OWNERS[ownerIx].name, due: TASK_DUES[dueIx].iso });
+      setTaskState("done");
+    } catch (e) {
+      setTaskState("idle");
+      setFailed(why(e, "That review task could not be created."));
+    }
   };
   const jump = (id: number) => { setFlashId(id); setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1200); };
 
@@ -179,6 +230,8 @@ export function DocReviewFindingsPanel({
         <Button block disabled={checking} onClick={runCheck}>
           <ShieldCheck size={14} /> {checking ? "Checking claims against verified facts…" : "Run fact check"}
         </Button>
+        {checked && <p className="mt-1.5 text-[11.5px] text-ink/70">{checked}</p>}
+        <FieldError>{failed}</FieldError>
       </div>
 
       {tab === "claims" ? (
@@ -294,13 +347,13 @@ export function DocReviewFindingsPanel({
                   <Button className={pickBtn}>
                     <span className="flex min-w-0 items-center gap-1.5">
                       <Calendar size={13} className="shrink-0" />
-                      <span className="truncate">{TASK_DUES[dueIx]}</span>
+                      <span className="truncate">{TASK_DUES[dueIx].label}</span>
                     </span>
                     <ChevronDown size={12} className="shrink-0" />
                   </Button>
                 )}>
                   <MenuRadioGroup value={String(dueIx)} onValueChange={(v) => setDueIx(Number(v))}>
-                    {TASK_DUES.map((d, i) => <MenuRadioItem key={d} value={String(i)}>{d}</MenuRadioItem>)}
+                    {TASK_DUES.map((d, i) => <MenuRadioItem key={d.iso} value={String(i)}>{d.label}</MenuRadioItem>)}
                   </MenuRadioGroup>
                 </Menu>
               </div>

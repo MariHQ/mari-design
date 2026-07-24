@@ -64,16 +64,34 @@ function counts(s: Source): ReactNode {
   return null;
 }
 
+/** What a connected-source card can DO. Every handler may throw; the card
+    shows the server's message on the card that failed, so a refused write is
+    as visible as a refused read. Omit them and the card keeps the local echo
+    below, which is what the design canvas renders (CONVENTIONS.md §2). */
+export type SourceCardActions = {
+  syncNow?: (s: Source) => void | Promise<void>;
+  fullResync?: (s: Source) => void | Promise<void>;
+  /** Destructive: goes through <ConfirmButton> inside the card. */
+  disconnect?: (s: Source) => void | Promise<void>;
+};
+
 export type SourcesConnectorCardProps = {
   /** Override the baked-in demo sources. */
   sources: Source[];
+  actions?: SourceCardActions;
   loading?: boolean;
   className?: string;
 };
 
-export function SourcesConnectorCard({ sources, loading = false, className = "" }: SourcesConnectorCardProps) {
+export function SourcesConnectorCard({ sources, actions, loading = false, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState<Record<string, string>>({});
+  /* `sources` is the server's truth and it changes under us: the parent
+     re-reads after every write. Without this the grid froze on the rows it
+     mounted with, so a sync that really did add 400 documents looked inert. */
+  const [seen, setSeen] = useState(sources);
+  if (seen !== sources) { setSeen(sources); setItems(sources); }
 
   if (loading) {
     return (
@@ -97,13 +115,53 @@ export function SourcesConnectorCard({ sources, loading = false, className = "" 
   const patch = (id: string, next: Partial<Source>) =>
     setItems((xs) => xs.map((s) => (s.id === id ? { ...s, ...next } : s)));
 
-  const kick = (id: string, after: Partial<Source>) => {
+  /* One path for "start a sync on this source".
+     With a handler: the card goes busy, the server is asked, and it STAYS on
+     "running" afterwards — the sync is long, it continues on the server, and
+     the parent's sync-status polling owns the progress from here. A refusal
+     lands on the card verbatim.
+     Without a handler (the canvas): the old local echo, so the control is
+     still visibly alive with no server behind it. */
+  const kick = (s: Source, handler?: (s: Source) => void | Promise<void>) => {
+    const id = s.id;
+    setFailed((f) => ({ ...f, [id]: "" }));
+    if (!handler) {
+      setBusy((b) => ({ ...b, [id]: true }));
+      patch(id, { state: "running", phase: "fetching", done: 0, total: 200 });
+      window.setTimeout(() => {
+        setBusy((b) => ({ ...b, [id]: false }));
+        patch(id, { state: "healthy", phase: undefined, lastSyncAt: new Date().toISOString() });
+      }, 1400);
+      return;
+    }
     setBusy((b) => ({ ...b, [id]: true }));
-    patch(id, { state: "running", phase: "fetching", done: 0, total: 200 });
-    window.setTimeout(() => {
-      setBusy((b) => ({ ...b, [id]: false }));
-      patch(id, { state: "healthy", phase: undefined, lastSyncAt: new Date().toISOString(), ...after });
-    }, 1400);
+    void (async () => {
+      try {
+        await handler(s);
+        patch(id, { state: "running", phase: "listing" });
+      } catch (err) {
+        setFailed((f) => ({ ...f, [id]: err instanceof Error ? err.message : "Sync could not be started." }));
+      } finally {
+        setBusy((b) => ({ ...b, [id]: false }));
+      }
+    })();
+  };
+
+  const disconnect = (s: Source) => {
+    const id = s.id;
+    setFailed((f) => ({ ...f, [id]: "" }));
+    if (!actions?.disconnect) { patch(id, { state: "paused" }); return; }
+    setBusy((b) => ({ ...b, [id]: true }));
+    void (async () => {
+      try {
+        await actions.disconnect!(s);
+        patch(id, { state: "paused" });
+      } catch (err) {
+        setFailed((f) => ({ ...f, [id]: err instanceof Error ? err.message : "Disconnect failed." }));
+      } finally {
+        setBusy((b) => ({ ...b, [id]: false }));
+      }
+    })();
   };
 
   const syncLine = (s: Source, isBusy: boolean): ReactNode => {
@@ -113,7 +171,7 @@ export function SourcesConnectorCard({ sources, loading = false, className = "" 
           variant="link"
           className="text-[12.5px]"
           disabled={isBusy}
-          onClick={() => kick(s.id, {})}
+          onClick={() => kick(s, actions?.syncNow)}
         >
           Paused. Resume syncing
         </Button>
@@ -179,10 +237,15 @@ export function SourcesConnectorCard({ sources, loading = false, className = "" 
                made one square in the grid look broken. It now offers the same
                menu; the actions it cannot honour are simply disabled. */
             canResync={isConnectorKind}
-            onSyncNow={() => kick(s.id, {})}
-            onFullResync={isConnectorKind ? () => kick(s.id, {}) : undefined}
-            onPause={!paused ? () => patch(s.id, { state: "paused" }) : undefined}
-            onResume={paused ? () => kick(s.id, {}) : undefined}
+            onSyncNow={() => kick(s, actions?.syncNow)}
+            onFullResync={isConnectorKind ? () => kick(s, actions?.fullResync ?? actions?.syncNow) : undefined}
+            /* With a real disconnect wired, pausing IS disconnecting, and a
+               destructive action may not fire from a first menu click (§2):
+               it moves to the ConfirmButton on the card. */
+            onPause={!paused && !actions?.disconnect ? () => patch(s.id, { state: "paused" }) : undefined}
+            onResume={paused ? () => kick(s, actions?.syncNow) : undefined}
+            onDisconnect={actions?.disconnect && !paused ? () => disconnect(s) : undefined}
+            actionError={failed[s.id] || null}
           />
         );
       })}

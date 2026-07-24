@@ -11,6 +11,10 @@ import { Button } from "../actions/Button";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { fmtDateTime } from "../tokens/format";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
+import { FieldError } from "../feedback/ErrorMessage";
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 type Skill = { name: string; sub: string; api: string };
 type RefineScope = "Whole document" | "Current selection";
@@ -29,33 +33,56 @@ const SKILLS: Skill[] = [
 /* The decorative brand sprig that used to sit behind this panel is gone: at
    340px it ran straight through the skill grid and the scope row. */
 
+/** Running a refinement is a write: it proposes edits into the change queue.
+    Optional, as ever — with no handler the panel keeps its local run. */
+export type RefineActions = {
+  /** Run one editing skill over the document. Resolves to the number of edits
+      it proposed, which is what the panel reports. */
+  run?: (args: { skill: string }) => Promise<number>;
+};
+
 export function DocReviewRefinePanel({
   errorN = 1,
   warnN = 3,
   advisoryN = 2,
+  actions,
   loading = false,
 }: {
   errorN?: number;
   warnN?: number;
   advisoryN?: number;
+  actions?: RefineActions;
   loading?: boolean;
 }) {
   const [skill, setSkill] = useState("Tighten");
   const [scope, setScope] = useState<RefineScope>("Whole document");
   const [refining, setRefining] = useState(false);
   const [lastRun, setLastRun] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const [hasSel] = useState(false); // no live editor selection in the standalone panel
 
   const needsSelection = scope === "Current selection" && !hasSel;
 
-  const run = () => {
+  const report = (proposed: number) =>
+    setLastRun(`Last run: ${fmtDateTime(new Date())} (${skill}) · ${proposed} change${proposed === 1 ? "" : "s"} proposed`);
+
+  const run = async () => {
     if (refining || needsSelection) return;
     setRefining(true);
-    setTimeout(() => {
+    setFailed(null);
+    if (!actions?.run) {
+      // No server behind the panel: the run is the local pass it always was.
+      setTimeout(() => { setRefining(false); report(2 + Math.floor(Math.random() * 4)); }, 1600);
+      return;
+    }
+    try {
+      // The API key, not the button label: several buttons share one skill.
+      report(await actions.run({ skill: SKILLS.find((s) => s.name === skill)?.api ?? "tighten" }));
+    } catch (e) {
+      setFailed(why(e, "That refinement could not be run."));
+    } finally {
       setRefining(false);
-      const proposed = 2 + Math.floor(Math.random() * 4);
-      setLastRun(`Last run: ${fmtDateTime(new Date())} (${skill}) · ${proposed} changes proposed`);
-    }, 1600);
+    }
   };
 
   const tally: [number, string, string][] = [
@@ -148,6 +175,7 @@ export function DocReviewRefinePanel({
       <Button variant="primary" block className="mt-4" onClick={run} disabled={refining || needsSelection}>
         <Sparkles size={15} /> {refining ? "Mari is editing…" : "Run refinement"}
       </Button>
+      <FieldError>{failed}</FieldError>
       <p className="mt-2 text-[11.5px] text-ink/70">
         {refining
           ? `Running ${skill.toLowerCase()} on ${scope.toLowerCase()}. This can take up to a minute.`

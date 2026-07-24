@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Shield } from "lucide-react";
-import { AuditFindingsChecklist, type AuditFinding } from "../features/AuditFindingsChecklist";
+import { Shield, RotateCw } from "lucide-react";
+import { AuditFindingsChecklist, type AuditActions, type AuditFinding } from "../features/AuditFindingsChecklist";
+import { FieldError } from "../feedback/ErrorMessage";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
@@ -42,6 +43,8 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+export type { AuditActions };
 
 /** One entry in the audit-history rail. */
 export type AuditRun = { label: string; detail: string; current?: boolean };
@@ -135,7 +138,9 @@ function withRail(main: ReactNode, rail: ReactNode, mobile: boolean) {
     the canvas. */
 const noRepo = (d: AuditData) => !d.repo;
 
-function Body({ data, error, mobile }: { data: AuditData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile }: {
+  data: AuditData; error: string | null; actions?: AuditActions; mobile: boolean;
+}) {
   if (error) {
     return (
       <div className="mt-6">
@@ -174,6 +179,7 @@ function Body({ data, error, mobile }: { data: AuditData; error: string | null; 
       ranAt={data.ranAt}
       members={data.members}
       findings={data.findings}
+      actions={actions}
     />
   );
 
@@ -192,8 +198,32 @@ function Body({ data, error, mobile }: { data: AuditData; error: string | null; 
   );
 }
 
-function AuditPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<AuditData>) {
-  const actions = <Button variant="primary">{noRepo(data) ? "Run first audit" : "Re-audit"}</Button>;
+function AuditPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<AuditData, AuditActions>) {
+  const [scanning, setScanning] = useState(false);
+  const [scanFailed, setScanFailed] = useState<string | null>(null);
+
+  /* runRepoAudit walks the whole repository, so the header button has to say
+     it is scanning rather than sit there looking clicked. */
+  const runAudit = async () => {
+    if (scanning) return;
+    setScanning(true);
+    setScanFailed(null);
+    try {
+      if (actions?.runAudit) await actions.runAudit(data.provider);
+      else await new Promise((r) => setTimeout(r, 700));
+    } catch (err) {
+      setScanFailed(err instanceof Error ? err.message : "The audit could not run.");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const headerActions = (
+    <Button variant="primary" disabled={scanning} onClick={() => void runAudit()}>
+      <RotateCw size={14} className={scanning ? "animate-spin" : ""} />
+      {scanning ? "Scanning…" : noRepo(data) ? "Run first audit" : "Re-audit"}
+    </Button>
+  );
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("audit")} title="Repository audit" mobile={mobile}>
@@ -202,23 +232,24 @@ function AuditPage({ data, loading = false, error = null, chrome, mobile = false
     );
   }
   return (
-    <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("audit")} title="Repository audit" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
           eyebrow="Onboarding"
           title={data.repo ? `Repository audit, ${data.repo}` : "Repository audit"}
           description={data.summary}
-          actions={mobile ? undefined : actions}
+          actions={mobile ? undefined : headerActions}
         />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <Body data={data} error={error} mobile={mobile} />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+        {scanFailed && <div className="mt-3"><FieldError>{scanFailed}</FieldError></div>}
+        <Body data={data} error={error} actions={actions} mobile={mobile} />
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule<AuditData> = {
+export const page: PageModule<AuditData, AuditActions> = {
   id: "audit",
   title: "Repository Audit",
   route: "/audit",

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import { CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
+import { FieldError } from "../feedback/ErrorMessage";
 import { SectionLabel } from "../forms/SectionLabel";
 import { TagPicker } from "../forms/TagPicker";
 import { Tabs } from "../navigation/Tabs";
@@ -44,7 +45,22 @@ export type KnowledgeDoc = {
   /** Lineage edges off this doc. Optional: callers that predate the preview
       fall back to a derived list built from `related`. */
   lineage?: Link[];
+  /** Whether the signed-in person already watches this document. Optional:
+      absent means unknown, and the rail opens the toggle in the off state
+      rather than claiming a subscription nobody made. */
+  watched?: boolean;
 };
+
+/** What the inspector can DO to the document it is describing. Optional: with
+    no actions the watch toggle is local, which is what the canvas renders. */
+export type KnowledgeInspectorActions = {
+  /** Watch or unwatch this document. Resolves to the new watched state, which
+      is the server's answer rather than the rail's guess. */
+  toggleWatch?: (args: { id: string }) => Promise<boolean>;
+};
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
 
@@ -84,10 +100,11 @@ function BoundedList({ bounded, children }: { bounded: boolean; children: React.
 export type KnowledgeInspectorProps = {
   doc: KnowledgeDoc;
   loading?: boolean;
+  actions?: KnowledgeInspectorActions;
   className?: string;
 };
 
-export function KnowledgeInspector({ doc, loading = false, className = "" }: KnowledgeInspectorProps) {
+export function KnowledgeInspector({ doc, loading = false, actions, className = "" }: KnowledgeInspectorProps) {
   const [insTab, setInsTab] = useState<InsTab>("document");
   const [tags, setTags] = useState<string[]>(doc.tags);
   // Both rail links used to be inert. They now drive real state: the history
@@ -98,6 +115,31 @@ export function KnowledgeInspector({ doc, loading = false, className = "" }: Kno
   const [focused, setFocused] = useState<string | null>(null);
   const [allFacts, setAllFacts] = useState(false);
   const [allRelated, setAllRelated] = useState(false);
+  /* "Watched" used to be the literal string "Yes" in the metadata table, which
+     was true of no document in particular. It is a real subscription now. */
+  const [watched, setWatched] = useState(doc.watched ?? false);
+  const [watching, setWatching] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const toggleWatch = async () => {
+    if (watching) return;
+    if (!actions?.toggleWatch) { setWatched((v) => !v); return; }
+    setWatching(true);
+    setFailed(null);
+    try {
+      setWatched(await actions.toggleWatch({ id: doc.id }));
+    } catch (e) {
+      setFailed(why(e, "That subscription could not be changed."));
+    } finally {
+      setWatching(false);
+    }
+  };
+
+  const watchButton = (
+    <Button compact disabled={watching} onClick={toggleWatch}>
+      {watched ? <><EyeOff size={13} /> Unwatch</> : <><Eye size={13} /> Watch</>}
+    </Button>
+  );
 
   const factList = allFacts ? doc.facts : doc.facts.slice(0, FACTS_PAGE);
   const relatedList = allRelated ? doc.related : doc.related.slice(0, RELATED_PAGE);
@@ -161,8 +203,12 @@ export function KnowledgeInspector({ doc, loading = false, className = "" }: Kno
             {metaRow("Owner", doc.owner)}
             {metaRow("Updated", fmtDate(doc.updated))}
             {metaRow("Tags", tags.length ? tags.join(", ") : "")}
-            {metaRow("Watched", "Yes")}
-            <Button block className="mt-4">Open document <ArrowRight size={14} /></Button>
+            {metaRow("Watched", watched ? "Yes" : "No")}
+            <div className="mt-4 flex flex-col items-start gap-2">
+              {watchButton}
+              <FieldError>{failed}</FieldError>
+              <Button block>Open document <ArrowRight size={14} /></Button>
+            </div>
           </div>
         ) : (
           /* Rail order is fixed by the client note and CONVENTIONS.md §1:
@@ -295,6 +341,8 @@ export function KnowledgeInspector({ doc, loading = false, className = "" }: Kno
                   lineage sits directly below View full history, with no
                   leading icon (CONVENTIONS.md §16). */}
               <div className="mt-2 flex flex-col items-start gap-1.5">
+                {watchButton}
+                <FieldError>{failed}</FieldError>
                 <Button variant="link" onClick={() => setFullHistory((v) => !v)}>
                   {fullHistory ? "Show recent revisions" : `View full history (${doc.timeline.length})`} <ArrowRight size={12} />
                 </Button>

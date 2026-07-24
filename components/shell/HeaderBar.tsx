@@ -105,10 +105,16 @@ export function HeaderBar({
 
       {brand && <div className="shrink-0">{brand}</div>}
 
+      {/* The bar keeps its flexible middle either way, so the account block
+          stays hard right whether or not there is a search box. The trigger
+          itself only appears when something can act on it: a search field that
+          opens nothing is the most conspicuous dead control in the product. */}
       <div className="min-w-0 flex-1">
-        <div className="max-w-[460px]">
-          {search ?? <SearchTrigger placeholder={searchPlaceholder} shortcut={searchShortcut} onClick={onSearch} />}
-        </div>
+        {(search || onSearch) && (
+          <div className="max-w-[460px]">
+            {search ?? <SearchTrigger placeholder={searchPlaceholder} shortcut={searchShortcut} onClick={onSearch} />}
+          </div>
+        )}
       </div>
 
       {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}

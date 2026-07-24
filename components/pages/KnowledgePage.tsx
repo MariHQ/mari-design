@@ -1,7 +1,7 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { KnowledgeBrowser, type KnowledgeResult } from "../features/KnowledgeBrowser";
-import { KnowledgeInspector, type KnowledgeDoc } from "../features/KnowledgeInspector";
+import { KnowledgeInspector, type KnowledgeDoc, type KnowledgeInspectorActions } from "../features/KnowledgeInspector";
 import { PageHeader, Card, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 
@@ -40,6 +40,14 @@ export type KnowledgeData = {
   doc: KnowledgeDoc | null;
 };
 
+/** What the Knowledge page can DO. Search, facets, sort and bookmarks are all
+    reads or local view state; the one write this surface offers is watching the
+    document in the inspector rail.
+
+    Optional, as always: with no actions the watch toggle keeps its local
+    behaviour, which is what the design canvas renders. */
+export type KnowledgeActions = KnowledgeInspectorActions;
+
 /** Nothing matched. Derived from the data, not from a state flag, so it is
     true in the real app for exactly the same reason it is true on the canvas. */
 function isEmpty(d: KnowledgeData): boolean {
@@ -70,14 +78,14 @@ function Feed({ data, error, mobile }: { data: KnowledgeData; error: string | nu
   return <KnowledgeBrowser results={data.results} stacked={mobile} />;
 }
 
-function Inspector({ data, error }: { data: KnowledgeData; error: string | null }) {
+function Inspector({ data, error, actions }: { data: KnowledgeData; error: string | null; actions?: KnowledgeActions }) {
   // Nothing to inspect at all: the search failed, or it matched nothing.
   if (error || isEmpty(data)) return <EmptyBox title="No document">Nothing to inspect.</EmptyBox>;
   if (!data.doc) return <EmptyBox title="Nothing selected">Select a result to inspect it here.</EmptyBox>;
-  return <KnowledgeInspector doc={data.doc} />;
+  return <KnowledgeInspector doc={data.doc} actions={actions} />;
 }
 
-function KnowledgePage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<KnowledgeData>) {
+function KnowledgePage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<KnowledgeData, KnowledgeActions>) {
   return (
     <PageFrame chrome={chrome} active={navFor("knowledge")} title="Knowledge" mobile={mobile}>
       {loading ? (
@@ -94,7 +102,7 @@ function KnowledgePage({ data, loading = false, error = null, chrome, mobile = f
             <Feed data={data} error={error} mobile={mobile} />
           </div>
           <div className={mobile ? "min-w-0" : "min-w-0 sticky top-6 self-start"}>
-            <Inspector data={data} error={error} />
+            <Inspector data={data} error={error} actions={actions} />
           </div>
         </div>
       </div>
@@ -103,7 +111,7 @@ function KnowledgePage({ data, loading = false, error = null, chrome, mobile = f
   );
 }
 
-export const page: PageModule<KnowledgeData> = {
+export const page: PageModule<KnowledgeData, KnowledgeActions> = {
   id: "knowledge",
   title: "Knowledge",
   route: "/knowledge",

@@ -6,6 +6,8 @@ import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
+import { Input } from "../forms/Input";
+import { FieldError } from "../feedback/ErrorMessage";
 import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
@@ -38,6 +40,11 @@ const SOURCE_MENU_ROWS = 9;
 export type LineageToolbarProps = {
   /** The graph the source/owner filters are built from. */
   nodes: LNode[];
+  /** Ask Mari to propose new edges across the corpus. Long-running: the button
+      says it is reading. May throw; the toolbar shows the message. */
+  onDeriveLinks?: () => void | Promise<void>;
+  /** Persist the current filter/view state under a name. */
+  onSaveView?: (args: { name: string; state: string }) => void | Promise<void>;
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
   className?: string;
@@ -79,7 +86,9 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
   );
 }
 
-export function LineageToolbar({ nodes, loading = false, className = "" }: LineageToolbarProps) {
+export function LineageToolbar({
+  nodes, onDeriveLinks, onSaveView, loading = false, className = "",
+}: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
 
@@ -90,6 +99,11 @@ export function LineageToolbar({ nodes, loading = false, className = "" }: Linea
   const [assertOpen, setAssertOpen] = useState(false);
   const [pathMode, setPathMode] = useState(false);
   const [picks, setPicks] = useState(0);
+  const [deriveErr, setDeriveErr] = useState<string | null>(null);
+  const [saveName, setSaveName] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAs, setSavedAs] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   const onSources = controls.sources ?? sources;
   const onRels = controls.rels ?? REL_ORDER;
@@ -128,10 +142,38 @@ export function LineageToolbar({ nodes, loading = false, className = "" }: Linea
     setView(name);
   };
 
-  const derive = () => {
+  /* Mari reads the whole corpus to propose edges, so the button has to say it
+     is working rather than sit there looking clicked. */
+  const derive = async () => {
     if (deriving) return;
     setDeriving(true);
-    setTimeout(() => { setDeriving(false); setDerived((d) => d + 3); }, 1600);
+    setDeriveErr(null);
+    try {
+      if (onDeriveLinks) await onDeriveLinks();
+      else await new Promise((r) => setTimeout(r, 1600));
+      setDerived((d) => d + 3);
+    } catch (err) {
+      setDeriveErr(err instanceof Error ? err.message : "Mari could not read the graph.");
+    } finally {
+      setDeriving(false);
+    }
+  };
+
+  /* Saving a view needs a name, so the menu item opens a name field rather
+     than silently writing "Saved view" over the last one. */
+  const saveView = async (name: string) => {
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      await onSaveView?.({ name, state: JSON.stringify(controls) });
+      setSavedAs(name);
+      setSaveName(null);
+      setView(name);
+    } catch (err) {
+      setSaveErr(err instanceof Error ? err.message : "That view could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sourceValue = controls.sources === null
@@ -314,7 +356,9 @@ export function LineageToolbar({ nodes, loading = false, className = "" }: Linea
             Contradictions only
           </MenuItem>
           <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />} onSelect={() => applyView("Saved view", {})}>Save current view</MenuItem>
+          <MenuItem icon={<Plus size={14} />} onSelect={() => { setSaveName(view === "Custom" ? "" : view); setSaveErr(null); }}>
+            Save current view
+          </MenuItem>
         </Menu>
       </Row>
 
@@ -332,14 +376,39 @@ export function LineageToolbar({ nodes, loading = false, className = "" }: Linea
         >
           <GitFork size={14} /> {pathLabel}
         </Button>
-        <Button onClick={derive} disabled={deriving}>
+        <Button onClick={() => void derive()} disabled={deriving}>
           <Sparkles size={14} /> {deriving ? "Mari is reading" : "Derive links"}
         </Button>
         {derived > 0 && !deriving && (
           <Badge tone="ok" label={`${derived} links proposed`} />
         )}
         {assertOpen && <Badge tone="info" label="Impact analysis open" />}
+        {savedAs && !saveName && <Badge tone="ok" label={`Saved as ${savedAs}`} />}
       </Row>
+
+      {(deriveErr || saveErr) && (
+        <div className="pl-[66px]"><FieldError>{deriveErr ?? saveErr}</FieldError></div>
+      )}
+
+      {/* Name-and-save row for "Save current view". */}
+      {saveName !== null && (
+        <Row label="Save" divide>
+          <Input
+            autoFocus
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && saveName.trim()) void saveView(saveName.trim()); }}
+            placeholder="Name this view"
+            aria-label="Name this view"
+            className="w-[220px]"
+          />
+          {/* Confirm action bottom left of the row, cancel to its right (§2). */}
+          <Button variant="primary" disabled={saving || !saveName.trim()} onClick={() => void saveView(saveName.trim())}>
+            {saving ? "Saving…" : "Save view"}
+          </Button>
+          <Button onClick={() => { setSaveName(null); setSaveErr(null); }}>Cancel</Button>
+        </Row>
+      )}
 
       {/* path-mode pick state */}
       {pathMode && (

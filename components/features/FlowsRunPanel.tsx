@@ -5,6 +5,7 @@ import { Spinner } from "../data-display/Spinner";
 import { StatusChip, DryChip, type ChipStatus } from "../data-display/Chip";
 import { SkeletonList, SkeletonCard, SkeletonLine } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 import { Scrollable } from "../data-display/Scrollable";
 import { type RunStatus, type WorkflowRun } from "../workflow/RunHistory";
 import { card } from "../tokens/card";
@@ -73,13 +74,15 @@ export type RunInspectorProps = {
   onRerun?: (run: WorkflowRun, dry: boolean) => void;
   busy?: boolean;
   note?: string | null;
+  /** What the last action said when it failed. Shown under the action row. */
+  error?: string | null;
   loading?: boolean;
   className?: string;
 };
 
 /* The single run inspector used by both the run panel and the run history. */
 export function RunInspector({
-  run, onClose, onApprove, onRerun, busy = false, note, loading = false, className = "",
+  run, onClose, onApprove, onRerun, busy = false, note, error = null, loading = false, className = "",
 }: RunInspectorProps) {
   if (loading) {
     return (
@@ -205,7 +208,8 @@ export function RunInspector({
               </Button>
             </div>
           )}
-          {note && <span className="font-term text-[11.5px] text-moss">{note}</span>}
+          {error && <FieldError>{error}</FieldError>}
+          {note && !error && <span className="font-term text-[11.5px] text-moss">{note}</span>}
         </div>
       )}
     </div>
@@ -215,34 +219,51 @@ export function RunInspector({
 /** Runs rendered in the live list beside the panel. */
 const LIST_PAGE = 30;
 
+/** What a run inspector can DO. Optional: without it the panel keeps resuming
+    the run locally, which is what the design canvas renders. */
+export type FlowsRunActions = {
+  /** Resume a run paused at an approval step. May throw; the panel shows it. */
+  approveRun?: (runId: string) => void | Promise<void>;
+};
+
 export type FlowsRunPanelProps = {
   /** The runs listed down the left. Required: no invented run history. */
   runs: WorkflowRun[];
   /** Run number to open by default. */
   openNumber?: number;
+  /** Side effects the inspector offers. Omitted = local echo only. */
+  actions?: FlowsRunActions;
   /** Render a content-shaped skeleton silhouette instead of the panel. */
   loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunPanel({ runs: initial, openNumber, loading = false, className = "" }: FlowsRunPanelProps) {
+export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = false, className = "" }: FlowsRunPanelProps) {
   const [runs, setRuns] = useState<WorkflowRun[]>(initial);
   const [openId, setOpenId] = useState<string | null>(
     (openNumber != null ? runs.find((r) => r.number === openNumber) : runs[0])?.id ?? null,
   );
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const run = openId ? runs.find((r) => r.id === openId) ?? null : null;
   const visible = runs.slice(0, LIST_PAGE);
 
-  const approve = (r: WorkflowRun) => {
+  const approve = async (r: WorkflowRun) => {
     setBusy(true);
-    setRuns((rs) => rs.map((x) => (x.id === r.id
-      ? { ...x, status: "passed", rows: x.rows?.map((row) => (row.status === "waiting" ? { ...row, status: "passed", detail: "Approved by you" } : row.status === "pending" ? { ...row, status: "passed", detail: "Deployed" } : row)) }
-      : x)));
-    setNote(`Approved run #${r.number}: the run is resuming.`);
-    setBusy(false);
+    setFailed(null);
+    try {
+      if (actions?.approveRun) await actions.approveRun(r.id);
+      setRuns((rs) => rs.map((x) => (x.id === r.id
+        ? { ...x, status: "passed", rows: x.rows?.map((row) => (row.status === "waiting" ? { ...row, status: "passed", detail: "Approved by you" } : row.status === "pending" ? { ...row, status: "passed", detail: "Deployed" } : row)) }
+        : x)));
+      setNote(`Approved run #${r.number}: the run is resuming.`);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : `Could not approve run #${r.number}.`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const rerun = (r: WorkflowRun, dry: boolean) => {
@@ -314,11 +335,12 @@ export function FlowsRunPanel({ runs: initial, openNumber, loading = false, clas
       <div className="lg:sticky lg:top-4">
         <RunInspector
           run={run}
-          onClose={() => { setOpenId(null); setNote(null); }}
-          onApprove={approve}
+          onClose={() => { setOpenId(null); setNote(null); setFailed(null); }}
+          onApprove={(r) => void approve(r)}
           onRerun={rerun}
           busy={busy}
           note={note}
+          error={failed}
         />
       </div>
     </div>

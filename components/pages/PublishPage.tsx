@@ -4,9 +4,11 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Send, ExternalLink, FileText, Check, Plus, GripVertical } from "lucide-react";
 import { card } from "../tokens/card";
+import { focusRing } from "../tokens/focusRing";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
@@ -23,7 +25,11 @@ import { Alert } from "../feedback/Alert";
 import { ERRORS } from "../feedback/errors";
 import { Switch } from "../forms/Switch";
 import { Tabs, type TabOption } from "../navigation/Tabs";
-import { PublishMcpServers, type McpServer } from "../features/PublishMcpServers";
+import { PublishMcpServers, type McpServer, type PublishMcpActions } from "../features/PublishMcpServers";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
+import { Link } from "../navigation/Link";
+import { siteUrl } from "../tokens/siteUrl";
 
 /* Publish (pages/publish.md). The doc-site product: turn the knowledge base
    into a static documentation website, or expose it to Claude/agents over MCP.
@@ -104,6 +110,28 @@ export type McpCreated = {
   name: string; scopeLabel: string; toolCount: number; token: string; snippet: string;
 };
 
+/** What Publish can DO.
+
+    The site handlers take no site id: this page edits ONE site, the one the
+    caller put in `data.site`, so the caller already knows which row it is.
+    `rollbackRelease` is keyed by the version string the release log shows, for
+    the same reason.
+
+    There is no `addNavSection` / `removeNavSection`: the navigation tree has
+    no mutation of its own (a build rewrites it), so those two buttons keep
+    their local behaviour rather than pretending to persist. */
+export type PublishActions = PublishMcpActions & {
+  /** Leave the site editor and go back to the list of sites. Which view is on
+      screen lives in `data`, so the page cannot go back on its own. */
+  openSites?: () => void;
+  deploySite?: () => void | Promise<void>;
+  buildSite?: () => void | Promise<void>;
+  rollbackRelease?: (version: string) => void | Promise<void>;
+  setSiteFeature?: (key: string, on: boolean) => void | Promise<void>;
+  setSiteTheme?: (theme: { preset?: string; accent?: string }) => void | Promise<void>;
+  saveDeployConfig?: (cfg: { bucket: string; region: string }) => void | Promise<void>;
+};
+
 /** Everything Publish renders. */
 export type PublishData = {
   view: PublishView;
@@ -155,14 +183,23 @@ function EditorTabs({ active }: { active: EditorTab }) {
 /* mkdocs-style site-builder controls: an editable nav tree plus the feature
    switches a static-site generator exposes. Every control is wired to local
    state so nothing here is inert (§2). */
-function ContentBody({ site }: { site: DocSite }) {
+function ContentBody({ site, actions }: { site: DocSite; actions?: PublishActions }) {
   const [nav, setNav] = useState<NavSection[]>(site.nav);
   const [features, setFeatures] = useState<Record<string, boolean>>(
     Object.fromEntries(site.features.map((f) => [f.key, f.on])),
   );
+  const write = useWrite();
+
+  /* A switch only moves once the generator has taken the change, so it can
+     never sit in a position the built site does not honour. */
+  const toggleFeature = (key: string, on: boolean) => write.run(
+    actions?.setSiteFeature && (() => actions.setSiteFeature!(key, on)),
+    () => setFeatures((s) => ({ ...s, [key]: on })),
+  );
 
   return (
     <div className="flex flex-col gap-4">
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div>
         <SectionLabel>Sources</SectionLabel>
         <div className="mt-1.5 flex flex-wrap gap-1.5">{site.sourceTags.map((t) => <TagChip key={t} tag={t} />)}</div>
@@ -205,7 +242,7 @@ function ContentBody({ site }: { site: DocSite }) {
             <li key={f.key} className="flex items-start gap-2.5">
               <Switch
                 checked={features[f.key]}
-                onCheckedChange={(v) => setFeatures((s) => ({ ...s, [f.key]: v }))}
+                onCheckedChange={(v) => void toggleFeature(f.key, v)}
                 aria-label={f.label}
               />
               <span className="min-w-0">
@@ -239,24 +276,49 @@ function ContentBody({ site }: { site: DocSite }) {
   );
 }
 
-function ThemeBody({ site }: { site: DocSite }) {
+function ThemeBody({ site, actions }: { site: DocSite; actions?: PublishActions }) {
+  /* Presets and accents used to be a picture: the first row was hard-coded as
+     the selected one and nothing was clickable. They are controls now, and
+     with a handler each pick is written to the site's theme (§2). */
+  const [preset, setPreset] = useState(site.themes[0]?.key ?? "");
+  const [accent, setAccent] = useState(site.accents[0] ?? "");
+  const write = useWrite();
+  const pickPreset = (key: string) => write.run(
+    actions?.setSiteTheme && (() => actions.setSiteTheme!({ preset: key, accent })),
+    () => setPreset(key),
+  );
+  const pickAccent = (color: string) => write.run(
+    actions?.setSiteTheme && (() => actions.setSiteTheme!({ preset, accent: color })),
+    () => setAccent(color),
+  );
+
   return (
     <div className="flex flex-col gap-4">
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div>
         <SectionLabel>Preset</SectionLabel>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
-          {site.themes.map((t, i) => (
-            <div key={t.key} className={`flex items-center gap-2.5 p-2 rounded-[5px] border ${i === 0 ? "border-biscay-2 ring-1 ring-biscay-2/40" : "border-ink/15"}`}>
+          {site.themes.map((t) => (
+            <button
+              type="button"
+              key={t.key}
+              aria-pressed={t.key === preset}
+              disabled={write.busy}
+              onClick={() => void pickPreset(t.key)}
+              className={`flex items-center gap-2.5 p-2 rounded-[5px] border text-left ${focusRing} ${t.key === preset ? "border-biscay-2 ring-1 ring-biscay-2/40" : "border-ink/15 hover:border-ink/30"}`}
+            >
               <span className="w-8 h-8 rounded-[3px] border border-ink/10 grid place-items-end p-1" style={{ background: t.bg }}><span className="w-3 h-3 rounded-full" style={{ background: t.accent }} /></span>
               <span className="text-[12.5px] font-medium text-ink">{t.name}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
       <div>
         <SectionLabel>Accent</SectionLabel>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {site.accents.map((c, i) => <Swatch key={c} color={c} selected={i === 0} />)}
+          {site.accents.map((c) => (
+            <Swatch key={c} color={c} selected={c === accent} onClick={() => void pickAccent(c)} />
+          ))}
         </div>
       </div>
       <div>
@@ -299,14 +361,28 @@ function PreviewBody({ site }: { site: DocSite }) {
   );
 }
 
-function DomainsBody({ site }: { site: DocSite }) {
+function DomainsBody({ site, actions }: { site: DocSite; actions?: PublishActions }) {
+  /* The bucket and region are the deploy target, and "Save deploy config" is
+     what sets them, so they are fields rather than a read-only display of
+     themselves. The domain stays read-only: it belongs to the site row and
+     nothing here writes it. */
+  const [bucket, setBucket] = useState(site.bucket);
+  const [region, setRegion] = useState(site.region);
+  const [saved, setSaved] = useState(false);
+  const write = useWrite();
+  const save = () => write.run(
+    actions?.saveDeployConfig && (() => actions.saveDeployConfig!({ bucket: bucket.trim(), region: region.trim() })),
+    () => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); },
+  );
+
   return (
     <div className="flex flex-col gap-4">
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div>
         <SectionLabel>S3 target</SectionLabel>
         <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-          <Input className="w-full font-term" readOnly value={site.bucket} />
-          <Input className="w-full font-term" readOnly value={site.region} />
+          <Input className="w-full font-term" aria-label="Bucket" placeholder="my-docs-bucket" value={bucket} onChange={(e) => { setBucket(e.target.value); setSaved(false); }} />
+          <Input className="w-full font-term" aria-label="Region" placeholder="us-west-2" value={region} onChange={(e) => { setRegion(e.target.value); setSaved(false); }} />
         </div>
       </div>
       <div>
@@ -314,26 +390,42 @@ function DomainsBody({ site }: { site: DocSite }) {
         <Input className="mt-1.5 w-full font-term" readOnly value={site.domain} />
         <p className="mt-1 text-[12px] text-ink/65">Point {site.domain} → your S3 website endpoint. Without a bucket, deploys build locally.</p>
       </div>
-      <div><Button compact>Save deploy config</Button></div>
+      <div className="flex items-center gap-3">
+        <Button compact disabled={write.busy} onClick={() => void save()}>{write.busy ? "Saving…" : "Save deploy config"}</Button>
+        {saved && <span className="font-term text-[11.5px] text-moss">✓ Saved</span>}
+      </div>
     </div>
   );
 }
 
-function SiteEditorInline({ tab, site, mobile }: { tab: EditorTab; site: DocSite; mobile: boolean }) {
+function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site: DocSite; mobile: boolean; actions?: PublishActions }) {
+  const write = useWrite();
+  const [deployed, setDeployed] = useState(false);
+  const deploy = () => write.run(
+    actions?.deploySite && (() => actions.deploySite!()),
+    () => { setDeployed(true); window.setTimeout(() => setDeployed(false), 2400); },
+  );
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title={site.name}
-        backLink={{ href: "#", label: "All sites" }}
+        backLink={{ href: page.route, label: "All sites", onClick: actions?.openSites }}
         actions={
           <>
             <Chip label="Live" tone="ok" dot pulse caps />
             <span className="hidden font-term text-[12px] text-ink/70 sm:inline">{site.domain}</span>
-            <a href="#" className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80"><ExternalLink size={14} /> Open site</a>
-            <Button variant="primary">Deploy</Button>
+            {/* The published site itself, on its own domain — a genuinely
+                external destination, so a real new-tab link rather than the
+                "#" that used to sit here. This header only renders for a site
+                the page has already labelled Live. */}
+            <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><ExternalLink size={14} /> Open site</Link>
+            <Button variant={deployed ? "success" : "primary"} disabled={write.busy} onClick={() => void deploy()}>
+              {write.busy ? "Deploying…" : deployed ? "Deployed" : "Deploy"}
+            </Button>
           </>
         }
       />
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       {/* The Preview tab already IS the live preview: showing it twice side by
           side reads as a rendering bug, so the rail drops out on that tab. */}
       {/* §11 two-column split: editor column minmax(0,1fr) + the standard
@@ -348,10 +440,10 @@ function SiteEditorInline({ tab, site, mobile }: { tab: EditorTab; site: DocSite
       >
         <Card>
           <EditorTabs active={tab} />
-          {tab === "content" && <ContentBody site={site} />}
-          {tab === "theme" && <ThemeBody site={site} />}
+          {tab === "content" && <ContentBody site={site} actions={actions} />}
+          {tab === "theme" && <ThemeBody site={site} actions={actions} />}
           {tab === "preview" && <PreviewBody site={site} />}
-          {tab === "domains" && <DomainsBody site={site} />}
+          {tab === "domains" && <DomainsBody site={site} actions={actions} />}
         </Card>
         {tab !== "preview" && (
           <Card
@@ -367,7 +459,25 @@ function SiteEditorInline({ tab, site, mobile }: { tab: EditorTab; site: DocSite
 }
 
 /* ── Publish / deploy flow ─────────────────────────────────────────────────*/
-function PublishFlow({ phase, site, mobile }: { phase: PublishPhase; site: DocSite; mobile: boolean }) {
+function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPhase; site: DocSite; mobile: boolean; actions?: PublishActions }) {
+  const write = useWrite();
+  const [reached, setReached] = useState<PublishPhase | null>(null);
+  /* Where the deploy has got to: the caller's answer until this page's own
+     button moves it on. `busy` is the publishing step, so the stepper and the
+     progress bar are true of the write actually in flight. */
+  const phase: PublishPhase = write.busy ? "publishing" : reached ?? given;
+  const deploy = () => write.run(
+    actions?.deploySite && (() => actions.deploySite!()),
+    () => setReached("published"),
+  );
+  const previewBuild = () => write.run(
+    actions?.buildSite && (() => actions.buildSite!()),
+    () => setReached("draft"),
+  );
+  const rollback = (version: string) => write.run(
+    actions?.rollbackRelease && (() => actions.rollbackRelease!(version)),
+    () => setReached("published"),
+  );
   const step = phase === "draft" ? 0 : phase === "publishing" ? 1 : 3;
   const statusChip =
     phase === "published" ? <Chip label="Live" tone="ok" dot pulse caps />
@@ -395,16 +505,19 @@ function PublishFlow({ phase, site, mobile }: { phase: PublishPhase; site: DocSi
         {phase === "published" && (
           <p className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-moss"><Check size={15} /> {site.releasedNote}</p>
         )}
+        {write.failed && (
+          <div className="mt-4"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+        )}
         {/* Primary action bottom left (§2), secondary to its right. */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {phase === "published"
-            ? <a href="#" className="inline-flex items-center gap-1.5 text-[13px] text-biscay-2 hover:underline"><ExternalLink size={14} /> View live site</a>
+            ? <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 text-[13px] text-biscay-2 hover:underline"><ExternalLink size={14} /> View live site</Link>
             : (
               <>
-                <Button variant="primary" disabled={phase === "publishing"}>
+                <Button variant="primary" disabled={phase === "publishing"} onClick={() => void deploy()}>
                   {phase === "publishing" ? "Publishing…" : "Deploy"}
                 </Button>
-                <Button>Preview build</Button>
+                <Button disabled={write.busy} onClick={() => void previewBuild()}>Preview build</Button>
               </>
             )}
         </div>
@@ -417,7 +530,11 @@ function PublishFlow({ phase, site, mobile }: { phase: PublishPhase; site: DocSi
               <span className="w-2 h-2 rounded-full bg-ink/30" />
               <span className="text-[13px] font-medium text-ink">{r.version}</span>
               <span className="font-term text-[11.5px] text-ink/65 flex-1">{r.note}</span>
-              <Button compact>Rollback</Button>
+              {/* Rolling a live site back to an older build is destructive:
+                  it must not fire on first click (CONVENTIONS §2). */}
+              <ConfirmButton compact confirmLabel="Roll back?" disabled={write.busy} onConfirm={() => void rollback(r.version)}>
+                Rollback
+              </ConfirmButton>
             </li>
           ))}
         </ul>
@@ -505,7 +622,7 @@ function isEmpty(d: PublishData): boolean {
   return d.site === null && d.servers.length === 0;
 }
 
-function Body({ data, error, mobile }: { data: PublishData; error: string | null; mobile: boolean }): ReactNode {
+function Body({ data, error, mobile, actions }: { data: PublishData; error: string | null; mobile: boolean; actions?: PublishActions }): ReactNode {
   /* The catalog owns the heading and the tone (§8); the body is the message
      the server actually sent, so the user sees the real failure. */
   if (error) return <Alert tone="blocked" title={ERRORS["server.unavailable"].title}>{error}</Alert>;
@@ -514,16 +631,16 @@ function Body({ data, error, mobile }: { data: PublishData; error: string | null
   switch (data.view) {
     case "mcp-add": return <McpAddServer draft={data.draft} serverCount={data.serverCount} />;
     case "mcp-token": return <McpTokenCreated created={data.created} serverCount={data.serverCount} />;
-    case "mcp-list": return <PublishMcpServers servers={data.servers} />;
+    case "mcp-list": return <PublishMcpServers servers={data.servers} actions={actions} />;
     case "publish-flow":
-      return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} /> : null;
+      return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} actions={actions} /> : null;
     case "site-editor":
     default:
-      return data.site ? <SiteEditorInline tab={data.editorTab} site={data.site} mobile={mobile} /> : null;
+      return data.site ? <SiteEditorInline tab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : null;
   }
 }
 
-function PublishPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<PublishData>) {
+function PublishPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<PublishData, PublishActions>) {
   const mcpView = data.view.startsWith("mcp");
   const [tab, setTab] = useState<Tab>(mcpView ? "mcp" : "sites");
   const bare = error !== null || isEmpty(data);
@@ -537,7 +654,7 @@ function PublishPage({ data, loading = false, error = null, chrome, mobile = fal
   }
 
   return (
-    <PageFrame active={navFor("publish")} title="Publish" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Doc site"
@@ -549,14 +666,14 @@ function PublishPage({ data, loading = false, error = null, chrome, mobile = fal
           {!bare && (
             <Tabs<Tab> ariaLabel="Publish sections" variant="underline" options={TAB_OPTIONS} value={mcpView ? "mcp" : tab} onChange={setTab} />
           )}
-          <Body data={data} error={error} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} actions={actions} />
         </div>
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule<PublishData> = {
+export const page: PageModule<PublishData, PublishActions> = {
   id: "publish",
   title: "Publish",
   route: "/publish",

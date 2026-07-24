@@ -2,7 +2,8 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
 import { Sparkles } from "lucide-react";
 import {
-  InsightsWidgets, type InsightStat, type ReadRow, type GlossRow, type InsightsActivity,
+  InsightsWidgets,
+  type InsightStat, type ReadRow, type GlossRow, type InsightsActivity, type InsightsWidgetsActions,
 } from "../features/InsightsWidgets";
 import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFreshnessChart";
 import { EmptyState } from "../data-display/EmptyState";
@@ -60,6 +61,11 @@ export type InsightsExtras = {
   avatarMax: number;
 };
 
+/** What Insights can DO. Every handler may throw; the widget that owns the
+    control shows the message beside it. Optional: without actions the controls
+    keep the local echo the library ships (the canvas has no server). */
+export type InsightsActions = InsightsWidgetsActions;
+
 /** Everything the Insights dashboard renders. */
 export type InsightsData = {
   /** `null` while the widget queries are still in flight: the widgets render
@@ -115,7 +121,9 @@ function isEmpty(d: InsightsData): boolean {
     && (!w || (!w.stats.length && !w.readability.length && !w.glossary.length && !w.activity.length));
 }
 
-function Body({ data, error, mobile }: { data: InsightsData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile }: {
+  data: InsightsData; error: string | null; actions?: InsightsActions; mobile: boolean;
+}) {
   const grid = mobile ? GRID_M : GRID;
   const full = mobile ? "" : SPAN[3];
 
@@ -145,7 +153,7 @@ function Body({ data, error, mobile }: { data: InsightsData; error: string | nul
   return (
     <div className={grid}>
       {w
-        ? <InsightsWidgets className={full} {...w} />
+        ? <InsightsWidgets className={full} actions={actions} {...w} />
         : <InsightsWidgets className={full} loading stats={[]} readability={[]} glossary={[]} activity={[]} since="" />}
       {data.freshness && (
         <div className={mobile ? "" : data.extras ? SPAN[2] : SPAN[3]}>
@@ -157,21 +165,21 @@ function Body({ data, error, mobile }: { data: InsightsData; error: string | nul
   );
 }
 
-function InsightsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<InsightsData>) {
+function InsightsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<InsightsData, InsightsActions>) {
   return (
     <PageFrame chrome={chrome} active={navFor("insights")} title="Insights" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-          <Body data={data} error={error} mobile={mobile} />
+          <Body data={data} error={error} actions={actions} mobile={mobile} />
         </div>
       )}
     </PageFrame>
   );
 }
 
-export const page: PageModule<InsightsData> = {
+export const page: PageModule<InsightsData, InsightsActions> = {
   id: "insights",
   title: "Insights",
   route: "/insights",

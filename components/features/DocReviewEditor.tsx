@@ -15,7 +15,7 @@ import {
 } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import {
-  parseMarkdown, mdInline, escapeHtml, type Block, type BlockType,
+  parseMarkdown, serializeBlocks, mdInline, escapeHtml, type Block, type BlockType,
 } from "../data-display/markdown";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -132,11 +132,16 @@ const ANNOT_TONE: Record<string, string> = {
 export function DocReviewEditor({
   body,
   findings,
+  onChange,
   loading = false,
   compact = false,
 }: {
   body: string;
   findings: EditorFinding[];
+  /** The edited document, as markdown, whenever a block commits. The editor
+      owns the blocks; this is how the body leaves it so a page can save it.
+      Optional — with no listener the editor is exactly as local as before. */
+  onChange?: (markdown: string) => void;
   loading?: boolean;
   /** Narrow-column composition: the margin annotations drop below the prose
       instead of holding a 190px gutter. The page owns this decision
@@ -157,6 +162,15 @@ export function DocReviewEditor({
   const editorRef = useRef<HTMLDivElement>(null);
 
   const focusedBlock = blocks.find((b) => b.id === focusedId) ?? null;
+
+  /* Blocks back out as markdown, after the first render: the initial value is
+     the body the page already has, and reporting it would read as an edit. */
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!reported.current) { reported.current = true; return; }
+    onChange?.(serializeBlocks(blocks));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks]);
 
   /* decorated html per block */
   const rendered = useMemo(() => {

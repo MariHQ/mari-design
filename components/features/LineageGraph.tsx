@@ -7,6 +7,7 @@ import { Chip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
@@ -52,6 +53,10 @@ export type LineageGraphProps = {
   maxNodes?: number;
   onSelectNode?: (id: string) => void;
   onSelectEdge?: (id: string) => void;
+  /** Persist where a node was dragged to, so the position survives a reload.
+      May throw; the canvas shows the message over the graph. Omitted = the
+      move stays local, which is what the design canvas renders. */
+  onPinNode?: (args: { docId: number; x: number; y: number }) => void | Promise<void>;
   /** Render a content-shaped skeleton silhouette instead of the graph. */
   loading?: boolean;
   className?: string;
@@ -162,7 +167,7 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 export function LineageGraph({
   nodes, edges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
-  onSelectNode, onSelectEdge, loading = false, className = "",
+  onSelectNode, onSelectEdge, onPinNode, loading = false, className = "",
 }: LineageGraphProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [controls, setControls] = useLineageControls();
@@ -173,6 +178,7 @@ export function LineageGraph({
   const [trace, setTrace] = useState(traceProp);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>({});
+  const [pinErr, setPinErr] = useState<string | null>(null);
 
   // An explicit prop wins, and is pushed into the shared store so the toolbar
   // and the canvas never disagree about which lens/layout is showing.
@@ -294,9 +300,25 @@ export function LineageGraph({
     }));
   };
 
+  /* Dropping a node is the pin gesture: the position it was dragged to is
+     persisted, so the layout the reader arranged survives a reload instead of
+     snapping back to the auto-layout. */
   const endDrag = () => {
-    suppressClick.current = Boolean(drag.current?.moved);
+    const d = drag.current;
+    suppressClick.current = Boolean(d?.moved);
     drag.current = null;
+    if (!d?.moved || d.mode !== "node" || !d.id || !onPinNode) return;
+    const at = moved[d.id];
+    const node = byId[d.id];
+    if (!at || !node || node.docId == null) return;
+    setPinErr(null);
+    void (async () => {
+      try {
+        await onPinNode({ docId: node.docId as number, x: at.x, y: at.y });
+      } catch (err) {
+        setPinErr(err instanceof Error ? err.message : "That position could not be saved.");
+      }
+    })();
   };
 
   const selectNode = (id: string) => {
@@ -576,6 +598,13 @@ export function LineageGraph({
           <div className="absolute left-3 top-3 z-20 max-w-[260px] truncate rounded-[4px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 font-term text-[11px] text-ink/70 backdrop-blur">
             {hiddenCount > 0 ? `${hiddenCount} node${hiddenCount === 1 ? "" : "s"} filtered out` : "Filtered"}
             {controls.query.trim() && ` · matching “${controls.query.trim()}”`}
+          </div>
+        )}
+
+        {/* A rejected pin says so over the canvas, where the drag happened. */}
+        {pinErr && (
+          <div className="absolute bottom-3 left-3 z-20 max-w-[320px] rounded-[5px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 backdrop-blur">
+            <FieldError>{pinErr}</FieldError>
           </div>
         )}
 

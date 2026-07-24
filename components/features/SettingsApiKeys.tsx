@@ -15,6 +15,8 @@ import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { fmtDate } from "../tokens/format";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
    Create and revoke programmatic-access keys (CI, bots, the MCP gateway).
@@ -38,31 +40,69 @@ function randomSecret(): string {
   return `mk_live_${hex}`;
 }
 
+/** What the API-keys surface can DO.
+
+    `createKey` RETURNS the secret because that is the only moment it exists:
+    the server mints it, hands it back once, and stores a hash. Nothing here
+    ever re-reads a secret, and nothing logs one. */
+export type SettingsApiKeysActions = {
+  createKey?: (draft: { name: string; scopes: string }) => string | Promise<string>;
+  revokeKey?: (id: number) => void | Promise<void>;
+};
+
 export type SettingsApiKeysProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
-  embedded?: boolean; keys: ApiKey[]; loading?: boolean; className?: string };
+  embedded?: boolean;
+  keys: ApiKey[];
+  actions?: SettingsApiKeysActions;
+  /** Whether the create form is open. Embedded, the host page owns the
+      "Create key" button, so it owns this. */
+  createOpen?: boolean;
+  onCreateOpenChange?: (open: boolean) => void;
+  loading?: boolean;
+  className?: string;
+};
 
-export function SettingsApiKeys({ keys: initialKeys, loading = false, embedded = false, className = "" }: SettingsApiKeysProps) {
+export function SettingsApiKeys({
+  keys: initialKeys, actions, createOpen, onCreateOpenChange,
+  loading = false, embedded = false, className = "",
+}: SettingsApiKeysProps) {
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
-  const [creating, setCreating] = useState(false);
+  const [creatingLocal, setCreatingLocal] = useState(false);
+  const creating = createOpen ?? creatingLocal;
+  const setCreating = (open: boolean) => { setCreatingLocal(open); onCreateOpenChange?.(open); };
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState("read");
   const [saving, setSaving] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
-  const createKey = () => {
-    if (!name.trim()) return;
+  /* Create and revoke both go through `write`: with no `actions` they are the
+     local-state changes this panel has always made (which is what the design
+     canvas renders), and with actions they are the server's answer. */
+  const write = useWrite();
+
+  const createKey = async () => {
+    const keyName = name.trim();
+    if (!keyName) return;
+    const eff = scopes.trim() || "read";
     setSaving(true);
-    setTimeout(() => {
-      const secret = randomSecret();
-      const eff = scopes.trim() || "read";
-      setKeys((k) => [...k, { id: Math.max(0, ...k.map((x) => x.id)) + 1, name: name.trim(), prefix: `${secret.slice(0, 12)}…`, scopes: eff, created: new Date().toISOString().slice(0, 10), lastUsed: null, revoked: false }]);
-      setToken(secret);
-      setName(""); setScopes("read"); setCreating(false); setSaving(false);
-    }, 500);
+    // The secret comes from the server when there is one, and from here only
+    // when there is not. Either way it is shown once and never re-read.
+    const secret = actions?.createKey
+      ? await write.runFor(() => actions.createKey!({ name: keyName, scopes: eff }))
+      : randomSecret();
+    setSaving(false);
+    if (!secret) return;
+    setKeys((k) => [...k, { id: Math.max(0, ...k.map((x) => x.id)) + 1, name: keyName, prefix: `${secret.slice(0, 12)}…`, scopes: eff, created: new Date().toISOString().slice(0, 10), lastUsed: null, revoked: false }]);
+    setToken(secret);
+    setName(""); setScopes("read"); setCreating(false);
   };
 
-  const revoke = (id: number) => setKeys((k) => k.map((x) => (x.id === id ? { ...x, revoked: true } : x)));
+  /* Destructive: the caller is <ConfirmButton>, so this is the second click. */
+  const revoke = (id: number) => write.run(
+    actions?.revokeKey && (() => actions.revokeKey!(id)),
+    () => setKeys((k) => k.map((x) => (x.id === id ? { ...x, revoked: true } : x))),
+  );
 
   const { sort, onSort, sorted } = useSort(keys, {
     name: (k) => k.name,
@@ -94,8 +134,10 @@ export function SettingsApiKeys({ keys: initialKeys, loading = false, embedded =
       {!embedded && <PageHeader
         title="API keys"
         description="Programmatic access for CI, bots, and the MCP gateway"
-        actions={<Button variant="primary" onClick={() => setCreating((v) => !v)}><Plus size={15} /> Create key</Button>}
+        actions={<Button variant="primary" onClick={() => setCreating(!creating)}><Plus size={15} /> Create key</Button>}
       />}
+
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
 
       {creating && (
         <Card title="New key" hint={TOKEN_REVEAL_WARNING}>
@@ -104,7 +146,7 @@ export function SettingsApiKeys({ keys: initialKeys, loading = false, embedded =
             <Field label="Scopes"><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder="search:read ingest:write" className="w-full font-term" /></Field>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <Button variant="primary" disabled={saving || !name.trim()} onClick={createKey}>{saving ? "Creating…" : "Create key"}</Button>
+            <Button variant="primary" disabled={saving || !name.trim()} onClick={() => void createKey()}>{saving ? "Creating…" : "Create key"}</Button>
             <Button onClick={() => setCreating(false)}>Cancel</Button>
           </div>
         </Card>

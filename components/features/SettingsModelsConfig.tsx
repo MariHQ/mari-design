@@ -14,6 +14,8 @@ import { ErrorMessage } from "../feedback/ErrorMessage";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* Settings — Models configuration ─────────────────────────────────────────
    Choose which models embed, search, and answer for the workspace: the
@@ -54,6 +56,23 @@ function SavedNote({ show }: { show: boolean }) {
   return show ? <span className="font-term text-[11.5px] text-moss">✓ Saved</span> : null;
 }
 
+/** What the model configuration can DO.
+
+    There is no `testConnection` handler: the server exposes no provider
+    reachability check (only `testMcpServer`, which is a different thing), so
+    Test connection stays the local validation below rather than pretending to
+    have called OpenAI. Chunking has no handler either: the rows name sources
+    the way the console does, not by the key the `chunking` setting is stored
+    under, so a save could not address the row it was editing.
+
+    `saveLlm` is given whatever is in the key fields. Keys arrive from the
+    server MASKED, so a field the user never touched still holds "••••…1234";
+    a handler must not write that back over a real key. */
+export type SettingsModelsActions = {
+  saveEmbedding?: (m: { model: string; dims: number }) => void | Promise<void>;
+  saveLlm?: (m: { model: string; openai: string; anthropic: string }) => void | Promise<void>;
+};
+
 export type SettingsModelsConfigProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
   embedded?: boolean;
@@ -62,6 +81,7 @@ export type SettingsModelsConfigProps = {
   dims: number;
   chunking: ChunkRow[];
   keys: ProviderKeys;
+  actions?: SettingsModelsActions;
   /** Corpus line appended to a healthy connection test. */
   indexSummary: string;
   loading?: boolean;
@@ -74,6 +94,7 @@ export function SettingsModelsConfig({
   dims,
   chunking: initialChunking,
   keys,
+  actions,
   indexSummary,
   loading = false,
   embedded = false,
@@ -93,6 +114,19 @@ export function SettingsModelsConfig({
   const [chunkSaved, setChunkSaved] = useState(false);
 
   const flash = (set: (v: boolean) => void) => { set(true); setTimeout(() => set(false), 1600); };
+
+  /* With no `actions` these are the same "✓ Saved" flashes this panel has
+     always shown, which is what the design canvas renders. With actions the
+     flash only happens once the server has taken the change. */
+  const write = useWrite();
+  const saveEmbedding = () => write.run(
+    actions?.saveEmbedding && (() => actions.saveEmbedding!({ model: emb, dims })),
+    () => flash(setEmbSaved),
+  );
+  const saveLlm = () => write.run(
+    actions?.saveLlm && (() => actions.saveLlm!({ model: llmSel, openai: openaiKey, anthropic: anthropicKey })),
+    () => flash(setLlmSaved),
+  );
 
   const setChunkField = (source: string, field: keyof ChunkRow, value: string) =>
     setChunk((c) => c.map((r) => (r.source === source ? { ...r, [field]: field === "strategy" ? value : Number(value) || 0 } : r)));
@@ -136,6 +170,9 @@ export function SettingsModelsConfig({
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
       {!embedded && <PageHeader title="Models" description="Choose which models embed, search, and answer for this workspace" />}
 
+      {/* One failure surface for both saves, in the server's own words (§8). */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint={`${dims} dims`}>
           <Field label="Model">
@@ -143,7 +180,7 @@ export function SettingsModelsConfig({
               {embOpts.map((o, i) => <option key={o} value={o}>{optionLabel(o)}{i === 0 ? " (default)" : ""}</option>)}
             </Select>
           </Field>
-          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact onClick={() => flash(setEmbSaved)}>Save</Button><SavedNote show={embSaved} /></div>
+          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact disabled={write.busy} onClick={() => void saveEmbedding()}>Save</Button><SavedNote show={embSaved} /></div>
         </Card>
 
         <Card icon={<Sparkles size={16} className="text-clay" />} title="LLM provider">
@@ -152,7 +189,7 @@ export function SettingsModelsConfig({
               {llmOpts.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
             </Select>
           </Field>
-          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact onClick={() => flash(setLlmSaved)}>Save</Button><SavedNote show={llmSaved} /></div>
+          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact disabled={write.busy} onClick={() => void saveLlm()}>Save</Button><SavedNote show={llmSaved} /></div>
         </Card>
       </div>
 
@@ -177,7 +214,7 @@ export function SettingsModelsConfig({
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button variant="primary" compact onClick={() => flash(setLlmSaved)}>Save changes</Button>
+          <Button variant="primary" compact disabled={write.busy} onClick={() => void saveLlm()}>Save changes</Button>
           <Button compact onClick={testConnection}>Test connection</Button>
           {health?.ok && (
             <span className="inline-flex items-center gap-2">

@@ -26,6 +26,10 @@ export type SearchResult = {
   /** Right-aligned meta — relative time, count, source label, etc. */
   meta?: string;
   icon?: ReactNode;
+  /** Where selecting this result goes. An in-app href; the host follows it.
+      Optional because a result can also be a pure action handled in
+      `onSelect`. */
+  href?: string;
 };
 
 /** Results for one scope, in render order. */
@@ -50,13 +54,17 @@ export type GlobalSearchProps = {
   placeholder?: string;
   value?: string;
   onValueChange?: (query: string) => void;
+  /** A search is in flight. Only meaningful when the host fetches results
+      asynchronously; without it a slow backend is indistinguishable from
+      "no results", which reads as a broken search. */
+  loading?: boolean;
 };
 
 export function GlobalSearch({
   open, onOpenChange, scopes, results = [], onQuery, onSelect,
   recentSearches = [], onRecentSelect,
   placeholder = "Search knowledge, people, sources…",
-  value, onValueChange,
+  value, onValueChange, loading = false,
 }: GlobalSearchProps) {
   const [internalQuery, setInternalQuery] = useState("");
   const query = value ?? internalQuery;
@@ -153,7 +161,11 @@ export function GlobalSearch({
               <div className="px-3 py-10 text-center text-[13px] text-ink/65">Type to search across {scopeList.length > 0 ? scopeList.map((s) => s.label).join(", ") : "everything"}.</div>
             )}
 
-            {hasQuery && flat.length === 0 && (
+            {hasQuery && flat.length === 0 && loading && (
+              <div className="px-3 py-10 text-center text-[13px] text-ink/65">Searching…</div>
+            )}
+
+            {hasQuery && flat.length === 0 && !loading && (
               <div className="px-3 py-10 text-center text-[13px] text-ink/65">
                 No results for <span className="text-ink/70">“{query.trim()}”</span>
               </div>

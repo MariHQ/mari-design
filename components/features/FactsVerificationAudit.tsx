@@ -9,6 +9,7 @@ import { SkeletonTable } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Facts verification audit — a client-side audit derived entirely from the
@@ -45,6 +46,9 @@ function verifiedAgeDays(verified: DateInput | null | undefined, anchor: number)
 export type FactsVerificationAuditProps = {
   /** The facts to audit. Required: the panel never invents claims. */
   facts: Fact[];
+  /** Open a re-verification task on a stale fact. May throw; the row shows the
+      message in place of the button. Omitted = the local echo below. */
+  onCreateReviewTask?: (fact: Fact) => void | Promise<void>;
   /** Render the surrounding close affordance (the panel is toggled open). */
   onClose?: () => void;
   /** Render a content-shaped skeleton while the audit is computing. */
@@ -52,9 +56,12 @@ export type FactsVerificationAuditProps = {
   className?: string;
 };
 
-export function FactsVerificationAudit({ facts, onClose, loading = false, className = "" }: FactsVerificationAuditProps) {
+export function FactsVerificationAudit({
+  facts, onCreateReviewTask, onClose, loading = false, className = "",
+}: FactsVerificationAuditProps) {
   const [taskState, setTaskState] = useState<Record<number, TaskState>>({});
   const [tasks, setTasks] = useState<Record<number, string>>({});
+  const [failed, setFailed] = useState<Record<number, string>>({});
 
   const auditRows = useMemo(() => {
     const verified = facts.filter((f) => f.status === "Verified");
@@ -81,12 +88,19 @@ export function FactsVerificationAudit({ facts, onClose, loading = false, classN
      instead of rendering every one into the panel (CONVENTIONS §13). */
   const pager = usePaged(sorted, 10);
 
-  const createReviewTask = (f: Fact) => {
+  const createReviewTask = async (f: Fact) => {
     setTaskState((s) => ({ ...s, [f.id]: "creating" }));
-    // Emulate the createTask mutation resolving. The button has to leave
-    // something behind on screen, so the new task lands as its own row (§2).
-    setTaskState((s) => ({ ...s, [f.id]: "done" }));
-    setTasks((t) => ({ ...t, [f.id]: `TASK-${1200 + Object.keys(t).length + 1}` }));
+    setFailed((e) => { const n = { ...e }; delete n[f.id]; return n; });
+    try {
+      // No handler: the button still has to leave something behind on screen,
+      // so the new task lands as its own row (§2) exactly as before.
+      if (onCreateReviewTask) await onCreateReviewTask(f);
+      setTaskState((s) => ({ ...s, [f.id]: "done" }));
+      setTasks((t) => ({ ...t, [f.id]: `TASK-${1200 + Object.keys(t).length + 1}` }));
+    } catch (err) {
+      setTaskState((s) => ({ ...s, [f.id]: "error" }));
+      setFailed((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "Couldn’t reach Mari." }));
+    }
   };
 
   const hint =
@@ -175,12 +189,12 @@ export function FactsVerificationAudit({ facts, onClose, loading = false, classN
                       <td className={`${td} whitespace-nowrap text-right align-top`}>
                         {stale && (
                           state === "error" ? (
-                            <span className="font-term text-[11.5px] text-espelette">Couldn’t reach Mari.</span>
+                            <FieldError>{failed[fact.id] ?? "Couldn’t reach Mari."}</FieldError>
                           ) : (
                             <Button
                               variant="primary" compact
                               disabled={state === "creating" || state === "done"}
-                              onClick={() => createReviewTask(fact)}
+                              onClick={() => void createReviewTask(fact)}
                             >
                               {state === "done" ? "Task created" : state === "creating" ? "Creating" : "Create review task"}
                             </Button>

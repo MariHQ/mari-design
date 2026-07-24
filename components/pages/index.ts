@@ -16,6 +16,7 @@ import { page as publish } from "./PublishPage";
 import { page as insights } from "./InsightsPage";
 import { page as tasks } from "./TasksPage";
 import { page as sources } from "./SourcesPage";
+import { page as preferences } from "./PreferencesPage";
 import { page as settingsGeneral } from "./SettingsGeneralPage";
 import { page as settingsMembers } from "./SettingsMembersPage";
 import { page as settingsModels } from "./SettingsModelsPage";
@@ -41,6 +42,7 @@ export const PAGES: PageModule<any, any>[] = [
   insights,
   tasks,
   sources,
+  preferences,
   settingsGeneral,
   settingsMembers,
   settingsModels,

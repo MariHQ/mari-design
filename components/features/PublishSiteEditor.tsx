@@ -15,6 +15,8 @@ import { Scrollable } from "../data-display/Scrollable";
 import { ResultCount } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { focusRing } from "../tokens/focusRing";
+import { Link } from "../navigation/Link";
+import { siteUrl } from "../tokens/siteUrl";
 
 /* Publish · Site editor ───────────────────────────────────────────────────
    The per-site editor: a left config Card with four underline tabs
@@ -58,13 +60,15 @@ const TABS: { id: EditorTab; label: string }[] = [
 
 export type PublishSiteEditorProps = {
   site: Site;
+  /** Back out of the editor to the list of sites. */
+  onBack?: () => void;
   /** Which config tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: EditorTab;
   loading?: boolean;
   className?: string;
 };
 
-export function PublishSiteEditor({ site, defaultTab = "theme", loading = false, className = "" }: PublishSiteEditorProps) {
+export function PublishSiteEditor({ site, onBack, defaultTab = "theme", loading = false, className = "" }: PublishSiteEditorProps) {
   const [tab, setTab] = useState<EditorTab>(defaultTab);
   const [theme, setTheme] = useState(THEMES[0]);
   const [accent, setAccent] = useState(THEMES[0].accent);
@@ -127,12 +131,14 @@ export function PublishSiteEditor({ site, defaultTab = "theme", loading = false,
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
       <PageHeader
         title={site.name}
-        backLink={{ href: "#", label: "All sites" }}
+        backLink={{ href: "/publish", label: "All sites", onClick: onBack }}
         actions={
           <>
             <Chip label={site.status === "live" ? "Live" : "Draft"} tone={site.status === "live" ? "ok" : "neutral"} dot pulse={site.status === "live"} caps />
             <span className="font-term text-[12px] text-ink/60 hidden sm:inline">{site.domain}</span>
-            <a href="#" className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink ${focusRing}`}><ExternalLink size={14} /> Open site</a>
+            {site.status === "live" && (
+              <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><ExternalLink size={14} /> Open site</Link>
+            )}
             <Button variant="primary" onClick={deploy}>Deploy</Button>
           </>
         }
@@ -294,7 +300,9 @@ export function PublishSiteEditor({ site, defaultTab = "theme", loading = false,
         <Card variant="flush"
           icon={<span className="relative inline-flex w-2 h-2"><span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" /><span className="relative inline-flex w-2 h-2 rounded-full bg-moss" /></span>}
           title="Live preview" hint={site.domain}
-          actions={<a href="#" className={`inline-flex items-center gap-1 text-[12px] text-biscay-2 hover:text-ink ${focusRing}`}><ExternalLink size={12} /> New tab</a>}
+          actions={site.status === "live"
+            ? <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1 text-[12px] text-biscay-2 hover:text-ink"><ExternalLink size={12} /> New tab</Link>
+            : undefined}
         >
           {dirty && (
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-clay/[0.07] border-b border-clay/25">

@@ -7,6 +7,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { Stepper } from "../data-display/Stepper";
 import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
@@ -16,6 +17,10 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Textarea } from "../forms/Textarea";
 import { SectionLabel } from "../forms/SectionLabel";
+import { Alert } from "../feedback/Alert";
+import { FieldError } from "../feedback/ErrorMessage";
+import { Spinner } from "../data-display/Spinner";
+import { focusRing } from "../tokens/focusRing";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark } from "../icons/marks";
 import { SourcesConnectorCard, type Source } from "../features/SourcesConnectorCard";
@@ -67,8 +72,9 @@ function SplitBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNod
    Credential fields come in already filled so the configure screenshot reads
    populated; the sync counts feed the SyncPanel step. */
 
-/** One credential field on the configure step. */
-export type ConnField = { label: string; value: string; secret?: boolean; help?: string; multiline?: boolean };
+/** One credential field on the configure step. `key` is what the server calls
+    the field; it defaults to the label, which is all a screenshot needs. */
+export type ConnField = { key?: string; label: string; value: string; secret?: boolean; help?: string; multiline?: boolean };
 
 /** The provider being connected, and what its first sync will report. */
 export type Connector = {
@@ -106,6 +112,34 @@ export type FirstSync = {
   error: string;
 };
 
+/** What Sources can DO.
+ *
+ *  Every handler may throw, and the control that called it shows the message
+ *  the server actually sent. That matters more here than anywhere else in the
+ *  console: connecting a source fails for reasons the user can fix ("Bad
+ *  credentials", "Repository acme/docs not found", "Slack is already
+ *  connected"), and flattening those into one house apology would leave a
+ *  workspace stuck at zero documents with no idea why.
+ *
+ *  All optional. With none of them the page keeps the local behaviour the
+ *  library ships, which is what the design canvas renders (CONVENTIONS.md §2). */
+export type SourcesActions = {
+  /** Pre-flight credential check. Answers rather than throws: "not ok" is a
+      normal result of a test, not a broken request. */
+  testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
+  /** Create the source and start its first sync. */
+  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | Promise<void>;
+  /** Ingest files directly, no credentials involved. */
+  uploadFiles?: (files: File[]) => void | Promise<void>;
+  /** Start an incremental sync on an existing source. Long-running: it
+      returns once the server has accepted the run, not once it finishes. */
+  syncNow?: (s: Source) => void | Promise<void>;
+  /** Full rebuild of one source. */
+  fullResync?: (s: Source) => void | Promise<void>;
+  /** Destructive: stops syncing this source. Goes through <ConfirmButton>. */
+  disconnect?: (s: Source) => void | Promise<void>;
+};
+
 /** Everything Sources renders. */
 export type SourcesData = {
   view: SourcesView;
@@ -137,47 +171,72 @@ function DocsLink({ c }: { c: Connector }) {
   );
 }
 
-function ConfigureBody({ c, uploadFiles }: { c: Connector; uploadFiles: string[] }) {
-  if (c.upload) {
-    return (
-      <div>
-        <div className="grid place-items-center gap-2 rounded-md border border-dashed border-ink/25 bg-ink/[0.015] px-4 py-8 text-center">
-          <span className="text-ink/65"><UploadCloud size={30} /></span>
-          <p className="text-[13px] text-ink/70">Drag files here, or <span className="text-biscay-2">browse</span></p>
-          <p className="font-term text-[11px] text-ink/65">PDF · Markdown · Word · text · up to 50 MB each</p>
-        </div>
-        <div className="mt-3">
-          <SectionLabel>Selected files — {uploadFiles.length}</SectionLabel>
-          <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
-            {uploadFiles.map((f) => (
-              <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
-                <FileText size={13} className="text-ink/65" /> {f}
-              </li>
-            ))}
-          </ul>
-        </div>
+const fieldKey = (f: ConnField) => f.key ?? f.label;
+
+/** The drop zone plus a real file picker. Files are handed to the parent, so
+    the same control is a live upload in the app and an inert-but-responsive
+    picker on the canvas. */
+function UploadBody({ chosen, seeded, onChoose }: {
+  chosen: File[]; seeded: string[]; onChoose: (files: File[]) => void;
+}) {
+  const names = chosen.length ? chosen.map((f) => f.name) : seeded;
+  return (
+    <div>
+      <label className={`grid cursor-pointer place-items-center gap-2 rounded-md border border-dashed border-ink/25 bg-ink/[0.015] px-4 py-8 text-center ${focusRing}`}>
+        <input
+          type="file" multiple className="sr-only"
+          accept=".md,.mdx,.markdown,.txt"
+          onChange={(e) => onChoose(Array.from(e.target.files ?? []))}
+        />
+        <span className="text-ink/65"><UploadCloud size={30} /></span>
+        <p className="text-[13px] text-ink/70">Drag files here, or <span className="text-biscay-2">browse</span></p>
+        <p className="font-term text-[11px] text-ink/65">Markdown or text, up to 20 files, 1 MB each</p>
+      </label>
+      <div className="mt-3">
+        <SectionLabel>Selected files — {names.length}</SectionLabel>
+        <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+          {names.map((f) => (
+            <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
+              <FileText size={13} className="text-ink/65" /> <Truncate>{f}</Truncate>
+            </li>
+          ))}
+        </ul>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+function ConfigureBody({ c, values, onChange, tested }: {
+  c: Connector;
+  values: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+  tested: { ok: boolean; error: string } | null;
+}) {
   return (
     <div>
       <p className="mb-1 text-[13px] text-ink/70">{c.blurb} Credentials stay on the server and are never shown again.</p>
       <DocsLink c={c} />
       <div className={`mt-3 ${FORM_GRID}`}>
-        {c.fields.map((f) => (
-          <Field key={f.label} label={f.label}>
-            {f.multiline ? (
-              <Textarea rows={4} className="w-full font-term text-[12px]" readOnly value={f.value} />
-            ) : (
-              <Input className="w-full font-term" type={f.secret ? "password" : "text"} readOnly value={f.value} />
-            )}
-            {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
-          </Field>
-        ))}
+        {c.fields.map((f) => {
+          const k = fieldKey(f);
+          return (
+            <Field key={k} label={f.label}>
+              {f.multiline ? (
+                <Textarea rows={4} className="w-full font-term text-[12px]" value={values[k] ?? ""} onChange={(e) => onChange(k, e.target.value)} />
+              ) : (
+                <Input className="w-full font-term" type={f.secret ? "password" : "text"} value={values[k] ?? ""} onChange={(e) => onChange(k, e.target.value)} />
+              )}
+              {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
+            </Field>
+          );
+        })}
       </div>
-      <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
-        <CheckCircle2 size={14} /> Connection OK — credentials verified.
-      </div>
+      {tested?.ok && (
+        <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
+          <CheckCircle2 size={14} /> Connection OK. Credentials verified.
+        </div>
+      )}
+      {tested && !tested.ok && <FieldError>{tested.error}</FieldError>}
     </div>
   );
 }
@@ -198,9 +257,61 @@ function connectorSyncSource(c: Connector, phase: "sync" | "done"): SyncSource {
   };
 }
 
-function ConnectFlow({ c, phase, uploadFiles }: { c: Connector; phase: ConnectPhase; uploadFiles: string[] }) {
-  const stepIdx = phase === "configure" ? 1 : 2;
-  const configuring = phase === "configure";
+function ConnectFlow({ c, phase, uploadFiles, actions }: {
+  c: Connector; phase: ConnectPhase; uploadFiles: string[]; actions?: SourcesActions;
+}) {
+  /* Credential values are local: they are typed here, and the data only ever
+     seeds them. Fields used to be `readOnly` against `data`, so the configure
+     step could be screenshotted but never completed. */
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(c.fields.map((f) => [fieldKey(f), f.value])));
+  const [chosen, setChosen] = useState<File[]>([]);
+  const [tested, setTested] = useState<{ ok: boolean; error: string } | null>(null);
+  const [busy, setBusy] = useState<null | "test" | "connect">(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  /* The user has fired Connect and the server accepted: the flow moves to its
+     sync step on its own, rather than waiting for a route change it may never
+     get. `null` means "whatever the data says". */
+  const [live, setLive] = useState<ConnectPhase | null>(null);
+
+  const effective = live ?? phase;
+  const stepIdx = effective === "configure" ? 1 : 2;
+  const configuring = effective === "configure";
+
+  const test = async () => {
+    if (!actions?.testConnection || busy) return;
+    setBusy("test");
+    setFailed(null);
+    try {
+      const r = await actions.testConnection({ provider: c.key, config: values });
+      setTested({ ok: r.ok, error: r.error ?? "Validation failed without details." });
+    } catch (err) {
+      setTested({ ok: false, error: err instanceof Error ? err.message : "The connection test failed." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const connect = async () => {
+    if (busy) return;
+    const run = c.upload
+      ? (actions?.uploadFiles ? () => actions.uploadFiles!(chosen) : null)
+      : (actions?.connectSource ? () => actions.connectSource!({ provider: c.key, config: values }) : null);
+    if (!run) return; // canvas: no server behind the page
+    setBusy("connect");
+    setFailed(null);
+    try {
+      await run();
+      setLive("sync");
+    } catch (err) {
+      // Verbatim: "Bad credentials" and "Repository not found" are the whole
+      // point of this message.
+      setFailed(err instanceof Error ? err.message : "The source could not be connected.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="min-w-0">
       <div className={`${card} p-5`}>
@@ -210,7 +321,7 @@ function ConnectFlow({ c, phase, uploadFiles }: { c: Connector; phase: ConnectPh
             <Truncate as="h3" className="text-[16px] font-semibold text-ink" title={`Connect ${c.name}`}>Connect {c.name}</Truncate>
             <Truncate className="text-[12.5px] text-ink/60">{c.blurb}</Truncate>
           </div>
-          <Chip className="ml-auto" label={configuring ? "Step 2 of 3" : phase === "done" ? "Synced" : "Syncing"} tone={phase === "done" ? "ok" : configuring ? "neutral" : "info"} dot />
+          <Chip className="ml-auto" label={configuring ? "Step 2 of 3" : effective === "done" ? "Synced" : "Syncing"} tone={effective === "done" ? "ok" : configuring ? "neutral" : "info"} dot />
         </div>
 
         <div className="mt-5"><Stepper labels={["Choose source", "Configure", "Sync"]} current={stepIdx} ariaLabel="Connector setup progress" /></div>
@@ -218,21 +329,35 @@ function ConnectFlow({ c, phase, uploadFiles }: { c: Connector; phase: ConnectPh
         <div className="mt-5 min-h-[200px]">
           {/* Phase tracker lives in the 320px rail (§11) so the panel below can
               run the full width of the main column. */}
-          {configuring ? <ConfigureBody c={c} uploadFiles={uploadFiles} /> : <SyncPanel sources={[connectorSyncSource(c, phase)]} />}
+          {configuring
+            ? (c.upload
+                ? <UploadBody chosen={chosen} seeded={uploadFiles} onChoose={setChosen} />
+                : <ConfigureBody c={c} values={values} onChange={(k, v) => { setValues((s) => ({ ...s, [k]: v })); setTested(null); }} tested={tested} />)
+            : <SyncPanel sources={[connectorSyncSource(c, effective === "done" ? "done" : "sync")]} />}
         </div>
+
+        {failed && <div className="mt-4"><Alert tone="blocked" title="Could not connect">{failed}</Alert></div>}
 
         {/* Primary bottom LEFT, secondaries to its right (§2). */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-4">
           {configuring ? (
             <>
-              <Button variant="primary">Connect &amp; sync <ArrowRight size={14} /></Button>
-              <Button><ShieldCheck size={13} /> Test connection</Button>
+              <Button variant="primary" disabled={busy !== null} onClick={() => void connect()}>
+                {busy === "connect"
+                  ? <><Spinner size="sm" /> Connecting…</>
+                  : <>{c.upload ? "Upload & sync" : "Connect & sync"} <ArrowRight size={14} /></>}
+              </Button>
+              {!c.upload && (
+                <Button disabled={busy !== null} onClick={() => void test()}>
+                  {busy === "test" ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={13} /> Test connection</>}
+                </Button>
+              )}
             </>
-          ) : phase === "done" ? (
+          ) : effective === "done" ? (
             <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
           ) : null}
-          <Button disabled={configuring}>Back</Button>
-          {!configuring && phase !== "done" && (
+          <Button disabled={configuring} onClick={() => setLive("configure")}>Back</Button>
+          {!configuring && effective !== "done" && (
             <span className="text-[12px] text-ink/65">Sync continues in the background.</span>
           )}
         </div>
@@ -335,17 +460,87 @@ function SourcesRail({ data }: { data: SourcesData }) {
   );
 }
 
+/* ── Add-source toolbar ────────────────────────────────────────────────────
+   The server's catalog returns two entries with no credential fields, because
+   neither is configured with credentials: GitHub is picked by repository, and
+   Upload takes files. A wizard step that asks for nothing and then connects
+   nothing is the worst kind of dead control, so the two are shaped here. */
+
+/** GitHub's one required setting. Not credentials: the token is server-side
+    already, and this names which repository to read. */
+const GITHUB_FIELDS = [{
+  key: "repo", label: "Repository", placeholder: "owner/name",
+  help: "Any repository this workspace's GitHub token can read.",
+}];
+
+function wizardCatalog(catalog: WizardProviderSpec[], hasUpload: boolean): WizardProviderSpec[] {
+  return catalog
+    // Upload takes files, not a credential form, so it moves out of the
+    // wizard and onto its own control — but only once that control exists.
+    .filter((p) => !(hasUpload && p.key === "upload"))
+    .map((p) => (p.key === "github" && p.fields.length === 0 ? { ...p, fields: GITHUB_FIELDS } : p));
+}
+
+/** Files straight into the ingest pipeline. Sits beside "Add source" because
+    it is the same intent with no credentials attached. */
+function UploadSourceButton({ onUpload }: { onUpload: (files: File[]) => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [added, setAdded] = useState(0);
+
+  const choose = async (files: File[]) => {
+    if (files.length === 0) return;
+    setBusy(true);
+    setFailed(null);
+    try {
+      await onUpload(files);
+      setAdded(files.length);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "Those files could not be ingested.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-w-0">
+      <label className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper px-3 text-[13px] font-medium text-ink/80 hover:border-ink/45 ${focusRing}`}>
+        <input type="file" multiple className="sr-only" accept=".md,.mdx,.markdown,.txt"
+          onChange={(e) => void choose(Array.from(e.target.files ?? []))} />
+        {busy ? <><Spinner size="sm" /> Uploading…</> : <><UploadCloud size={14} /> Upload files</>}
+      </label>
+      {failed && <FieldError>{failed}</FieldError>}
+      {!failed && added > 0 && (
+        <p className="mt-1 text-right text-[12px] text-moss">{added} file{added === 1 ? "" : "s"} ingested into Uploads.</p>
+      )}
+    </div>
+  );
+}
+
 /** A workspace with nothing connected at all. Derived from the data. */
 function isEmpty(d: SourcesData): boolean {
   return d.sources.length === 0 && d.connector === null && d.view === "grid";
 }
 
-function Body({ data, error, tab }: { data: SourcesData; error: string | null; tab: Tab }): ReactNode {
+function Body({ data, error, tab, actions }: {
+  data: SourcesData; error: string | null; tab: Tab; actions?: SourcesActions;
+}): ReactNode {
   if (error) return <EmptyState title="API offline">{error}</EmptyState>;
-  if (isEmpty(data)) return <EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState>;
+  if (isEmpty(data)) {
+    /* A workspace with nothing connected is the one state where the empty box
+       must not be a dead end: the wizard is the whole path out of it. */
+    return (
+      <EmptyState
+        title="No sources connected yet"
+        action={<SourcesConnectorWizard defaultOpen={false} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />}
+      >
+        Connect GitHub or another source to start building your knowledge base.
+      </EmptyState>
+    );
+  }
 
   if (data.view === "connect" && data.connector) {
-    return <ConnectFlow c={data.connector} phase={data.connectPhase} uploadFiles={data.uploadFiles} />;
+    return <ConnectFlow c={data.connector} phase={data.connectPhase} uploadFiles={data.uploadFiles} actions={actions} />;
   }
   if (data.view === "sync-status") {
     return <SyncPanel sources={[syncPhaseSource(data.firstSync, data.syncPhase)]} onRetry={() => {}} />;
@@ -357,16 +552,17 @@ function Body({ data, error, tab }: { data: SourcesData; error: string | null; t
   // grid / wizard → connectors grid
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex justify-end">
-        <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={data.catalog} />
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
+        <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
       </div>
-      <SourcesConnectorCard sources={data.sources} />
+      <SourcesConnectorCard sources={data.sources} actions={actions} />
       <SourcesSyncStatus animate={false} />
     </div>
   );
 }
 
-function SourcesPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SourcesData>) {
+function SourcesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SourcesData, SourcesActions>) {
   const [tab, setTab] = useState<Tab>(data.view === "bots" ? "bots" : "connectors");
   const pinned = data.view === "connect" || data.view === "sync-status";
   const bare = error !== null || isEmpty(data);
@@ -380,7 +576,7 @@ function SourcesPage({ data, loading = false, error = null, chrome, mobile = fal
   }
 
   return (
-    <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
       <div className={PAGE}>
         <PageHeader
           eyebrow="Settings"
@@ -388,14 +584,20 @@ function SourcesPage({ data, loading = false, error = null, chrome, mobile = fal
           description="Bring every product conversation into one trusted library."
           icon={<span className="text-moss"><Layers size={24} /></span>}
         />
+        {/* Sources IS one of the Settings tabs, so it carries the same row as
+            the five settings/* pages — without it this page is reachable from
+            Settings and has no way back. The page's own sections drop to the
+            segmented variant so the two rows read as page-level and in-page
+            rather than as two competing navigations. */}
+        <div className="mt-5"><SettingsTabs active="sources" onNavigate={chrome?.onNavigate} /></div>
         {!bare && (
-          <div className="mt-5">
-            <Tabs<Tab> ariaLabel="Sources sections" variant="underline" options={TAB_OPTIONS} value={pinned ? "connectors" : tab} onChange={setTab} />
+          <div className="mt-4">
+            <Tabs<Tab> ariaLabel="Sources sections" variant="seg" options={TAB_OPTIONS} value={pinned ? "connectors" : tab} onChange={setTab} />
           </div>
         )}
         <div className="mt-6">
           <SplitBody mobile={mobile} rail={<SourcesRail data={data} />}>
-            <Body data={data} error={error} tab={tab} />
+            <Body data={data} error={error} tab={tab} actions={actions} />
           </SplitBody>
         </div>
       </div>
@@ -403,7 +605,7 @@ function SourcesPage({ data, loading = false, error = null, chrome, mobile = fal
   );
 }
 
-export const page: PageModule<SourcesData> = {
+export const page: PageModule<SourcesData, SourcesActions> = {
   id: "sources",
   title: "Sources & connectors",
   route: "/sources",

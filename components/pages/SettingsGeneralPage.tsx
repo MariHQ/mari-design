@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Tag, Clock, ArrowRight, Settings, AlertTriangle, Trash2 } from "lucide-react";
-import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -16,6 +16,8 @@ import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { BrandingEditor, type Branding, type BrandHarvest, type BrandPreviewStat } from "../features/BrandingEditor";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 
 /* Settings → General (pages/settings-general.md). Workspace identity form
@@ -44,6 +46,21 @@ const STATES = [
 /** Which sub-section of General is on screen. */
 export type GeneralSection = "workspace" | "branding";
 
+/** The workspace identity record the form submits. */
+export type WorkspaceIdentity = {
+  name: string; slug: string; plan: string; timezone: string; language: string;
+};
+
+/** What Settings → General can do.
+
+    There is deliberately no handler behind the danger zone: transferring or
+    deleting a workspace has no endpoint, and a button that pretends to is
+    worse than one that says nothing. Those controls stay local, and the page
+    only offers them when `data.danger` says the viewer owns the workspace. */
+export type SettingsGeneralActions = {
+  saveWorkspace?: (w: WorkspaceIdentity) => void | Promise<void>;
+};
+
 /** Where the save of the identity form has got to. Validation is NOT a mode:
     it is derived from the field errors the server sent back. */
 export type SaveState = "clean" | "dirty" | "saving" | "saved";
@@ -71,31 +88,6 @@ export type SettingsGeneralData = {
   brandPreviewStats: BrandPreviewStat[];
 };
 
-type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
-
-const SETTINGS_TABS: TabOption<SettingsTab>[] = [
-  { id: "general", label: "General" },
-  { id: "members", label: "Members" },
-  { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
-  { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Audit log" },
-  { id: "design", label: "Design & brand" },
-];
-
-function SettingsTabs({ active }: { active: SettingsTab }) {
-  const [value, setValue] = useState<SettingsTab>(active);
-  return (
-    <Tabs
-      ariaLabel="Workspace settings"
-      variant="underline"
-      options={SETTINGS_TABS}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Every Settings page shares these three constants so the container edge, the
@@ -113,7 +105,14 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
   );
 }
 
-function LinkCard({ icon, title, blurb, cta }: { icon: ReactNode; title: string; blurb: string; cta: string }) {
+/* A sign-post to a feature that used to live in Settings. The whole point of
+   the card is the jump, so `to` is required: a LinkCard with nowhere to go is
+   a paragraph with a button-shaped decoration on it, which is what these two
+   were. */
+function LinkCard({ icon, title, blurb, cta, to, onNavigate }: {
+  icon: ReactNode; title: string; blurb: string; cta: string;
+  to: string; onNavigate?: (pageId: string) => void;
+}) {
   return (
     <Card>
       <div className="flex items-start gap-3">
@@ -124,7 +123,7 @@ function LinkCard({ icon, title, blurb, cta }: { icon: ReactNode; title: string;
         </div>
       </div>
       <div className="mt-3">
-        <Button variant="default" compact>
+        <Button variant="default" compact onClick={() => onNavigate?.(to)}>
           <ArrowRight size={15} /> {cta}
         </Button>
       </div>
@@ -132,47 +131,88 @@ function LinkCard({ icon, title, blurb, cta }: { icon: ReactNode; title: string;
   );
 }
 
-function WorkspaceForm({ data }: { data: SettingsGeneralData }) {
-  const { save, slugError } = data;
+/* An option list has to be able to show a value the server already holds, even
+   one this build has no label for: a timezone of "America/Los_Angeles" used to
+   render as UTC because it matched no <option>, so the form silently misstated
+   the workspace and saving it would have overwritten the real value. */
+function withCurrent(options: { value: string; label: string }[], current: string) {
+  if (!current || options.some((o) => o.value === current)) return options;
+  return [{ value: current, label: current }, ...options];
+}
+
+const PLANS = [
+  { value: "free", label: "Free" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" },
+];
+const TIMEZONES = [
+  { value: "utc", label: "UTC" },
+  { value: "pt", label: "America/Los_Angeles" },
+  { value: "et", label: "America/New_York" },
+];
+const LANGUAGES = [
+  { value: "en", label: "English" }, { value: "es", label: "Español" }, { value: "de", label: "Deutsch" },
+];
+
+/* Controlled, because the values have to leave the form. They were
+   `defaultValue` on inputs inside a card whose Save button had no handler at
+   all, so the whole form was a picture of itself. */
+function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?: SettingsGeneralActions }) {
+  const { slugError } = data;
+  const [name, setName] = useState(data.name);
+  const [slug, setSlug] = useState(data.slug);
+  const [plan, setPlan] = useState(data.plan);
+  const [timezone, setTimezone] = useState(data.timezone);
+  const [language, setLanguage] = useState(data.language);
+  const write = useWrite();
+  /* Whether there is anything to save is derived from the fields against what
+     the server sent, not from a mode: the two cannot disagree. `data.save` is
+     still honoured, because the canvas drives the lifecycle through it. */
+  const dirty = name !== data.name || slug !== data.slug || plan !== data.plan
+    || timezone !== data.timezone || language !== data.language;
+  const [justSaved, setJustSaved] = useState(false);
+  const save = write.busy ? "saving" : justSaved ? "saved" : dirty ? "dirty" : data.save;
   const invalid = slugError !== null;
+
+  const submit = () => write.run(
+    actions?.saveWorkspace && (() => actions.saveWorkspace!({ name, slug, plan, timezone, language })),
+    () => { setJustSaved(true); window.setTimeout(() => setJustSaved(false), 2000); },
+  );
+
   return (
     <Card title="Workspace" eyebrow="Identity" hint="Workspace identity and language.">
       <div className={FORM_GRID}>
         <Field label="Workspace name">
-          <Input defaultValue={data.name} className="w-full" />
+          <Input value={name} onChange={(e) => { setName(e.target.value); setJustSaved(false); }} className="w-full" />
         </Field>
         <Field label="Slug">
           <Input
-            defaultValue={data.slug}
+            value={slug}
+            onChange={(e) => { setSlug(e.target.value); setJustSaved(false); }}
             className={`w-full font-term ${invalid ? "border-espelette ring-1 ring-espelette/40" : ""}`.trim()}
             aria-invalid={invalid || undefined}
           />
           {invalid && <p className="mt-1 text-[12px] text-espelette">{slugError}</p>}
         </Field>
         <Field label="Plan">
-          <Select defaultValue={data.plan} className="w-full">
-            <option value="free">Free</option>
-            <option value="team">Team</option>
-            <option value="enterprise">Enterprise</option>
+          <Select value={plan} onChange={(e) => { setPlan(e.target.value); setJustSaved(false); }} className="w-full">
+            {withCurrent(PLANS, data.plan).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </Field>
         <Field label="Timezone">
-          <Select defaultValue={data.timezone} className="w-full">
-            <option value="utc">UTC</option>
-            <option value="pt">America/Los_Angeles</option>
-            <option value="et">America/New_York</option>
+          <Select value={timezone} onChange={(e) => { setTimezone(e.target.value); setJustSaved(false); }} className="w-full">
+            {withCurrent(TIMEZONES, data.timezone).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </Field>
         <Field label="Language">
-          <Select defaultValue={data.language} className="w-full">
-            <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="de">Deutsch</option>
+          <Select value={language} onChange={(e) => { setLanguage(e.target.value); setJustSaved(false); }} className="w-full">
+            {withCurrent(LANGUAGES, data.language).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </Field>
       </div>
+      {write.failed && (
+        <div className="mt-4"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+      )}
       <div className="mt-5 flex items-center gap-3 border-t border-ink/10 pt-4">
-        <Button variant="primary" disabled={save === "clean" || save === "saved" || save === "saving" || invalid}>
+        <Button variant="primary" disabled={save === "clean" || save === "saved" || save === "saving" || invalid} onClick={() => void submit()}>
           {save === "saving" ? "Saving…" : "Save changes"}
         </Button>
         {save === "clean" && !invalid && <span className="text-[12.5px] text-moss">All changes saved</span>}
@@ -215,19 +255,19 @@ function DangerZone() {
 /* Supporting rail (§11, 320px). Carries the read-only summary plus the two
    sign-post cards for features that moved out of Settings, so the main column
    is a single full-width form instead of a half-empty one. */
-function GeneralRail({ summary }: { summary: PropertyItem[] }) {
+function GeneralRail({ summary, onNavigate }: { summary: PropertyItem[]; onNavigate?: (pageId: string) => void }) {
   return (
     <>
       <Card title="At a glance" hint="Read only">
         <PropertyList items={summary} />
       </Card>
-      <LinkCard icon={<Tag size={18} />} title="Editorial library" blurb="Tags, glossary, and style guides now live in the Library." cta="Open Library" />
-      <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Flows (cross-cluster runs)." cta="Open Flows" />
+      <LinkCard icon={<Tag size={18} />} title="Editorial library" blurb="Tags, glossary, and style guides now live in the Library." cta="Open Library" to="library" onNavigate={onNavigate} />
+      <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Flows (cross-cluster runs)." cta="Open Flows" to="flows" onNavigate={onNavigate} />
     </>
   );
 }
 
-function Body({ data, error }: { data: SettingsGeneralData; error: string | null }) {
+function Body({ data, error, actions }: { data: SettingsGeneralData; error: string | null; actions?: SettingsGeneralActions }) {
   if (error) {
     return (
       <EmptyState icon={<Settings size={22} />} title="API offline">{error}</EmptyState>
@@ -245,13 +285,13 @@ function Body({ data, error }: { data: SettingsGeneralData; error: string | null
   return (
     <>
       {data.save === "saved" && <Alert tone="ok" title="Workspace saved">Your identity changes are live for all members.</Alert>}
-      <WorkspaceForm data={data} />
+      <WorkspaceForm data={data} actions={actions} />
       {data.danger && <DangerZone />}
     </>
   );
 }
 
-function SettingsGeneralPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsGeneralData>) {
+function SettingsGeneralPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsGeneralData, SettingsGeneralActions>) {
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -259,9 +299,9 @@ function SettingsGeneralPage({ data, loading = false, error = null, chrome, mobi
       ) : (
         <div className={PAGE}>
           <PageHeader eyebrow="Settings" title="Workspace" description="Workspace identity and language." />
-          <div className="mt-5"><SettingsTabs active="general" /></div>
-          <SettingsBody mobile={mobile} rail={<GeneralRail summary={data.summary} />}>
-            <Body data={data} error={error} />
+          <div className="mt-5"><SettingsTabs active="general" onNavigate={chrome?.onNavigate} /></div>
+          <SettingsBody mobile={mobile} rail={<GeneralRail summary={data.summary} onNavigate={chrome?.onNavigate} />}>
+            <Body data={data} error={error} actions={actions} />
           </SettingsBody>
         </div>
       )}
@@ -269,7 +309,7 @@ function SettingsGeneralPage({ data, loading = false, error = null, chrome, mobi
   );
 }
 
-export const page: PageModule<SettingsGeneralData> = {
+export const page: PageModule<SettingsGeneralData, SettingsGeneralActions> = {
   id: "settings-general",
   title: "Settings · General",
   route: "/settings/general",

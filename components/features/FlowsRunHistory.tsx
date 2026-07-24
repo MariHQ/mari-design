@@ -6,7 +6,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonTable, SkeletonCard } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { type WorkflowRun, type RunStatus } from "../workflow/RunHistory";
-import { RUN_CHIP, RunStatusChips, RunInspector } from "./FlowsRunPanel";
+import { RUN_CHIP, RunStatusChips, RunInspector, type FlowsRunActions } from "./FlowsRunPanel";
 import { card } from "../tokens/card";
 import { fmtDate } from "../tokens/format";
 
@@ -153,14 +153,32 @@ export type FlowsRunHistoryProps = {
   runs: WorkflowRun[];
   /** Cap on rows, newest first. */
   limit?: number;
+  /** Side effects the inspector offers. Omitted = read-only history. */
+  actions?: FlowsRunActions;
   /** Render a content-shaped skeleton silhouette instead of the history. */
   loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunHistory({ runs, limit = 12, loading = false, className = "" }: FlowsRunHistoryProps) {
+export function FlowsRunHistory({ runs, limit = 12, actions, loading = false, className = "" }: FlowsRunHistoryProps) {
   const [selId, setSelId] = useState<string | null>(runs[0]?.id ?? null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const selected = selId ? runs.find((r) => r.id === selId) ?? null : null;
+
+  const approve = async (r: WorkflowRun) => {
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions!.approveRun!(r.id);
+      setNote(`Approved run #${r.number}: the run is resuming.`);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : `Could not approve run #${r.number}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -194,7 +212,14 @@ export function FlowsRunHistory({ runs, limit = 12, loading = false, className =
       <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_380px]">
         <FlowRunsTable runs={runs} limit={limit} selectedId={selId} onSelect={(r) => setSelId(r.id)} />
         <div className="lg:sticky lg:top-4">
-          <RunInspector run={selected} onClose={() => setSelId(null)} />
+          <RunInspector
+            run={selected}
+            onClose={() => { setSelId(null); setNote(null); setFailed(null); }}
+            onApprove={actions?.approveRun ? (r) => void approve(r) : undefined}
+            busy={busy}
+            note={note}
+            error={failed}
+          />
         </div>
       </div>
     </div>

@@ -16,6 +16,10 @@ import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton } from "../data-di
    upsertGlossary are baked in. Standalone in the "Start" state. */
 
 export type Candidate = {
+  /** The stored candidate row, when the harvester persisted one. Promoting a
+      candidate by id is a different operation from inserting a term someone
+      typed, so the two must stay distinguishable. */
+  id?: number;
   term: string;
   definition: string;
   /** Where the term was found, e.g. the document title. */
@@ -34,24 +38,61 @@ export type WelcomeGlossaryStepProps = {
   llm?: boolean;
   /** Open straight into a given step (used by the state gallery). */
   defaultMode?: Mode;
+  /** Run the real harvest. Throws on failure; the caller shows the message.
+      Returning the fresh candidate list is what makes the scan visible: the
+      page's own read is already in flight-free cache, so a scan that only
+      wrote to the server would look like it found nothing.
+      Omitted: the local walk-through below, so the button is never inert. */
+  onScan?: () => void | Promise<Candidate[] | void> | Candidate[];
+  /** Save the candidates the user kept. Throws on failure. */
+  onAdd?: (picked: Candidate[]) => void | Promise<void>;
   loading?: boolean;
   className?: string;
 };
 
-export function WelcomeGlossaryStep({ candidates, llm = true, defaultMode = "start", loading = false, className = "" }: WelcomeGlossaryStepProps) {
+export function WelcomeGlossaryStep({ candidates: given, llm = true, defaultMode = "start", onScan, onAdd, loading = false, className = "" }: WelcomeGlossaryStepProps) {
   const [mode, setMode] = useState<Mode>(defaultMode);
-  const [checked, setChecked] = useState<Set<string>>(new Set(defaultMode === "review" ? candidates.map((c) => c.term) : []));
+  /* A scan that returned rows replaces the list this step was handed. */
+  const [scanned, setScanned] = useState<Candidate[] | null>(null);
+  const candidates = scanned ?? given;
+  const [checked, setChecked] = useState<Set<string>>(new Set(defaultMode === "review" ? given.map((c) => c.term) : []));
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [addResult, setAddResult] = useState<{ ok: number; failed: number } | null>(null);
   const [addedThisSession, setAddedThisSession] = useState(0);
 
+  /* The candidate list is the server's, and the harvest replaces it. Without
+     this the review step kept showing the batch it mounted with, so a scan
+     that really did find new terms looked like it found nothing. */
+  const [seen, setSeen] = useState(given);
+  if (seen !== given) {
+    setSeen(given);
+    setScanned(null);
+    if (mode === "review") setChecked(new Set(given.map((c) => c.term)));
+  }
+
   const scan = () => {
     setMode("scanning");
     setAddResult(null);
-    window.setTimeout(() => {
-      setChecked(new Set(candidates.map((c) => c.term)));
-      setMode("review");
-    }, 1400);
+    if (!onScan) {
+      window.setTimeout(() => {
+        setChecked(new Set(candidates.map((c) => c.term)));
+        setMode("review");
+      }, 1400);
+      return;
+    }
+    void (async () => {
+      let next = candidates;
+      try {
+        const out = await onScan();
+        if (Array.isArray(out)) { setScanned(out); next = out; }
+      } catch {
+        /* The caller renders the message; this step just stops pretending to
+           work. */
+      } finally {
+        setChecked(new Set(next.map((c) => c.term)));
+        setMode("review");
+      }
+    })();
   };
 
   const toggle = (term: string) =>
@@ -65,6 +106,21 @@ export function WelcomeGlossaryStep({ candidates, llm = true, defaultMode = "sta
     const picked = candidates.filter((c) => checked.has(c.term));
     setProgress({ done: 0, total: picked.length });
     setMode("adding");
+    if (onAdd) {
+      void (async () => {
+        try {
+          await onAdd(picked);
+          setAddedThisSession((n) => n + picked.length);
+          setAddResult({ ok: picked.length, failed: 0 });
+        } catch {
+          setAddResult({ ok: 0, failed: picked.length });
+        } finally {
+          setProgress({ done: picked.length, total: picked.length });
+          setMode("start");
+        }
+      })();
+      return;
+    }
     let i = 0;
     const step = () => {
       i += 1;
@@ -183,7 +239,11 @@ export function WelcomeGlossaryStep({ candidates, llm = true, defaultMode = "sta
     <div className={`${card} p-6 text-center ${className}`.trim()}>
       <span className="grid place-items-center mx-auto w-10 h-10 rounded-full border border-ink/15 text-ink/60 mb-3"><BookOpen size={20} /></span>
       <h2 className="text-[15px] font-semibold text-ink">Fill glossary</h2>
-      {addResult ? (
+      {addResult && addResult.failed > 0 ? (
+        <p className="mt-1 inline-flex items-center justify-center gap-1.5 text-[13.5px] text-espelette">
+          <AlertTriangle size={15} /> None of the {addResult.failed} term{addResult.failed === 1 ? " was" : "s were"} saved. The detail is above.
+        </p>
+      ) : addResult ? (
         <p className="mt-1 text-[13.5px] text-moss inline-flex items-center gap-1.5 justify-center">
           <CheckCircle2 size={15} /> Added {addResult.ok} term{addResult.ok === 1 ? "" : "s"} to your glossary.
         </p>

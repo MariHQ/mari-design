@@ -2,9 +2,10 @@ import { useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { AnswerCard, type Answer } from "../features/AnswerCard";
-import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
+import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
+import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { FieldError } from "../feedback/ErrorMessage";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
@@ -69,6 +70,19 @@ export type AnswersPane =
   | { kind: "coverage" }
   | { kind: "harvest"; harvest: Harvest };
 
+/** What the Answers page can DO. Per-card writes come from `AnswerActions`;
+    `create` is this page's own, behind "New answer" and "Draft answer".
+
+    Optional, as always: with no actions the composer still opens and the cards
+    still respond locally, which is what the design canvas renders. */
+export type AnswersActions = AnswerActions & {
+  /** Save a new answer. It lands as a draft until someone approves it. */
+  create?: (args: { question: string; answer: string }) => void | Promise<void>;
+};
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+
 /** Everything the Answers page renders. */
 export type AnswersData = {
   stats: AnswerStat[];
@@ -97,7 +111,9 @@ const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
   history: <Sparkles size={18} />,
 };
 
-function AnswersList({ data, error }: { data: AnswersData; error: string | null }) {
+function AnswersList({ data, error, actions, onCompose }: {
+  data: AnswersData; error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
+}) {
   if (error) {
     return (
       <Card>
@@ -108,7 +124,7 @@ function AnswersList({ data, error }: { data: AnswersData; error: string | null 
   if (isEmpty(data)) {
     return (
       <Card>
-        <EmptyState title="No answers yet" action={<Button variant="primary" compact><Plus size={14} /> New answer</Button>}>
+        <EmptyState title="No answers yet" action={<Button variant="primary" compact onClick={() => onCompose("")}><Plus size={14} /> New answer</Button>}>
           Approve your first answer so bots can serve it verbatim.
         </EmptyState>
       </Card>
@@ -123,7 +139,7 @@ function AnswersList({ data, error }: { data: AnswersData; error: string | null 
     };
     return (
       <Card>
-        <EmptyState title="Nothing here" action={<Button variant="primary" compact><Plus size={14} /> New answer</Button>}>
+        <EmptyState title="Nothing here" action={<Button variant="primary" compact onClick={() => onCompose("")}><Plus size={14} /> New answer</Button>}>
           {copy[data.filter]}
         </EmptyState>
       </Card>
@@ -131,14 +147,14 @@ function AnswersList({ data, error }: { data: AnswersData; error: string | null 
   }
   return (
     <div className="flex flex-col gap-5">
-      {data.answers.map((a) => <AnswerCard key={a.id} answer={a} />)}
+      {data.answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
     </div>
   );
 }
 
 function CoverageCard({
-  questions, error, extended = false,
-}: { questions: string[]; error: string | null; extended?: boolean }) {
+  questions, error, extended = false, onCompose,
+}: { questions: string[]; error: string | null; extended?: boolean; onCompose: (question: string) => void }) {
   const qs = extended ? questions : questions.slice(0, 2);
   return (
     <Card>
@@ -155,7 +171,7 @@ function CoverageCard({
               <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink/65">
                 <MessageSquare size={12} /> from chat logs
               </div>
-              <Button variant="link" compact className="mt-1.5">Draft answer</Button>
+              <Button variant="link" compact className="mt-1.5" onClick={() => onCompose(q)}>Draft answer</Button>
             </div>
           ))}
         </div>
@@ -180,13 +196,69 @@ function HowServingWorks() {
 /* The rail. Every card in it shares the rail's left and right edge (§11), so
    no card carries its own max-width. */
 function CoverageRail({
-  questions, error, withCoverage,
-}: { questions: string[]; error: string | null; withCoverage: boolean }) {
+  questions, error, withCoverage, onCompose,
+}: { questions: string[]; error: string | null; withCoverage: boolean; onCompose: (question: string) => void }) {
   return (
     <div className="flex flex-col gap-5">
-      {withCoverage && <CoverageCard questions={questions} error={error} />}
+      {withCoverage && <CoverageCard questions={questions} error={error} onCompose={onCompose} />}
       <HowServingWorks />
     </div>
+  );
+}
+
+/* The composer sits at the top of the main column, opened by "New answer" or
+   by "Draft answer" on a coverage gap — which prefills the question, so the
+   uncovered question and the answer to it are never retyped apart.
+
+   Fields first, primary action bottom left (§2). */
+function NewAnswer({ question: initial, actions, onClose }: {
+  question: string; actions?: AnswersActions; onClose: () => void;
+}) {
+  const [question, setQuestion] = useState(initial);
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    if (!question.trim() || !answer.trim() || busy) return;
+    if (!actions?.create) { setSaved(true); return; }
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions.create({ question: question.trim(), answer: answer.trim() });
+      setSaved(true);
+    } catch (e) {
+      setFailed(why(e, "That answer could not be saved."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <div className="mb-2 text-[14px] font-semibold text-ink">New answer</div>
+      {saved ? (
+        <>
+          <p className="text-[13px] text-ink/70">
+            Saved as a draft. Approve it below and bots will serve this wording verbatim.
+          </p>
+          <div className="mt-3"><Button variant="primary" compact onClick={onClose}>Done</Button></div>
+        </>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <Input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Question people ask" />
+          <Textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="The wording to serve, verbatim" />
+          <FieldError>{failed}</FieldError>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" compact disabled={busy || !question.trim() || !answer.trim()} onClick={save}>
+              {busy ? "Saving…" : "Save draft"}
+            </Button>
+            <Button compact disabled={busy} onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -290,7 +362,13 @@ function HarvestPreview({ harvest }: { harvest: Harvest }) {
   );
 }
 
-function Body({ data, error, mobile }: { data: AnswersData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile, composing, onCompose, onCloseComposer }: {
+  data: AnswersData; error: string | null; actions?: AnswersActions; mobile: boolean;
+  /** The question the composer opened on, or null when it is closed. */
+  composing: string | null;
+  onCompose: (question: string) => void;
+  onCloseComposer: () => void;
+}) {
   const [filter, setFilter] = useState<AnswersFilter>(data.filter);
 
   const isCoverage = data.pane.kind === "coverage";
@@ -300,7 +378,7 @@ function Body({ data, error, mobile }: { data: AnswersData; error: string | null
   const main = data.pane.kind === "harvest" ? (
     <HarvestPreview harvest={data.pane.harvest} />
   ) : isCoverage ? (
-    <CoverageCard questions={data.coverage} error={error} extended />
+    <CoverageCard questions={data.coverage} error={error} extended onCompose={onCompose} />
   ) : (
     <div className="flex flex-col gap-5">
       <Tabs
@@ -317,7 +395,7 @@ function Body({ data, error, mobile }: { data: AnswersData; error: string | null
           { id: "retired", label: "Retired" },
         ]}
       />
-      <AnswersList data={{ ...data, filter }} error={error} />
+      <AnswersList data={{ ...data, filter }} error={error} actions={actions} onCompose={onCompose} />
     </div>
   );
 
@@ -332,20 +410,32 @@ function Body({ data, error, mobile }: { data: AnswersData; error: string | null
       </div>
 
       <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
-        <div className="min-w-0">{main}</div>
+        <div className="flex min-w-0 flex-col gap-5">
+          {composing !== null && (
+            <NewAnswer question={composing} actions={actions} onClose={onCloseComposer} />
+          )}
+          {main}
+        </div>
         <div className="min-w-0">
-          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} />
+          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} onCompose={onCompose} />
         </div>
       </div>
     </div>
   );
 }
 
-function AnswersPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<AnswersData>) {
-  const actions = (
+function AnswersPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<AnswersData, AnswersActions>) {
+  /* The composer is a mode of this page, not a property of the library: it
+     opens on "" for a blank answer, or on the text of a coverage gap. */
+  const [composing, setComposing] = useState<string | null>(null);
+  const headerActions = (
     <>
+      {/* Harvest stays as it was: `scanAnswerCandidates` exists, but the wizard
+          is a static rendition of one step out of `data.pane`, with no local
+          accept/skip state to import from. Wiring it means making the wizard
+          interactive first, so no handler is claimed for it here. */}
       <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
-      <Button variant="primary" compact><Plus size={15} /> New answer</Button>
+      <Button variant="primary" compact onClick={() => setComposing("")}><Plus size={15} /> New answer</Button>
     </>
   );
   return (
@@ -358,11 +448,19 @@ function AnswersPage({ data, loading = false, error = null, chrome, mobile = fal
           eyebrow="Knowledge"
           title="Approved answers"
           description="Curate the answers bots and teams serve verbatim: no generation, no drift."
-          actions={mobile ? undefined : actions}
+          actions={mobile ? undefined : headerActions}
         />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
         <div className="mt-6">
-          <Body data={data} error={error} mobile={mobile} />
+          <Body
+            data={data}
+            error={error}
+            actions={actions}
+            mobile={mobile}
+            composing={composing}
+            onCompose={setComposing}
+            onCloseComposer={() => setComposing(null)}
+          />
         </div>
       </div>
       )}
@@ -370,7 +468,7 @@ function AnswersPage({ data, loading = false, error = null, chrome, mobile = fal
   );
 }
 
-export const page: PageModule<AnswersData> = {
+export const page: PageModule<AnswersData, AnswersActions> = {
   id: "answers",
   title: "Answers",
   route: "/answers",

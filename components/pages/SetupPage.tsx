@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Logo, Brandmark } from "../shell/Logo";
@@ -8,6 +9,7 @@ import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { Alert } from "../feedback/Alert";
+import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
 
 /* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
@@ -31,6 +33,18 @@ const STATES = [
 
 /** Which of the two claim steps is on screen, or the hand-off after both. */
 export type SetupStep = "token" | "admin" | "done";
+
+/** The admin account this screen creates, and the token that authorizes it. */
+export type Claim = { token: string; name: string; email: string; password: string; workspace: string };
+
+/** What first-run setup can DO. One call, because the server validates the
+ *  token and creates the admin in one step: a token that was mistyped or
+ *  already used comes back as a rejection on the finish button, and that
+ *  wording is shown verbatim. Optional (§2): with no handler the two steps
+ *  still walk, which is what the design canvas renders. */
+export type SetupActions = {
+  claimWorkspace?: (c: Claim) => void | Promise<void>;
+};
 
 /** Everything the Setup screen renders. */
 export type SetupData = {
@@ -76,7 +90,11 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-function TokenStep({ data, error }: { data: SetupData; error: string | null }) {
+function TokenStep({ data, error, claim, set, onNext }: {
+  data: SetupData; error: string | null; claim: Claim;
+  set: (patch: Partial<Claim>) => void; onNext: () => void;
+}) {
+  const [help, setHelp] = useState(false);
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
@@ -85,22 +103,35 @@ function TokenStep({ data, error }: { data: SetupData; error: string | null }) {
       </p>
       <CodeBlock code={data.logSample} language="log" title="server logs" copy={false} />
       <Field label="Admin token">
-        <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false} defaultValue={data.token} />
+        <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false}
+          value={claim.token} onChange={(e) => set({ token: e.target.value })} />
       </Field>
       {/* The token step is exactly where a rejected token has to be reported;
           this branch used to drop `error`, so "Invalid token" — a state this
           page declares — rendered as a silently unchanged form. */}
       {error && <Alert tone="blocked" title="Token rejected">{error}</Alert>}
-      {/* Next-step action bottom LEFT (§2). */}
+      {/* Next-step action bottom LEFT (§2). The token is not checked here:
+          the server validates it together with the admin account it
+          authorizes, so this step only carries it forward. */}
       <div className={AUTH_ACTIONS}>
-        <Button variant="primary">Continue <ArrowRight size={14} /></Button>
-        <Button variant="link">Where do I find this?</Button>
+        <Button variant="primary" disabled={!claim.token.trim()} onClick={onNext}>Continue <ArrowRight size={14} /></Button>
+        <Button variant="link" onClick={() => setHelp((h) => !h)}>Where do I find this?</Button>
       </div>
+      {help && (
+        <p className="text-[12.5px] leading-relaxed text-ink/70">
+          The API prints it once at first boot, on a line beginning{" "}
+          <code className="font-term">admin token:</code>. Run the command above
+          against the container that is serving this page.
+        </p>
+      )}
     </div>
   );
 }
 
-function AdminStep({ data, error }: { data: SetupData; error: string | null }) {
+function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
+  error: string | null; claim: Claim; set: (patch: Partial<Claim>) => void;
+  busy: boolean; onBack: () => void; onSubmit: () => void;
+}) {
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
@@ -116,22 +147,24 @@ function AdminStep({ data, error }: { data: SetupData; error: string | null }) {
       )}
       <div className={FORM_GRID}>
         <Field label="Your name">
-          <Input className="w-full" placeholder="Maya Chen" autoComplete="name" defaultValue={data.name} />
+          <Input className="w-full" placeholder="Maya Chen" autoComplete="name" value={claim.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
         <Field label="Email">
-          <Input className="w-full" type="email" placeholder="maya@team.com" autoComplete="email" defaultValue={data.email} />
+          <Input className="w-full" type="email" placeholder="maya@team.com" autoComplete="email" value={claim.email} onChange={(e) => set({ email: e.target.value })} />
         </Field>
         <Field label="Password">
-          <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" defaultValue={data.password} />
+          <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" value={claim.password} onChange={(e) => set({ password: e.target.value })} />
         </Field>
         <Field label="Workspace name">
-          <Input className="w-full" placeholder="Acme Product" defaultValue={data.workspace} />
+          <Input className="w-full" placeholder="Acme Product" value={claim.workspace} onChange={(e) => set({ workspace: e.target.value })} />
         </Field>
       </div>
       <p className="-mt-2 text-[12px] text-ink/65">Shown in the sidebar and on published pages.</p>
       <div className={`pt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary">Finish setup</Button>
-        <Button variant="link">← Back to token</Button>
+        <Button variant="primary" disabled={busy} onClick={onSubmit}>
+          {busy ? <><Spinner size="sm" /> Setting up…</> : "Finish setup"}
+        </Button>
+        <Button variant="link" onClick={onBack}>← Back to token</Button>
       </div>
     </div>
   );
@@ -159,7 +192,38 @@ function SuccessStep({ workspace }: { workspace: string }) {
   );
 }
 
-function SetupPage({ data, loading = false, error = null, mobile = false }: PageProps<SetupData>) {
+function SetupPage({ data, loading = false, error = null, actions, mobile = false }: PageProps<SetupData, SetupActions>) {
+  /* The claim is typed here and has to leave the form, so it is local state
+     seeded from the data. Both steps used to be uncontrolled `defaultValue`
+     inputs under buttons with no handler: the whole screen was a picture. */
+  const [claim, setClaim] = useState<Claim>({
+    token: data.token, name: data.name, email: data.email,
+    password: data.password, workspace: data.workspace,
+  });
+  const [step, setStep] = useState<SetupStep>(data.step);
+  const [seen, setSeen] = useState(data.step);
+  if (seen !== data.step) { setSeen(data.step); setStep(data.step); }
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const set = (patch: Partial<Claim>) => setClaim((c) => ({ ...c, ...patch }));
+
+  const submit = async () => {
+    if (!actions?.claimWorkspace) { setStep("done"); return; } // canvas
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions.claimWorkspace(claim);
+      setStep("done");
+    } catch (err) {
+      // "Invalid setup token, check the server logs." is the message that
+      // makes this recoverable; it reaches the user unchanged.
+      setFailed(err instanceof Error ? err.message : "Setup could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
@@ -168,7 +232,8 @@ function SetupPage({ data, loading = false, error = null, mobile = false }: Page
     );
   }
 
-  const done = data.step === "done";
+  const done = step === "done";
+  const shown = failed ?? error;
   return (
     <div className={AUTH_SHELL}>
       <AuthBackdrop />
@@ -179,18 +244,18 @@ function SetupPage({ data, loading = false, error = null, mobile = false }: Page
         />
         <Card variant="plain">
           <div className="mb-5">
-            <Stepper labels={["Token", "Admin account"]} current={data.step === "token" ? 0 : 1} ariaLabel="Setup steps" />
+            <Stepper labels={["Token", "Admin account"]} current={step === "token" ? 0 : 1} ariaLabel="Setup steps" />
           </div>
-          {done ? <SuccessStep workspace={data.workspace} />
-            : data.step === "token" ? <TokenStep data={data} error={error} />
-            : <AdminStep data={data} error={error} />}
+          {done ? <SuccessStep workspace={claim.workspace || data.workspace} />
+            : step === "token" ? <TokenStep data={data} error={shown} claim={claim} set={set} onNext={() => setStep("admin")} />
+            : <AdminStep error={shown} claim={claim} set={set} busy={busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
         </Card>
       </div>
     </div>
   );
 }
 
-export const page: PageModule<SetupData> = {
+export const page: PageModule<SetupData, SetupActions> = {
   id: "setup",
   title: "Setup",
   route: "/setup",

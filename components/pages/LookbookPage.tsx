@@ -442,7 +442,7 @@ function LookbookPage({ data, loading = false, chrome, mobile = false }: PagePro
     );
   }
   return (
-    <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Design system"

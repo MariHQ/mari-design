@@ -9,6 +9,7 @@ import { StatusChip, Chip, type ChipStatus } from "../data-display/Chip";
 import { Avatar } from "../data-display/Avatar";
 import { Sparkline } from "../data-display/Sparkline";
 import { Truncate } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
@@ -22,7 +23,9 @@ import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } fr
 
 export type AnswerStatus = "approved" | "draft" | "retired";
 const CHANNELS = ["slack-bot", "support-widget", "docs-site"] as const;
-type Channel = (typeof CHANNELS)[number];
+/** One place a bot serves an answer. Exported so an app can type the handler
+    that writes the set back. */
+export type Channel = (typeof CHANNELS)[number];
 const CHANNEL_LABEL: Record<Channel, string> = { "slack-bot": "Slack bot", "support-widget": "Support widget", "docs-site": "Docs site" };
 
 /** One curated answer, as the Answers page and its fixtures compose it. */
@@ -41,37 +44,100 @@ export type Answer = {
 
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join(""); }
 
+/** What one answer card can DO. Every handler may throw; the card shows the
+    server's own message and leaves the answer as it found it.
+
+    Optional: with none of them Edit, Approve/Retire and the channel toggles
+    keep the local behaviour below, which is what the design canvas renders. */
+export type AnswerActions = {
+  /** Persist an inline edit to the question or the served wording. */
+  save?: (args: { id: number; question: string; answer: string }) => void | Promise<void>;
+  /** Approve (embeds it for matching) or retire an answer. */
+  setStatus?: (args: { id: number; status: AnswerStatus }) => void | Promise<void>;
+  /** Replace the set of channels that serve this answer. */
+  setChannels?: (args: { id: number; channels: Channel[] }) => void | Promise<void>;
+};
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+
 export type AnswerCardProps = {
   answer: Answer;
   loading?: boolean;
+  actions?: AnswerActions;
   className?: string;
 };
 
-export function AnswerCard({ answer: initial, loading = false, className = "" }: AnswerCardProps) {
+export function AnswerCard({ answer: initial, loading = false, actions, className = "" }: AnswerCardProps) {
   const [a, setA] = useState<Answer>(initial);
   const [editing, setEditing] = useState(false);
   const [editQ, setEditQ] = useState(a.question);
   const [editA, setEditA] = useState(a.answer);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const long = a.answer.length > 190;
   const approved = a.status === "approved";
 
   const startEdit = () => { setEditQ(a.question); setEditA(a.answer); setEditing(true); };
-  const saveEdit = () => {
-    if (!editQ.trim() || !editA.trim()) return;
+
+  const saveEdit = async () => {
+    const question = editQ.trim();
+    const answer = editA.trim();
+    if (!question || !answer) return;
     setBusy("save");
-    window.setTimeout(() => { setA((p) => ({ ...p, question: editQ.trim(), answer: editA.trim(), updated: new Date().toISOString().slice(0, 10) })); setBusy(null); setEditing(false); }, 500);
+    setFailed(null);
+    const applied = () => setA((p) => ({ ...p, question, answer, updated: new Date().toISOString().slice(0, 10) }));
+    if (!actions?.save) {
+      window.setTimeout(() => { applied(); setBusy(null); setEditing(false); }, 500);
+      return;
+    }
+    try {
+      await actions.save({ id: a.id, question, answer });
+      applied();
+      setEditing(false);
+    } catch (e) {
+      setFailed(why(e, "That answer could not be saved."));
+    } finally {
+      setBusy(null);
+    }
   };
-  const setStatus = (status: AnswerStatus) => {
+
+  const setStatus = async (status: AnswerStatus) => {
     setBusy(status);
-    window.setTimeout(() => { setA((p) => ({ ...p, status })); setBusy(null); }, 600);
+    setFailed(null);
+    if (!actions?.setStatus) {
+      window.setTimeout(() => { setA((p) => ({ ...p, status })); setBusy(null); }, 600);
+      return;
+    }
+    try {
+      await actions.setStatus({ id: a.id, status });
+      setA((p) => ({ ...p, status }));
+    } catch (e) {
+      setFailed(why(e, "That answer's status could not be changed."));
+    } finally {
+      setBusy(null);
+    }
   };
-  const toggleChannel = (ch: Channel) => {
+
+  const toggleChannel = async (ch: Channel) => {
     if (!approved) return;
+    const channels = a.channels.includes(ch) ? a.channels.filter((c) => c !== ch) : [...a.channels, ch];
     setBusy("channels");
-    window.setTimeout(() => { setA((p) => ({ ...p, channels: p.channels.includes(ch) ? p.channels.filter((c) => c !== ch) : [...p.channels, ch] })); setBusy(null); }, 400);
+    setFailed(null);
+    if (!actions?.setChannels) {
+      window.setTimeout(() => { setA((p) => ({ ...p, channels })); setBusy(null); }, 400);
+      return;
+    }
+    try {
+      await actions.setChannels({ id: a.id, channels });
+      setA((p) => ({ ...p, channels }));
+    } catch (e) {
+      setFailed(why(e, "That channel could not be changed."));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const chipStatus: ChipStatus = approved ? "approved" : a.status === "retired" ? "retired" : "draft";
@@ -107,6 +173,7 @@ export function AnswerCard({ answer: initial, loading = false, className = "" }:
         <div className="flex flex-col gap-2.5">
           <Input value={editQ} onChange={(e) => setEditQ(e.target.value)} placeholder="Question" />
           <Textarea value={editA} onChange={(e) => setEditA(e.target.value)} placeholder="Answer" />
+          <FieldError>{failed}</FieldError>
           <div className="flex items-center gap-2">
             <Button variant="primary" compact disabled={!editQ.trim() || !editA.trim() || busy === "save"} onClick={saveEdit}>{busy === "save" ? "Saving…" : "Save"}</Button>
             <Button compact onClick={() => setEditing(false)}>Cancel</Button>
@@ -214,6 +281,8 @@ export function AnswerCard({ answer: initial, loading = false, className = "" }:
             </div>
           </CardSection>
         )}
+
+        <FieldError>{failed}</FieldError>
 
         {/* 11 + 12 — buttons, biggest action last */}
         <CardActions

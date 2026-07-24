@@ -2,7 +2,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import { ScrollText, RefreshCw, Search, ChevronDown, X } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -15,6 +15,8 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { fmtDateTime } from "../tokens/format";
 import { SettingsAuditLog, type AuditEvent } from "../features/SettingsAuditLog";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 import type { PropertyItem } from "../data-display/PropertyList";
 
 /* Settings → Audit log (pages/settings-audit-log.md). Read-only record of the
@@ -43,6 +45,16 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/** What Settings → Access log can do.
+
+    The log is immutable by design, so the one intent this page has is to go
+    and look again. There is no mutation behind it and there should not be:
+    `refresh` re-reads, and with no handler the button keeps the local
+    behaviour the feature ships. */
+export type SettingsAuditLogActions = {
+  refresh?: () => void | Promise<void>;
+};
+
 /** A filter the user has applied to the log. `matches` is what the server
     returned for it, so an empty array genuinely means "no matches". */
 export type AuditFilter = { label: string; matches: AuditEvent[] };
@@ -67,31 +79,6 @@ export type SettingsAuditLogData = {
   summary: PropertyItem[];
 };
 
-type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
-
-const SETTINGS_TABS: TabOption<SettingsTab>[] = [
-  { id: "general", label: "General" },
-  { id: "members", label: "Members" },
-  { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
-  { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Access log" },
-  { id: "design", label: "Design & brand" },
-];
-
-function SettingsTabs({ active }: { active: SettingsTab }) {
-  const [value, setValue] = useState<SettingsTab>(active);
-  return (
-    <Tabs
-      ariaLabel="Workspace settings"
-      variant="underline"
-      options={SETTINGS_TABS}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
@@ -215,7 +202,15 @@ function Body({ data, error }: { data: SettingsAuditLogData; error: string | nul
   return <SettingsAuditLog embedded events={data.events} total={data.total} />;
 }
 
-function SettingsAuditLogPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsAuditLogData>) {
+function SettingsAuditLogPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsAuditLogData, SettingsAuditLogActions>) {
+  /* The header button used to be a picture of a refresh. It now re-reads, and
+     says so while it is doing it (§2). */
+  const write = useWrite();
+  const [reloads, setReloads] = useState(0);
+  const refresh = () => write.run(
+    actions?.refresh && (() => actions.refresh!()),
+    () => setReloads((n) => n + 1),
+  );
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -226,9 +221,17 @@ function SettingsAuditLogPage({ data, loading = false, error = null, chrome, mob
             eyebrow="Settings"
             title="Access log"
             description="Every workspace change: actor, action, target, and time."
-            actions={<Button variant="default"><RefreshCw size={15} /> Refresh</Button>}
+            actions={
+              <Button variant="default" disabled={write.busy} onClick={() => void refresh()}>
+                <RefreshCw size={15} className={write.busy ? "animate-spin" : undefined} />
+                {write.busy ? "Refreshing…" : `Refresh${reloads > 0 ? ` (${reloads})` : ""}`}
+              </Button>
+            }
           />
-          <div className="mt-5"><SettingsTabs active="audit" /></div>
+          <div className="mt-5"><SettingsTabs active="audit" onNavigate={chrome?.onNavigate} /></div>
+          {write.failed && (
+            <div className="mt-5"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+          )}
           <SettingsBody mobile={mobile} rail={<AuditRail summary={data.summary} />}>
             <Body data={data} error={error} />
           </SettingsBody>
@@ -238,7 +241,7 @@ function SettingsAuditLogPage({ data, loading = false, error = null, chrome, mob
   );
 }
 
-export const page: PageModule<SettingsAuditLogData> = {
+export const page: PageModule<SettingsAuditLogData, SettingsAuditLogActions> = {
   id: "settings-audit-log",
   title: "Settings · Access log",
   route: "/settings/audit",

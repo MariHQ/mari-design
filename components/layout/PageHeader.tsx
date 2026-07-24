@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "../navigation/Link";
 import { ArrowLeft } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 
@@ -8,7 +9,13 @@ export type PageHeaderProps = {
   description?: string;
   icon?: ReactNode;
   actions?: ReactNode;
-  backLink?: { href: string; label: string };
+  /* Where "back" goes. `href` keeps it a real link — openable in a new tab,
+     with a destination in the status bar. `onClick` is for the case where back
+     is a change of view rather than of URL; it is handled IN ADDITION to the
+     href, so the control still works if the host has no router. A backLink
+     with neither used to render as href="#", which looks like a link, focuses
+     like a link, and does nothing. */
+  backLink?: { href: string; label: string; onClick?: () => void };
 };
 
 /* Header-only fragment, for screens that need more control over body layout
@@ -26,10 +33,14 @@ export function PageHeader({ title, eyebrow, description, icon, actions, backLin
         {icon && <span className="shrink-0 mt-0.5" aria-hidden="true">{icon}</span>}
         <div className="min-w-0">
           {backLink && (
-            <a href={backLink.href} className={`inline-flex items-center gap-1 mb-1.5 text-[12.5px] font-medium text-ink/65 hover:text-ink rounded-[3px] ${focusRing}`}>
+            <Link
+              href={backLink.href}
+              onClick={backLink.onClick && ((e) => { e.preventDefault(); backLink.onClick!(); })}
+              className="inline-flex items-center gap-1 mb-1.5 text-[12.5px] font-medium text-ink/65 hover:text-ink rounded-[3px]"
+            >
               <ArrowLeft size={13} />
               {backLink.label}
-            </a>
+            </Link>
           )}
           {eyebrow && (
             <div className="flex items-center gap-2 mb-1.5 font-term text-[10.5px] font-medium uppercase tracking-[0.18em] text-biscay-2">

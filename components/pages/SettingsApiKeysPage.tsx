@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { KeyRound, Plus } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -16,8 +16,12 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { TokenReveal } from "../data-display/TokenReveal";
 import { fmtDate } from "../tokens/format";
-import { SettingsApiKeys, type ApiKey } from "../features/SettingsApiKeys";
+import { SettingsApiKeys, type ApiKey, type SettingsApiKeysActions } from "../features/SettingsApiKeys";
 import type { PropertyItem } from "../data-display/PropertyList";
+
+/** What Settings → API keys can do. Defined with the panel that renders the
+    controls and re-exported here, so an app types its handlers off the page. */
+export type { SettingsApiKeysActions };
 
 /* Settings → API keys (pages/settings-api-keys.md). Create and revoke
    programmatic-access keys. List variants render the SettingsApiKeys feature;
@@ -65,31 +69,6 @@ export type SettingsApiKeysData = {
   summary: PropertyItem[];
 };
 
-type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
-
-const SETTINGS_TABS: TabOption<SettingsTab>[] = [
-  { id: "general", label: "General" },
-  { id: "members", label: "Members" },
-  { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
-  { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Audit log" },
-  { id: "design", label: "Design & brand" },
-];
-
-function SettingsTabs({ active }: { active: SettingsTab }) {
-  const [value, setValue] = useState<SettingsTab>(active);
-  return (
-    <Tabs
-      ariaLabel="Workspace settings"
-      variant="underline"
-      options={SETTINGS_TABS}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
@@ -158,7 +137,13 @@ function isEmpty(d: SettingsApiKeysData): boolean {
   return d.keys.length === 0;
 }
 
-function Body({ data, error }: { data: SettingsApiKeysData; error: string | null }) {
+function Body({ data, error, actions, createOpen, onCreateOpenChange }: {
+  data: SettingsApiKeysData;
+  error: string | null;
+  actions?: SettingsApiKeysActions;
+  createOpen: boolean;
+  onCreateOpenChange: (open: boolean) => void;
+}) {
   if (error) {
     return <EmptyState icon={<KeyRound size={22} />} title="API offline">{error}</EmptyState>;
   }
@@ -207,10 +192,21 @@ function Body({ data, error }: { data: SettingsApiKeysData; error: string | null
       </>
     );
   }
-  return <SettingsApiKeys embedded keys={data.keys} />;
+  return (
+    <SettingsApiKeys
+      embedded
+      keys={data.keys}
+      actions={actions}
+      createOpen={createOpen}
+      onCreateOpenChange={onCreateOpenChange}
+    />
+  );
 }
 
-function SettingsApiKeysPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsApiKeysData>) {
+function SettingsApiKeysPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsApiKeysData, SettingsApiKeysActions>) {
+  /* The header owns the "Create key" button, so it owns whether the form
+     below it is open: the panel's own header is hidden when embedded (§2). */
+  const [createOpen, setCreateOpen] = useState(false);
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -221,11 +217,11 @@ function SettingsApiKeysPage({ data, loading = false, error = null, chrome, mobi
             eyebrow="Settings"
             title="API keys"
             description="Programmatic access for CI, bots, and the MCP gateway."
-            actions={<Button variant="primary"><Plus size={15} /> Create key</Button>}
+            actions={<Button variant="primary" onClick={() => setCreateOpen((v) => !v)}><Plus size={15} /> Create key</Button>}
           />
-          <div className="mt-5"><SettingsTabs active="api-keys" /></div>
+          <div className="mt-5"><SettingsTabs active="api-keys" onNavigate={chrome?.onNavigate} /></div>
           <SettingsBody mobile={mobile} rail={<KeysRail summary={data.summary} />}>
-            <Body data={data} error={error} />
+            <Body data={data} error={error} actions={actions} createOpen={createOpen} onCreateOpenChange={setCreateOpen} />
           </SettingsBody>
         </div>
       )}
@@ -233,7 +229,7 @@ function SettingsApiKeysPage({ data, loading = false, error = null, chrome, mobi
   );
 }
 
-export const page: PageModule<SettingsApiKeysData> = {
+export const page: PageModule<SettingsApiKeysData, SettingsApiKeysActions> = {
   id: "settings-api-keys",
   title: "Settings · API keys",
   route: "/settings/api-keys",

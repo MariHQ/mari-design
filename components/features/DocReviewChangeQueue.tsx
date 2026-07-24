@@ -15,6 +15,10 @@ import { Tabs } from "../navigation/Tabs";
 import { SkeletonLine } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
+import { FieldError } from "../feedback/ErrorMessage";
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /* ————— ported diff helpers ————— */
 
@@ -43,15 +47,28 @@ type ChangeTab = "review" | "all";
 /* ————— demo data ————— */
 
 
+/** The writes the queue offers. Optional: with none of them accept and reject
+    stay local, which is what the design canvas renders. */
+export type ChangeQueueActions = {
+  /** Accept one proposal. The server rewrites the body with it. */
+  acceptChange?: (args: { id: number }) => void | Promise<void>;
+  /** Dismiss one proposal without applying it. */
+  rejectChange?: (args: { id: number }) => void | Promise<void>;
+  /** Apply every pending proposal in one pass. */
+  acceptAll?: () => void | Promise<void>;
+};
+
 export function DocReviewChangeQueue({
   changes: initialChanges,
   body,
+  actions,
   defaultTab = "review",
   loading = false,
   compact = false,
 }: {
   changes: DocChange[];
   body: string;
+  actions?: ChangeQueueActions;
   /** Which tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: ChangeTab;
   loading?: boolean;
@@ -63,6 +80,8 @@ export function DocReviewChangeQueue({
   const [tab, setTab] = useState<ChangeTab>(defaultTab);
   const [changes, setChanges] = useState<DocChange[]>(initialChanges);
   const [bodyText, setBodyText] = useState(body);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const pending = changes.filter((c) => c.state === "pending");
   const visible = tab === "review" ? pending : changes;
@@ -79,15 +98,48 @@ export function DocReviewChangeQueue({
     setBodyText((t) => t.split(o).join(cleanText(repl)));
   };
 
-  const accept = (c: DocChange) => {
-    setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state: "accepted" } : x)));
-    applyLocal(c.original, c.proposed);
+  /* Each control moves the row FIRST and then writes, so the queue reads the
+     same with and without a server; a rejected write puts the row back where
+     it was and says why. */
+  const settle = async (
+    c: DocChange, state: ChangeState, write: (() => void | Promise<void>) | undefined, fallback: string,
+  ) => {
+    setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state } : x)));
+    if (state === "accepted") applyLocal(c.original, c.proposed);
+    if (!write) return;
+    setFailed(null);
+    try {
+      await write();
+    } catch (e) {
+      setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state: c.state } : x)));
+      if (state === "accepted") setBodyText(body);
+      setFailed(why(e, fallback));
+    }
   };
+
+  const accept = (c: DocChange) =>
+    settle(c, "accepted", actions?.acceptChange && (() => actions.acceptChange!({ id: c.id })),
+      "That change could not be accepted.");
   const reject = (c: DocChange) =>
-    setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state: "rejected" } : x)));
-  const acceptAll = () => {
+    settle(c, "rejected", actions?.rejectChange && (() => actions.rejectChange!({ id: c.id })),
+      "That change could not be rejected.");
+
+  const acceptAll = async () => {
+    const before = changes;
     pending.forEach((c) => applyLocal(c.original, c.proposed));
     setChanges((cs) => cs.map((c) => (c.state === "pending" ? { ...c, state: "accepted" } : c)));
+    if (!actions?.acceptAll) return;
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions.acceptAll();
+    } catch (e) {
+      setChanges(before);
+      setBodyText(body);
+      setFailed(why(e, "Those changes could not be applied."));
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
@@ -211,10 +263,11 @@ export function DocReviewChangeQueue({
 
       {/* Primary action bottom LEFT (CONVENTIONS.md §2). The count reads from
           the strip above the list, not from under it (§13). */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <Button variant="primary" onClick={acceptAll} disabled={pending.length === 0}>
-          Accept all {pending.length || ""} changes
+      <div className="flex flex-col items-start gap-2 px-4 py-3">
+        <Button variant="primary" onClick={acceptAll} disabled={busy || pending.length === 0}>
+          {busy ? "Applying…" : `Accept all ${pending.length || ""} changes`.replace(/\s+/g, " ")}
         </Button>
+        <FieldError>{failed}</FieldError>
       </div>
     </Card>
   );

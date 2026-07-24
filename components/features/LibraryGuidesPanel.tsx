@@ -12,6 +12,8 @@ import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonText } from "../data-di
 import { Scrollable } from "../data-display/Scrollable";
 import { ResultCount } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* LibraryGuidesPanel — the Library › Style guides tab.
    Pick a trusted built-in style pack as the project default, then layer
@@ -33,8 +35,20 @@ type Layer = {
 /** The workspace's own voice layer, stacked on top of the chosen pack. */
 export type VoiceLayer = Layer;
 
+/** What the style-guide surface can DO.
+
+    There is no create/delete handler for a pack: "Custom guide" is an explicit
+    placeholder with no name, description or tone to send, so wiring it would
+    mean inventing a pack rather than saving one. It stays the local note it
+    already is. */
+export type LibraryGuidesActions = {
+  setDefaultPack?: (key: string) => void | Promise<void>;
+  saveVoice?: (layer: VoiceLayer) => void | Promise<void>;
+};
+
 export type LibraryGuidesPanelProps = {
   guides: Guide[];
+  actions?: LibraryGuidesActions;
   workspace: string;
   defaultPack: string;
   /** The workspace's own voice layer, stacked on the chosen pack. */
@@ -45,6 +59,7 @@ export type LibraryGuidesPanelProps = {
 
 export function LibraryGuidesPanel({
   guides,
+  actions,
   workspace,
   defaultPack,
   layer: initialLayer,
@@ -59,7 +74,15 @@ export function LibraryGuidesPanel({
 
   const setField = <K extends keyof Layer>(k: K, v: Layer[K]) => { setLayer((l) => ({ ...l, [k]: v })); setSaved(false); };
 
-  const save = () => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); };
+  const write = useWrite();
+  const save = () => write.run(
+    actions?.saveVoice && (() => actions.saveVoice!(layer)),
+    () => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); },
+  );
+  const setDefault = (key: string) => write.run(
+    actions?.setDefaultPack && (() => actions.setDefaultPack!(key)),
+    () => setActive(key),
+  );
 
   if (loading) {
     return (
@@ -94,6 +117,10 @@ export function LibraryGuidesPanel({
 
   return (
     <div className={`grid gap-4 lg:grid-cols-[1.4fr_1fr] items-start ${className}`.trim()}>
+      {write.failed && (
+        <div className="lg:col-span-2"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+      )}
+
       {/* Left — style guide packs */}
       <Card
         variant="flush"
@@ -139,7 +166,7 @@ export function LibraryGuidesPanel({
                     {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                     {open ? "Hide rules" : "View rules"}
                   </Button>
-                  {on ? <Badge label="Project default" tone="ok" /> : <Button compact onClick={() => setActive(g.id)}>Set as default</Button>}
+                  {on ? <Badge label="Project default" tone="ok" /> : <Button compact disabled={write.busy} onClick={() => void setDefault(g.id)}>Set as default</Button>}
                 </div>
                 {/* The whole rule list, never clipped with an "and N more":
                     a 200-rule pack scrolls inside its own bounded box. */}
@@ -184,7 +211,7 @@ export function LibraryGuidesPanel({
           {/* Primary action bottom LEFT; the confirmation keeps a reserved
               slot so saving never shifts the button (CONVENTIONS §2). */}
           <div className="flex items-center gap-3 border-t border-ink/10 pt-3">
-            <Button variant="primary" compact onClick={save}>Save</Button>
+            <Button variant="primary" compact disabled={write.busy} onClick={() => void save()}>Save</Button>
             <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
           </div>
         </div>

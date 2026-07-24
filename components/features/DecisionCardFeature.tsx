@@ -6,7 +6,11 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
+import { FieldError } from "../feedback/ErrorMessage";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /* DecisionCardFeature — the Decisions ledger column: a timeline of decision
    cards, each composing the data-display <DecisionCard> (aliased DecisionCardUI)
@@ -64,17 +68,34 @@ const IMPACT_DOCS: ImpactDoc[] = [
   { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
 ];
 
+/** What a run of `decisionImpact` came back with. */
+export type ImpactRun = { summary: string; docs: ImpactDoc[] };
+
+/** The writes the ledger column offers. Optional: with none of them every
+    control below keeps the local behaviour it already had, which is what the
+    design canvas renders. */
+export type DecisionLedgerActions = {
+  /** Sign one proposal off. */
+  ratify?: (args: { id: number }) => void | Promise<void>;
+  /** Trace the blast radius. Resolves to the documents it found. */
+  runImpact?: (args: { id: number }) => Promise<ImpactRun>;
+};
+
 export type DecisionCardFeatureProps = {
   decisions: Decision[];
   /** Render a content-shaped skeleton timeline while the ledger loads. */
   loading?: boolean;
+  actions?: DecisionLedgerActions;
   className?: string;
 };
 
-export function DecisionCardFeature({ decisions, loading = false, className = "" }: DecisionCardFeatureProps) {
+export function DecisionCardFeature({ decisions, loading = false, actions, className = "" }: DecisionCardFeatureProps) {
   const [items, setItems] = useState<Decision[]>(decisions);
   const [ratifying, setRatifying] = useState<number | null>(null);
   const [filter, setFilter] = useState<Facet>("all");
+  /* A failed write is as visible as a failed read: the server's own message
+     sits above the timeline the write was meant to change. */
+  const [failed, setFailed] = useState<string | null>(null);
 
   const resolved = (d: Decision) => (d.status === "superseded" ? "ignored" : d.status);
   const counts: Record<Facet, number> = {
@@ -90,22 +111,49 @@ export function DecisionCardFeature({ decisions, loading = false, className = ""
   const patchImpact = (id: number, next: Partial<ImpactState>) =>
     setItems((cur) => cur.map((d) => (d.id === id ? { ...d, impact: { ...d.impact, ...next } } : d)));
 
-  const ratify = (id: number) => {
+  const ratify = async (id: number) => {
     if (ratifying !== null) return;
     setRatifying(id);
-    setTimeout(() => {
+    setFailed(null);
+    if (!actions?.ratify) {
+      // No server behind the ledger: the sign-off is the local move alone.
+      setTimeout(() => {
+        patch(id, { status: "ratified", decidedOn: new Date().toISOString() });
+        setRatifying(null);
+      }, 800);
+      return;
+    }
+    try {
+      await actions.ratify({ id });
       patch(id, { status: "ratified", decidedOn: new Date().toISOString() });
+    } catch (e) {
+      setFailed(why(e, "That decision could not be ratified."));
+    } finally {
       setRatifying(null);
-    }, 800);
+    }
   };
 
-  const runImpact = (d: Decision) => {
+  const runImpact = async (d: Decision) => {
     if (d.impact.docs) {
       patchImpact(d.id, { open: !d.impact.open });
       return;
     }
     patchImpact(d.id, { open: true, loading: true });
-    setTimeout(() => patchImpact(d.id, { loading: false, docs: IMPACT_DOCS }), 1100);
+    setFailed(null);
+    if (!actions?.runImpact) {
+      setTimeout(() => patchImpact(d.id, { loading: false, docs: IMPACT_DOCS }), 1100);
+      return;
+    }
+    try {
+      const run = await actions.runImpact({ id: d.id });
+      patchImpact(d.id, {
+        loading: false, docs: run.docs,
+        count: run.docs.length, summary: run.summary,
+      });
+    } catch (e) {
+      patchImpact(d.id, { loading: false, open: false });
+      setFailed(why(e, "The impact analysis could not be run."));
+    }
   };
 
   const createTasks = (d: Decision) => {
@@ -149,6 +197,8 @@ export function DecisionCardFeature({ decisions, loading = false, className = ""
           ))}
         </div>
       </div>
+
+      <FieldError>{failed}</FieldError>
 
       {shown.length === 0 && (
         <EmptyState title="Nothing in this filter">No decisions match the {FACETS.find((f) => f.value === filter)?.label.toLowerCase()} filter yet.</EmptyState>

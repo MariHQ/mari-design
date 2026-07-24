@@ -51,7 +51,11 @@ export type LoginActions = {
   signIn?: (c: Credentials) => void | Promise<void>;
   register?: (c: Credentials) => void | Promise<void>;
   magicLink?: (email: string) => void | Promise<void>;
-  oauth?: (provider: "github" | "google") => void | Promise<void>;
+  oauth?: (provider: "github" | "google" | "sso") => void | Promise<void>;
+  /** Leave a post-submit screen and go back to the credentials form. Which
+      screen is showing comes from `data`, so the page cannot undo it itself —
+      without this, "Check your inbox" was a one-way door. */
+  backToSignIn?: () => void;
 };
 
 export type LoginData = {
@@ -129,7 +133,7 @@ const DIVIDER =
    its own full-width row keeps the enterprise path obvious without crowding
    the two consumer providers. Rendered only for the providers the workspace
    actually offers, so a credentials-only workspace shows no dead buttons. */
-function OAuthRow({ providers }: { providers: LoginProvider[] }) {
+function OAuthRow({ providers, actions }: { providers: LoginProvider[]; actions?: LoginActions }) {
   if (!providers.length) return null;
   const base = `inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:pointer-events-none ${btnDisabled} ${focusRing}`;
   const social = providers.filter((p) => p !== "sso");
@@ -139,16 +143,16 @@ function OAuthRow({ providers }: { providers: LoginProvider[] }) {
       {social.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {social.includes("github") && (
-            <button type="button" className={base}><GithubMark size={16} /> GitHub</button>
+            <button type="button" className={base} onClick={() => actions?.oauth?.("github")}><GithubMark size={16} /> GitHub</button>
           )}
           {social.includes("google") && (
-            <button type="button" className={base}><GoogleMark /> Google</button>
+            <button type="button" className={base} onClick={() => actions?.oauth?.("google")}><GoogleMark /> Google</button>
           )}
         </div>
       )}
       {providers.includes("sso") && (
         <>
-          <button type="button" className={`mt-2 w-full ${base}`}>
+          <button type="button" className={`mt-2 w-full ${base}`} onClick={() => actions?.oauth?.("sso")}>
             <KeyRound size={16} /> Single sign-on (SAML)
           </button>
           <p className="mt-1.5 text-center text-[11.5px] text-ink/65">
@@ -160,14 +164,21 @@ function OAuthRow({ providers }: { providers: LoginProvider[] }) {
   );
 }
 
-function ModeToggle({ register }: { register: boolean }) {
+/* Switching between sign-in and register is a VIEW change, not a server call,
+   so the page owns it. It used to be a <span>: unfocusable, unclickable, and
+   invisible to a screen reader, so "Create an account" was decoration and the
+   register screen could only be reached from the canvas. */
+function ModeToggle({ register, onToggle }: { register: boolean; onToggle: () => void }) {
   return (
     <p className="mt-4 text-center text-[12.5px] text-ink/70">
-      {register ? (
-        <>Already have an account? <span className="font-medium text-biscay-2">Sign in</span></>
-      ) : (
-        <>New here? <span className="font-medium text-biscay-2">Create an account</span></>
-      )}
+      {register ? "Already have an account? " : "New here? "}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`font-medium text-biscay-2 hover:text-ink rounded-[3px] ${focusRing}`}
+      >
+        {register ? "Sign in" : "Create an account"}
+      </button>
     </p>
   );
 }
@@ -259,6 +270,10 @@ function NoticeCard({ icon, title, children, footer }: {
 }
 
 function Body({ data, error, actions }: { data: LoginData; error: string | null; actions?: LoginActions }) {
+  /* Sign-in vs register is a view change, not a server call, so the page owns
+     it: seeded from `data` so the canvas can pin either screen, then local so
+     the toggle actually switches. */
+  const [register, setRegister] = useState(data.register);
   switch (data.screen) {
     case "oauth": {
       const google = data.handoff === "google";
@@ -278,7 +293,7 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
         <NoticeCard icon={<Mail size={22} className="text-biscay-2" />} title="Check your inbox"
           footer={
             <div className={AUTH_ACTIONS}>
-              <Button variant="primary"><ArrowLeft size={14} /> Back to sign in</Button>
+              <Button variant="primary" onClick={actions?.backToSignIn}><ArrowLeft size={14} /> Back to sign in</Button>
               <span className="text-[12px] text-ink/65">Didn’t get it? Resend in {data.resendIn}</span>
             </div>
           }>
@@ -313,9 +328,9 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
     default:
       return (
         <Card variant="plain">
-          <CredForm data={data} error={error} actions={actions} />
-          <OAuthRow providers={data.providers} />
-          {data.allowRegister && <ModeToggle register={data.register} />}
+          <CredForm data={{ ...data, register }} error={error} actions={actions} />
+          <OAuthRow providers={data.providers} actions={actions} />
+          {data.allowRegister && <ModeToggle register={register} onToggle={() => setRegister((r) => !r)} />}
         </Card>
       );
   }

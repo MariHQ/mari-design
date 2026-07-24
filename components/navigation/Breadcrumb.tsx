@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { Link } from "./Link";
 import { Scrollable } from "../data-display/Scrollable";
 import { focusRing } from "../tokens/focusRing";
 
@@ -17,7 +18,7 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
             <span key={i} className="flex shrink-0 items-center gap-1.5">
               {i > 0 && <ChevronRight size={16} className="text-ink/65" aria-hidden="true" />}
               {item.href && !last ? (
-                <a href={item.href} className={`max-w-[16rem] truncate rounded-[3px] text-ink/70 hover:text-ink ${focusRing}`}>{item.label}</a>
+                <Link href={item.href} className="max-w-[16rem] truncate rounded-[3px] text-ink/70 hover:text-ink">{item.label}</Link>
               ) : (
                 <span aria-current={last ? "page" : undefined} className={`max-w-[16rem] truncate ${last ? "font-medium text-ink" : "text-ink/70"}`}>{item.label}</span>
               )}

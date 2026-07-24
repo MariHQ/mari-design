@@ -52,6 +52,30 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/** What the lineage instrument can DO. Every handler may throw and the control
+    that called it shows the message. All optional: without actions each control
+    keeps the local behaviour the library ships, because the design canvas
+    renders this page with no server behind it. */
+export type LineageActions = {
+  /** Persist where a node sits, so a dragged layout survives a reload. */
+  pinNode?: (args: { docId: number; x: number; y: number }) => void | Promise<void>;
+  /** Hand a node back to the auto-layout. */
+  unpinNode?: (docId: number) => void | Promise<void>;
+  /** Follow or unfollow a document. */
+  watchDocument?: (docId: number) => void | Promise<void>;
+  /** Follow a lineage node through to the document it stands for. */
+  openDocument?: (docId: number) => void;
+  /** Open a review task on a document. */
+  createReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
+  /** Ask Mari to propose new edges across the corpus. Long-running. */
+  deriveLinks?: () => void | Promise<void>;
+  /** Save the current filter/view state under a name. */
+  saveView?: (args: { name: string; state: string }) => void | Promise<void>;
+  /** Trace an assertion's blast radius. Long-running, and it is the one
+      handler that answers: the drawer renders what it returns. */
+  analyzeImpact?: (claim: string) => ImpactResult | Promise<ImpactResult>;
+};
+
 /** Which drawer is open, and everything that drawer needs. Exactly one at a
     time, which is why this is a tagged union rather than four nullable slots. */
 export type LineageDrawer =
@@ -139,16 +163,28 @@ function railFor(data: LineageData): number | null {
   return data.drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ data }: { data: LineageData }) {
+function Drawer({ data, actions }: { data: LineageData; actions?: LineageActions }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
   const d = data.drawer;
   if (!d) return null;
   if (d.kind === "node") {
-    return <LineageNodeDrawer nodes={data.nodes} edges={data.edges} nodeId={d.nodeId} history={d.history} />;
+    return (
+      <LineageNodeDrawer
+        nodes={data.nodes}
+        edges={data.edges}
+        nodeId={d.nodeId}
+        history={d.history}
+        onPin={actions?.pinNode}
+        onUnpin={actions?.unpinNode}
+        onWatch={actions?.watchDocument}
+        onOpenDocument={actions?.openDocument}
+        onCreateReviewTask={actions?.createReviewTask}
+      />
+    );
   }
   if (d.kind === "edge") {
-    return <LineageEdgeDrawer nodes={data.nodes} edges={data.edges} edgeId={d.edgeId} />;
+    return <LineageEdgeDrawer nodes={data.nodes} edges={data.edges} edgeId={d.edgeId} onOpenDocument={actions?.openDocument} />;
   }
   if (d.kind === "group") {
     return (
@@ -168,6 +204,7 @@ function Drawer({ data }: { data: LineageData }) {
       claim={d.claim}
       owners={d.owners}
       people={d.people}
+      onAnalyze={actions?.analyzeImpact}
     />
   );
 }
@@ -224,7 +261,9 @@ function Rig({ rail, canvas, drawer }: {
     exactly the same reason it is true on the canvas. */
 const isEmpty = (d: LineageData) => !d.nodes.length && !d.edges.length && !d.drawer && !d.extras;
 
-function Body({ data, error, mobile }: { data: LineageData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile }: {
+  data: LineageData; error: string | null; actions?: LineageActions; mobile: boolean;
+}) {
   if (error) {
     return (
       <div className="mt-6">
@@ -248,7 +287,7 @@ function Body({ data, error, mobile }: { data: LineageData; error: string | null
 
   // Mobile collapses to one column (§11): the rail drops below the canvas.
   const rail = mobile ? null : railFor(data);
-  const railBody = data.extras ? <Extras extras={data.extras} /> : <Drawer data={data} />;
+  const railBody = data.extras ? <Extras extras={data.extras} /> : <Drawer data={data} actions={actions} />;
 
   return (
     <div className="mt-6 flex flex-col gap-5">
@@ -257,7 +296,7 @@ function Body({ data, error, mobile }: { data: LineageData; error: string | null
         rail={rail}
         canvas={(
           <>
-            <LineageToolbar nodes={data.nodes} />
+            <LineageToolbar nodes={data.nodes} onDeriveLinks={actions?.deriveLinks} onSaveView={actions?.saveView} />
             {data.search && <SearchResults nodes={data.nodes} query={data.search.query} />}
             <LineageGraph
               key={`${data.lens}-${data.layout}-${data.focalId}-${data.trace?.direction ?? "none"}`}
@@ -267,6 +306,7 @@ function Body({ data, error, mobile }: { data: LineageData; error: string | null
               layout={data.layout}
               trace={data.trace}
               focalId={data.focalId}
+              onPinNode={actions?.pinNode}
             />
             <LineageTimeScrubber dates={data.dates} activity={data.activity} value={data.asOf} />
           </>
@@ -281,8 +321,10 @@ function Body({ data, error, mobile }: { data: LineageData; error: string | null
   );
 }
 
-function LineagePage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<LineageData>) {
-  const actions = <Button variant="default">{data.action}</Button>;
+function LineagePage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<LineageData, LineageActions>) {
+  /* `data.action` names the document being traced; an empty one is a workspace
+     with nothing in focus, and there is nothing to offer then. */
+  const headerActions = data.action ? <Button variant="default">{data.action}</Button> : undefined;
   return (
     <PageFrame chrome={chrome} active={navFor("lineage")} title="Lineage" mobile={mobile}>
       {loading ? (
@@ -293,17 +335,17 @@ function LineagePage({ data, loading = false, error = null, chrome, mobile = fal
             eyebrow="Lineage"
             title="Product lineage"
             description="The document graph: provenance, impact, and drift across every source."
-            actions={mobile ? undefined : actions}
+            actions={mobile ? undefined : headerActions}
           />
-          {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-          <Body data={data} error={error} mobile={mobile} />
+          {mobile && headerActions && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+          <Body data={data} error={error} actions={actions} mobile={mobile} />
         </div>
       )}
     </PageFrame>
   );
 }
 
-export const page: PageModule<LineageData> = {
+export const page: PageModule<LineageData, LineageActions> = {
   id: "lineage",
   title: "Lineage",
   route: "/lineage",

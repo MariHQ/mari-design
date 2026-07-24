@@ -16,6 +16,8 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* LibraryTagsPanel — the Library › Tags tab (default tab).
    The single source of truth for the project's tag vocabulary: one
@@ -52,8 +54,25 @@ const COLORS: { id: Tone; label: string }[] = [
   { id: "neutral", label: "Ink" },
 ];
 
+/** What the tag vocabulary can DO. All optional: with none, the composer, the
+    inline weight editor and Delete keep the local behaviour below, which is
+    what the design canvas renders.
+
+    `behaviors` rides along on a save because the composer does not edit it and
+    the upsert is a whole-row write: dropping it would erase what the row
+    already says every time somebody renamed a tag. */
+export type LibraryTagsActions = {
+  saveTag?: (tag: {
+    id: string; name: string; description: string; tone: Tone;
+    weight: number; behaviors: string[]; isNew: boolean;
+  }) => void | Promise<void>;
+  deleteTag?: (id: string) => void | Promise<void>;
+  setTagWeight?: (id: string, weight: number) => void | Promise<void>;
+};
+
 export type LibraryTagsPanelProps = {
   tags: TagDef[];
+  actions?: LibraryTagsActions;
   /** Documents in the corpus, for the "used on N of M" coverage line. */
   totalDocs: number;
   loading?: boolean;
@@ -64,7 +83,7 @@ export type LibraryTagsPanelProps = {
   className?: string;
 };
 
-export function LibraryTagsPanel({ tags, totalDocs, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
+export function LibraryTagsPanel({ tags, actions, totalDocs, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
   const [rows, setRows] = useState<TagDef[]>(tags);
   const [query, setQuery] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -105,25 +124,44 @@ export function LibraryTagsPanel({ tags, totalDocs, loading = false, compact = f
     setComposerOpen(true);
   };
 
-  const saveTag = () => {
-    if (!draftName.trim()) return;
+  /* Every mutator goes through `write`: no actions means the local-state
+     change this panel has always made, actions means that change applied only
+     once the server took it (actions/useWrite.ts). */
+  const write = useWrite();
+
+  const saveTag = async () => {
+    const name = draftName.trim();
+    if (!name) return;
     const weight = Number(draftWeight) || 1;
-    if (editId) {
-      setRows((prev) => prev.map((t) => (t.id === editId ? { ...t, name: draftName.trim(), description: draftDesc.trim() || "Custom team label.", tone: draftTone, weight } : t)));
-    } else {
-      const id = draftName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      setRows((prev) => [...prev, { id: id || `tag-${Date.now().toString(36)}`, name: draftName.trim(), description: draftDesc.trim() || "Custom team label.", tone: draftTone, evidence: "Normal evidence", weight, usage: 0, behaviors: ["Custom label"], standard: false }]);
-    }
-    setComposerOpen(false);
+    const description = draftDesc.trim() || "Custom team label.";
+    const existing = editId ? rows.find((t) => t.id === editId) : undefined;
+    const id = editId
+      ?? (name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `tag-${Date.now().toString(36)}`);
+    const behaviors = existing?.behaviors ?? ["Custom label"];
+    const ok = await write.run(
+      actions?.saveTag && (() => actions.saveTag!({ id, name, description, tone: draftTone, weight, behaviors, isNew: !editId })),
+      () => setRows((prev) => (editId
+        ? prev.map((t) => (t.id === editId ? { ...t, name, description, tone: draftTone, weight } : t))
+        : [...prev, { id, name, description, tone: draftTone, evidence: "Normal evidence", weight, usage: 0, behaviors, standard: false }])),
+    );
+    if (ok) setComposerOpen(false);
   };
 
   const commitWeight = (id: string) => {
     const v = Number(weightVal);
-    if (Number.isFinite(v) && v >= 0) setRows((prev) => prev.map((t) => (t.id === id ? { ...t, weight: v } : t)));
     setWeightEditId(null);
+    if (!Number.isFinite(v) || v < 0) return;
+    return write.run(
+      actions?.setTagWeight && (() => actions.setTagWeight!(id, v)),
+      () => setRows((prev) => prev.map((t) => (t.id === id ? { ...t, weight: v } : t))),
+    );
   };
 
-  const del = (id: string) => setRows((prev) => prev.filter((t) => t.id !== id));
+  /* Destructive: the caller is <ConfirmButton>, so this is the second click. */
+  const del = (id: string) => write.run(
+    actions?.deleteTag && (() => actions.deleteTag!(id)),
+    () => setRows((prev) => prev.filter((t) => t.id !== id)),
+  );
 
   const maxUsage = Math.max(1, ...rows.map((t) => t.usage));
   const untagged = Math.max(0, totalDocs - Math.round(tagged / 1.4));
@@ -169,6 +207,8 @@ export function LibraryTagsPanel({ tags, totalDocs, loading = false, compact = f
 
   return (
     <div className={`flex flex-col gap-4 ${className}`.trim()}>
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+
       {/* Stats strip */}
       <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" aria-label="Tag health">
         <Stat value={rows.length} label="Active definitions" />
@@ -234,7 +274,7 @@ export function LibraryTagsPanel({ tags, totalDocs, loading = false, compact = f
               </div>
               <div className="mt-3 flex justify-end gap-2">
                 <Button compact onClick={() => setComposerOpen(false)}>Cancel</Button>
-                <Button variant="primary" compact disabled={!draftName.trim()} onClick={saveTag}>{editId ? "Save" : "Create"}</Button>
+                <Button variant="primary" compact disabled={write.busy || !draftName.trim()} onClick={() => void saveTag()}>{editId ? "Save" : "Create"}</Button>
               </div>
             </div>
           )}

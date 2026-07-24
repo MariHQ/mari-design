@@ -11,6 +11,7 @@ import { CountChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
 import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
+import { FieldError } from "../feedback/ErrorMessage";
 import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -49,8 +50,25 @@ const FIX_LABEL: Record<FixAction, string> = {
 
 type Override = { status: "fixed"; summary: string } | { status: "dismissed" };
 
+/** What the checklist can DO. Every handler may throw and the row (or the
+    section, or the Re-audit button) shows the message where the click was.
+    All optional: without them the checklist keeps the local overrides it has
+    always applied, which is what the design canvas renders. */
+export type AuditActions = {
+  /** Re-scan the repository. Long-running: the button says it is scanning. */
+  runAudit?: (provider: string) => void | Promise<void>;
+  /** Apply a finding's one-click fix. `memberName` maps an unmapped author. */
+  fixFinding?: (args: { id: number; memberName?: string }) => void | Promise<void>;
+  /** Apply the one-click fix to every open finding of one kind. */
+  fixAllFindings?: (args: { kind: string }) => void | Promise<void>;
+  /** Take a finding off the list without fixing it. */
+  dismissFinding?: (id: number) => void | Promise<void>;
+};
+
 export type AuditFindingsChecklistProps = {
   findings: AuditFinding[];
+  /** Side effects the checklist offers. Omitted = local overrides only. */
+  actions?: AuditActions;
   /** The people an unmapped git author can be mapped to. */
   members: { id: number; name: string }[];
   /** Where the audited repository lives, e.g. "github". */
@@ -65,7 +83,7 @@ export type AuditFindingsChecklistProps = {
 };
 
 export function AuditFindingsChecklist({
-  findings, members, provider, repo, ranAt, loading = false, className = "",
+  findings, members, provider, repo, ranAt, actions, loading = false, className = "",
 }: AuditFindingsChecklistProps) {
   const [overrides, setOverrides] = useState<Record<number, Override>>({});
   const [hideHandled, setHideHandled] = useState(false);
@@ -73,6 +91,10 @@ export function AuditFindingsChecklist({
   const [pulse, setPulse] = useState<Kind | null>(null);
   const [pick, setPick] = useState<Record<number, string>>({});
   const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr] = useState<string | null>(null);
+  const [rowErr, setRowErr] = useState<Record<number, string>>({});
+  const [kindErr, setKindErr] = useState<Partial<Record<Kind, string>>>({});
+  const [fixingKind, setFixingKind] = useState<Kind | null>(null);
   /* A repo audit routinely returns 200+ findings in one kind. Each section
      shows a screenful and names the real remainder, rather than rendering a
      10,000px column of checklist rows (CONVENTIONS §13, §15). */
@@ -94,16 +116,51 @@ export function AuditFindingsChecklist({
   const total = findings.length;
   const handled = findings.filter((f) => statusOf(f) !== "open").length;
 
-  const fixFinding = (f: AuditFinding, memberName?: string) =>
+  /* Optimistic: the row settles on the click, because the checklist is a list
+     you work down. A rejected write puts the row back and says why, in place. */
+  const fixFinding = async (f: AuditFinding, memberName?: string) => {
     setOverrides((o) => ({ ...o, [f.id]: { status: "fixed", summary: memberName ? `Mapped to ${memberName}` : summaryFor(f) } }));
-  const dismiss = (f: AuditFinding) => setOverrides((o) => ({ ...o, [f.id]: { status: "dismissed" } }));
+    setRowErr((e) => { const n = { ...e }; delete n[f.id]; return n; });
+    if (!actions?.fixFinding) return;
+    try {
+      await actions.fixFinding({ id: f.id, memberName });
+    } catch (err) {
+      setOverrides((o) => { const n = { ...o }; delete n[f.id]; return n; });
+      setRowErr((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "That fix did not apply." }));
+    }
+  };
 
-  const fixAll = (k: Kind) =>
+  const dismiss = async (f: AuditFinding) => {
+    setOverrides((o) => ({ ...o, [f.id]: { status: "dismissed" } }));
+    setRowErr((e) => { const n = { ...e }; delete n[f.id]; return n; });
+    if (!actions?.dismissFinding) return;
+    try {
+      await actions.dismissFinding(f.id);
+    } catch (err) {
+      setOverrides((o) => { const n = { ...o }; delete n[f.id]; return n; });
+      setRowErr((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "That finding could not be dismissed." }));
+    }
+  };
+
+  const fixAll = async (k: Kind) => {
+    const open = (byKind.get(k) ?? []).filter((f) => statusOf(f) === "open");
     setOverrides((o) => {
       const next = { ...o };
-      for (const f of byKind.get(k) ?? []) if (statusOf(f) === "open") next[f.id] = { status: "fixed", summary: summaryFor(f) };
+      for (const f of open) next[f.id] = { status: "fixed", summary: summaryFor(f) };
       return next;
     });
+    setKindErr((e) => { const n = { ...e }; delete n[k]; return n; });
+    if (!actions?.fixAllFindings) return;
+    setFixingKind(k);
+    try {
+      await actions.fixAllFindings({ kind: k });
+    } catch (err) {
+      setOverrides((o) => { const n = { ...o }; for (const f of open) delete n[f.id]; return n; });
+      setKindErr((e) => ({ ...e, [k]: err instanceof Error ? err.message : "Those fixes did not apply." }));
+    } finally {
+      setFixingKind(null);
+    }
+  };
 
   const jumpTo = (k: Kind) => {
     setCollapsed((c) => { const n = new Set(c); n.delete(k); return n; });
@@ -111,7 +168,22 @@ export function AuditFindingsChecklist({
     setTimeout(() => setPulse(null), 1400);
   };
 
-  const reaudit = () => { setScanning(true); setOverrides({}); setTimeout(() => setScanning(false), 700); };
+  /* A repo audit walks the whole tree, so the button has to say it is working
+     rather than sit there looking clicked. */
+  const reaudit = async () => {
+    if (scanning) return;
+    setScanning(true);
+    setScanErr(null);
+    setOverrides({});
+    try {
+      if (actions?.runAudit) await actions.runAudit(provider);
+      else await new Promise((r) => setTimeout(r, 700));
+    } catch (err) {
+      setScanErr(err instanceof Error ? err.message : "The audit could not run.");
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const toggle = (k: Kind) => setCollapsed((c) => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
@@ -138,8 +210,17 @@ export function AuditFindingsChecklist({
     return (
       <div className={className}>
         <Card variant="flush">
-          <EmptyState icon={<Layers size={26} />} title="No audits yet" action={<Button variant="primary">Run first audit</Button>}>
+          <EmptyState
+            icon={<Layers size={26} />}
+            title="No audits yet"
+            action={
+              <Button variant="primary" disabled={scanning} onClick={() => void reaudit()}>
+                <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Run first audit"}
+              </Button>
+            }
+          >
             Run a repository audit to see findings grouped by kind.
+            {scanErr && <FieldError>{scanErr}</FieldError>}
           </EmptyState>
         </Card>
       </div>
@@ -177,11 +258,12 @@ export function AuditFindingsChecklist({
           );
         })}
         <div className="ml-auto">
-          <Button variant="primary" disabled={scanning} onClick={reaudit}>
+          <Button variant="primary" disabled={scanning} onClick={() => void reaudit()}>
             <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}
           </Button>
         </div>
       </div>
+      {scanErr && <FieldError>{scanErr}</FieldError>}
 
       {/* Progress header */}
       <div className={`${card} flex flex-wrap items-center gap-4 px-4 py-3`}>
@@ -210,8 +292,13 @@ export function AuditFindingsChecklist({
               <span className="text-[14px] font-semibold text-ink">{k}</span>
               <CountChip count={open} tone={open === 0 ? "ok" : "attention"} />
               <span className="flex-1" />
-              {!isCollapsed && open > 0 && <Button variant="link" onClick={() => fixAll(k)}>Fix all</Button>}
+              {!isCollapsed && open > 0 && (
+                <Button variant="link" disabled={fixingKind === k} onClick={() => void fixAll(k)}>
+                  {fixingKind === k ? "Fixing…" : "Fix all"}
+                </Button>
+              )}
             </div>
+            {kindErr[k] && <div className="px-4 pb-3"><FieldError>{kindErr[k]}</FieldError></div>}
 
             {!isCollapsed && (
               <div className="border-t border-ink/10">
@@ -244,11 +331,12 @@ export function AuditFindingsChecklist({
                             <Truncate lines={2} className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{f.detail}</Truncate>
                             {st === "fixed" && <div className="mt-1 font-term text-[11.5px] text-moss">→ {ov && "summary" in ov ? ov.summary : summaryFor(f)}</div>}
                             {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/65">dismissed</div>}
+                            {rowErr[f.id] && <FieldError>{rowErr[f.id]}</FieldError>}
                           </div>
                           {st === "open" && (
                             <div className="flex max-w-[45%] shrink-0 flex-wrap items-center justify-end gap-1.5 [&_*]:max-w-full [&_button]:[overflow-wrap:anywhere]">
-                              {fixControl(f, members, pick[f.id] ?? "", (v) => setPick((p) => ({ ...p, [f.id]: v })), fixFinding)}
-                              <button type="button" aria-label="Dismiss finding" title="Dismiss" onClick={() => dismiss(f)} className={`grid h-7 w-7 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink ${focusRing}`}>
+                              {fixControl(f, members, pick[f.id] ?? "", (v) => setPick((p) => ({ ...p, [f.id]: v })), (x, m) => void fixFinding(x, m))}
+                              <button type="button" aria-label="Dismiss finding" title="Dismiss" onClick={() => void dismiss(f)} className={`grid h-7 w-7 place-items-center rounded-[4px] text-ink/65 hover:bg-flysch hover:text-ink ${focusRing}`}>
                                 <X size={14} />
                               </button>
                             </div>

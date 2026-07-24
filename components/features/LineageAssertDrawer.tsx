@@ -7,6 +7,7 @@ import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { Truncate } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
@@ -49,6 +50,10 @@ export type LineageAssertDrawerProps = {
   owners: { name: string; role: string }[];
   /** Initials for the owner avatar stack. */
   people: string[];
+  /** Run the analysis for real and hand back what came out. Long-running: the
+      Analyze button says so. May throw; the drawer shows the message. Omitted
+      = the drawer resolves to `result`, which is what the canvas renders. */
+  onAnalyze?: (claim: string) => ImpactResult | Promise<ImpactResult>;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -57,7 +62,7 @@ export type LineageAssertDrawerProps = {
 
 export function LineageAssertDrawer({
   result: outcome, analyzed, claim: initialClaim, owners, people,
-  onClose, loading = false, className = "",
+  onAnalyze, onClose, loading = false, className = "",
 }: LineageAssertDrawerProps) {
   const initial = analyzed ? outcome : null;
   const [claim, setClaim] = useState(initial?.claim ?? initialClaim);
@@ -66,6 +71,7 @@ export function LineageAssertDrawer({
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(initial ? "just now" : null);
   const [filter, setFilter] = useState<Severity | null>(null);
   const [taskState, setTaskState] = useState<"idle" | "creating" | "done">("idle");
+  const [failed, setFailed] = useState<string | null>(null);
   const [exported, setExported] = useState(false);
   const [docPage, setDocPage] = useState(1);
 
@@ -77,16 +83,25 @@ export function LineageAssertDrawer({
   const needUpdates = counts["update-required"] + counts.review;
   const taskCount = result?.docs.length ?? 0;
 
-  const analyze = () => {
+  const analyze = async () => {
     if (!claim.trim() || running) return;
     setRunning(true);
+    setFailed(null);
     setTaskState("idle");
     setFilter(null);
-    setTimeout(() => {
-      setResult(outcome);
+    try {
+      // Mari reads the whole graph, so this is genuinely slow and the button
+      // says "Analyzing…" the entire time.
+      const next = onAnalyze
+        ? await onAnalyze(claim.trim())
+        : await new Promise<ImpactResult>((r) => setTimeout(() => r(outcome), 1400));
+      setResult(next);
       setAnalyzedAt("just now");
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "The analysis could not run.");
+    } finally {
       setRunning(false);
-    }, 1400);
+    }
   };
 
   const createTasks = () => {
@@ -167,15 +182,16 @@ export function LineageAssertDrawer({
           <Input
             value={claim}
             onChange={(e) => setClaim(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") analyze(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void analyze(); }}
             placeholder="Free tier ends September 1"
             className="flex-1"
             aria-label="Assertion to analyze"
           />
-          <Button onClick={analyze} disabled={running || !claim.trim()} className={running ? "text-clay" : ""}>
+          <Button onClick={() => void analyze()} disabled={running || !claim.trim()} className={running ? "text-clay" : ""}>
             <Sparkles size={14} /> {running ? "Analyzing…" : "Analyze"}
           </Button>
         </div>
+        {failed && <FieldError>{failed}</FieldError>}
 
         {/* Slots 4 + 5: the claim under analysis and what came back. */}
         <CardTitleBlock

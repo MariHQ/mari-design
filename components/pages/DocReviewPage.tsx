@@ -4,12 +4,13 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { DocReviewEditor, type EditorFinding } from "../features/DocReviewEditor";
 import { DocReviewOutlinePanel, type DocRevision } from "../features/DocReviewOutlinePanel";
-import { DocReviewRefinePanel } from "../features/DocReviewRefinePanel";
-import { DocReviewChangeQueue, type DocChange } from "../features/DocReviewChangeQueue";
-import { DocReviewFindingsPanel, type DocClaim, type DocFinding } from "../features/DocReviewFindingsPanel";
+import { DocReviewRefinePanel, type RefineActions } from "../features/DocReviewRefinePanel";
+import { DocReviewChangeQueue, type DocChange, type ChangeQueueActions } from "../features/DocReviewChangeQueue";
+import { DocReviewFindingsPanel, type DocClaim, type DocFinding, type FindingsActions } from "../features/DocReviewFindingsPanel";
 import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate } from "../data-display/Truncate";
+import { FieldError } from "../feedback/ErrorMessage";
 
 /* Doc Review workspace (pages/doc-review.md). A multi-pane editor: outline +
    revisions on the left, the block editor in the centre, refine on the right,
@@ -67,6 +68,22 @@ export type SaveState = "saved" | "dirty" | "saving" | "applied" | "offline-dirt
     the others are the deep-link views of a single pane. */
 export type ReviewPane = "workspace" | "outline" | "editor" | "changes" | "findings" | "refine";
 
+/** What the review workspace can DO. Handlers may throw and the page shows the
+    server's own message beside the control that tried the write.
+
+    Optional, as always: with none of them the editor, the change queue, the
+    refine panel and the fact check keep the local behaviour they already had —
+    which is what the design canvas, with no server behind it, renders. */
+export type DocReviewActions = ChangeQueueActions & RefineActions & FindingsActions & {
+  /** Persist the edited body. */
+  save?: (args: { body: string }) => void | Promise<void>;
+  /** Watch or unwatch this document. Resolves to the new watched state. */
+  toggleWatch?: () => Promise<boolean>;
+};
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+
 /** Everything the Doc Review page renders. */
 export type DocReviewData = {
   title: string;
@@ -87,7 +104,12 @@ function isEmpty(d: DocReviewData): boolean {
     && !doc.changes.length && !doc.findings.length && !doc.claims.length;
 }
 
-function HeaderActions({ save }: { save: SaveState }) {
+function HeaderActions({ save, onSave, onWatch, watched }: {
+  save: SaveState;
+  onSave?: () => void;
+  onWatch?: () => void;
+  watched: boolean;
+}) {
   const offlineDirty = save === "offline-dirty";
   const dirty = save === "dirty";
   const saving = save === "saving";
@@ -113,11 +135,11 @@ function HeaderActions({ save }: { save: SaveState }) {
       <TagChip tag="canonical" />
       <TagChip tag="verified" />
       {statusChip}
-      <Button compact icon={false} disabled={saveDisabled}>
+      <Button compact icon={false} disabled={saveDisabled} onClick={onSave}>
         <Save size={15} /> {saveLabel}
       </Button>
-      <Button compact variant="default">
-        <Eye size={15} /> Watch
+      <Button compact variant="default" onClick={onWatch}>
+        <Eye size={15} /> {watched ? "Watching" : "Watch"}
       </Button>
       <Button compact variant="default">
         <Share2 size={15} /> Share
@@ -126,7 +148,10 @@ function HeaderActions({ save }: { save: SaveState }) {
   );
 }
 
-function Workspace({ mobile, initialTab, doc }: { mobile: boolean; initialTab: BottomTab; doc: ReviewDoc }) {
+function Workspace({ mobile, initialTab, doc, actions, onBodyChange }: {
+  mobile: boolean; initialTab: BottomTab; doc: ReviewDoc;
+  actions?: DocReviewActions; onBodyChange: (body: string) => void;
+}) {
   const [tab, setTab] = useState<BottomTab>(initialTab);
   return (
     <>
@@ -146,10 +171,10 @@ function Workspace({ mobile, initialTab, doc }: { mobile: boolean; initialTab: B
           <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
         </div>
         <div className="min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
-          <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} />
+          <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} onChange={onBodyChange} />
         </div>
         <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
-          <DocReviewRefinePanel {...doc.refine} />
+          <DocReviewRefinePanel {...doc.refine} actions={actions} />
         </div>
       </div>
       <div className="flex flex-col gap-5">
@@ -164,8 +189,8 @@ function Workspace({ mobile, initialTab, doc }: { mobile: boolean; initialTab: B
           ]}
         />
         {tab === "changes"
-          ? <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} />
-          : <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} />}
+          ? <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} actions={actions} />
+          : <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} actions={actions} />}
       </div>
     </>
   );
@@ -183,7 +208,10 @@ function PanelFrame({ title, description, children }: { title: string; descripti
   );
 }
 
-function Body({ data, error, mobile }: { data: DocReviewData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile, onBodyChange }: {
+  data: DocReviewData; error: string | null; actions?: DocReviewActions;
+  mobile: boolean; onBodyChange: (body: string) => void;
+}) {
   const doc = data.doc;
   if (error) {
     return (
@@ -213,28 +241,28 @@ function Body({ data, error, mobile }: { data: DocReviewData; error: string | nu
   if (data.pane === "editor") {
     return (
       <PanelFrame title="Block editor" description="Content-editable blocks with inline finding underlines and margin annotations.">
-        <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} />
+        <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} onChange={onBodyChange} />
       </PanelFrame>
     );
   }
   if (data.pane === "changes") {
     return (
       <PanelFrame title="Change queue" description="Proposed edits as a word-level diff: accept to rewrite the body, reject to dismiss.">
-        <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} />
+        <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} actions={actions} />
       </PanelFrame>
     );
   }
   if (data.pane === "findings") {
     return (
       <PanelFrame title="Fact check" description="Claim tallies, the top contradiction against verified facts, and a create-review-task row.">
-        <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} />
+        <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} actions={actions} />
       </PanelFrame>
     );
   }
   if (data.pane === "refine") {
     return (
       <PanelFrame title="Refine" description="AI editing skills that propose edits into the review-before-apply queue.">
-        <DocReviewRefinePanel {...doc.refine} />
+        <DocReviewRefinePanel {...doc.refine} actions={actions} />
       </PanelFrame>
     );
   }
@@ -252,13 +280,60 @@ function Body({ data, error, mobile }: { data: DocReviewData; error: string | nu
           The document was saved and revisions were refreshed.
         </Alert>
       )}
-      <Workspace mobile={mobile} initialTab={initialTab} doc={doc} />
+      <Workspace mobile={mobile} initialTab={initialTab} doc={doc} actions={actions} onBodyChange={onBodyChange} />
     </>
   );
 }
 
-function DocReviewPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<DocReviewData>) {
-  const actions = <HeaderActions save={data.save} />;
+function DocReviewPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<DocReviewData, DocReviewActions>) {
+  /* Save is a lifecycle this page owns once it can actually write: `data.save`
+     is where the document started, and every edit and every save moves it from
+     there. Without a `save` handler the state is whatever the app said, exactly
+     as before. */
+  const [save, setSave] = useState<SaveState | null>(null);
+  const [body, setBody] = useState<string | null>(null);
+  const [watched, setWatched] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const saveState = save ?? data.save;
+
+  const onBodyChange = (next: string) => {
+    if (!actions?.save) return; // nothing to save it with: no false "unsaved".
+    setBody(next);
+    setSave("dirty");
+  };
+
+  const onSave = async () => {
+    if (!actions?.save || body === null) return;
+    setSave("saving");
+    setFailed(null);
+    try {
+      await actions.save({ body });
+      setSave("applied");
+    } catch (e) {
+      setSave("dirty");
+      setFailed(why(e, "This document could not be saved."));
+    }
+  };
+
+  const onWatch = async () => {
+    if (!actions?.toggleWatch) { setWatched((v) => !v); return; }
+    setFailed(null);
+    try {
+      setWatched(await actions.toggleWatch());
+    } catch (e) {
+      setFailed(why(e, "That subscription could not be changed."));
+    }
+  };
+
+  const headerActions = (
+    <HeaderActions
+      save={saveState}
+      watched={watched}
+      onSave={actions?.save ? onSave : undefined}
+      onWatch={actions?.toggleWatch ? onWatch : undefined}
+    />
+  );
   return (
     <PageFrame chrome={chrome} active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
       {loading ? (
@@ -272,12 +347,19 @@ function DocReviewPage({ data, loading = false, error = null, chrome, mobile = f
         <PageHeader
           title={data.title}
           backLink={{ href: "/knowledge", label: "Library" }}
-          actions={mobile ? undefined : actions}
+          actions={mobile ? undefined : headerActions}
         />
         <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">{data.subtitle}</Truncate>
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+        <FieldError>{failed}</FieldError>
         <div className="mt-6 flex flex-col gap-5">
-          <Body data={data} error={error} mobile={mobile} />
+          <Body
+            data={{ ...data, save: saveState }}
+            error={error}
+            actions={actions}
+            mobile={mobile}
+            onBodyChange={onBodyChange}
+          />
         </div>
       </div>
       )}
@@ -285,7 +367,7 @@ function DocReviewPage({ data, loading = false, error = null, chrome, mobile = f
   );
 }
 
-export const page: PageModule<DocReviewData> = {
+export const page: PageModule<DocReviewData, DocReviewActions> = {
   id: "doc-review",
   title: "Doc Review",
   route: "/knowledge/doc",

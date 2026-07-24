@@ -16,6 +16,8 @@ import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* Publish · MCP servers ───────────────────────────────────────────────────
    Expose the curated knowledge base to Claude and other agents as
@@ -51,7 +53,29 @@ const SCOPE_LABEL: Record<string, string> = Object.fromEntries(MCP_SCOPES.map((s
 const normalizeScope = (s: string): McpScope => (s === "project" ? "workspace" : (s as McpScope));
 
 export type McpServer = { id: number; name: string; url: string; scope: McpScope | "project"; status: "connected" | "idle"; capabilities: string[] };
-type McpTest = { ok: boolean; latency_ms: number; checks: Record<string, number> } | "error" | null;
+
+/** What a real reachability check reports back. Every field is optional: the
+    report is the server's own JSON and an older API may say less. A failed
+    check answers `{ok: false, error}` rather than throwing, so `error` is the
+    reason the card has to show. */
+export type McpTestReport = {
+  ok?: boolean; latency_ms?: number; checks?: Record<string, number>; error?: string;
+};
+
+/** A server the API has just created: the row it minted, plus the bearer token
+    that exists only in this response and is shown exactly once. */
+export type CreatedMcpServer = { id: number; url: string; token: string };
+
+/** What the MCP surface can DO. All optional: with none, the controls keep the
+    local behaviour below, which is what the design canvas renders. */
+export type PublishMcpActions = {
+  createServer?: (draft: { name: string; scope: string; capabilities: string[] }) => CreatedMcpServer | Promise<CreatedMcpServer>;
+  updateServer?: (id: number, next: { scope: string; capabilities: string[] }) => void | Promise<void>;
+  deleteServer?: (id: number) => void | Promise<void>;
+  testServer?: (id: number) => McpTestReport | Promise<McpTestReport>;
+};
+
+type McpTest = { ok: boolean; latency_ms: number; checks: Record<string, number>; error?: string } | "error" | null;
 
 function connectSnippet(name: string, url: string, token?: string) {
   return `claude mcp add ${name} --transport http ${url || "<url>"} \\\n  --header "Authorization: Bearer ${token ?? "YOUR_TOKEN"}"`;
@@ -81,9 +105,9 @@ function CapPicker({ selected, onToggle }: { selected: string[]; onToggle: (k: s
   );
 }
 
-export type PublishMcpServersProps = { servers: McpServer[]; loading?: boolean; className?: string };
+export type PublishMcpServersProps = { servers: McpServer[]; actions?: PublishMcpActions; loading?: boolean; className?: string };
 
-export function PublishMcpServers({ servers: initialServers, loading = false, className = "" }: PublishMcpServersProps) {
+export function PublishMcpServers({ servers: initialServers, actions, loading = false, className = "" }: PublishMcpServersProps) {
   const [servers, setServers] = useState<McpServer[]>(initialServers);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -98,19 +122,38 @@ export function PublishMcpServers({ servers: initialServers, loading = false, cl
   const toggleCap = (setter: (fn: (c: string[]) => string[]) => void) => (k: string) =>
     setter((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
 
-  const create = () => {
-    if (!name.trim() || caps.length === 0) return;
-    const token = randomToken();
-    const id = Math.max(0, ...servers.map((s) => s.id)) + 1;
-    const url = `https://mcp.acme.com/s/${name.trim()}`;
-    setServers((s) => [...s, { id, name: name.trim(), url, scope, status: "idle", capabilities: caps }]);
-    setFresh({ name: name.trim(), token });
+  /* Create / configure / delete / test all go through `write`: with no
+     `actions` they are the local-state changes this panel has always made, and
+     with actions they are the server's answer (actions/useWrite.ts). */
+  const write = useWrite();
+
+  const create = async () => {
+    const serverName = name.trim();
+    if (!serverName || caps.length === 0) return;
+    // The id, the URL and the token are all the server's to mint. Only when
+    // there is no server behind the page does this panel invent them.
+    const made = actions?.createServer
+      ? await write.runFor(() => actions.createServer!({ name: serverName, scope, capabilities: caps }))
+      : {
+          id: Math.max(0, ...servers.map((s) => s.id)) + 1,
+          url: `https://mcp.acme.com/s/${serverName}`,
+          token: randomToken(),
+        };
+    if (!made) return;
+    setServers((s) => [...s, { id: made.id, name: serverName, url: made.url, scope, status: "idle", capabilities: caps }]);
+    setFresh({ name: serverName, token: made.token });
     setName(""); setScope("workspace"); setCaps(["search", "facts"]); setCreating(false);
   };
 
-  const del = (id: number) => setServers((s) => s.filter((x) => x.id !== id));
-  const saveCaps = (id: number, scope: McpScope, capabilities: string[]) =>
-    setServers((s) => s.map((x) => (x.id === id ? { ...x, scope, capabilities } : x)));
+  /* Destructive: the caller is <ConfirmButton>, so this is the second click. */
+  const del = (id: number) => write.run(
+    actions?.deleteServer && (() => actions.deleteServer!(id)),
+    () => setServers((s) => s.filter((x) => x.id !== id)),
+  );
+  const saveCaps = (id: number, scope: McpScope, capabilities: string[]) => write.run(
+    actions?.updateServer && (() => actions.updateServer!(id, { scope, capabilities })),
+    () => setServers((s) => s.map((x) => (x.id === id ? { ...x, scope, capabilities } : x))),
+  );
 
   if (loading) {
     return (
@@ -137,6 +180,8 @@ export function PublishMcpServers({ servers: initialServers, loading = false, cl
         actions={<><CountChip count={servers.length} /><Button variant="primary" onClick={() => setCreating((v) => !v)}><Plus size={15} /> New server</Button></>}
       />
 
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+
       {fresh && (
         <TokenRevealUI token={fresh.token} title={`${fresh.name} is live. Here is your bearer token`} onDismiss={() => setFresh(null)} />
       )}
@@ -149,7 +194,7 @@ export function PublishMcpServers({ servers: initialServers, loading = false, cl
           </div>
           <div className="mt-4"><SectionLabel>Capabilities, {capTools(caps)} tools selected</SectionLabel><div className="mt-1.5"><CapPicker selected={caps} onToggle={toggleCap(setCaps)} /></div></div>
           <div className="mt-4 flex items-center gap-2">
-            <Button variant="primary" disabled={!name.trim() || caps.length === 0} onClick={create}>Create server</Button>
+            <Button variant="primary" disabled={write.busy || !name.trim() || caps.length === 0} onClick={() => void create()}>{write.busy ? "Creating…" : "Create server"}</Button>
             <Button onClick={() => setCreating(false)}>Cancel</Button>
           </div>
         </Card>
@@ -171,7 +216,14 @@ export function PublishMcpServers({ servers: initialServers, loading = false, cl
             />
           </div>
           {(showAll ? servers : servers.slice(0, PAGE)).map((s) => (
-            <ServerCard key={s.id} server={s} freshToken={fresh?.name === s.name ? fresh.token : undefined} onDelete={() => del(s.id)} onSave={(scope, caps) => saveCaps(s.id, scope, caps)} />
+            <ServerCard
+              key={s.id}
+              server={s}
+              freshToken={fresh?.name === s.name ? fresh.token : undefined}
+              onDelete={() => del(s.id)}
+              onSave={(scope, caps) => saveCaps(s.id, scope, caps)}
+              onTest={actions?.testServer && (() => actions.testServer!(s.id))}
+            />
           ))}
         </div>
       )}
@@ -179,19 +231,44 @@ export function PublishMcpServers({ servers: initialServers, loading = false, cl
   );
 }
 
-function ServerCard({ server, freshToken, onDelete, onSave }: {
-  server: McpServer; freshToken?: string; onDelete: () => void; onSave: (scope: McpScope, caps: string[]) => void;
+function ServerCard({ server, freshToken, onDelete, onSave, onTest }: {
+  server: McpServer; freshToken?: string; onDelete: () => void;
+  onSave: (scope: McpScope, caps: string[]) => void;
+  /** A real reachability check. Absent means there is no server behind the
+      page and the card reports what it can see locally instead. */
+  onTest?: () => McpTestReport | Promise<McpTestReport>;
 }) {
   const [open, setOpen] = useState<null | "test" | "configure" | "connect">(null);
   const [test, setTest] = useState<McpTest>(null);
+  const [testing, setTesting] = useState(false);
   const [draftScope, setDraftScope] = useState<McpScope>(normalizeScope(server.scope));
   const [draftCaps, setDraftCaps] = useState<string[]>(server.capabilities);
 
-  const runTest = () => {
+  const runTest = async () => {
     setOpen("test");
-    const checks: Record<string, number> = {};
-    server.capabilities.forEach((c) => { checks[c] = Math.floor(Math.random() * 400) + 20; });
-    setTest({ ok: server.status === "connected", latency_ms: 40 + Math.floor(Math.random() * 60), checks });
+    if (!onTest) {
+      const checks: Record<string, number> = {};
+      server.capabilities.forEach((c) => { checks[c] = Math.floor(Math.random() * 400) + 20; });
+      setTest({ ok: server.status === "connected", latency_ms: 40 + Math.floor(Math.random() * 60), checks });
+      return;
+    }
+    setTesting(true);
+    setTest(null);
+    try {
+      const r = await onTest();
+      // The report is the server's own JSON, so read it defensively rather
+      // than asserting a shape an older API may not send.
+      setTest({
+        ok: Boolean(r?.ok),
+        latency_ms: Number(r?.latency_ms ?? 0),
+        checks: r?.checks ?? {},
+        error: r?.error,
+      });
+    } catch {
+      setTest("error");
+    } finally {
+      setTesting(false);
+    }
   };
   const toggleDraft = (k: string) => setDraftCaps((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
   const dotColor = server.status === "connected" ? "bg-moss" : "bg-[#c9bda0]";
@@ -220,16 +297,23 @@ function ServerCard({ server, freshToken, onDelete, onSave }: {
       {/* Actions bottom LEFT, primary first (CONVENTIONS.md §2). */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <Button compact variant="primary" onClick={() => setOpen(open === "configure" ? null : "configure")}>Configure</Button>
-        <Button compact onClick={runTest}>Test</Button>
+        <Button compact disabled={testing} onClick={() => void runTest()}>{testing ? "Testing…" : "Test"}</Button>
         <Button compact onClick={() => setOpen(open === "connect" ? null : "connect")}>How to connect</Button>
         <ConfirmButton compact confirmLabel="Delete server?" onConfirm={onDelete}>Delete</ConfirmButton>
       </div>
 
-      {open === "test" && test && (
+      {open === "test" && (testing || test) && (
         <div className="mt-3 rounded-md border border-ink/15 p-3">
-          {test === "error" ? <p className="text-[13px] text-espelette">Test failed. Check that the API is running.</p> : (
+          {testing && <p className="text-[13px] text-ink/70">Contacting the server…</p>}
+          {test === "error" ? <p className="text-[13px] text-espelette">Test failed. Check that the API is running.</p> : test && (
             <>
-              <p className="text-[13px] font-medium text-ink">{test.ok ? "Connected" : "Not responding"} <span className="font-term text-[11.5px] text-ink/65">· {test.latency_ms}ms</span></p>
+              <p className="text-[13px] font-medium text-ink">
+                {test.ok ? "Connected" : "Not responding"}
+                {test.latency_ms > 0 && <span className="font-term text-[11.5px] text-ink/65"> · {test.latency_ms}ms</span>}
+              </p>
+              {/* A failed check answers with a reason instead of throwing, so
+                  the card says what the server said (CONVENTIONS §8). */}
+              {!test.ok && test.error && <p className="mt-1 font-term text-[12px] text-espelette">{test.error}</p>}
               <ul className="mt-1.5 flex flex-col gap-0.5">
                 {Object.entries(test.checks).map(([k, n]) => <li key={k} className="font-term text-[12px] text-ink/70"><span className="text-ink/65">{k}</span> ✓ {n} {MCP_UNITS[k] ?? "items"}</li>)}
               </ul>

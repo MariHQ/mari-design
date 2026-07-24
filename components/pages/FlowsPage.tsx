@@ -1,10 +1,10 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Workflow, Bell, FileText } from "lucide-react";
-import { FlowsList, type Flow, type SourceRef } from "../features/FlowsList";
+import { FlowsList, type Flow, type FlowsListActions, type SourceRef } from "../features/FlowsList";
 import { FlowsPipelineEditor, type EditorStep, type SiteRef } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
-import { FlowsRunPanel } from "../features/FlowsRunPanel";
+import { FlowsRunPanel, type FlowsRunActions } from "../features/FlowsRunPanel";
 import type { WorkflowRun } from "../workflow/RunHistory";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 import { PageHeader } from "../layout/PageHeader";
@@ -45,6 +45,11 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** What the Flows page can DO. Every handler may throw and the control that
+    called it shows the message. All optional: without actions every control
+    keeps the local behaviour the library ships (the canvas has no server). */
+export type FlowsActions = FlowsListActions & FlowsRunActions;
 
 export type TriggerKind = "manual" | "schedule" | "document";
 
@@ -190,7 +195,9 @@ function showsHeader(d: FlowsData, error: string | null): boolean {
   return Boolean(d.extras || d.runHistory || d.runPanel);
 }
 
-function Body({ data, error, mobile }: { data: FlowsData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, mobile }: {
+  data: FlowsData; error: string | null; actions?: FlowsActions; mobile: boolean;
+}) {
   if (error) return <ErrorMessage id="server.unavailable" />;
   if (isEmpty(data)) {
     return (
@@ -206,13 +213,13 @@ function Body({ data, error, mobile }: { data: FlowsData; error: string | null; 
     return (
       <>
         {data.extras && <Extras extras={data.extras} />}
-        {data.runHistory && <FlowsRunHistory runs={data.runHistory.runs} limit={data.runHistory.limit} />}
-        {data.runPanel && <FlowsRunPanel runs={data.runPanel.runs} openNumber={data.runPanel.openNumber} />}
+        {data.runHistory && <FlowsRunHistory runs={data.runHistory.runs} limit={data.runHistory.limit} actions={actions} />}
+        {data.runPanel && <FlowsRunPanel runs={data.runPanel.runs} openNumber={data.runPanel.openNumber} actions={actions} />}
       </>
     );
   }
 
-  const list = <FlowsList flows={data.flows} sources={data.sources} />;
+  const list = <FlowsList flows={data.flows} sources={data.sources} actions={actions} />;
 
   if (data.trigger) {
     /* Standard 320px supporting rail beside the list on desktop (§11; §10: no
@@ -236,7 +243,7 @@ function Body({ data, error, mobile }: { data: FlowsData; error: string | null; 
   return list;
 }
 
-function FlowsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<FlowsData>) {
+function FlowsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<FlowsData, FlowsActions>) {
   const showHeader = showsHeader(data, error);
   return (
     <PageFrame chrome={chrome} active={navFor("flows")} title="Flows" mobile={mobile}>
@@ -252,7 +259,7 @@ function FlowsPage({ data, loading = false, error = null, chrome, mobile = false
             />
           )}
           <div className={`flex flex-col gap-5 [&>*]:min-w-0 ${showHeader ? "mt-6" : ""}`}>
-            <Body data={data} error={error} mobile={mobile} />
+            <Body data={data} error={error} actions={actions} mobile={mobile} />
           </div>
         </div>
       )}
@@ -260,7 +267,7 @@ function FlowsPage({ data, loading = false, error = null, chrome, mobile = false
   );
 }
 
-export const page: PageModule<FlowsData> = {
+export const page: PageModule<FlowsData, FlowsActions> = {
   id: "flows",
   title: "Flows",
   route: "/flows",

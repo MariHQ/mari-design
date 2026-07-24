@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ErrorMessage } from "../feedback/ErrorMessage";
+import { Alert } from "../feedback/Alert";
+import { Spinner } from "../data-display/Spinner";
 import {
   CheckCircle2, ArrowRight, ChevronRight, GitFork, Lock, ExternalLink,
   Send, FileText, BookOpen, GitBranch, Bot, Sparkles,
@@ -81,6 +83,37 @@ export type UploadedFile = { name: string; detail: string };
 
 /** What the onboarding run actually achieved, for the Done step. */
 export type WelcomeSummary = { sourcesSynced: number; guide: string; glossaryTerms: number };
+
+/** What onboarding can DO. This is the path out of an empty workspace, so
+ *  every failure here has to arrive intact: a GitHub token that cannot see a
+ *  repository, a Slack app that was never installed, a workspace that already
+ *  has that source. Handlers throw and the step shows the server's words.
+ *
+ *  All optional (CONVENTIONS.md §2): stepping through the wizard is local
+ *  state and works with no server at all, which is what the canvas renders. */
+export type WelcomeActions = {
+  /** Leave onboarding for somewhere else in the console ("/", "/sources",
+      "/library"). The page emits the intent; the APP owns routing. This used
+      to be `window.location.href = "/"` inside the component, which is a hard
+      reload, loses the SPA's session state, and bakes one app's URL scheme
+      into a library component. */
+  navigate?: (href: string) => void;
+  /** Create a GitHub source from a repo the token can see, and start syncing. */
+  connectGithubRepo?: (v: { repo: string; paths: string }) => void | Promise<void>;
+  /** Create any catalog connector from its credential fields. */
+  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | Promise<void>;
+  /** Ingest files straight from the device: no credentials involved. */
+  uploadFiles?: (files: File[]) => void | Promise<void>;
+  /** Adopt a style pack as the workspace default. */
+  chooseGuide?: (id: string) => void | Promise<void>;
+  /** Mine the connected documents for glossary candidates, and return the
+      fresh list so the review step shows what the scan actually found. */
+  harvestGlossary?: () => Promise<Candidate[]>;
+  /** Save the candidates the user kept. */
+  addGlossaryTerms?: (terms: Candidate[]) => void | Promise<void>;
+  /** Leave onboarding for the console. */
+  finish?: () => void | Promise<void>;
+};
 
 /** Everything the onboarding wizard renders. */
 export type WelcomeData = {
@@ -175,7 +208,18 @@ function Hero() {
 
 /* ── Step 1: connector grid ───────────────────────────────────────────── */
 
-function ConnectGrid({ tiles, connectorCount }: { tiles: Tile[]; connectorCount: number }) {
+/** Tiles onboarding has a dedicated step for. Everything else in the catalog
+    is set up on Sources, which carries the full wizard. */
+const TILE_STEP: Record<string, WelcomeStep> = {
+  github: "connect-github", slack: "connect-slack", notion: "connect-notion",
+  gdrive: "connect-gdrive", upload: "connect-upload",
+};
+
+function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]; connectorCount: number; nav: StepNav; onNavigate?: (href: string) => void }) {
+  const cls = (active?: boolean) =>
+    `flex w-full items-center gap-3 rounded-md border p-3 text-left ${focusRing} ${
+      active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
+    }`;
   return (
     <div className="space-y-5">
       <div>
@@ -185,23 +229,31 @@ function ConnectGrid({ tiles, connectorCount }: { tiles: Tile[]; connectorCount:
         </p>
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {tiles.map((t) => (
-          <div key={t.key}
-            className={`flex items-center gap-3 rounded-md border p-3 text-left ${
-              t.active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
-            }`}>
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-ink/12"><SourceMark provider={t.key} size={20} /></span>
-            <span className="min-w-0 flex-1">
-              <b className="block text-[13.5px] font-semibold text-ink">{t.name}</b>
-              <span className="block truncate text-[12px] text-ink/60">{t.blurb}</span>
-            </span>
-            {t.connected
-              ? <Chip label="Connected" tone="ok" icon={<CheckCircle2 size={11} />} className="shrink-0" />
-              : <span className="shrink-0 font-term text-[11.5px] text-biscay-2">Connect →</span>}
-          </div>
-        ))}
+        {tiles.map((t) => {
+          const step = TILE_STEP[t.key];
+          const inner = (
+            <>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-ink/12"><SourceMark provider={t.key} size={20} /></span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-[13.5px] font-semibold text-ink">{t.name}</b>
+                <span className="block truncate text-[12px] text-ink/60">{t.blurb}</span>
+              </span>
+              {t.connected
+                ? <Chip label="Connected" tone="ok" icon={<CheckCircle2 size={11} />} className="shrink-0" />
+                : <span className="shrink-0 font-term text-[11.5px] text-biscay-2">Connect →</span>}
+            </>
+          );
+          /* A tile onboarding has no step for still goes somewhere real:
+             Sources carries every connector in the catalog. A tile that only
+             looked clickable was the dead end that made this step useless. */
+          return step ? (
+            <button key={t.key} type="button" onClick={() => nav.go(step)} className={cls(t.active)}>{inner}</button>
+          ) : (
+            <button key={t.key} type="button" onClick={() => onNavigate?.("/sources")} className={cls(t.active)}>{inner}</button>
+          );
+        })}
       </div>
-      <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
+      <button type="button" onClick={() => onNavigate?.("/sources")} className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
         <ChevronRight size={13} /> Show all {connectorCount} connectors
       </button>
     </div>
@@ -232,32 +284,72 @@ function ConnectorHeader({ provider, name, blurb, docs }: {
   );
 }
 
-function BackToConnectors() {
+function BackToConnectors({ onBack }: { onBack: () => void }) {
   return (
-    <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
+    <button type="button" onClick={onBack} className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
       ← All connectors
     </button>
   );
 }
 
-function ConnectFooterHint({ children }: { children: ReactNode }) {
+/* The one submit for every connector step: busy while the server works, and
+   the server's own refusal above the button. "Bad credentials" and
+   "Repository acme/docs not found" are the two things this fails on, and both
+   name exactly what the user has to change — so neither may be flattened into
+   a house apology (CONVENTIONS.md §8). */
+function ConnectFooter({ hint, label = "Connect & sync", disabled = false, run, onDone }: {
+  hint: ReactNode;
+  label?: string;
+  disabled?: boolean;
+  /** Omitted (canvas, no server): the step simply advances. */
+  run?: () => void | Promise<void>;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const go = async () => {
+    if (!run) { onDone(); return; }
+    setBusy(true);
+    setFailed(null);
+    try {
+      await run();
+      onDone();
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "The source could not be connected.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
-      <span className="flex-1 text-[12px] text-ink/65">{children}</span>
-      <Button variant="primary">Connect &amp; sync <ArrowRight size={14} /></Button>
-    </div>
+    <>
+      {failed && <Alert tone="blocked" title="Could not connect">{failed}</Alert>}
+      <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
+        <span className="flex-1 text-[12px] text-ink/65">{hint}</span>
+        <Button variant="primary" disabled={busy || disabled} onClick={() => void go()}>
+          {busy ? <><Spinner size="sm" /> Connecting…</> : <>{label} <ArrowRight size={14} /></>}
+        </Button>
+      </div>
+    </>
   );
 }
 
-function CredFields({ fields }: { fields: CField[] }) {
+/** Controlled credential form. `values`/`onChange` live in the step, because
+    the values have to leave the form for the connect call. */
+function CredFields({ fields, values, onChange }: {
+  fields: CField[];
+  values: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+}) {
   return (
     <div className="space-y-3">
       {fields.map((f) => (
         <Field key={f.key} label={f.label}>
           {f.multiline ? (
-            <Textarea className="w-full font-term" rows={4} placeholder={f.placeholder} defaultValue={f.value} autoComplete="off" />
+            <Textarea className="w-full font-term" rows={4} placeholder={f.placeholder} value={values[f.key] ?? ""} onChange={(e) => onChange(f.key, e.target.value)} autoComplete="off" />
           ) : (
-            <Input className="w-full" type={f.secret ? "password" : "text"} placeholder={f.placeholder} defaultValue={f.value} autoComplete="off" />
+            <Input className="w-full" type={f.secret ? "password" : "text"} placeholder={f.placeholder} value={values[f.key] ?? ""} onChange={(e) => onChange(f.key, e.target.value)} autoComplete="off" />
           )}
           {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
         </Field>
@@ -267,19 +359,41 @@ function CredFields({ fields }: { fields: CField[] }) {
   );
 }
 
-function GithubConnect({ data }: { data: WelcomeData }) {
-  const selected = data.selectedRepo;
+/** Every connector step shares this: seeded values, a back link, a submit. */
+function useCredValues(fields: CField[]) {
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(fields.map((f) => [f.key, f.value ?? ""])));
+  return {
+    values,
+    set: (key: string, value: string) => setValues((s) => ({ ...s, [key]: value })),
+    filled: fields.length === 0 || fields.every((f) => (values[f.key] ?? "").trim().length > 0),
+  };
+}
+
+type StepNav = { go: (step: WelcomeStep) => void };
+
+function GithubConnect({ data, actions, nav }: { data: WelcomeData; actions?: WelcomeActions; nav: StepNav }) {
+  /* Which repo, and which glob: choices the user makes here. They used to be
+     `defaultChecked`/`defaultValue` against the data, so the picker moved but
+     the selection never left the form. */
+  const [selected, setSelected] = useState(data.selectedRepo);
+  const [glob, setGlob] = useState(data.pathsGlob);
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="github" name="GitHub" blurb="Pick a repository from your token’s scope, then narrow to a paths glob." />
-      <BackToConnectors />
+      <BackToConnectors onBack={() => nav.go("connect")} />
+      {data.repos.length === 0 && (
+        <p className="text-[13px] text-ink/70">
+          No repositories are visible to this workspace’s GitHub token. Add a token with repository read access, then reload this step.
+        </p>
+      )}
       <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5">
         {data.repos.map((r) => {
           const active = r.name === selected;
           return (
             <label key={r.name}
-              className={`flex min-w-0 items-center gap-2.5 rounded-md border p-2.5 ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15"}`}>
-              <input type="radio" name="repo" className="accent-biscay shrink-0" defaultChecked={active} readOnly />
+              className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md border p-2.5 ${active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"}`}>
+              <input type="radio" name="repo" className="accent-biscay shrink-0" checked={active} onChange={() => setSelected(r.name)} />
               <GitFork size={14} className="shrink-0 text-ink/65" />
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -294,64 +408,91 @@ function GithubConnect({ data }: { data: WelcomeData }) {
         })}
       </div>
       <Field label="Paths filter (glob)">
-        <Input className="w-full font-term" defaultValue={data.pathsGlob} />
+        <Input className="w-full font-term" value={glob} onChange={(e) => setGlob(e.target.value)} placeholder="docs/**" />
       </Field>
-      <ConnectFooterHint>Mari Cloud syncs Markdown docs read-only.</ConnectFooterHint>
+      <ConnectFooter
+        hint="Mari Cloud syncs Markdown docs read-only."
+        disabled={!selected}
+        run={actions?.connectGithubRepo ? () => actions.connectGithubRepo!({ repo: selected, paths: glob }) : undefined}
+        onDone={() => nav.go("connect-syncing")}
+      />
     </div>
   );
 }
 
-function SlackConnect({ fields }: { fields: CField[] }) {
+/** Slack, Notion and Google Drive differ only in copy: one credential form,
+    one connect call against the catalog provider key. */
+function CredConnect({ provider, name, blurb, hint, fields, note, actions, nav }: {
+  provider: string; name: string; blurb: string; hint: string;
+  fields: CField[]; note?: ReactNode; actions?: WelcomeActions; nav: StepNav;
+}) {
+  const cred = useCredValues(fields);
   return (
     <div className="space-y-4">
-      <ConnectorHeader provider="slack" name="Slack" blurb="Import channel history into your shared knowledge library." docs />
-      <BackToConnectors />
-      <CredFields fields={fields} />
-      <div className="flex items-start gap-2 rounded-[4px] border border-ink/12 bg-flysch px-3 py-2 text-[12px] text-ink/70">
-        <Bot size={13} className="mt-0.5 shrink-0" />
-        Importing channel history is separate from the answering bot — set that up under Settings → Sources → Bots.
-      </div>
-      <ConnectFooterHint>Credentials validate against the Slack API before syncing.</ConnectFooterHint>
+      <ConnectorHeader provider={provider} name={name} blurb={blurb} docs />
+      <BackToConnectors onBack={() => nav.go("connect")} />
+      <CredFields fields={fields} values={cred.values} onChange={cred.set} />
+      {note}
+      <ConnectFooter
+        hint={hint}
+        disabled={!cred.filled}
+        run={actions?.connectSource ? () => actions.connectSource!({ provider, config: cred.values }) : undefined}
+        onDone={() => nav.go("connect-syncing")}
+      />
     </div>
   );
 }
 
-function NotionConnect({ fields }: { fields: CField[] }) {
-  return (
-    <div className="space-y-4">
-      <ConnectorHeader provider="notion" name="Notion" blurb="Sync pages and databases shared with an internal integration." docs />
-      <BackToConnectors />
-      <CredFields fields={fields} />
-      <ConnectFooterHint>Only pages shared with the integration are visible.</ConnectFooterHint>
-    </div>
-  );
-}
+function UploadConnect({ data, actions, nav }: { data: WelcomeData; actions?: WelcomeActions; nav: StepNav }) {
+  const [chosen, setChosen] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [ingested, setIngested] = useState<string[]>([]);
 
-function GdriveConnect({ fields }: { fields: CField[] }) {
-  return (
-    <div className="space-y-4">
-      <ConnectorHeader provider="gdrive" name="Google Drive" blurb="Sync Docs and folders through a service account." docs />
-      <BackToConnectors />
-      <CredFields fields={fields} />
-      <ConnectFooterHint>Google Docs are exported to Markdown on sync.</ConnectFooterHint>
-    </div>
-  );
-}
+  const upload = async (files: File[]) => {
+    setChosen(files);
+    if (!actions?.uploadFiles || files.length === 0) return;
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions.uploadFiles(files);
+      setIngested(files.map((f) => f.name));
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "Those files could not be ingested.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-function UploadConnect({ data }: { data: WelcomeData }) {
+  /* Rows the server has actually ingested win over rows this session picked;
+     the manifest from the last read is the floor. */
+  const rows = ingested.length
+    ? ingested.map((name) => ({ name, detail: "Ingested" }))
+    : chosen.length
+      ? chosen.map((f) => ({ name: f.name, detail: `${Math.max(1, Math.round(f.size / 1024))} KB` }))
+      : data.uploadFiles;
+
   return (
     <div className="space-y-4">
-      <ConnectorHeader provider="upload" name="files" blurb="Drag in .md / .txt files — they run the same chunk → embed pipeline as sync." />
-      <BackToConnectors />
-      <div className="grid place-items-center gap-2 rounded-md border-2 border-dashed border-ink/20 px-6 py-9 text-center">
+      <ConnectorHeader provider="upload" name="files" blurb="Drag in .md / .txt files. They run the same chunk to embed pipeline as sync." />
+      <BackToConnectors onBack={() => nav.go("connect")} />
+      <label className={`grid cursor-pointer place-items-center gap-2 rounded-md border-2 border-dashed border-ink/20 px-6 py-9 text-center ${focusRing}`}>
+        <input type="file" multiple className="sr-only" accept=".md,.mdx,.markdown,.txt"
+          onChange={(e) => void upload(Array.from(e.target.files ?? []))} />
         <Send size={22} className="-rotate-45 text-ink/35" />
         <span className="text-[13px] text-ink/60">Drag files here, or</span>
-        <Button compact>Browse files</Button>
-      </div>
+        {/* A <button> inside the <label> would swallow the click and never
+            reach the file input, so the affordance is a styled span and the
+            whole drop zone is the control. */}
+        <span className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper px-3 text-[13px] font-medium text-ink/80">
+          {busy ? <><Spinner size="sm" /> Uploading…</> : "Browse files"}
+        </span>
+      </label>
+      {failed && <Alert tone="blocked" title="Upload failed">{failed}</Alert>}
       <div>
         <p className="text-[12.5px] text-ink/70">{data.uploadSummary} <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
         <div className="mt-2 grid grid-cols-1 gap-1.5">
-          {data.uploadFiles.map((f) => (
+          {rows.map((f) => (
             <div key={f.name} className="flex items-center gap-2 rounded-md border border-ink/12 p-2">
               <FileText size={14} className="shrink-0 text-ink/65" />
               <span className="flex-1 truncate text-[13px] text-ink">{f.name}</span>
@@ -362,26 +503,40 @@ function UploadConnect({ data }: { data: WelcomeData }) {
       </div>
       <div className="mt-2 flex items-center gap-3 border-t border-ink/10 pt-3">
         <span className="flex-1 text-[12px] text-ink/65">.md / .txt · up to 20 files · 1 MB each</span>
-        <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
+        <Button variant="primary" disabled={busy} onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
   );
 }
 
-function ConnectSyncing({ row }: { row: SyncRow }) {
+function ConnectSyncing({ row, nav }: { row: SyncRow; nav: StepNav }) {
   /* The brand mark is built from the provider key, so the row itself stays
      plain JSON. */
   const source: SyncSource = {
     ...row,
     provider: row.provider,
   };
+  /* An empty row means the source was just created and this step has no live
+     status for it: the wizard reads its data once, and the sync started after
+     that read. Saying so beats rendering an all-zero progress panel, which
+     reads as a sync that is stuck. */
+  const live = row.id !== "";
   return (
     <div className="space-y-4">
-      <ConnectorHeader provider="github" name="GitHub" blurb="The initial sync runs on the server — live status below." />
-      <SyncPanel sources={[source]} />
+      <ConnectorHeader provider={row.provider || "github"} name={row.name || "your source"}
+        blurb="The initial sync runs on the server." />
+      {live ? (
+        <SyncPanel sources={[source]} />
+      ) : (
+        <p className="text-[13px] leading-relaxed text-ink/70">
+          The source is connected and its first sync is running on the server.
+          Progress shows up on the Finish step and on Sources, and it keeps
+          running whether or not this window stays open.
+        </p>
+      )}
       <div className="flex items-center gap-3 border-t border-ink/10 pt-3">
-        <span className="flex-1 text-[12px] text-ink/65">Sync continues on the server — leaving this step won’t interrupt it.</span>
-        <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
+        <span className="flex-1 text-[12px] text-ink/65">Sync continues on the server. Leaving this step won’t interrupt it.</span>
+        <Button variant="primary" onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
   );
@@ -389,32 +544,69 @@ function ConnectSyncing({ row }: { row: SyncRow }) {
 
 /* ── Steps 2–4 ────────────────────────────────────────────────────────── */
 
-function GuideStep({ packs }: { packs: GuidePack[] }) {
+function GuideStep({ packs, actions }: { packs: GuidePack[]; actions?: WelcomeActions }) {
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const pick = (id: string) => {
+    if (!actions?.chooseGuide) return;
+    setSaving(true);
+    setFailed(null);
+    void (async () => {
+      try { await actions.chooseGuide!(id); }
+      catch (err) { setFailed(err instanceof Error ? err.message : "That style guide could not be saved."); }
+      finally { setSaving(false); }
+    })();
+  };
   return (
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Choose a style guide</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default: you can change it any time.</p>
       </div>
-      <WelcomeGuideStep packs={packs} />
-      <Button variant="link">Manage guides in the Library →</Button>
+      {failed && <Alert tone="blocked" title="Could not save your pick">{failed}</Alert>}
+      <WelcomeGuideStep packs={packs} saving={saving} onPick={pick} />
+      <Button variant="link" onClick={() => actions?.navigate?.("/library")}>Manage guides in the Library →</Button>
     </div>
   );
 }
 
-function GlossaryStep({ candidates }: { candidates: Candidate[] }) {
+function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; actions?: WelcomeActions }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const guard = async <T,>(fn: () => Promise<T> | T): Promise<T> => {
+    setFailed(null);
+    try { return await fn(); }
+    catch (err) {
+      setFailed(err instanceof Error ? err.message : "The glossary step failed.");
+      throw err; // the step keeps its own busy state honest
+    }
+  };
   return (
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Seed your glossary</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Harvest candidate terms from the documents you just connected.</p>
       </div>
-      <WelcomeGlossaryStep candidates={candidates} />
+      {failed && <Alert tone="blocked" title="Glossary step failed">{failed}</Alert>}
+      <WelcomeGlossaryStep
+        candidates={candidates}
+        onScan={actions?.harvestGlossary ? () => guard(() => actions.harvestGlossary!()) : undefined}
+        onAdd={actions?.addGlossaryTerms ? (picked) => guard(() => actions.addGlossaryTerms!(picked)) : undefined}
+      />
     </div>
   );
 }
 
-function FinishStep({ rows }: { rows: SyncRow[] }) {
+function FinishStep({ rows, actions }: { rows: SyncRow[]; actions?: WelcomeActions }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const finish = async () => {
+    if (!actions?.finish) return;
+    setBusy(true);
+    setFailed(null);
+    try { await actions.finish(); }
+    catch (err) { setFailed(err instanceof Error ? err.message : "Setup could not be completed."); }
+    finally { setBusy(false); }
+  };
   return (
     <div className="space-y-5">
       <div>
@@ -422,8 +614,11 @@ function FinishStep({ rows }: { rows: SyncRow[] }) {
         <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened: live sync state from your sources.</p>
       </div>
       <WelcomeSyncPanel sources={rows} />
+      {failed && <Alert tone="blocked" title="Could not finish setup">{failed}</Alert>}
       <div className={AUTH_ACTIONS}>
-        <Button variant="primary">Finish setup</Button>
+        <Button variant="primary" disabled={busy} onClick={() => void finish()}>
+          {busy ? <><Spinner size="sm" /> Finishing…</> : "Finish setup"}
+        </Button>
       </div>
     </div>
   );
@@ -464,24 +659,56 @@ function DoneStep({ summary }: { summary: WelcomeSummary }) {
 
 /* ── Body dispatch ────────────────────────────────────────────────────── */
 
-function StepBody({ data }: { data: WelcomeData }) {
-  switch (data.step) {
-    case "connect": return <ConnectGrid tiles={data.tiles} connectorCount={data.connectorCount} />;
-    case "connect-github": return <GithubConnect data={data} />;
-    case "connect-slack": return <SlackConnect fields={data.slackFields} />;
-    case "connect-notion": return <NotionConnect fields={data.notionFields} />;
-    case "connect-gdrive": return <GdriveConnect fields={data.gdriveFields} />;
-    case "connect-upload": return <UploadConnect data={data} />;
-    case "connect-syncing": return <ConnectSyncing row={data.connectSync} />;
-    case "guide": return <GuideStep packs={data.packs} />;
-    case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} />;
-    case "finish": return <FinishStep rows={data.syncRows} />;
+function StepBody({ data, current, actions, nav }: {
+  data: WelcomeData; current: WelcomeStep; actions?: WelcomeActions; nav: StepNav;
+}) {
+  switch (current) {
+    case "connect": return <ConnectGrid onNavigate={actions?.navigate} tiles={data.tiles} connectorCount={data.connectorCount} nav={nav} />;
+    case "connect-github": return <GithubConnect data={data} actions={actions} nav={nav} />;
+    case "connect-slack":
+      return <CredConnect provider="slack" name="Slack"
+        blurb="Import channel history into your shared knowledge library."
+        hint="Credentials validate against the Slack API before syncing."
+        fields={data.slackFields} actions={actions} nav={nav}
+        note={
+          <div className="flex items-start gap-2 rounded-[4px] border border-ink/12 bg-flysch px-3 py-2 text-[12px] text-ink/70">
+            <Bot size={13} className="mt-0.5 shrink-0" />
+            Importing channel history is separate from the answering bot. Set that up under Settings, Sources, Bots.
+          </div>
+        } />;
+    case "connect-notion":
+      return <CredConnect provider="notion" name="Notion"
+        blurb="Sync pages and databases shared with an internal integration."
+        hint="Only pages shared with the integration are visible."
+        fields={data.notionFields} actions={actions} nav={nav} />;
+    case "connect-gdrive":
+      return <CredConnect provider="gdrive" name="Google Drive"
+        blurb="Sync Docs and folders through a service account."
+        hint="Google Docs are exported to Markdown on sync."
+        fields={data.gdriveFields} actions={actions} nav={nav} />;
+    case "connect-upload": return <UploadConnect data={data} actions={actions} nav={nav} />;
+    case "connect-syncing": return <ConnectSyncing row={data.connectSync} nav={nav} />;
+    case "guide": return <GuideStep packs={data.packs} actions={actions} />;
+    case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} actions={actions} />;
+    case "finish": return <FinishStep rows={data.syncRows} actions={actions} />;
     case "done": return <DoneStep summary={data.doneSummary} />;
     default: return <Hero />;
   }
 }
 
-function WelcomePage({ data, loading = false, error = null, mobile = false }: PageProps<WelcomeData>) {
+/** The five wizard positions, in order, for Continue / Back. Connecting a
+    source detours off this spine and rejoins it at `guide`. */
+const SPINE: WelcomeStep[] = ["hero", "connect", "guide", "glossary", "finish"];
+
+function WelcomePage({ data, loading = false, error = null, actions, mobile = false }: PageProps<WelcomeData, WelcomeActions>) {
+  /* Which step is on screen is the user's own progress through the wizard,
+     seeded by the data and then owned here. It used to come from `data` only,
+     which meant Continue and Back did nothing at all and onboarding could
+     never leave its first screen. */
+  const [current, setCurrent] = useState<WelcomeStep>(data.step);
+  const [seen, setSeen] = useState(data.step);
+  if (seen !== data.step) { setSeen(data.step); setCurrent(data.step); }
+
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
@@ -489,11 +716,19 @@ function WelcomePage({ data, loading = false, error = null, mobile = false }: Pa
       </div>
     );
   }
-  const step = STEP_INDEX[data.step];
+  const step = STEP_INDEX[current];
   const last = LABELS.length - 1;
-  const done = data.step === "done";
+  const done = current === "done";
   const nextLabel =
     done ? "Go to Overview" : step === 0 ? "Set up my workspace" : step === last ? "Finish setup" : "Continue";
+
+  const nav: StepNav = { go: setCurrent };
+  const advance = () => {
+    if (done) { actions?.navigate?.("/"); return; }
+    if (step === last) { setCurrent("done"); return; }
+    setCurrent(SPINE[Math.min(step + 1, SPINE.length - 1)]);
+  };
+  const back = () => setCurrent(SPINE[Math.max(step - 1, 0)]);
 
   return (
     <div className={AUTH_SHELL}>
@@ -516,13 +751,13 @@ function WelcomePage({ data, loading = false, error = null, mobile = false }: Pa
             </div>
           )}
 
-          <StepBody data={data} />
+          <StepBody data={data} current={current} actions={actions} nav={nav} />
 
           {/* Primary bottom LEFT, secondary to its right (§2). */}
           <div className={`mt-7 border-t border-ink/10 pt-4 ${AUTH_ACTIONS}`}>
-            <Button variant="primary">{nextLabel}</Button>
-            <Button variant="default" disabled={step === 0}>← Back</Button>
-            <Button variant="link">Save and finish later</Button>
+            <Button variant="primary" onClick={advance}>{nextLabel}</Button>
+            <Button variant="default" disabled={step === 0} onClick={back}>← Back</Button>
+            <Button variant="link" onClick={() => actions?.navigate?.("/")}>Save and finish later</Button>
             <span className="ml-auto font-term text-[12px] text-ink/65">
               {done ? <span className="inline-flex items-center gap-1 text-moss"><Sparkles size={12} /> Setup complete</span> : `${step + 1} of ${LABELS.length}`}
             </span>
@@ -533,7 +768,7 @@ function WelcomePage({ data, loading = false, error = null, mobile = false }: Pa
   );
 }
 
-export const page: PageModule<WelcomeData> = {
+export const page: PageModule<WelcomeData, WelcomeActions> = {
   id: "welcome",
   title: "Welcome",
   route: "/welcome",

@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Link } from "../navigation/Link";
+import { docHref } from "../tokens/routes";
 import { ExternalLink, Eye, ClipboardCheck, Target, Pin, Link2, Plus } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
@@ -8,6 +10,7 @@ import { Pill } from "../data-display/Pill";
 import { SectionLabel } from "../forms/SectionLabel";
 import { FileQuestion } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
+import { FieldError } from "../feedback/ErrorMessage";
 import { Timeline } from "../data-display/Timeline";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
@@ -43,6 +46,17 @@ export type LineageNodeDrawerProps = {
   nodeId: string;
   /** The document's revision history, newest first. */
   history: DocHistoryRow[];
+  /** Persist this node's current graph position. */
+  onPin?: (args: { docId: number; x: number; y: number }) => void | Promise<void>;
+  /** Let the auto-layout place this node again. */
+  onUnpin?: (docId: number) => void | Promise<void>;
+  /** Follow or unfollow the document. The server toggles; the button reflects
+      what it returns nothing about, so the label follows local state. */
+  onWatch?: (docId: number) => void | Promise<void>;
+  /** Follow through to the document itself. */
+  onOpenDocument?: (docId: number) => void;
+  /** Open a review task on this document. */
+  onCreateReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -50,7 +64,8 @@ export type LineageNodeDrawerProps = {
 };
 
 export function LineageNodeDrawer({
-  nodes, edges, nodeId, history, onClose, loading = false, className = "",
+  nodes, edges, nodeId, history, onPin, onUnpin, onWatch, onOpenDocument, onCreateReviewTask,
+  onClose, loading = false, className = "",
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
@@ -60,6 +75,8 @@ export function LineageNodeDrawer({
   const [focal, setFocal] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [taskMade, setTaskMade] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   /** Inline result for the otherwise-inert trace/export buttons. */
   const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
@@ -104,6 +121,59 @@ export function LineageNodeDrawer({
 
   const copyLink = () => { setCopied(true); setTimeout(() => setCopied(false), 1600); };
 
+  /* Each footer control latches optimistically and rolls back on a rejected
+     write, saying what the server said (§8). With no handler wired the latch
+     is the whole behaviour, which is what the design canvas renders. */
+  const run = async (settle: () => void, revert: () => void, work?: () => void | Promise<void>) => {
+    settle();
+    setFailed(null);
+    if (!work) return;
+    setBusy(true);
+    try {
+      await work();
+    } catch (err) {
+      revert();
+      setFailed(err instanceof Error ? err.message : "That did not save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePin = () => {
+    if (!node) return;
+    const next = !pinned;
+    void run(
+      () => setPinned(next),
+      () => setPinned(!next),
+      node.docId == null
+        ? undefined
+        : next
+          ? onPin && (() => onPin({ docId: node.docId as number, x: node.x, y: node.y }))
+          : onUnpin && (() => onUnpin(node.docId as number)),
+    );
+  };
+
+  const toggleWatch = () => {
+    if (!node) return;
+    const next = !watched;
+    void run(
+      () => setWatched(next),
+      () => setWatched(!next),
+      node.docId != null && onWatch ? () => onWatch(node.docId as number) : undefined,
+    );
+  };
+
+  const createTask = () => {
+    if (!node) return;
+    void run(
+      () => setTaskMade(true),
+      () => setTaskMade(false),
+      onCreateReviewTask
+        ? () => onCreateReviewTask({ title: `Review: ${node.title}`, assignee: node.owner || "Daniel H." })
+        : undefined,
+    );
+  };
+
   if (loading) {
     return (
       <LgDrawerShell
@@ -147,28 +217,33 @@ export function LineageNodeDrawer({
             <Button compact onClick={() => setFocal((f) => !f)} className={focal ? lgToggleOn : ""}>
               <Target size={13} /> {focal ? "Focal" : "Set focal"}
             </Button>
-            <Button compact onClick={() => setPinned((p) => !p)} className={pinned ? lgToggleOn : ""}>
+            <Button compact disabled={busy} onClick={togglePin} className={pinned ? lgToggleOn : ""}>
               <Pin size={13} /> {pinned ? "Pinned" : "Pin"}
             </Button>
             <Button compact onClick={copyLink} className={copied ? lgToggleOn : ""}>
               <Link2 size={13} /> {copied ? "Copied" : "Copy link"}
             </Button>
-            <Button compact onClick={() => setWatched((w) => !w)} className={watched ? lgToggleOn : ""}>
+            <Button compact disabled={busy} onClick={toggleWatch} className={watched ? lgToggleOn : ""}>
               <Eye size={13} /> {watched ? "Watching" : "Watch"}
             </Button>
           </div>
+          {failed && <FieldError>{failed}</FieldError>}
           {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right. */}
           <CardActions
             primary={
-              <Button variant="primary" onClick={() => setTaskMade(true)}>
+              <Button variant="primary" disabled={busy || taskMade} onClick={createTask}>
                 <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
               </Button>
             }
-            secondary={
-              <a href="#" className={`inline-flex h-9 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3.5 text-[13px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05] ${focusRing}`}>
-                Open document <ExternalLink size={12} />
-              </a>
-            }
+            secondary={              node.docId != null ? (
+                <Link
+                  href={docHref(node.docId)}
+                  onClick={onOpenDocument && ((e) => { e.preventDefault(); onOpenDocument(node.docId as number); })}
+                  className={`inline-flex h-9 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3.5 text-[13px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05]`}
+                >
+                  Open document <ExternalLink size={12} />
+                </Link>
+              ) : undefined}
           />
         </div>
       }

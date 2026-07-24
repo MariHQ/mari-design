@@ -37,6 +37,38 @@ export const mdInline = (s: string): string =>
 // is a real heading in live docs). `tight` records the missing space.
 const HEADING = /^(#{1,3})(?!#)([ \t]*)(\S.*)$/;
 
+const unescapeHtml = (s: string): string =>
+  s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+
+/** One block back to the markdown it was parsed from. The inverse of the
+    inline pass above: `<b>` and `<i>` and `<code>` become their markers, any
+    other tag the browser left behind is dropped, and entities are unescaped
+    last so a literal `&lt;` survives the round trip. */
+export function blockToMarkdown(b: Block): string {
+  if (b.type === "code") return "```" + (b.lang ?? "") + "\n" + unescapeHtml(b.html) + "\n```";
+  const text = unescapeHtml(
+    b.html
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/?(?:b|strong)>/gi, "**")
+      .replace(/<\/?(?:i|em)>/gi, "*")
+      .replace(/<\/?code>/gi, "`")
+      .replace(/<[^>]*>/g, ""),
+  ).replace(/\s+/g, " ").trim();
+  if (b.type === "li") return `- ${text}`;
+  if (b.type === "p") return text;
+  return `${"#".repeat(Number(b.type[1]))}${b.tight ? "" : " "}${text}`;
+}
+
+/** Blocks back to one markdown document. Consecutive list items stay adjacent
+    (that is one list); everything else is separated by a blank line, which is
+    what `parseMarkdown` treats as a block boundary. */
+export function serializeBlocks(blocks: Block[]): string {
+  return blocks
+    .map((b, i) => (i > 0 && !(blocks[i - 1].type === "li" && b.type === "li") ? "\n" : "") + blockToMarkdown(b))
+    .join("\n");
+}
+
 /** Parse markdown into a flat list of blocks. */
 export function parseMarkdown(md: string): Block[] {
   const blocks: Block[] = [];

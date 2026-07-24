@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Link } from "../navigation/Link";
+import { docHref } from "../tokens/routes";
 import { Unlink } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
 import { ExternalLink, ClipboardCheck, Download } from "lucide-react";
@@ -36,6 +38,8 @@ export type LineageEdgeDrawerProps = {
   /** Which edge to open. */
   edgeId: string;
   onSelectNode?: (id: string) => void;
+  /** Follow through to a document this edge connects. */
+  onOpenDocument?: (docId: number) => void;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -43,7 +47,7 @@ export type LineageEdgeDrawerProps = {
 };
 
 export function LineageEdgeDrawer({
-  nodes, edges, edgeId, onSelectNode, onClose, loading = false, className = "",
+  nodes, edges, edgeId, onSelectNode, onOpenDocument, onClose, loading = false, className = "",
 }: LineageEdgeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId] = useState(edgeId);
@@ -56,6 +60,7 @@ export function LineageEdgeDrawer({
   const edge: LEdge | null = edges.find((e) => e.id === openId) ?? edges[0] ?? null;
   const from = edge ? byId[edge.from] : undefined;
   const to = edge ? byId[edge.to] : undefined;
+  const fromDocId = from?.docId ?? null;
   const s = edge ? REL[edge.rel] : null;
   const confirmed = edge?.meta?.status === "confirmed";
   const statusLabel = confirmed ? "Confirmed" : edge?.llm ? "Derived by Mari" : "Observed";
@@ -125,9 +130,19 @@ export function LineageEdgeDrawer({
                 >
                   <Download size={13} /> {result ? "Exported" : "Export"}
                 </Button>
-                <a href="#" className={`inline-flex h-8 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3 text-[12.5px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05] ${focusRing}`}>
-                  Open document <ExternalLink size={12} />
-                </a>
+                {/* An edge joins two documents, so "the" document is
+                    ambiguous — this opens the SOURCE end, which is the one the
+                    relationship is stated about. Hidden when that node carries
+                    no document id, rather than linking to "#". */}
+                {fromDocId != null && (
+                  <Link
+                    href={docHref(fromDocId)}
+                    onClick={onOpenDocument && ((e) => { e.preventDefault(); onOpenDocument(fromDocId); })}
+                    className="inline-flex h-8 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3 text-[12.5px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05]"
+                  >
+                    Open document <ExternalLink size={12} />
+                  </Link>
+                )}
               </>
             }
           />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Shield, ShieldCheck } from "lucide-react";
@@ -13,6 +14,11 @@ import { Chip, StatusChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
+import { FieldError } from "../feedback/ErrorMessage";
+import { Drawer } from "../layout/Drawer";
+import { Field } from "../forms/Field";
+import { Input } from "../forms/Input";
+import { Textarea } from "../forms/Textarea";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
 import { fmtDate } from "../tokens/format";
@@ -45,6 +51,23 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** A claim being captured. */
+export type NewFact = { claim: string; source: string; owner: string };
+
+/** What the Facts page can DO. Every handler may throw and the control that
+    called it shows the message. All optional: without actions the page keeps
+    the local behaviour the library ships (the canvas has no server). */
+export type FactsActions = {
+  /** Mark a claim verified as of today. */
+  verifyFact?: (id: number) => void | Promise<void>;
+  /** Capture a new claim into the ledger. */
+  addFact?: (fact: NewFact) => void | Promise<void>;
+  /** Mine the corpus for claims worth tracking. Long-running. */
+  scanFacts?: () => void | Promise<void>;
+  /** Open a re-verification task on a stale fact. */
+  createReviewTask?: (fact: Fact) => void | Promise<void>;
+};
 
 /** One status filter tab, with the count the workspace actually holds. */
 export type FactFilter = { id: string; label: string; count: number };
@@ -128,27 +151,123 @@ function factChip(status: string) {
   return <StatusChip status="needs-review" />;
 }
 
-function FactsTable({ facts }: { facts: Fact[] }) {
+function FactsTable({ facts, onVerify }: { facts: Fact[]; onVerify?: (id: number) => void | Promise<void> }) {
+  /* Local overlay so the row visibly settles the moment it is verified, with
+     or without a server behind the page (§2). With `onVerify` wired the write
+     lands first and the overlay is what the reader sees until the next read. */
+  const [verified, setVerified] = useState<number[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [failed, setFailed] = useState<Record<number, string>>({});
+
   if (facts.length === 0) {
     return <EmptyState title="No facts in this view">Nothing matches the current filter.</EmptyState>;
   }
+
+  const verify = async (f: Fact) => {
+    setBusy(f.id);
+    setFailed((e) => { const n = { ...e }; delete n[f.id]; return n; });
+    try {
+      if (onVerify) await onVerify(f.id);
+      setVerified((v) => [...v, f.id]);
+    } catch (err) {
+      setFailed((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "Could not verify that claim." }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <Card variant="flush">
-      {/* No clickable item in a row, so status is the last column (§3). */}
-      <Table head={["Claim", "Owner", "Verified", "Status"]} minW={640}>
-        {facts.map((f) => (
-          <tr key={f.id} className="border-b border-ink/[0.06] last:border-0">
-            <td className="px-4 py-3 align-top">
-              <b className="block break-words text-[13px] font-medium text-ink">{f.claim}</b>
-              <div className="mt-0.5 break-words font-term text-[11px] text-ink/65">{f.source}</div>
-            </td>
-            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 break-words">{f.owner}</td>
-            <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : ""}</td>
-            <td className="px-4 py-3 align-top">{factChip(f.status)}</td>
-          </tr>
-        ))}
+      {/* Every row carries a clickable action, so status is second-to-last (§3). */}
+      <Table head={["Claim", "Owner", "Verified", "Status", ""]} minW={760}>
+        {facts.map((f) => {
+          const isVerified = verified.includes(f.id) || f.status === "Verified";
+          return (
+            <tr key={f.id} className="border-b border-ink/[0.06] last:border-0">
+              <td className="px-4 py-3 align-top">
+                <b className="block break-words text-[13px] font-medium text-ink">{f.claim}</b>
+                <div className="mt-0.5 break-words font-term text-[11px] text-ink/65">{f.source}</div>
+              </td>
+              <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 break-words">{f.owner}</td>
+              <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : ""}</td>
+              <td className="px-4 py-3 align-top">{factChip(isVerified ? "Verified" : f.status)}</td>
+              <td className="px-4 py-3 align-top text-right">
+                {failed[f.id] ? (
+                  <FieldError>{failed[f.id]}</FieldError>
+                ) : isVerified ? (
+                  <span className="font-term text-[11.5px] text-ink/65">Verified</span>
+                ) : (
+                  <Button compact variant="primary" disabled={busy === f.id} onClick={() => void verify(f)}>
+                    {busy === f.id ? "Verifying…" : "Verify"}
+                  </Button>
+                )}
+              </td>
+            </tr>
+          );
+        })}
       </Table>
     </Card>
+  );
+}
+
+/* "New fact": the header's primary action opens this, so the button captures a
+   claim rather than doing nothing. With no `onAdd` it still closes with the
+   values it collected, which is the honest canvas behaviour. */
+function NewFactDrawer({ onAdd, onClose }: {
+  onAdd?: (fact: NewFact) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const [claim, setClaim] = useState("");
+  const [source, setSource] = useState("");
+  const [owner, setOwner] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true);
+    setFailed(null);
+    try {
+      await onAdd?.({ claim: claim.trim(), source: source.trim(), owner: owner.trim() });
+      onClose();
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "Could not save that claim.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="New fact"
+      subtitle="A claim the team relies on"
+      icon={<ShieldCheck size={16} className="text-moss" />}
+      footer={
+        <>
+          {/* Primary bottom left, secondary to its right (§2). */}
+          <Button variant="primary" disabled={busy || !claim.trim() || !source.trim()} onClick={() => void submit()}>
+            {busy ? "Saving…" : "Add fact"}
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </>
+      }
+    >
+      <Field label="Claim">
+        <Textarea short autoFocus value={claim} onChange={(e) => setClaim(e.target.value)}
+          placeholder="Free-tier limits are enforced per workspace." className="w-full" />
+      </Field>
+      <Field label="Where it comes from">
+        <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="pricing.md" className="w-full font-term" />
+      </Field>
+      <Field label="Owner">
+        <Input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Maya Chen" className="w-full" />
+      </Field>
+      {failed && <FieldError>{failed}</FieldError>}
+      <div className="pt-2 text-[11.5px] text-ink/65">
+        A new claim starts as Needs review until someone verifies it.
+      </div>
+    </Drawer>
   );
 }
 
@@ -190,7 +309,10 @@ function isEmpty(d: FactsData): boolean {
   return !d.facts.length && !d.audit?.length && !d.taskAudit && !d.impact && !d.extras;
 }
 
-function Body({ data, error }: { data: FactsData; error: string | null }) {
+function Body({ data, error, actions, auditOpen, onCloseAudit }: {
+  data: FactsData; error: string | null; actions?: FactsActions;
+  auditOpen: boolean; onCloseAudit: () => void;
+}) {
   if (error) {
     return (
       <div className="mt-6">
@@ -224,15 +346,29 @@ function Body({ data, error }: { data: FactsData; error: string | null }) {
           />
         </Card>
       ) : (
-        data.facts.length > 0 && <FactsTable facts={data.facts} />
+        data.facts.length > 0 && <FactsTable facts={data.facts} onVerify={actions?.verifyFact} />
       )}
       {data.taskAudit && <ReviewTaskAudit task={data.taskAudit} />}
-      {data.audit && <FactsVerificationAudit facts={data.audit} />}
+      {/* The audit is a view of the same rows: it arrives in `data` for the
+          states that are about it, and "Audit documents" opens it over the
+          rows already on screen otherwise. */}
+      {(data.audit ?? (auditOpen ? data.facts : null)) && (
+        <FactsVerificationAudit
+          facts={data.audit ?? data.facts}
+          onCreateReviewTask={actions?.createReviewTask}
+          onClose={data.audit ? undefined : onCloseAudit}
+        />
+      )}
     </div>
   );
 }
 
-function FactsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<FactsData>) {
+function FactsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<FactsData, FactsActions>) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanFailed, setScanFailed] = useState<string | null>(null);
+
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("facts")} title="Facts" mobile={mobile}>
@@ -240,31 +376,59 @@ function FactsPage({ data, loading = false, error = null, chrome, mobile = false
       </PageFrame>
     );
   }
-  const actions = (
+
+  const scan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    setScanFailed(null);
+    try {
+      // No handler (the canvas): the button still says it worked and settled.
+      if (actions?.scanFacts) await actions.scanFacts();
+      else await new Promise((r) => setTimeout(r, 900));
+    } catch (err) {
+      setScanFailed(err instanceof Error ? err.message : "The scan could not run.");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const headerActions = (
     <>
-      <Button variant="link">Scan for facts</Button>
-      <Button variant="default">Audit documents</Button>
-      <Button variant="primary">New fact</Button>
+      <Button variant="link" disabled={scanning} onClick={() => void scan()}>
+        {scanning ? "Scanning…" : "Scan for facts"}
+      </Button>
+      <Button variant="default" aria-expanded={auditOpen} onClick={() => setAuditOpen((v) => !v)}>
+        {auditOpen ? "Hide audit" : "Audit documents"}
+      </Button>
+      <Button variant="primary" onClick={() => setAdding(true)}>New fact</Button>
     </>
   );
   return (
-    <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("facts")} title="Facts" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
           eyebrow="Verification"
           title="Facts"
           description="Every claim the team relies on: verified, owned, and traced to its impact across the corpus."
-          actions={mobile ? undefined : actions}
+          actions={mobile ? undefined : headerActions}
         />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <Body data={data} error={error} />
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+        {scanFailed && <div className="mt-3"><FieldError>{scanFailed}</FieldError></div>}
+        <Body
+          data={data}
+          error={error}
+          actions={actions}
+          auditOpen={auditOpen}
+          onCloseAudit={() => setAuditOpen(false)}
+        />
       </div>
+      {adding && <NewFactDrawer onAdd={actions?.addFact} onClose={() => setAdding(false)} />}
     </PageFrame>
   );
 }
 
-export const page: PageModule<FactsData> = {
+export const page: PageModule<FactsData, FactsActions> = {
   id: "facts",
   title: "Facts",
   route: "/facts",

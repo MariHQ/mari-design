@@ -9,6 +9,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
+import { FieldError } from "../feedback/ErrorMessage";
 import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { PageHeader } from "../layout/PageHeader";
@@ -62,6 +63,19 @@ const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-mi
 /** Rows revealed per page in the readability table and the glossary list. */
 const PAGE = 25;
 
+/** What the Insights widgets can DO. Every handler may throw; the widget that
+    owns the control shows the message beside it. Optional throughout: with no
+    actions the controls keep the local echo the library ships, which is what
+    the design canvas renders. */
+export type InsightsWidgetsActions = {
+  /** Re-score every document for LLM readability. Long-running. */
+  scoreReadability?: () => void | Promise<void>;
+  /** Mine the corpus for candidate glossary terms. Long-running. */
+  harvestGlossary?: () => void | Promise<void>;
+  /** Accept a candidate term into the glossary, or dismiss it. */
+  resolveGlossaryTerm?: (args: { id: number; accept: boolean }) => void | Promise<void>;
+};
+
 export type InsightsWidgetsProps = {
   stats: InsightStat[];
   readability: ReadRow[];
@@ -69,17 +83,54 @@ export type InsightsWidgetsProps = {
   activity: InsightsActivity[];
   /** ISO date the counts are measured from. Shown in the page header. */
   since: string;
+  /** Side effects the widgets offer. Omitted = local echo only. */
+  actions?: InsightsWidgetsActions;
   /** Render a content-shaped skeleton silhouette instead of the widgets. */
   loading?: boolean;
   className?: string;
 };
 
 export function InsightsWidgets({
-  stats, readability, glossary, activity, since, loading = false, className = "",
+  stats, readability, glossary, activity, since, actions, loading = false, className = "",
 }: InsightsWidgetsProps) {
   const [scoring, setScoring] = useState(false);
   const [harvesting, setHarvesting] = useState(false);
   const [hidden, setHidden] = useState<number[]>([]);
+  /* Write failures sit next to the control that failed, never in a toast that
+     scrolls away: a failed write is as visible as a failed read. */
+  const [scoreErr, setScoreErr] = useState<string | null>(null);
+  const [harvestErr, setHarvestErr] = useState<string | null>(null);
+  const [glossErr, setGlossErr] = useState<string | null>(null);
+
+  /* No action wired (the canvas) leaves the original local echo intact: the
+     button still says it is working and then settles. */
+  const score = async () => {
+    if (scoring) return;
+    setScoring(true);
+    setScoreErr(null);
+    try {
+      if (actions?.scoreReadability) await actions.scoreReadability();
+      else await new Promise((r) => setTimeout(r, 900));
+    } catch (err) {
+      setScoreErr(err instanceof Error ? err.message : "Scoring failed.");
+    } finally {
+      setScoring(false);
+    }
+  };
+
+  const harvest = async () => {
+    if (harvesting) return;
+    setHarvesting(true);
+    setHarvestErr(null);
+    try {
+      if (actions?.harvestGlossary) await actions.harvestGlossary();
+      else await new Promise((r) => setTimeout(r, 900));
+    } catch (err) {
+      setHarvestErr(err instanceof Error ? err.message : "Harvest failed.");
+    } finally {
+      setHarvesting(false);
+    }
+  };
 
   const readSort = useSort(readability, {
     title: (r) => r.title,
@@ -90,7 +141,19 @@ export function InsightsWidgets({
 
   const candidates = glossary.filter((c) => !hidden.includes(c.id));
 
-  const resolve = (c: GlossRow) => setHidden((h) => [...h, c.id]);
+  /* Optimistic: the row leaves immediately, because that is what the reader
+     asked for. A rejected write puts it back and says why. */
+  const resolve = async (c: GlossRow, accept: boolean) => {
+    setHidden((h) => [...h, c.id]);
+    setGlossErr(null);
+    if (!actions?.resolveGlossaryTerm) return;
+    try {
+      await actions.resolveGlossaryTerm({ id: c.id, accept });
+    } catch (err) {
+      setHidden((h) => h.filter((id) => id !== c.id));
+      setGlossErr(err instanceof Error ? err.message : "Could not save that term.");
+    }
+  };
 
   /* Neither list may render its whole input. A 300-document scoring run turned
      the readability card into a ~20,000px column, and the page below it was
@@ -148,9 +211,10 @@ export function InsightsWidgets({
         <Card
           icon={<IconRing tone="info"><Search size={15} /></IconRing>}
           title="LLM readability"
-          actions={<Button compact disabled={scoring} onClick={() => { setScoring(true); setTimeout(() => setScoring(false), 900); }}>{scoring ? "Scoring…" : "Score docs"}</Button>}
+          actions={<Button compact disabled={scoring} onClick={score}>{scoring ? "Scoring…" : "Score docs"}</Button>}
           variant="flush"
         >
+          {scoreErr && <div className="px-4 pb-1"><FieldError>{scoreErr}</FieldError></div>}
           {readability.length === 0 ? (
             <EmptyState icon={<Search size={24} />} title="Nothing scored yet">Score your documents to see readability grades.</EmptyState>
           ) : (
@@ -197,8 +261,9 @@ export function InsightsWidgets({
         <Card
           icon={<IconRing tone="ok"><BookOpen size={15} /></IconRing>}
           title="Glossary health"
-          actions={<Button compact disabled={harvesting} onClick={() => { setHarvesting(true); setTimeout(() => setHarvesting(false), 900); }}>{harvesting ? "Harvesting…" : "Harvest terms"}</Button>}
+          actions={<Button compact disabled={harvesting} onClick={harvest}>{harvesting ? "Harvesting…" : "Harvest terms"}</Button>}
         >
+          {(harvestErr ?? glossErr) && <FieldError>{harvestErr ?? glossErr}</FieldError>}
           {harvesting && (
             <div className="mb-3 flex items-center gap-2 font-term text-[12px] text-ink/70">
               <Sparkles size={13} className="text-biscay-2" /> Scanning documents for candidate terms…
@@ -224,8 +289,8 @@ export function InsightsWidgets({
                     <Truncate as="p" lines={2} className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{c.definition}</Truncate>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Button variant="success" compact onClick={() => resolve(c)}>Accept</Button>
-                    <Button compact onClick={() => resolve(c)}>Dismiss</Button>
+                    <Button variant="success" compact onClick={() => void resolve(c, true)}>Accept</Button>
+                    <Button compact onClick={() => void resolve(c, false)}>Dismiss</Button>
                   </div>
                 </li>
               ))}

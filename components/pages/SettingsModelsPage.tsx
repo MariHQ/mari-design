@@ -10,13 +10,17 @@ import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Spinner } from "../data-display/Spinner";
-import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import {
-  SettingsModelsConfig, type ChunkRow, type ProviderKeys,
+  SettingsModelsConfig, type ChunkRow, type ProviderKeys, type SettingsModelsActions,
 } from "../features/SettingsModelsConfig";
+
+/** What Settings → Models can do. Defined with the panel that renders the
+    controls and re-exported here, so an app types its handlers off the page. */
+export type { SettingsModelsActions };
 
 /* Settings → Models (pages/settings-models.md). Configure the embedding model,
    LLM provider + keys, connection test, and per-source chunking. The default
@@ -73,31 +77,6 @@ export type SettingsModelsData = {
   summary: PropertyItem[];
 };
 
-type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
-
-const SETTINGS_TABS: TabOption<SettingsTab>[] = [
-  { id: "general", label: "General" },
-  { id: "members", label: "Members" },
-  { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
-  { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Audit log" },
-  { id: "design", label: "Design & brand" },
-];
-
-function SettingsTabs({ active }: { active: SettingsTab }) {
-  const [value, setValue] = useState<SettingsTab>(active);
-  return (
-    <Tabs
-      ariaLabel="Workspace settings"
-      variant="underline"
-      options={SETTINGS_TABS}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
@@ -116,6 +95,42 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
 
 function SavedNote() {
   return <span className="font-term text-[11.5px] text-moss">✓ Saved</span>;
+}
+
+/* A provider key plus its show/hide toggle.
+
+   The two key fields used to be hardcoded into opposite states — one
+   `type="password"` next to an Eye, one `type="text"` next to an EyeOff — so
+   the page depicted both halves of a toggle that neither field actually had.
+   One component with one piece of state gives both fields the real behaviour.
+
+   What comes back from the server is already masked (`••••…last4`), so
+   revealing shows the mask, not the secret. That is the point: the plaintext
+   key is write-only and never leaves the server again. */
+function SecretField({ label, value }: { label: string; value: string }) {
+  const [shown, setShown] = useState(false);
+  const [draft, setDraft] = useState(value);
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type={shown ? "text" : "password"}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-full font-term"
+        />
+        <Button
+          icon
+          compact
+          aria-label={shown ? "Hide key" : "Reveal key"}
+          aria-pressed={shown}
+          onClick={() => setShown((v) => !v)}
+        >
+          {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+        </Button>
+      </div>
+    </Field>
+  );
 }
 
 function TestResult({ data }: { data: SettingsModelsData }) {
@@ -183,18 +198,8 @@ function ModelsInline({ data }: { data: SettingsModelsData }) {
 
       <Card icon={<KeyRound size={16} className="text-clay" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
         <div className={FORM_GRID}>
-          <Field label="OpenAI (sk-…)">
-            <div className="flex items-center gap-1.5">
-              <Input type="password" defaultValue={data.keys.openai} className="w-full font-term" />
-              <Button icon compact aria-label="Reveal key"><Eye size={14} /></Button>
-            </div>
-          </Field>
-          <Field label="Anthropic (sk-ant-…)">
-            <div className="flex items-center gap-1.5">
-              <Input type="text" defaultValue={data.keys.anthropic} className="w-full font-term" />
-              <Button icon compact aria-label="Hide key"><EyeOff size={14} /></Button>
-            </div>
-          </Field>
+          <SecretField label="OpenAI (sk-…)" value={data.keys.openai} />
+          <SecretField label="Anthropic (sk-ant-…)" value={data.keys.anthropic} />
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-ink/10 pt-4">
           <Button variant="primary" disabled={variant === "saved"}>Save changes</Button>
@@ -232,7 +237,7 @@ function isEmpty(d: SettingsModelsData): boolean {
   return !d.embedding && !d.llm;
 }
 
-function Body({ data, error }: { data: SettingsModelsData; error: string | null }) {
+function Body({ data, error, actions }: { data: SettingsModelsData; error: string | null; actions?: SettingsModelsActions }) {
   if (error) {
     return <EmptyState icon={<Layers size={22} />} title="API offline">{error}</EmptyState>;
   }
@@ -252,12 +257,13 @@ function Body({ data, error }: { data: SettingsModelsData; error: string | null 
       dims={data.dims}
       chunking={data.chunking}
       keys={data.keys}
+      actions={actions}
       indexSummary={data.indexSummary}
     />
   );
 }
 
-function SettingsModelsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsModelsData>) {
+function SettingsModelsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsModelsData, SettingsModelsActions>) {
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -269,9 +275,9 @@ function SettingsModelsPage({ data, loading = false, error = null, chrome, mobil
             title="Models"
             description="Which models embed, search, and answer for this workspace."
           />
-          <div className="mt-5"><SettingsTabs active="models" /></div>
+          <div className="mt-5"><SettingsTabs active="models" onNavigate={chrome?.onNavigate} /></div>
           <SettingsBody mobile={mobile} rail={<ModelsRail summary={data.summary} />}>
-            <Body data={data} error={error} />
+            <Body data={data} error={error} actions={actions} />
           </SettingsBody>
         </div>
       )}
@@ -279,7 +285,7 @@ function SettingsModelsPage({ data, loading = false, error = null, chrome, mobil
   );
 }
 
-export const page: PageModule<SettingsModelsData> = {
+export const page: PageModule<SettingsModelsData, SettingsModelsActions> = {
   id: "settings-models",
   title: "Settings · Models",
   route: "/settings/models",

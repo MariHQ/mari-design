@@ -8,11 +8,11 @@ import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { LibraryTagsPanel, type TagDef } from "../features/LibraryTagsPanel";
+import { LibraryTagsPanel, type TagDef, type LibraryTagsActions } from "../features/LibraryTagsPanel";
 import { LibraryRulesPanel, type CheckerDoc } from "../features/LibraryRulesPanel";
-import { LibraryGlossaryPanel, type Term } from "../features/LibraryGlossaryPanel";
-import { LibraryGuidesPanel, type Guide, type VoiceLayer } from "../features/LibraryGuidesPanel";
-import { LibraryTemplatesPanel, type Template } from "../features/LibraryTemplatesPanel";
+import { LibraryGlossaryPanel, type Term, type LibraryGlossaryActions } from "../features/LibraryGlossaryPanel";
+import { LibraryGuidesPanel, type Guide, type VoiceLayer, type LibraryGuidesActions } from "../features/LibraryGuidesPanel";
+import { LibraryTemplatesPanel, type Template, type LibraryTemplatesActions } from "../features/LibraryTemplatesPanel";
 
 /* Library (pages/library.md). The project-wide editorial system: one tabbed
    page over the tag vocabulary, deterministic rule registry, style guides,
@@ -26,6 +26,14 @@ import { LibraryTemplatesPanel, type Template } from "../features/LibraryTemplat
    and the "nothing here yet" state is derived from all of them being empty. */
 
 export type LibraryTab = "tags" | "rules" | "glossary" | "guides" | "templates";
+
+/** What the Library can DO: the union of what its five panels offer.
+
+    The Rules tab contributes nothing, and that is deliberate: its registry is
+    compiled into LibraryRulesPanel as live RegExps, there is no rule row on
+    the server to write, and the checker runs entirely in the browser. */
+export type LibraryActions =
+  LibraryTagsActions & LibraryGlossaryActions & LibraryGuidesActions & LibraryTemplatesActions;
 
 /** Everything the Library renders, one collection per tab. */
 export type LibraryData = {
@@ -76,12 +84,12 @@ const STATES = [
 
 /** Render the active tab from the data it was given. A tab with nothing in it
     renders its panel's own empty state, because the collection is empty. */
-function Panel({ tab, data, mobile }: { tab: LibraryTab; data: LibraryData; mobile: boolean }) {
+function Panel({ tab, data, mobile, actions }: { tab: LibraryTab; data: LibraryData; mobile: boolean; actions?: LibraryActions }) {
   switch (tab) {
     case "rules":
       return <LibraryRulesPanel workspace={data.workspace} docs={data.checkerDocs} />;
     case "glossary":
-      return <LibraryGlossaryPanel terms={data.terms} />;
+      return <LibraryGlossaryPanel terms={data.terms} actions={actions} />;
     case "guides":
       return (
         <LibraryGuidesPanel
@@ -89,13 +97,14 @@ function Panel({ tab, data, mobile }: { tab: LibraryTab; data: LibraryData; mobi
           workspace={data.workspace}
           defaultPack={data.defaultPack}
           layer={data.voice}
+          actions={actions}
         />
       );
     case "templates":
-      return <LibraryTemplatesPanel compact={mobile} templates={data.templates} />;
+      return <LibraryTemplatesPanel compact={mobile} templates={data.templates} actions={actions} />;
     case "tags":
     default:
-      return <LibraryTagsPanel compact={mobile} tags={data.tags} totalDocs={data.totalDocs} />;
+      return <LibraryTagsPanel compact={mobile} tags={data.tags} totalDocs={data.totalDocs} actions={actions} />;
   }
 }
 
@@ -106,7 +115,7 @@ function isEmpty(d: LibraryData): boolean {
     && !d.templates.length && !d.checkerDocs.length;
 }
 
-function LibraryPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<LibraryData>) {
+function LibraryPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<LibraryData, LibraryActions>) {
   const [tab, setTab] = useState<LibraryTab>(data.tab);
 
   if (loading) {
@@ -141,31 +150,31 @@ function LibraryPage({ data, loading = false, error = null, chrome, mobile = fal
     body = (
       <div className="mt-6 flex flex-col gap-5">
         <Tabs<LibraryTab> ariaLabel="Library sections" variant="underline" options={tabOptions} value={tab} onChange={setTab} />
-        <Panel tab={tab} data={data} mobile={mobile} />
+        <Panel tab={tab} data={data} mobile={mobile} actions={actions} />
       </div>
     );
   }
 
-  const actions = <Button variant="default">Setup guide</Button>;
+  const headerActions = <Button variant="default">Setup guide</Button>;
 
   return (
-    <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("library")} title="Library" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           eyebrow="Editorial system"
           title="Library"
           description="Project-wide vocabulary, deterministic rules, voice, and scaffolds for every document."
           icon={<span className="text-moss"><BookOpen size={24} /></span>}
-          actions={mobile ? undefined : actions}
+          actions={mobile ? undefined : headerActions}
         />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
         {body}
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule<LibraryData> = {
+export const page: PageModule<LibraryData, LibraryActions> = {
   id: "library",
   title: "Library",
   route: "/library",

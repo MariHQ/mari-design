@@ -1,0 +1,321 @@
+import { useState } from "react";
+import { UserRound, KeyRound, Bell, IdCard } from "lucide-react";
+import type { PageModule, PageProps } from "./types";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
+import { PageHeader } from "../layout/PageHeader";
+import { Card } from "../layout/Card";
+import { Button } from "../actions/Button";
+import { FormField } from "../forms/FormField";
+import { Input } from "../forms/Input";
+import { Select } from "../forms/Select";
+import { Switch } from "../forms/Switch";
+import { Avatar } from "../data-display/Avatar";
+import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
+import { EmptyState } from "../data-display/EmptyState";
+import { SkeletonPage } from "../data-display/Skeletons";
+import { Alert } from "../feedback/Alert";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
+
+/* Preferences — the signed-in person's own account.
+ *
+ * This exists because the account menu offered "Preferences" and sent you to
+ * Settings → Workspace, which is a different thing owned by a different
+ * person: workspace name, plan and billing are an admin's business, while your
+ * display name, your password and whether you get email are yours. On a
+ * workspace where you are not an admin that link led somewhere you could only
+ * read, which is why it read as broken.
+ *
+ * Pure presenter: the profile, which sign-in method is in use, and the
+ * notification switches all arrive in `data`. The page owns only the edit
+ * buffer for the two forms — what you have typed but not yet saved.
+ */
+
+const STATES = [
+  { id: "default", label: "Default" },
+  { id: "loading", label: "Loading" },
+  { id: "error", label: "API offline" },
+  { id: "editing", label: "Dirty / unsaved" },
+  { id: "saved", label: "Just saved" },
+  { id: "oauth", label: "OAuth account (no password)" },
+  { id: "notifications-off", label: "All notifications off" },
+  { id: "overflow", label: "Overflow · long text" },
+  { id: "stress", label: "Stress · extremes" },
+] as const;
+
+/** How this account signs in. `password` is the only one that can change a
+    password — for a GitHub or Google account the credential lives there, and
+    offering a change-password form would be a form that cannot work. */
+export type AuthProvider = "password" | "github" | "google";
+
+/** The switches under Notifications. Deliberately a fixed record rather than a
+    free-form list: each one is a real delivery decision the server acts on. */
+export type NotificationPrefs = {
+  /** Someone @-mentions you, or asks you to review a document. */
+  mentions: boolean;
+  /** The weekly digest email. */
+  digest: boolean;
+  /** A scheduled flow you own finished with errors. */
+  flowFailures: boolean;
+};
+
+export type PreferencesProfile = {
+  name: string;
+  email: string;
+  initials: string;
+  /** IANA zone id, matching the option values below. */
+  timezone: string;
+};
+
+export type PreferencesData = {
+  profile: PreferencesProfile;
+  provider: AuthProvider;
+  notifications: NotificationPrefs;
+  /** Read-only facts in the rail — role, when the account was created, last
+      sign-in. Empty renders the card with no rows. */
+  summary: PropertyItem[];
+};
+
+export type PreferencesActions = {
+  saveProfile?: (p: { name: string; timezone: string }) => void | Promise<void>;
+  changePassword?: (p: { current: string; next: string }) => void | Promise<void>;
+  setNotification?: (key: keyof NotificationPrefs, on: boolean) => void | Promise<void>;
+};
+
+const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
+const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2";
+
+const TIMEZONES: { value: string; label: string }[] = [
+  { value: "UTC", label: "UTC" },
+  { value: "America/Los_Angeles", label: "Pacific — Los Angeles" },
+  { value: "America/Denver", label: "Mountain — Denver" },
+  { value: "America/Chicago", label: "Central — Chicago" },
+  { value: "America/New_York", label: "Eastern — New York" },
+  { value: "Europe/London", label: "London" },
+  { value: "Europe/Paris", label: "Paris" },
+  { value: "Asia/Tokyo", label: "Tokyo" },
+];
+
+const PROVIDER_LABEL: Record<AuthProvider, string> = {
+  password: "email and password",
+  github: "GitHub",
+  google: "Google",
+};
+
+function ProfileCard({ data, actions }: { data: PreferencesData; actions?: PreferencesActions }) {
+  const [name, setName] = useState(data.profile.name);
+  const [timezone, setTimezone] = useState(data.profile.timezone);
+  const [saved, setSaved] = useState(false);
+  const { busy, failed, run } = useWrite();
+
+  const dirty = name !== data.profile.name || timezone !== data.profile.timezone;
+  // A blank display name is not a save the server should have to reject.
+  const valid = name.trim().length > 0;
+
+  // The zone the account is on may not be one of the eight offered. Showing it
+  // rather than silently snapping the select to UTC — which would rewrite the
+  // setting on the next save without anyone asking.
+  const zones = TIMEZONES.some((t) => t.value === timezone)
+    ? TIMEZONES
+    : [{ value: timezone, label: timezone }, ...TIMEZONES];
+
+  return (
+    <Card title="Profile" icon={<UserRound size={18} />}>
+      <div className="flex items-center gap-3 pb-4">
+        <Avatar initials={data.profile.initials} />
+        <div className="min-w-0">
+          <div className="truncate text-[14px] font-medium text-ink">{data.profile.name}</div>
+          <div className="truncate font-term text-[11.5px] text-ink/65">{data.profile.email}</div>
+        </div>
+      </div>
+      <div className={FORM_GRID}>
+        <FormField label="Display name" hint="Shown on your comments, reviews and decisions.">
+          <Input value={name} onChange={(e) => { setName(e.target.value); setSaved(false); }} />
+        </FormField>
+        <FormField label="Time zone" hint="Dates and digest delivery times use this.">
+          <Select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}>
+            {zones.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+        </FormField>
+      </div>
+      {/* Email is read-only here on purpose. It is the account identifier and
+          the OAuth join key, so changing it is a verification flow, not a text
+          field — an editable box that silently refused to save would be the
+          worse lie. */}
+      <p className="mt-4 rounded-[4px] border border-ink/12 bg-flysch/50 px-3 py-2 text-[12.5px] text-ink/70">
+        You sign in with <b className="font-medium text-ink">{PROVIDER_LABEL[data.provider]}</b>. Your email address is your
+        account identifier and cannot be changed here.
+      </p>
+      <WriteError>{failed}</WriteError>
+      {saved && !failed && (
+        <div className="mt-3"><Alert tone="ok" title="Profile saved">Your name and time zone are up to date.</Alert></div>
+      )}
+      <div className="mt-4 flex items-center gap-2">
+        <Button
+          variant="primary"
+          disabled={!dirty || !valid || busy}
+          onClick={() => run(
+            () => actions?.saveProfile?.({ name: name.trim(), timezone }),
+            () => setSaved(true),
+          )}
+        >
+          {busy ? "Saving…" : "Save profile"}
+        </Button>
+        {dirty && !busy && (
+          <Button
+            variant="link"
+            onClick={() => { setName(data.profile.name); setTimezone(data.profile.timezone); setSaved(false); }}
+          >
+            Discard
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PasswordCard({ data, actions }: { data: PreferencesData; actions?: PreferencesActions }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [changed, setChanged] = useState(false);
+  const { busy, failed, run } = useWrite();
+
+  if (data.provider !== "password") {
+    return (
+      <Card title="Password" icon={<KeyRound size={18} />}>
+        <p className="text-[13px] text-ink/70">
+          You sign in with {PROVIDER_LABEL[data.provider]}, so there is no password here to change. Manage that credential
+          from your {PROVIDER_LABEL[data.provider]} account.
+        </p>
+      </Card>
+    );
+  }
+
+  // Checked before the request, so a mismatch is caught where it happened
+  // instead of after a round trip that never had a chance of succeeding.
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const tooShort = next.length > 0 && next.length < 8;
+  const ready = current.length > 0 && next.length >= 8 && next === confirm;
+
+  return (
+    <Card title="Password" icon={<KeyRound size={18} />}>
+      <div className="flex flex-col gap-4">
+        <FormField label="Current password">
+          <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+        </FormField>
+        <div className={FORM_GRID}>
+          <FormField label="New password" hint={tooShort ? "Use at least 8 characters." : "At least 8 characters."}>
+            <Input type="password" autoComplete="new-password" value={next} onChange={(e) => { setNext(e.target.value); setChanged(false); }} />
+          </FormField>
+          <FormField label="Confirm new password" hint={mismatch ? "The two passwords do not match." : undefined}>
+            <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => { setConfirm(e.target.value); setChanged(false); }} />
+          </FormField>
+        </div>
+      </div>
+      <WriteError>{failed}</WriteError>
+      {changed && !failed && (
+        <div className="mt-3"><Alert tone="ok" title="Password changed">Use the new password the next time you sign in.</Alert></div>
+      )}
+      <div className="mt-4">
+        <Button
+          variant="primary"
+          disabled={!ready || busy}
+          onClick={() => run(
+            () => actions?.changePassword?.({ current, next }),
+            // Cleared only on success: a rejected change should leave what you
+            // typed in place so you can correct it.
+            () => { setChanged(true); setCurrent(""); setNext(""); setConfirm(""); },
+          )}
+        >
+          {busy ? "Changing…" : "Change password"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+const NOTIFICATION_ROWS: { key: keyof NotificationPrefs; label: string; hint: string }[] = [
+  { key: "mentions", label: "Mentions and review requests", hint: "Someone @-mentions you or asks you to review a document." },
+  { key: "digest", label: "Weekly digest", hint: "What changed across the workspace, once a week." },
+  { key: "flowFailures", label: "Flow failures", hint: "A scheduled flow you own finished with errors." },
+];
+
+function NotificationsCard({ data, actions }: { data: PreferencesData; actions?: PreferencesActions }) {
+  // Local echo so a switch moves under the finger; `useWrite` only keeps it
+  // moved once the server has taken the change.
+  const [local, setLocal] = useState(data.notifications);
+  const { failed, run } = useWrite();
+
+  return (
+    <Card title="Notifications" icon={<Bell size={18} />}>
+      <div className="flex flex-col divide-y divide-ink/10">
+        {NOTIFICATION_ROWS.map((r) => (
+          <div key={r.key} className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
+            <div className="min-w-0 flex-1">
+              <div className="text-[13.5px] text-ink">{r.label}</div>
+              <div className="text-[12px] text-ink/65">{r.hint}</div>
+            </div>
+            <Switch
+              checked={local[r.key]}
+              aria-label={r.label}
+              onCheckedChange={(on) => run(
+                () => actions?.setNotification?.(r.key, on),
+                () => setLocal((p) => ({ ...p, [r.key]: on })),
+              )}
+            />
+          </div>
+        ))}
+      </div>
+      <WriteError>{failed}</WriteError>
+    </Card>
+  );
+}
+
+function Body({ data, error, actions }: { data: PreferencesData; error: string | null; actions?: PreferencesActions }) {
+  if (error) return <EmptyState icon={<UserRound size={22} />} title="API offline">{error}</EmptyState>;
+  return (
+    <>
+      <ProfileCard data={data} actions={actions} />
+      <PasswordCard data={data} actions={actions} />
+      <NotificationsCard data={data} actions={actions} />
+    </>
+  );
+}
+
+function PreferencesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<PreferencesData, PreferencesActions>) {
+  return (
+    <PageFrame chrome={chrome} active={navFor("preferences")} title="Preferences" mobile={mobile}>
+      {loading ? (
+        <SkeletonPage variant="settings" />
+      ) : (
+        <div className={PAGE}>
+          <PageHeader
+            eyebrow="Account"
+            title="Preferences"
+            description="Your profile, password and notifications. Workspace-wide settings live under Settings."
+            icon={<span className="text-biscay-2"><UserRound size={24} /></span>}
+          />
+          <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[320]}`}>
+            <div className="flex min-w-0 flex-col gap-5">
+              <Body data={data} error={error} actions={actions} />
+            </div>
+            <aside className="flex min-w-0 flex-col gap-5">
+              <Card title="Account" icon={<IdCard size={18} />}>
+                <PropertyList items={data.summary} />
+              </Card>
+            </aside>
+          </div>
+        </div>
+      )}
+    </PageFrame>
+  );
+}
+
+export const page: PageModule<PreferencesData, PreferencesActions> = {
+  id: "preferences",
+  title: "Preferences",
+  route: "/preferences",
+  component: PreferencesPage,
+  states: STATES.map((s) => ({ ...s })),
+};

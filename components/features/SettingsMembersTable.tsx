@@ -10,6 +10,8 @@ import { Field } from "../forms/Field";
 import { Avatar } from "../data-display/Avatar";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { Scrollable } from "../data-display/Scrollable";
@@ -48,12 +50,29 @@ export type GithubTeamSync = { connected: boolean; team: string };
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", user: "User" };
 const roleLabel = (r: Role) => ROLE_LABEL[r] ?? (String(r).charAt(0).toUpperCase() + String(r).slice(1));
 
+/** What the members surface can DO. One handler per intent the admin has, all
+    optional: with none the controls keep the local behaviour below, which is
+    what the design canvas renders. Handlers may throw; the message is shown. */
+export type SettingsMembersActions = {
+  inviteMember?: (invite: { name: string; email: string; role: string }) => void | Promise<void>;
+  setRole?: (id: number, role: string) => void | Promise<void>;
+  removeMember?: (id: number) => void | Promise<void>;
+  setWorkspaceName?: (name: string) => void | Promise<void>;
+  setGithubTeam?: (team: string) => void | Promise<void>;
+};
+
 export type SettingsMembersTableProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
   embedded?: boolean;
   members: Member[];
   workspaceName: string;
   githubTeam: GithubTeamSync;
+  actions?: SettingsMembersActions;
+  /** Whether the invite composer is open. Embedded, the host page owns the
+      "Invite member" button, so it owns this; standalone, the panel's own
+      header button drives it and both may be omitted. */
+  inviteOpen?: boolean;
+  onInviteOpenChange?: (open: boolean) => void;
   loading?: boolean;
   className?: string;
 };
@@ -62,12 +81,17 @@ export function SettingsMembersTable({
   members: initialMembers,
   workspaceName,
   githubTeam,
+  actions,
+  inviteOpen,
+  onInviteOpenChange,
   loading = false,
   embedded = false,
   className = "",
 }: SettingsMembersTableProps) {
   const [members, setMembers] = useState<Member[]>(initialMembers);
-  const [inviting, setInviting] = useState(false);
+  const [invitingLocal, setInvitingLocal] = useState(false);
+  const inviting = inviteOpen ?? invitingLocal;
+  const setInviting = (open: boolean) => { setInvitingLocal(open); onInviteOpenChange?.(open); };
   const [invName, setInvName] = useState("");
   const [invEmail, setInvEmail] = useState("");
   const [invRole, setInvRole] = useState<Role>("user");
@@ -83,21 +107,60 @@ export function SettingsMembersTable({
   const [ghEditing, setGhEditing] = useState(false);
   const ghConnected = gh.connected && Boolean(gh.team);
 
-  const sendInvite = () => {
-    if (!invName.trim() || !invEmail.trim()) return;
+  /* Every mutator below goes through `write`: with no `actions` it is the same
+     local-state change this panel has always made, and with actions it is that
+     change applied only after the server accepted it (actions/useWrite.ts). */
+  const write = useWrite();
+
+  const sendInvite = async () => {
+    const name = invName.trim();
+    const email = invEmail.trim();
+    if (!name || !email) return;
     setSending(true);
-    setTimeout(() => {
-      const initials = invName.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-      setMembers((m) => [...m, { id: Math.max(0, ...m.map((x) => x.id)) + 1, name: invName.trim(), initials, email: invEmail.trim(), role: invRole, status: "invited", joined: new Date().toISOString().slice(0, 10) }]);
-      setInvName(""); setInvEmail(""); setInvRole("user"); setInviting(false); setSending(false);
-    }, 500);
+    const ok = await write.run(
+      actions?.inviteMember && (() => actions.inviteMember!({ name, email, role: String(invRole) })),
+      () => {
+        const initials = name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+        setMembers((m) => [...m, { id: Math.max(0, ...m.map((x) => x.id)) + 1, name, initials, email, role: invRole, status: "invited", joined: new Date().toISOString().slice(0, 10) }]);
+      },
+    );
+    setSending(false);
+    if (ok) { setInvName(""); setInvEmail(""); setInvRole("user"); setInviting(false); }
   };
 
-  const changeRole = (id: number, role: Role) => setMembers((m) => m.map((x) => (x.id === id ? { ...x, role } : x)));
-  const remove = (id: number) => setMembers((m) => m.filter((x) => x.id !== id));
+  const changeRole = (id: number, role: Role) => write.run(
+    actions?.setRole && (() => actions.setRole!(id, String(role))),
+    () => setMembers((m) => m.map((x) => (x.id === id ? { ...x, role } : x))),
+  );
 
-  const saveName = () => { setName(nameDraft); setEditingName(false); setNameSaved(true); setTimeout(() => setNameSaved(false), 1600); };
-  const saveGh = () => { setGh({ connected: true, team: ghDraft }); setGhEditing(false); };
+  /* Destructive, so the caller is <ConfirmButton> and this only ever runs on
+     the second click (CONVENTIONS §2). */
+  const remove = (id: number) => write.run(
+    actions?.removeMember && (() => actions.removeMember!(id)),
+    () => setMembers((m) => m.filter((x) => x.id !== id)),
+  );
+
+  const saveName = async () => {
+    const next = nameDraft.trim();
+    if (!next) return;
+    const ok = await write.run(
+      actions?.setWorkspaceName && (() => actions.setWorkspaceName!(next)),
+      () => { setName(next); setNameSaved(true); setTimeout(() => setNameSaved(false), 1600); },
+    );
+    if (ok) setEditingName(false);
+  };
+
+  const saveGh = async () => {
+    const team = ghDraft.trim();
+    const ok = await write.run(
+      actions?.setGithubTeam && (() => actions.setGithubTeam!(team)),
+      // `connected` is the server's own judgement (a team AND a credential to
+      // read it with), so the echo only claims what this panel can know: the
+      // team it just set. A reload replaces it with the server's answer.
+      () => setGh((g) => ({ connected: actions?.setGithubTeam ? g.connected : true, team })),
+    );
+    if (ok) setGhEditing(false);
+  };
 
   const roleOptions = (r: Role): Role[] => (ROLES.includes(r as never) ? [...ROLES] : [r, ...ROLES]);
 
@@ -135,8 +198,12 @@ export function SettingsMembersTable({
       {!embedded && <PageHeader
         title="Admin"
         description={`Manage who can reach ${name}, and how they get in`}
-        actions={<Button variant="primary" onClick={() => setInviting((v) => !v)}><UserPlus size={15} /> Invite member</Button>}
+        actions={<Button variant="primary" onClick={() => setInviting(!inviting)}><UserPlus size={15} /> Invite member</Button>}
       />}
+
+      {/* One failure surface for all five writes on this panel: whichever one
+          the server rejected says why, in the server's own words (§8). */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
 
       {inviting && (
         <Card title="Invite a teammate" hint="They appear below with an Invited chip until they sign in.">
@@ -146,7 +213,7 @@ export function SettingsMembersTable({
             <Field label="Role"><Select value={invRole} onChange={(e) => setInvRole(e.target.value)} className="w-full">{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</Select></Field>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <Button variant="primary" disabled={sending || !invName.trim() || !invEmail.trim()} onClick={sendInvite}>{sending ? "Sending…" : "Send invite"}</Button>
+            <Button variant="primary" disabled={sending || !invName.trim() || !invEmail.trim()} onClick={() => void sendInvite()}>{sending ? "Sending…" : "Send invite"}</Button>
             <Button onClick={() => setInviting(false)}>Cancel</Button>
           </div>
         </Card>
@@ -155,7 +222,7 @@ export function SettingsMembersTable({
       <Card eyebrow="Workspace name" actions={
         editingName ? (
           <>
-            <Button compact variant="primary" onClick={saveName}>Save</Button>
+            <Button compact variant="primary" disabled={write.busy} onClick={() => void saveName()}>Save</Button>
             <Button compact onClick={() => { setNameDraft(name); setEditingName(false); }}>Cancel</Button>
           </>
         ) : <Button compact onClick={() => { setNameDraft(name); setEditingName(true); }}>Edit</Button>
@@ -224,7 +291,7 @@ export function SettingsMembersTable({
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card icon={<GithubMark size={16} />} title="GitHub team sync" actions={
-          ghEditing ? <><Button compact variant="primary" onClick={saveGh}>Save</Button><Button compact onClick={() => { setGhDraft(gh.team); setGhEditing(false); }}>Cancel</Button></>
+          ghEditing ? <><Button compact variant="primary" disabled={write.busy} onClick={() => void saveGh()}>Save</Button><Button compact onClick={() => { setGhDraft(gh.team); setGhEditing(false); }}>Cancel</Button></>
             : <Button compact onClick={() => { setGhDraft(gh.team); setGhEditing(true); }}>Configure</Button>
         }>
           {ghEditing ? (

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Users, UserPlus, ChevronDown, Check, Mail } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -16,8 +16,12 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Scrollable } from "../data-display/Scrollable";
 import { Alert } from "../feedback/Alert";
-import { SettingsMembersTable, type Member, type GithubTeamSync } from "../features/SettingsMembersTable";
+import { SettingsMembersTable, type Member, type GithubTeamSync, type SettingsMembersActions } from "../features/SettingsMembersTable";
 import type { PropertyItem } from "../data-display/PropertyList";
+
+/** What Settings → Members can do. Defined with the table that renders the
+    controls and re-exported here, so an app types its handlers off the page. */
+export type { SettingsMembersActions };
 
 /* Settings → Members (pages/settings-members.md). The list variants render the
    SettingsMembersTable feature (members table + invite panel + workspace name +
@@ -67,31 +71,6 @@ export type SettingsMembersData = {
   focusMemberId: number | null;
 };
 
-type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
-
-const SETTINGS_TABS: TabOption<SettingsTab>[] = [
-  { id: "general", label: "General" },
-  { id: "members", label: "Members" },
-  { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
-  { id: "api-keys", label: "API keys" },
-  { id: "audit", label: "Audit log" },
-  { id: "design", label: "Design & brand" },
-];
-
-function SettingsTabs({ active }: { active: SettingsTab }) {
-  const [value, setValue] = useState<SettingsTab>(active);
-  return (
-    <Tabs
-      ariaLabel="Workspace settings"
-      variant="underline"
-      options={SETTINGS_TABS}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
@@ -218,7 +197,13 @@ function isEmpty(d: SettingsMembersData): boolean {
   return d.members.length === 0;
 }
 
-function Body({ data, error }: { data: SettingsMembersData; error: string | null }) {
+function Body({ data, error, actions, inviteOpen, onInviteOpenChange }: {
+  data: SettingsMembersData;
+  error: string | null;
+  actions?: SettingsMembersActions;
+  inviteOpen: boolean;
+  onInviteOpenChange: (open: boolean) => void;
+}) {
   if (error) {
     return <EmptyState icon={<Users size={22} />} title="API offline">{error}</EmptyState>;
   }
@@ -236,11 +221,18 @@ function Body({ data, error }: { data: SettingsMembersData; error: string | null
       members={data.members}
       workspaceName={data.workspaceName}
       githubTeam={data.githubTeam}
+      actions={actions}
+      inviteOpen={inviteOpen}
+      onInviteOpenChange={onInviteOpenChange}
     />
   );
 }
 
-function SettingsMembersPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsMembersData>) {
+function SettingsMembersPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsMembersData, SettingsMembersActions>) {
+  /* The header owns the "Invite member" button, so it owns whether the
+     composer below it is open. Without this the button was decorative: the
+     table's own header is hidden when embedded (§2). */
+  const [inviteOpen, setInviteOpen] = useState(false);
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -251,11 +243,11 @@ function SettingsMembersPage({ data, loading = false, error = null, chrome, mobi
             eyebrow="Settings"
             title="Members"
             description="Manage workspace access, invitations, and provisioning."
-            actions={<Button variant="primary"><UserPlus size={15} /> Invite member</Button>}
+            actions={<Button variant="primary" onClick={() => setInviteOpen((v) => !v)}><UserPlus size={15} /> Invite member</Button>}
           />
-          <div className="mt-5"><SettingsTabs active="members" /></div>
+          <div className="mt-5"><SettingsTabs active="members" onNavigate={chrome?.onNavigate} /></div>
           <SettingsBody mobile={mobile} rail={<MembersRail summary={data.summary} />}>
-            <Body data={data} error={error} />
+            <Body data={data} error={error} actions={actions} inviteOpen={inviteOpen} onInviteOpenChange={setInviteOpen} />
           </SettingsBody>
         </div>
       )}
@@ -263,7 +255,7 @@ function SettingsMembersPage({ data, loading = false, error = null, chrome, mobi
   );
 }
 
-export const page: PageModule<SettingsMembersData> = {
+export const page: PageModule<SettingsMembersData, SettingsMembersActions> = {
   id: "settings-members",
   title: "Settings · Members",
   route: "/settings/members",

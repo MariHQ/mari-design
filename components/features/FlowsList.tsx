@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Play, Eye, MoreVertical, Pencil, Copy, Trash2, Bell, FileText, Workflow,
 } from "lucide-react";
@@ -20,6 +20,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { type RunStatus } from "../workflow/RunHistory";
 import { RunStatusChips } from "./FlowsRunPanel";
 import { Skeleton, SkeletonLine, SkeletonCard, SkeletonList } from "../data-display/Skeleton";
+import { FieldError } from "../feedback/ErrorMessage";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { fmtDateTime, type DateInput } from "../tokens/format";
@@ -151,10 +152,30 @@ function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void })
   );
 }
 
+/** What the flow list can DO. Every handler may throw and the control that
+    called it shows the message. All optional: without them the list keeps the
+    local behaviour the library ships (the design canvas has no server). */
+export type FlowsListActions = {
+  /** Start a run. `dryRun` executes transforms but previews side effects. */
+  runFlow?: (args: { id: number; dryRun: boolean }) => void | Promise<void>;
+  /** Turn a flow on or off, so it does or does not fire. */
+  setFlowEnabled?: (args: { id: number; enabled: boolean }) => void | Promise<void>;
+  /** Delete a flow and its run history. Destructive: goes through ConfirmButton. */
+  deleteFlow?: (id: number) => void | Promise<void>;
+  /** Create a draft flow, from scratch or copied off a template. */
+  createFlow?: (args: {
+    name: string; description: string; steps: FlowStep[]; color: string;
+  }) => void | Promise<void>;
+  /** Persist a flow's trigger. */
+  saveTrigger?: (args: { id: number; trigger: FlowTrigger }) => void | Promise<void>;
+};
+
 export type FlowsListProps = {
   flows: Flow[];
   /** Sources a document trigger can be scoped to. */
   sources: SourceRef[];
+  /** Side effects the list offers. Omitted = local echo only. */
+  actions?: FlowsListActions;
   /** Render a content-shaped skeleton silhouette instead of the list. */
   loading?: boolean;
   className?: string;
@@ -165,12 +186,19 @@ const td = `${tdPad} align-middle border-b border-ink/[0.06]`;
 /** Flow rows rendered before "Show all". */
 const PAGE = 25;
 
-export function FlowsList({ flows, sources, loading = false, className = "" }: FlowsListProps) {
+export function FlowsList({ flows, sources, actions, loading = false, className = "" }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(null);
   const [draft, setDraft] = useState<{ from: Flow | null } | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [running, setRunning] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+
+  /* A write invalidates the read behind it, so the next `flows` is the new
+     truth: adopt it rather than staying on the copy taken at mount, which is
+     what made a successful delete reappear on the following render. */
+  useEffect(() => { setRows(flows); }, [flows]);
 
   const templates = useMemo(() => flows.slice(0, 4), [flows]);
 
@@ -185,26 +213,92 @@ export function FlowsList({ flows, sources, loading = false, className = "" }: F
 
   const visible = showAll ? sorted : sorted.slice(0, PAGE);
 
-  const toggleStatus = (f: Flow) =>
-    setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: r.status === "active" ? "paused" : "active" } : r)));
-
-  const removeFlow = (f: Flow) => {
-    setRows((rs) => rs.filter((r) => r.id !== f.id));
-    setNote(`Deleted ${f.name}.`);
+  /* Optimistic everywhere: the switch flips, the row leaves, the draft lands.
+     A rejected write puts the list back exactly as it was and says why, so a
+     failed write is as visible as a failed read. */
+  const toggleStatus = async (f: Flow) => {
+    const enabled = f.status !== "active";
+    setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: enabled ? "active" : "paused" } : r)));
+    setFailed(null);
+    setNote(`${f.name} is ${enabled ? "on" : "off"}.`);
+    if (!actions?.setFlowEnabled) return;
+    try {
+      await actions.setFlowEnabled({ id: f.id, enabled });
+    } catch (err) {
+      setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: f.status } : r)));
+      setNote(null);
+      setFailed(err instanceof Error ? err.message : `Could not turn ${f.name} ${enabled ? "on" : "off"}.`);
+    }
   };
 
-  const createDraft = (name: string, description: string, from: Flow | null) => {
+  const removeFlow = async (f: Flow) => {
+    setRows((rs) => rs.filter((r) => r.id !== f.id));
+    setFailed(null);
+    setNote(`Deleted ${f.name}.`);
+    if (!actions?.deleteFlow) return;
+    try {
+      await actions.deleteFlow(f.id);
+    } catch (err) {
+      setRows((rs) => (rs.some((r) => r.id === f.id) ? rs : [...rs, f]));
+      setNote(null);
+      setFailed(err instanceof Error ? err.message : `Could not delete ${f.name}.`);
+    }
+  };
+
+  const runFlow = async (f: Flow, dryRun: boolean) => {
+    if (running != null) return;
+    setRunning(f.id);
+    setFailed(null);
+    setNote(null);
+    try {
+      if (actions?.runFlow) await actions.runFlow({ id: f.id, dryRun });
+      else await new Promise((r) => setTimeout(r, 600));
+      setNote(`Started ${f.name}${dryRun ? " as a test run" : ""}. Watch the run marks for its result.`);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : `Could not start ${f.name}.`);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const createDraft = async (name: string, description: string, from: Flow | null) => {
     const id = Math.max(0, ...rows.map((r) => r.id)) + 1;
+    const steps = from?.nodes ?? [{ label: "Manual" }];
+    const color = from?.color ?? "#1C3F60";
+    setDraft(null);
+    setFailed(null);
     setRows((rs) => [
       ...rs,
       {
-        id, name, description, color: from?.color ?? "#1C3F60", status: "paused",
-        whenLabel: "Manual only", trigger: {}, nodes: from?.nodes ?? [{ label: "Manual" }],
+        id, name, description, color, status: "paused",
+        whenLabel: "Manual only", trigger: {}, nodes: steps,
         lastRun: null, recentRuns: [],
       },
     ]);
-    setDraft(null);
     setNote(`Draft flow "${name}" created, paused until you turn it on.`);
+    if (!actions?.createFlow) return;
+    try {
+      await actions.createFlow({ name, description, steps, color });
+    } catch (err) {
+      setRows((rs) => rs.filter((r) => r.id !== id));
+      setNote(null);
+      setFailed(err instanceof Error ? err.message : `Could not create "${name}".`);
+    }
+  };
+
+  const saveTrigger = async (f: Flow, trigger: FlowTrigger) => {
+    setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, trigger } : r)));
+    setTrigEdit(null);
+    setFailed(null);
+    setNote(`Trigger saved for ${f.name}.`);
+    if (!actions?.saveTrigger) return;
+    try {
+      await actions.saveTrigger({ id: f.id, trigger });
+    } catch (err) {
+      setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, trigger: f.trigger } : r)));
+      setNote(null);
+      setFailed(err instanceof Error ? err.message : `Could not save the trigger for ${f.name}.`);
+    }
   };
 
   if (loading) {
@@ -292,7 +386,7 @@ export function FlowsList({ flows, sources, loading = false, className = "" }: F
                   return (
                     <tr key={f.id} className={paused ? "bg-ink/[0.015]" : undefined}>
                       <td className={td}>
-                        <Switch checked={!paused} onCheckedChange={() => toggleStatus(f)} aria-label={`${f.name}: ${f.status}`} />
+                        <Switch checked={!paused} onCheckedChange={() => void toggleStatus(f)} aria-label={`${f.name}: ${f.status}`} />
                       </td>
                       <td className={`${td} max-w-[220px]`}>
                         <button type="button" className={`block max-w-full truncate text-left text-[14px] font-semibold text-ink hover:underline ${focusRing} rounded-[3px]`}>
@@ -322,9 +416,15 @@ export function FlowsList({ flows, sources, loading = false, className = "" }: F
                       </td>
                       <td className={`${td} whitespace-nowrap text-right`}>
                         <span className="inline-flex items-center gap-1.5">
-                          <Button compact><Play size={13} /> Run</Button>
-                          <Button compact title="Runs for real, but side effects become previews"><Eye size={13} /> Test run</Button>
-                          <ConfirmButton compact aria-label={`Delete ${f.name}`} confirmLabel="Delete?" onConfirm={() => removeFlow(f)}>
+                          {/* A run is a background job, so the button says it
+                              is starting rather than sitting there clicked. */}
+                          <Button compact disabled={running === f.id} onClick={() => void runFlow(f, false)}>
+                            <Play size={13} /> {running === f.id ? "Starting…" : "Run"}
+                          </Button>
+                          <Button compact disabled={running === f.id} title="Runs for real, but side effects become previews" onClick={() => void runFlow(f, true)}>
+                            <Eye size={13} /> Test run
+                          </Button>
+                          <ConfirmButton compact aria-label={`Delete ${f.name}`} confirmLabel="Delete?" onConfirm={() => void removeFlow(f)}>
                             <Trash2 size={13} />
                           </ConfirmButton>
                           <Menu trigger={<Button icon aria-label="More actions"><MoreVertical size={15} /></Button>}>
@@ -342,11 +442,20 @@ export function FlowsList({ flows, sources, loading = false, className = "" }: F
           </Scrollable>
           </>
         )}
-        {note && <div className="border-t border-ink/10 px-4 py-2.5 font-term text-[11.5px] text-moss">{note}</div>}
+        {failed && <div className="border-t border-ink/10 px-4 py-2.5"><FieldError>{failed}</FieldError></div>}
+        {note && !failed && <div className="border-t border-ink/10 px-4 py-2.5 font-term text-[11.5px] text-moss">{note}</div>}
       </div>
 
-      {trigEdit && <TriggerEditor key={trigEdit.id} flow={trigEdit} sources={sources} onClose={() => setTrigEdit(null)} />}
-      {draft && <DraftEditor from={draft.from} onCreate={createDraft} onClose={() => setDraft(null)} />}
+      {trigEdit && (
+        <TriggerEditor
+          key={trigEdit.id}
+          flow={trigEdit}
+          sources={sources}
+          onSave={(t) => void saveTrigger(trigEdit, t)}
+          onClose={() => setTrigEdit(null)}
+        />
+      )}
+      {draft && <DraftEditor from={draft.from} onCreate={(n, d, f) => void createDraft(n, d, f)} onClose={() => setDraft(null)} />}
     </div>
   );
 }
@@ -393,7 +502,9 @@ function DraftEditor({
 
 /* ── TriggerEditor: the compact trigger Drawer ─────────────────────────── */
 
-function TriggerEditor({ flow, sources, onClose }: { flow: Flow; sources: SourceRef[]; onClose: () => void }) {
+function TriggerEditor({ flow, sources, onSave, onClose }: {
+  flow: Flow; sources: SourceRef[]; onSave: (trigger: FlowTrigger) => void; onClose: () => void;
+}) {
   const [on, setOn] = useState<TriggerOn>(flow.trigger?.on ?? "");
   const [every, setEvery] = useState<number>(flow.trigger?.every_minutes ?? 1440);
   const [sourceId, setSourceId] = useState<string>(flow.trigger?.source_id != null ? String(flow.trigger.source_id) : "");
@@ -412,7 +523,19 @@ function TriggerEditor({ flow, sources, onClose }: { flow: Flow; sources: Source
       icon={<Bell size={16} className="text-ink/70" />}
       footer={
         <>
-          <Button variant="primary" disabled={everyBad}>Save trigger</Button>
+          <Button
+            variant="primary"
+            disabled={everyBad}
+            onClick={() => onSave(
+              on === "schedule"
+                ? { on, every_minutes: everyN }
+                : on === "document_added" || on === "document_changed"
+                  ? { on, source_id: sourceId ? Number(sourceId) : null, tag: tag || null, path_glob: pathGlob || null }
+                  : { on: "" },
+            )}
+          >
+            Save trigger
+          </Button>
           <Button onClick={onClose}>Cancel</Button>
         </>
       }

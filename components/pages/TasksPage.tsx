@@ -5,7 +5,7 @@ import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ConfirmButton } from "../actions/ConfirmButton";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ErrorMessage, FieldError } from "../feedback/ErrorMessage";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -55,6 +55,33 @@ export type TaskStrip = {
   statValue: string;
   statLabel: string;
 };
+
+/** What the Tasks inbox can DO. Every handler may throw; the board reverts the
+    row it moved and shows the server's own message beside the control.
+
+    Optional, like every actions object: with none of these the composer, the
+    check toggles and Clear done keep the local behaviour below, which is what
+    the design canvas renders. */
+export type TasksActions = {
+  /** Check / uncheck one row. */
+  setDone?: (args: { id: number; done: boolean }) => void | Promise<void>;
+  /** Add the composer's draft to the inbox. */
+  create?: (args: { title: string; kind: string; kindLabel: string }) => void | Promise<void>;
+  /** Empty the Done column. Destructive: goes through ConfirmButton. */
+  clearDone?: () => void | Promise<void>;
+};
+
+/** The kinds the composer can file a task under. The value is the API's key,
+    the label is what the pill reads — the two travel together so a task never
+    lands with a key nobody has a label for. */
+const KINDS: { id: string; label: string }[] = [
+  { id: "approval", label: "Approval" },
+  { id: "factcheck", label: "Fact check" },
+  { id: "stale", label: "Stale" },
+];
+
+/** Whatever the server said, or a floor when the failure carried no message. */
+const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /** Everything the Tasks page renders. */
 export type TasksData = {
@@ -149,24 +176,78 @@ function StressStrip({ strip }: { strip: TaskStrip }) {
   );
 }
 
-function Body({ data, error, mobile }: { data: TasksData; error: string | null; mobile: boolean }) {
+function Body({ data, error, actions, who, mobile }: {
+  data: TasksData; error: string | null; actions?: TasksActions; who: string; mobile: boolean;
+}) {
   const [tasks, setTasks] = useState<Task[]>(() => data.tasks);
   const [draft, setDraft] = useState(data.draft);
+  const [kind, setKind] = useState(KINDS[1].id);
+  const [adding, setAdding] = useState(false);
+  /* A failed write is as visible as a failed read (PageProps.actions): the
+     server's own message lands under the control that tried it. */
+  const [composerFailed, setComposerFailed] = useState<string | null>(null);
+  const [boardFailed, setBoardFailed] = useState<string | null>(null);
 
-  const saving = data.saving;
+  const saving = data.saving || adding;
   // The composer reads as "active" whenever it holds a draft or is submitting
   // one — a mode derived from the content, not a separate flag.
   const composing = Boolean(draft.trim()) || saving;
 
-  const toggle = (id: number) =>
-    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  const add = () => {
-    const title = draft.trim();
-    if (!title) return;
-    setTasks((ts) => [...ts, { id: Date.now(), title, who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false }]);
-    setDraft("");
+  /* Every control below moves local state FIRST and then writes. With no
+     actions that local move is the whole behaviour (the canvas renders this
+     page with no server); with actions it is an optimistic echo the refetch
+     confirms, and a rejected write puts the row back where it was. */
+  const toggle = async (id: number) => {
+    const row = tasks.find((t) => t.id === id);
+    if (!row) return;
+    const done = !row.done;
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done } : t)));
+    if (!actions?.setDone) return;
+    setBoardFailed(null);
+    try {
+      await actions.setDone({ id, done });
+    } catch (e) {
+      setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !done } : t)));
+      setBoardFailed(why(e, "That task could not be updated."));
+    }
   };
-  const clearDone = () => setTasks((ts) => ts.filter((t) => !t.done));
+
+  const add = async () => {
+    const title = draft.trim();
+    if (!title || saving) return;
+    const kindLabel = KINDS.find((k) => k.id === kind)?.label ?? kind;
+    if (!actions?.create) {
+      setTasks((ts) => [...ts, { id: Date.now(), title, who, kind, kindLabel, done: false }]);
+      setDraft("");
+      return;
+    }
+    setAdding(true);
+    setComposerFailed(null);
+    try {
+      await actions.create({ title, kind, kindLabel });
+      // The row the server just wrote, filed to whoever is signed in — the
+      // same person its own `assignee` default names.
+      setTasks((ts) => [...ts, { id: Date.now(), title, who, kind, kindLabel, done: false }]);
+      setDraft("");
+    } catch (e) {
+      setComposerFailed(why(e, "That task could not be added."));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const clearDone = async () => {
+    const cleared = tasks.filter((t) => t.done);
+    setTasks((ts) => ts.filter((t) => !t.done));
+    if (!actions?.clearDone) return;
+    setBoardFailed(null);
+    try {
+      await actions.clearDone();
+    } catch (e) {
+      setTasks((ts) => [...ts, ...cleared]);
+      setBoardFailed(why(e, "Done tasks could not be cleared."));
+    }
+  };
 
   const offline = Boolean(error);
 
@@ -193,12 +274,11 @@ function Body({ data, error, mobile }: { data: TasksData; error: string | null; 
             placeholder="New task: e.g. Re-verify SLA uptime fact"
             className="min-w-0 flex-1"
           />
-          <Select defaultValue="factcheck" className="w-40 shrink-0">
-            <option value="approval">Approval</option>
-            <option value="factcheck">Fact check</option>
-            <option value="stale">Stale</option>
+          <Select value={kind} onChange={(e) => setKind(e.target.value)} className="w-40 shrink-0">
+            {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
           </Select>
         </div>
+        {composerFailed && <FieldError>{composerFailed}</FieldError>}
         <div className="mt-3">
           <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
             <Plus size={15} /> {saving ? "Adding…" : "Add task"}
@@ -207,6 +287,7 @@ function Body({ data, error, mobile }: { data: TasksData; error: string | null; 
       </Card>
 
       {offline && <ErrorMessage id="server.unavailable" />}
+      {boardFailed && <FieldError>{boardFailed}</FieldError>}
 
       {data.strip && <StressStrip strip={data.strip} />}
 
@@ -237,7 +318,7 @@ function Body({ data, error, mobile }: { data: TasksData; error: string | null; 
   );
 }
 
-function TasksPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<TasksData>) {
+function TasksPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<TasksData, TasksActions>) {
   return (
     <PageFrame chrome={chrome} active={navFor("tasks")} title="Tasks" mobile={mobile}>
       {loading ? (
@@ -251,7 +332,7 @@ function TasksPage({ data, loading = false, error = null, chrome, mobile = false
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
-          <Body data={data} error={error} mobile={mobile} />
+          <Body data={data} error={error} actions={actions} who={chrome?.user?.initials ?? "—"} mobile={mobile} />
         </div>
       </div>
       )}
@@ -259,7 +340,7 @@ function TasksPage({ data, loading = false, error = null, chrome, mobile = false
   );
 }
 
-export const page: PageModule<TasksData> = {
+export const page: PageModule<TasksData, TasksActions> = {
   id: "tasks",
   title: "Tasks",
   route: "/tasks",

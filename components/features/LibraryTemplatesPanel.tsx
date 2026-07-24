@@ -14,6 +14,8 @@ import { Scrollable } from "../data-display/Scrollable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuItem } from "../navigation/Menu";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* LibraryTemplatesPanel — the Library › Templates tab.
    A gallery of document scaffolds (Runbook, ADR, Postmortem, RFC…) plus
@@ -50,8 +52,21 @@ const TEMPLATE_ICONS = {
 const GENERIC_SECTIONS = ["Overview", "Context", "Details", "Process", "Risks", "Review", "References", "Appendix", "Next steps", "Owners", "Changelog", "Links"];
 const CATEGORIES = ["All", "Engineering", "Operations", "Product", "Team", "Governance"] as const;
 
+/** What the template gallery can DO.
+
+    "Use template" has no handler: it starts a draft in the editor, which is a
+    navigation this panel does not own, so it keeps its local confirmation. */
+export type LibraryTemplatesActions = {
+  saveTemplate?: (t: {
+    id: string; name: string; category: string; description: string;
+    sections: string[]; icon: TemplateIcon;
+  }) => void | Promise<void>;
+  deleteTemplate?: (id: string) => void | Promise<void>;
+};
+
 export type LibraryTemplatesPanelProps = {
   templates: Template[];
+  actions?: LibraryTemplatesActions;
   loading?: boolean;
   /** Narrow-column composition: the find field moves out of the card header
       onto its own row (CONVENTIONS.md §10 — the page owns mobile). */
@@ -59,7 +74,7 @@ export type LibraryTemplatesPanelProps = {
   className?: string;
 };
 
-export function LibraryTemplatesPanel({ templates, loading = false, compact = false, className = "" }: LibraryTemplatesPanelProps) {
+export function LibraryTemplatesPanel({ templates, actions, loading = false, compact = false, className = "" }: LibraryTemplatesPanelProps) {
   // Every hook runs on every render: these used to sit AFTER the `loading`
   // early return, so a panel that started life loading and then resolved
   // mounted a different number of hooks and React threw.
@@ -78,6 +93,9 @@ export function LibraryTemplatesPanel({ templates, loading = false, compact = fa
      time (CONVENTIONS §13, §15). */
   const [showAll, setShowAll] = useState(false);
   const PAGE = 12;
+  /* Create and delete go through `write`: with no actions they are the
+     local-state changes this panel has always made (actions/useWrite.ts). */
+  const write = useWrite();
 
   const visible = useMemo(
     () => rows.filter((t) => (category === "All" || t.category === category) && `${t.name} ${t.description}`.toLowerCase().includes(query.toLowerCase())),
@@ -103,18 +121,34 @@ export function LibraryTemplatesPanel({ templates, loading = false, compact = fa
     );
   }
 
-  const add = () => {
-    if (!name.trim()) return;
+  const add = async () => {
+    const templateName = name.trim();
+    if (!templateName) return;
     const n = Math.max(1, Math.min(Number(count) || 5, GENERIC_SECTIONS.length));
-    setRows((prev) => [
-      ...prev,
-      { id: `custom-${Date.now().toString(36)}`, name: name.trim(), category: cat, description: desc.trim() || "Custom scaffold.", sections: GENERIC_SECTIONS.slice(0, n), standard: false, icon: "file-text" },
-    ]);
-    setName(""); setDesc(""); setCount("5"); setComposerOpen(false);
+    // The key is the template's identity on the server, so it is derived from
+    // the name here and sent, rather than being a local row number.
+    const id = templateName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      || `custom-${Date.now().toString(36)}`;
+    const row: Template = {
+      id, name: templateName, category: cat, description: desc.trim() || "Custom scaffold.",
+      sections: GENERIC_SECTIONS.slice(0, n), standard: false, icon: "file-text",
+    };
+    const ok = await write.run(
+      actions?.saveTemplate && (() => actions.saveTemplate!({
+        id, name: row.name, category: row.category, description: row.description,
+        sections: row.sections, icon: row.icon,
+      })),
+      () => setRows((prev) => [...prev, row]),
+    );
+    if (ok) { setName(""); setDesc(""); setCount("5"); setComposerOpen(false); }
   };
 
   const use = (id: string) => { setUsedId(id); window.setTimeout(() => setUsedId((cur) => (cur === id ? null : cur)), 2400); };
-  const del = (id: string) => setRows((prev) => prev.filter((t) => t.id !== id));
+  /* Destructive: the caller is <ConfirmButton>, so this is the second click. */
+  const del = (id: string) => write.run(
+    actions?.deleteTemplate && (() => actions.deleteTemplate!(id)),
+    () => setRows((prev) => prev.filter((t) => t.id !== id)),
+  );
 
   const findField = (
     <label className="flex min-w-0 items-center gap-2 h-8 px-2.5 rounded-[4px] border border-ink/20 text-ink/70 focus-within:border-biscay-2">
@@ -136,6 +170,9 @@ export function LibraryTemplatesPanel({ templates, loading = false, compact = fa
       className={className}
     >
       <div className="border-t border-ink/10">
+        {write.failed && (
+          <div className="px-4 pt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+        )}
         {/* Header summary sits on its own line under the header + search +
             new-template row, not squeezed between them. */}
         {compact && <div className="px-4 pt-3">{findField}</div>}
@@ -157,7 +194,7 @@ export function LibraryTemplatesPanel({ templates, loading = false, compact = fa
             </div>
             <div className="mt-3 flex justify-end gap-2">
               <Button compact onClick={() => setComposerOpen(false)}>Cancel</Button>
-              <Button variant="primary" compact disabled={!name.trim()} onClick={add}>Create</Button>
+              <Button variant="primary" compact disabled={write.busy || !name.trim()} onClick={() => void add()}>Create</Button>
             </div>
           </div>
         )}
