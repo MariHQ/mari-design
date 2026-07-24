@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Search, X, Bookmark, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, X, Bookmark, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -250,7 +250,10 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           with its message and participant counts.
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* No flex-wrap: the sort control shares this line with the tabs and
+            never drops to its own row (§13). The tab row scrolls inside
+            itself; the sort button keeps its content width. */}
+        <div className="flex items-center gap-3">
           {/* min-w-0 + its own scroll box: without it the 5-tab row sets the
               min-content width of the whole results column and pushes the feed
               past the card edge on a narrow viewport. */}
@@ -270,7 +273,10 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           />
           </div>
           <div className="ml-auto shrink-0">
-            <Menu trigger={<Button compact>Sort: {sortLabel} <ChevronDown size={13} /></Button>}>
+            {/* The label collapses to just "Sort" so it can never cover the
+                tabs on its line; the dropdown carries the options and shows
+                the active one (§13). Standard ArrowUpDown sort glyph (§3). */}
+            <Menu trigger={<Button compact aria-label={`Sort results, currently ${sortLabel}`}><ArrowUpDown size={13} /> Sort</Button>}>
               <MenuLabel>Sort by</MenuLabel>
               <MenuRadioGroup value={sort} onValueChange={setSort}>
                 {SORTS.map((s) => <MenuRadioItem key={s.id} value={s.id}>{s.label}</MenuRadioItem>)}
@@ -278,6 +284,25 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
             </Menu>
           </div>
         </div>
+
+        {/* Corpus stats strip: above the results it describes, below the
+            search/tabs/sort bar, never at the bottom of the list (§13). */}
+        <Card variant="plain">
+          {/* gap-y keeps the stats off the live-ingestion line when the strip
+              wraps; without it the wrapped row sat on top of the labels. */}
+          <div className="flex items-center gap-x-8 gap-y-3 flex-wrap">
+            <FooterStat value={results.length.toLocaleString()} label="documents" />
+            <FooterStat value="1,284" label="verified facts" />
+            <FooterStat value="87%" label="fresh" />
+            <span className="ml-auto inline-flex items-center gap-2 font-term text-[11.5px] text-ink/60">
+              <span className="relative inline-flex w-2 h-2">
+                <span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" />
+                <span className="relative inline-flex w-2 h-2 rounded-full bg-moss" />
+              </span>
+              Live ingestion · 6 sources
+            </span>
+          </div>
+        </Card>
 
         <div className="font-term text-[11.5px] text-ink/65">{sorted.length} result{sorted.length === 1 ? "" : "s"}</div>
 
@@ -323,7 +348,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
                          row at full width and the card spilled past its border.
                          Letting the nowrap boxes shrink is what makes the
                          truncation fire (CONVENTIONS.md §12). */
-                      className="min-w-0 [&>div]:min-w-0 [&_.whitespace-nowrap]:min-w-0"
+                      className="min-w-0 [&_.whitespace-nowrap]:min-w-0"
                       source={
                         <Chip
                           className="min-w-0"
@@ -336,6 +361,10 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
                         <>
                           {r.status && <Pill kind={r.status} />}
                           {slack && <Chip label="Decision excerpt" tone="info" />}
+                          {/* Tags render in the same bottom-left block as the
+                              status, deduped against it; overflow stacks and
+                              the date/author line rides the bottom row (§14). */}
+                          {r.tags.filter((t) => t !== r.status).map((t) => <Pill key={t} kind={t} />)}
                         </>
                       }
                       date={fmtDate(r.date)}
@@ -361,23 +390,6 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           </div>
         )}
 
-        {/* Footer strip */}
-        <Card variant="plain">
-          {/* gap-y keeps the stats off the live-ingestion line when the strip
-              wraps; without it the wrapped row sat on top of the labels. */}
-          <div className="flex items-center gap-x-8 gap-y-3 flex-wrap">
-            <FooterStat value={results.length.toLocaleString()} label="documents" />
-            <FooterStat value="1,284" label="verified facts" />
-            <FooterStat value="87%" label="fresh" />
-            <span className="ml-auto inline-flex items-center gap-2 font-term text-[11.5px] text-ink/60">
-              <span className="relative inline-flex w-2 h-2">
-                <span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" />
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-moss" />
-              </span>
-              Live ingestion · 6 sources
-            </span>
-          </div>
-        </Card>
       </div>
     </div>
   );

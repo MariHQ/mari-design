@@ -12,6 +12,7 @@ import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { focusRing } from "../tokens/focusRing";
+import { Truncate } from "../data-display/Truncate";
 
 /* Overview — Today's review (task inbox) ──────────────────────────────────
    The open/near-term task inbox, rendered as a real table so it spaces and
@@ -79,6 +80,11 @@ export function OverviewTodayReview({
 }: OverviewTodayReviewProps) {
   const [rows, setRows] = useState<ReviewTask[]>(tasks ?? []);
   const [expanded, setExpanded] = useState(defaultExpanded);
+  // Long task text clamps to two lines with an explicit expand toggle, so one
+  // verbose task cannot unbalance the row against its sibling boxes (§15).
+  const [textOpen, setTextOpen] = useState<Set<number>>(new Set());
+  const toggleText = (id: number) =>
+    setTextOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const { sort, onSort, sorted } = useSort(rows, {
     task: (t) => t.text,
@@ -153,11 +159,27 @@ export function OverviewTodayReview({
               {visible.map((t) => (
                 <tr key={t.id} className="border-b border-ink/10 last:border-0">
                   <td className={`${tdPad} w-full min-w-[200px] max-w-0`}>
-                    <div className="flex items-center gap-2.5">
-                      <TaskCheck done={!!t.done} onToggle={() => toggle(t.id)} />
-                      <span className={`min-w-0 flex-1 break-words text-[13px] ${t.done ? "text-ink/55 line-through" : "text-ink/85"}`}>
-                        {t.text}
-                      </span>
+                    <div className="flex items-start gap-2.5">
+                      <span className="mt-0.5"><TaskCheck done={!!t.done} onToggle={() => toggle(t.id)} /></span>
+                      {t.text.length > 140 ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleText(t.id)}
+                          aria-expanded={textOpen.has(t.id)}
+                          className={`min-w-0 flex-1 text-left text-[13px] ${t.done ? "text-ink/55 line-through" : "text-ink/85"} ${focusRing}`}
+                        >
+                          {textOpen.has(t.id)
+                            ? <span className="break-words">{t.text}</span>
+                            : <Truncate lines={2}>{t.text}</Truncate>}
+                          <span className="mt-0.5 block font-term text-[11px] text-biscay-2">
+                            {textOpen.has(t.id) ? "Show less" : "Show more"}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className={`min-w-0 flex-1 break-words text-[13px] ${t.done ? "text-ink/55 line-through" : "text-ink/85"}`}>
+                          {t.text}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className={`${tdPad} text-center align-middle whitespace-nowrap`}>

@@ -415,6 +415,9 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     <div className="flex flex-col gap-5">
       <Tabs
         ariaLabel="Filter answers"
+        /* Underline variant: the Knowledge tab bar is the one standard
+           selection bar across the console (CONVENTIONS.md §13). */
+        variant="underline"
         value={filter}
         onChange={setFilter}
         options={[

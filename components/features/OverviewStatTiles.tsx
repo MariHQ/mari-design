@@ -95,7 +95,7 @@ export function OverviewStatTiles({
               tone={STAT_TONE[t.tone]}
               icon={<IconRing tone={RING_TONE[t.tone]} size={31}>{STAT_ICONS[t.key]}</IconRing>}
               onClick={() => go(STAT_AREA[t.key])}
-              className={swatch ? "pl-5" : ""}
+              className={swatch ? "pl-4" : ""}
             />
           </div>
         );

@@ -40,7 +40,10 @@ export function Chip({
   const dotColor = DOT[toneKey];
 
   const shared = [
-    "inline-flex max-w-full items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-term text-[11px] font-medium whitespace-nowrap transition-colors",
+    // min-w-0: as a flex item a nowrap chip otherwise floors at its full text
+    // width (min-width:auto) and escapes its row; with it, the label span
+    // truncates instead (CONVENTIONS.md §12).
+    "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-term text-[11px] font-medium whitespace-nowrap transition-colors",
     caps && "uppercase tracking-[0.06em]",
     toneClasses,
     // Selection reads on ALL FOUR sides — a ring alone sat behind the chip's

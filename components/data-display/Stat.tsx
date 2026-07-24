@@ -32,7 +32,7 @@ export function Stat({
 }) {
   if (loading) {
     return (
-      <div className={`${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-4 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-3 ${className}`.trim()} aria-hidden="true">
         <span className="flex flex-col gap-2">
           <Skeleton width={72} height={26} />
           <SkeletonLine w={90} h={10} />
@@ -52,7 +52,9 @@ export function Stat({
       {icon && <span className="text-ink/30" aria-hidden="true">{icon}</span>}
     </>
   );
-  const shared = `${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-4 text-left ${className}`.trim();
+  // p-3, not p-4: stat tiles run compact so dashboards clear the fold
+  // (CONVENTIONS.md §17).
+  const shared = `${card} flex flex-1 basis-[200px] min-w-[200px] overflow-hidden [overflow-wrap:anywhere] items-start justify-between gap-3 p-3 text-left ${className}`.trim();
   if (onClick) {
     return (
       <button type="button" onClick={onClick} className={`${shared} hover:border-ink/30 transition-colors ${focusRing}`}>

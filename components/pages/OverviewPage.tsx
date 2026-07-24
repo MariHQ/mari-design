@@ -10,6 +10,7 @@ import { OverviewLiveActivity } from "../features/OverviewLiveActivity";
 import { OverviewWorkflowStrip } from "../features/OverviewWorkflowStrip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { CardCollapseScope } from "../layout/Card";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, UNBREAKABLE,
   LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS, repeat,
@@ -94,8 +95,9 @@ function StressBody({ extreme, mobile }: { extreme: boolean; mobile: boolean }) 
   return (
     <DashGrid mobile={mobile}>
       <Cell mobile={mobile} span={3}><OverviewStatTiles stats={stats} /></Cell>
-      <Cell mobile={mobile}><OverviewDigestCard topics={digest} /></Cell>
+      {/* Today's review leads the row: timeliest content first (§17). */}
       <Cell mobile={mobile} span={2}><OverviewTodayReview tasks={tasks} /></Cell>
+      <Cell mobile={mobile}><OverviewDigestCard topics={digest} /></Cell>
       <Cell mobile={mobile}><OverviewLiveActivity items={feed} pollMs={0} /></Cell>
       <Cell mobile={mobile} span={2}><OverviewRecentDocs docs={docs} /></Cell>
       <Cell mobile={mobile} span={3}><OverviewWorkflowStrip flow={flow} run={{ started: extreme ? UNBREAKABLE : LONG_SOURCE, outcome: extreme ? MIXED_SCRIPT : "Passed after a very long retry loop" }} /></Cell>
@@ -132,8 +134,10 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           workflow strip a row of 86px nodes, so both take all three. The
           one-column slots hold the two prose widgets, which reflow. */}
       <Cell mobile={mobile} span={3}><OverviewStatTiles /></Cell>
-      <Cell mobile={mobile}><OverviewDigestCard /></Cell>
+      {/* Today's review sits above/left of the weekly digest: timeliest
+          content first (§17). */}
       <Cell mobile={mobile} span={2}><OverviewTodayReview /></Cell>
+      <Cell mobile={mobile}><OverviewDigestCard /></Cell>
       <Cell mobile={mobile}><OverviewLiveActivity /></Cell>
       <Cell mobile={mobile} span={2}><OverviewRecentDocs /></Cell>
       <Cell mobile={mobile} span={3}><OverviewWorkflowStrip /></Cell>
@@ -151,7 +155,11 @@ function OverviewPage({ state = "default", mobile = false }: PageProps) {
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <Greeting />
           <div className="mt-6">
-            <Body state={state} mobile={mobile} />
+            {/* Mobile collapses every titled widget behind its header, so the
+                dashboard scans as a list instead of a forever scroll (§17). */}
+            <CardCollapseScope.Provider value={mobile}>
+              <Body state={state} mobile={mobile} />
+            </CardCollapseScope.Provider>
           </div>
         </div>
       )}

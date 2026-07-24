@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, ArrowRight, GitBranch } from "lucide-react";
+import { CheckCircle2, ArrowRight } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -261,13 +261,15 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
                 </div>
               )}
 
-              {/* Both actions on the same line, bottom left (CONVENTIONS.md §2). */}
-              <div className="mt-2 flex flex-wrap items-center gap-4">
+              {/* Repeated actions keep one location on every pane: Open in
+                  lineage sits directly below View full history, with no
+                  leading icon (CONVENTIONS.md §16). */}
+              <div className="mt-2 flex flex-col items-start gap-1.5">
                 <Button variant="link" onClick={() => setFullHistory((v) => !v)}>
                   {fullHistory ? "Show recent revisions" : `View full history (${doc.timeline.length})`} <ArrowRight size={12} />
                 </Button>
                 <Button variant="link" onClick={() => setLineageOpen((v) => !v)}>
-                  <GitBranch size={12} /> {lineageOpen ? "Hide lineage" : "Open in lineage"} <ArrowRight size={12} />
+                  {lineageOpen ? "Hide lineage" : "Open in lineage"} <ArrowRight size={12} />
                 </Button>
               </div>
             </CardSection>

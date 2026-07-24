@@ -1,7 +1,7 @@
 # Mari design system — layout & content conventions
 
-Binding rules for every component and page. Derived from `updates.md`.
-When a component conflicts with a rule below, the rule wins.
+Binding rules for every component and page. Derived from `updates.md` and
+`canvas-knits.md`. When a component conflicts with a rule below, the rule wins.
 
 ## 1. Card / panel content order
 
@@ -190,3 +190,67 @@ Rules:
 - Reach for `[overflow-wrap:anywhere]` only where the full value genuinely must
   stay visible; it is the exception, not the default.
 - Never widen a column, a card, or a page to accommodate a long value.
+
+## 13. Toolbars, sort controls, and stats strips
+
+- One standard selection/tab bar component everywhere. The Knowledge tab bar
+  is the reference. No per-page variants (Answers must match Knowledge).
+- The sort control sits on the same line as the section heading or toolbar.
+  It never gets its own row and never overlaps content. If it cannot fit,
+  collapse the label to just "Sort" and let the dropdown carry the options.
+  Fix this in the component, not per page.
+- Result-count / stats strips render **above** the list they describe and
+  **below** the search/sort/filter bar. Never at the bottom of the results.
+- Every control in a button group shares the same height. An H1 button in the
+  editor toolbar is exactly as tall as Bold and Italic.
+
+## 14. Tags on cards
+
+- The tag block sits **bottom left** on every card, in the same position on
+  every card. "Canonical", "Needs review", and "Decision chunk" all render in
+  the same spot.
+- Tag labels use sentence case, consistently. No mixed lowercase ("related"
+  tags match the case of every other tag).
+- When tags overflow, they stack, and the date/author line sits on the same
+  line as the bottom tag row, never pushed below the whole stack.
+
+## 15. Balanced siblings and empty states
+
+- Sibling boxes in a row keep equal heights. Long content (a long task title)
+  gets an expand affordance instead of growing its box.
+- Empty-state boxes match the height of their populated siblings. "No results"
+  and "No documents" render at the same height.
+- Sibling sections share edges. A bottom section (Doc review change queue)
+  runs the full page width under the side rail, not just the main column.
+
+## 16. Repeated actions appear in the same place
+
+- An action that appears on more than one pane appears in the same location
+  every time. "Open in lineage" always sits directly below "View full
+  history".
+- "Open in lineage" has no leading icon.
+
+## 17. Above the fold and mobile density
+
+- Timeliest content first: Today's review sits above This week's digest.
+- Stat tiles use compact padding so more content clears the fold.
+- On mobile, long pages use collapsible sections. Forever scroll is a bug.
+- Nothing ever overflows the viewport, in any state. Headers truncate with an
+  ellipsis (§12); sections collapse when truncation is not enough.
+
+## 18. Decorative art
+
+- No watermark or background art may collide with content. The Refine panel
+  branch art is removed, at the component level.
+
+## 19. Content and interaction references (NN/g)
+
+Copy and interaction patterns follow Nielsen Norman Group guidance:
+
+- Headlines, page titles, microcontent: https://www.nngroup.com/articles/microcontent-how-to-write-headlines-page-titles-and-subject-lines/
+- Headings: https://www.nngroup.com/articles/headings-pickup-lines/
+- Link text: https://www.nngroup.com/articles/link-promise/
+- Error messages: https://www.nngroup.com/articles/error-message-guidelines/
+- Modes: https://www.nngroup.com/articles/modes/
+- Confirmation dialogs: https://www.nngroup.com/articles/confirmation-dialog/
+- Testing content: https://www.nngroup.com/articles/testing-content-websites/

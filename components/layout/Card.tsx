@@ -1,5 +1,8 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { createContext, useContext, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { card } from "../tokens/card";
+import { focusRing } from "../tokens/focusRing";
 
 type CardVariant = "default" | "plain" | "flush";
 
@@ -8,6 +11,12 @@ const PAD: Record<CardVariant, string> = {
   plain: "p-5",
   flush: "p-0",
 };
+
+/* Pages opt a subtree into collapsible cards (CONVENTIONS.md §17: mobile
+   dashboards collapse instead of forever-scrolling). Inside a true scope,
+   every titled card grows a chevron toggle and starts collapsed, so the page
+   reads as a scannable list of section headers. Desktop pages leave this off. */
+export const CardCollapseScope = createContext(false);
 
 export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
   variant?: CardVariant;
@@ -20,6 +29,9 @@ export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
 };
 
 export function Card({ variant = "default", title, eyebrow, icon, actions, hint, className = "", children, ...rest }: CardProps) {
+  const collapseScope = useContext(CardCollapseScope);
+  const collapsible = collapseScope && Boolean(title);
+  const [collapsed, setCollapsed] = useState(collapsible);
   const headed = Boolean(title || eyebrow || icon || actions || hint);
   return (
     <section className={`${card} ${className}`.trim()} {...rest}>
@@ -31,13 +43,34 @@ export function Card({ variant = "default", title, eyebrow, icon, actions, hint,
           {icon}
           <div className="min-w-[9rem] flex-1">
             {eyebrow && <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-0.5">{eyebrow}</span>}
-            {title && <h3 className="text-[15px] font-semibold leading-snug text-ink break-words">{title}</h3>}
+            {/* Headers truncate with an ellipsis; they never wrap tall or run
+                off screen (CONVENTIONS.md §12/§17). The full value rides the
+                title attribute. */}
+            {title && (
+              <h3
+                className="text-[15px] font-semibold leading-snug text-ink truncate"
+                title={typeof title === "string" ? title : undefined}
+              >
+                {title}
+              </h3>
+            )}
           </div>
           {hint && <span className="min-w-0 max-w-full self-center font-term text-[11px] text-ink/65 [overflow-wrap:anywhere]">{hint}</span>}
           {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+          {collapsible && (
+            <button
+              type="button"
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand section" : "Collapse section"}
+              onClick={() => setCollapsed((v) => !v)}
+              className={`grid h-7 w-7 shrink-0 place-items-center self-center rounded-[4px] border border-ink/20 text-ink/70 hover:border-ink/45 hover:text-ink transition-colors ${focusRing}`}
+            >
+              <ChevronDown size={15} className={`transition-transform ${collapsed ? "" : "rotate-180"}`} />
+            </button>
+          )}
         </header>
       )}
-      <div className={`${headed ? (variant === "flush" ? "" : `${PAD[variant]} pt-0`) : PAD[variant]} min-w-0 break-words`}>{children}</div>
+      <div className={`${headed ? (variant === "flush" ? "" : `${PAD[variant]} pt-0`) : PAD[variant]} min-w-0 break-words${collapsible && collapsed ? " hidden" : ""}`}>{children}</div>
     </section>
   );
 }
