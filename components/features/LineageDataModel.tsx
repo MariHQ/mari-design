@@ -438,7 +438,11 @@ export function LgDrawerShell({
         </div>
         {pills && <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{pills}</div>}
       </header>
-      <Scrollable axis="y" className="min-h-0 flex-1" scrollerClassName="px-4 py-4">{children}</Scrollable>
+      {/* min-h-0 grow, not flex-1: the 0% basis collapsed this wrapper inside
+          the max-height (auto-height) aside and body content painted over the
+          footer. basis:auto sizes to content, then shrinks and scrolls once
+          the 720px cap bites. */}
+      <Scrollable axis="y" className="min-h-0 grow" scrollerClassName="px-4 py-4">{children}</Scrollable>
       {footer && <footer className="shrink-0 border-t border-ink/10 px-4 py-3">{footer}</footer>}
     </aside>
   );

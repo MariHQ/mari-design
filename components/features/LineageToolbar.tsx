@@ -248,9 +248,13 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
           <span className="w-9 text-center font-term text-[12px] font-medium" style={{ color: CONTROL_ACCENT.zoom }}>
             {Math.round(controls.zoom * 100)}%
           </span>
-          <Button compact icon aria-label="Zoom out" className="h-6 w-6" onClick={() => setZoom(controls.zoom - 0.2)}><Minus size={14} /></Button>
-          <Button compact icon aria-label="Zoom in" className="h-6 w-6" onClick={() => setZoom(controls.zoom + 0.2)}><Plus size={14} /></Button>
-          <Button compact icon aria-label="Fit graph" className="h-6 w-6" onClick={() => setControls({ zoom: 1 })}><Maximize2 size={14} /></Button>
+          {/* !h-7/!w-7: the icon size prop is w-9 h-9, which outranked the
+              plain h-6 override and poked 4px out of this 32px group, reading
+              as a stray button behind the control. 28px keeps every control
+              in the filter row inside the shared 32px height (§13). */}
+          <Button compact icon aria-label="Zoom out" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom - 0.2)}><Minus size={14} /></Button>
+          <Button compact icon aria-label="Zoom in" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom + 0.2)}><Plus size={14} /></Button>
+          <Button compact icon aria-label="Fit graph" className="!h-7 !w-7" onClick={() => setControls({ zoom: 1 })}><Maximize2 size={14} /></Button>
         </div>
       </Row>
 

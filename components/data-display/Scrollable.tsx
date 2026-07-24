@@ -33,8 +33,12 @@ export type ScrollableProps = HTMLAttributes<HTMLDivElement> & {
   scrollerRef?: MutableRefObject<HTMLDivElement | null> | ((el: HTMLDivElement | null) => void);
 };
 
-/* biscay = the dark sidebar rail. */
-const FADE_FROM = { paper: "from-paper", flysch: "from-flysch", biscay: "from-biscay" } as const;
+/* Edge SHADOWS, not surface-colored fades: a paper fade over paper content is
+   invisible, which is exactly where the indicator matters most (mobile
+   toolbars cut off mid-label). An ink-tinted shadow reads on every surface;
+   the dark rail gets a deeper one. `fade` names the surface behind the
+   content and also picks the scrollbar thumb color. */
+const SHADOW_FROM = { paper: "from-ink/[0.14]", flysch: "from-ink/[0.14]", biscay: "from-black/35" } as const;
 
 /* The scrollbar is visible and draggable whenever there is overflow, on both
    axes. Styling ::-webkit-scrollbar opts Chrome/Safari out of the macOS
@@ -85,17 +89,23 @@ export function Scrollable({
     return () => { el.removeEventListener("scroll", measure); ro.disconnect(); };
   }, [axis]);
 
-  const overflow = axis === "x" ? "overflow-x-auto" : axis === "y" ? "max-h-full overflow-y-auto" : "max-h-full overflow-auto";
-  const from = FADE_FROM[fade];
+  /* Vertical scrolling never uses max-h-full: a percentage max-height is
+     ignored when the wrapper's own height is auto or max-h capped (dropdown
+     lists), and the content spills unclipped. Instead the wrapper is a flex
+     column and the scroller shrinks (min-h-0), which honors both definite
+     heights and max-h caps. */
+  const isY = axis !== "x";
+  const overflow = axis === "x" ? "overflow-x-auto" : axis === "y" ? "min-h-0 overflow-y-auto" : "min-h-0 overflow-auto";
+  const from = SHADOW_FROM[fade];
   const hint = "pointer-events-none absolute z-10 transition-opacity duration-150";
 
   return (
-    <div className={`relative min-w-0 ${className}`.trim()} {...rest}>
+    <div className={`relative min-w-0 ${isY ? "flex flex-col" : ""} ${className}`.trim()} {...rest}>
       <div ref={setScroller} className={`${overflow} ${BAR[fade]} ${scrollerClassName}`.trim()}>{children}</div>
-      <span aria-hidden className={`${hint} left-0 top-0 bottom-0 w-6 bg-gradient-to-r ${from} ${edge.left ? "opacity-100" : "opacity-0"}`} />
-      <span aria-hidden className={`${hint} right-0 top-0 bottom-0 w-6 bg-gradient-to-l ${from} ${edge.right ? "opacity-100" : "opacity-0"}`} />
-      <span aria-hidden className={`${hint} top-0 left-0 right-0 h-6 bg-gradient-to-b ${from} ${edge.up ? "opacity-100" : "opacity-0"}`} />
-      <span aria-hidden className={`${hint} bottom-0 left-0 right-0 h-6 bg-gradient-to-t ${from} ${edge.down ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} left-0 top-0 bottom-0 w-3 bg-gradient-to-r ${from} ${edge.left ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} right-0 top-0 bottom-0 w-3 bg-gradient-to-l ${from} ${edge.right ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} top-0 left-0 right-0 h-3 bg-gradient-to-b ${from} ${edge.up ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} bottom-0 left-0 right-0 h-3 bg-gradient-to-t ${from} ${edge.down ? "opacity-100" : "opacity-0"}`} />
     </div>
   );
 }

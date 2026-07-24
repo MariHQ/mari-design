@@ -269,9 +269,10 @@ mid-column or a list cut off mid-row reads as "that's all there is".
 - Every scrollable region inside a component renders through
   `<Scrollable>` (`data-display/Scrollable.tsx`), never a bare
   `overflow-x-auto` / `overflow-y-auto` div. It shows an always-visible
-  draggable scrollbar plus a quiet gradient fade on any edge with hidden
-  content, live-measured on scroll and resize. No arrows or chevrons on
-  the fades.
+  draggable scrollbar plus a quiet ink edge shadow on any edge with
+  hidden content, live-measured on scroll and resize. An ink shadow, not
+  a surface-colored fade: a paper fade over paper content is invisible,
+  which is where mobile needs the indicator most. No arrows or chevrons.
 - The indicator appears only when content is actually cut off in that
   direction, and disappears at the end of the scroll range.
 - The scrollbar itself is visible whenever there is overflow, on both

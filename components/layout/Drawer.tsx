@@ -54,7 +54,12 @@ function DrawerBody({
           <button onClick={onClose} className={`grid place-items-center w-8 h-8 rounded-[4px] text-ink/60 hover:bg-flysch hover:text-ink ${focusRing}`} aria-label="Close"><X size={16} /></button>
         )}
       </header>
-      <Scrollable axis="y" className="flex-1 min-h-0" scrollerClassName="p-5">{children}</Scrollable>
+      {/* min-h-0 grow, NOT flex-1: flex-1's 0% basis collapses this wrapper
+          when the drawer has no bounded height (inline drawers on mobile),
+          and the body content then painted straight over the footer buttons.
+          basis:auto sizes to content when unbounded and still shrinks and
+          scrolls inside the fixed-height overlay. */}
+      <Scrollable axis="y" className="min-h-0 grow" scrollerClassName="p-5">{children}</Scrollable>
       {footer && <footer className="shrink-0 p-4 border-t border-ink/10 flex gap-2">{footer}</footer>}
     </aside>
   );
