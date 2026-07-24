@@ -31,6 +31,7 @@ const STATES = [
   { id: "oauth-google", label: "OAuth · Google" },
   { id: "magic-link", label: "Magic link sent" },
   { id: "2fa", label: "Two-factor" },
+  { id: "bypass", label: "Sign-in bypass on" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -52,6 +53,9 @@ export type LoginActions = {
   register?: (c: Credentials) => void | Promise<void>;
   magicLink?: (email: string) => void | Promise<void>;
   oauth?: (provider: "github" | "google" | "sso") => void | Promise<void>;
+  /** Sign in as the workspace admin with no credentials, when the server has
+      the bypass enabled. */
+  bypass?: () => void | Promise<void>;
   /** Leave a post-submit screen and go back to the credentials form. Which
       screen is showing comes from `data`, so the page cannot undo it itself —
       without this, "Check your inbox" was a one-way door. */
@@ -76,6 +80,11 @@ export type LoginData = {
   providers: LoginProvider[];
   /** Offer to switch between signing in and creating an account. */
   allowRegister: boolean;
+  /** The server has the sign-in bypass turned on (MARI_AUTH_BYPASS). Offer the
+      one-click way in. This is DATA, not a build flag: the escape hatch is a
+      server setting, so only a server that actually honours it can show the
+      button. A demo instance advertises it; a real one never renders it. */
+  allowBypass: boolean;
   /** `oauth`: the provider we handed off to. */
   handoff: "github" | "google" | null;
   /** `magic-link`: where the link went, and the resend countdown. */
@@ -168,6 +177,50 @@ function OAuthRow({ providers, actions }: { providers: LoginProvider[]; actions?
    so the page owns it. It used to be a <span>: unfocusable, unclickable, and
    invisible to a screen reader, so "Create an account" was decoration and the
    register screen could only be reached from the canvas. */
+/* The bypass sign-in.
+
+   A real <button> — not a link, not a span dressed as one. It performs an
+   action (it creates a session) rather than going to an address, so button is
+   both the correct element and the one that gets Enter, Space, focus and a
+   name for free.
+
+   It is rendered only when `data.allowBypass` says the SERVER has the escape
+   hatch on, so a workspace that would reject the call never advertises it. The
+   label says plainly what it does; an unexplained way past the password field
+   is the kind of thing someone should recognise on sight. */
+function BypassRow({ actions }: { actions?: LoginActions }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  return (
+    <>
+      <div className={`my-3.5 ${DIVIDER}`}>or</div>
+      <Button
+        variant="default"
+        className="w-full justify-center"
+        disabled={busy}
+        onClick={async () => {
+          if (!actions?.bypass) return;
+          setBusy(true);
+          setFailed(null);
+          try {
+            await actions.bypass();
+          } catch (e) {
+            setFailed(e instanceof Error ? e.message : "Could not sign in.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <KeyRound size={15} /> {busy ? "Signing in…" : "Continue as workspace admin"}
+      </Button>
+      <p className="mt-1.5 text-center text-[12px] text-ink/65">
+        Sign-in bypass is enabled on this server — anyone who can reach it has admin.
+      </p>
+      {failed && <FieldError>{failed}</FieldError>}
+    </>
+  );
+}
+
 function ModeToggle({ register, onToggle }: { register: boolean; onToggle: () => void }) {
   return (
     <p className="mt-4 text-center text-[12.5px] text-ink/70">
@@ -330,6 +383,7 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
         <Card variant="plain">
           <CredForm data={{ ...data, register }} error={error} actions={actions} />
           <OAuthRow providers={data.providers} actions={actions} />
+          {data.allowBypass && <BypassRow actions={actions} />}
           {data.allowRegister && <ModeToggle register={register} onToggle={() => setRegister((r) => !r)} />}
         </Card>
       );

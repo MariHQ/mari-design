@@ -25,6 +25,7 @@ const SIGN_IN: LoginData = {
   workspace: null,
   providers: ["github", "google", "sso"],
   allowRegister: true,
+  allowBypass: false,
   handoff: null,
   magicLinkTo: "maya@team.com",
   resendIn: "0:42",
@@ -57,6 +58,8 @@ function strained(extreme: boolean): LoginData {
     // credential form stands alone, and self-serve signup is closed.
     providers: extreme ? [] : ["github", "google", "sso"],
     allowRegister: !extreme,
+    // The bypass banner has to survive the widest label the page can carry.
+    allowBypass: extreme,
     handoff: null,
     magicLinkTo: extreme ? `${UNBREAKABLE}@example.com` : LONG_EMAIL,
     resendIn: extreme ? UNBREAKABLE : "0:42",
@@ -73,6 +76,9 @@ export const FIXTURES: PageFixtures<LoginData> = {
   "oauth-google": { data: { ...SIGN_IN, screen: "oauth", handoff: "google" } },
   "magic-link": { data: { ...SIGN_IN, screen: "magic-link" } },
   "2fa": { data: TWO_FACTOR },
+  // A server running with MARI_AUTH_BYPASS on: the one-click admin sign-in is
+  // offered, and says so.
+  bypass: { data: { ...SIGN_IN, allowBypass: true } },
   overflow: { data: strained(false), error: LONG_PARAGRAPH },
   stress: { data: strained(true), error: `${MIXED_SCRIPT}, ${UNBREAKABLE}` },
 };
