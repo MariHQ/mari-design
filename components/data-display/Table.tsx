@@ -52,7 +52,14 @@ const NUMERIC = /^[-+]?\$?[\d,]*\.?\d+\s*[%a-zA-Z]{0,3}$/;
 const stripPad = (cls: unknown) =>
   typeof cls === "string" ? cls.replace(/\bp[xytrbl]?-\[?[\d./]+\]?\b/g, "").replace(/\s+/g, " ").trim() : "";
 
-type RowEl = ReactElement<{ children?: ReactNode }>;
+type RowEl = ReactElement<{ children?: ReactNode; className?: string }>;
+
+/* Row dividers are owned by the table, matching DataTable exactly: rows get
+   a hairline under each, none under the last. A caller that already styles
+   its own border-b keeps it. */
+const ROW_BORDER = "border-b border-ink/10 last:border-0";
+const rowCls = (cls?: string) =>
+  !cls ? ROW_BORDER : cls.includes("border-b") ? cls : `${cls} ${ROW_BORDER}`;
 
 /* ── Table: the plain, caller-composed table ─────────────────────────────
    Callers still pass `<tr>` rows as children; `head` accepts plain strings
@@ -115,7 +122,7 @@ export function Table({
     ? sorted.map((row) =>
         cloneElement(
           row,
-          {},
+          { className: rowCls(row.props.className) },
           cellsOf(row).map((cell, i) => {
             const cls = [tdPad, alignClass(alignOf(i)), stripPad(cell.props.className)]
               .filter(Boolean)
@@ -152,7 +159,9 @@ export function Table({
               ))}
             </tr>
           </thead>
-          <tbody>
+          {/* Fallback dividers for non-<tr> children the composable path
+              cannot clone. */}
+          <tbody className={composable || loading ? undefined : "divide-y divide-ink/10"}>
             {loading
               ? Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r} className="border-b border-ink/10 last:border-0">
