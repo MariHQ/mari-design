@@ -523,14 +523,14 @@ function Body({ data, error, mobile }: { data: PublishData; error: string | null
   }
 }
 
-function PublishPage({ data, loading = false, error = null, mobile = false }: PageProps<PublishData>) {
+function PublishPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<PublishData>) {
   const mcpView = data.view.startsWith("mcp");
   const [tab, setTab] = useState<Tab>(mcpView ? "mcp" : "sites");
   const bare = error !== null || isEmpty(data);
 
   if (loading) {
     return (
-      <PageFrame active={navFor("publish")} title="Publish" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
         <SkeletonPage variant="editor" />
       </PageFrame>
     );

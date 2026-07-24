@@ -192,11 +192,11 @@ function Body({ data, error, mobile }: { data: AuditData; error: string | null; 
   );
 }
 
-function AuditPage({ data, loading = false, error = null, mobile = false }: PageProps<AuditData>) {
+function AuditPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<AuditData>) {
   const actions = <Button variant="primary">{noRepo(data) ? "Run first audit" : "Re-audit"}</Button>;
   if (loading) {
     return (
-      <PageFrame active={navFor("audit")} title="Repository audit" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("audit")} title="Repository audit" mobile={mobile}>
         <SkeletonPage variant="list" />
       </PageFrame>
     );

@@ -76,28 +76,34 @@ export const NAV: NavSection[] = [
   ] },
 ];
 
-const NOTIS = [
-  { id: "n1", title: "Fact-check passed", body: "pricing.md · 12 claims", time: "2m ago", unread: true },
-  { id: "n2", title: "Review requested", body: "onboarding-guide", time: "1h ago" },
-];
+/** Who is signed in. The frame renders this in the topbar, so it has to be
+    the real session — it was a hardcoded "Dana Reyes / Owner", which meant a
+    logged-in console greeted you by name in the body and by somebody else's
+    name in the chrome. Demo data that is not called DEMO_ is still demo data. */
+export type ShellUser = { name: string; initials: string; detail: string };
 
-const USER = { name: "Dana Reyes", initials: "DR", detail: "Owner" };
+export type ShellNotification = {
+  id: string; title: string; body: string; time: string; unread?: boolean;
+};
 
-function HeaderActions() {
-  return (
-    <>
-      <NotificationBell items={NOTIS} />
-    </>
-  );
-}
+/** Chrome the frame shows around every page. Optional so the canvas can render
+    a page with no session behind it. */
+export type ShellChrome = {
+  user?: ShellUser;
+  notifications?: ShellNotification[];
+  onSignOut?: () => void;
+};
 
-function UserMenu() {
+/** Signed out, or not yet loaded: name the state, never invent a person. */
+const NO_USER: ShellUser = { name: "Signed out", initials: "—", detail: "" };
+
+function UserMenu({ onSignOut }: { onSignOut?: () => void }) {
   return (
     <>
       <MenuItem icon={<Settings size={14} />}>Preferences</MenuItem>
       <MenuItem>API keys</MenuItem>
       <MenuSeparator />
-      <MenuItem danger>Sign out</MenuItem>
+      <MenuItem danger onSelect={onSignOut}>Sign out</MenuItem>
     </>
   );
 }
@@ -119,7 +125,8 @@ export function navFor(pageId: string): string {
 let staticFrame = false;
 export const setStaticFrame = (v: boolean) => { staticFrame = v; };
 
-function MobileFrame({ active, title, children, grow = false }: { active: string; title?: string; children: ReactNode; grow?: boolean }) {
+function MobileFrame({ active, title, children, grow = false, chrome }: { active: string; title?: string; children: ReactNode; grow?: boolean; chrome?: ShellChrome }) {
+  const user = chrome?.user ?? NO_USER;
   const label = NAV.flatMap((s) => s.items).find((i) => i.id === active)?.label ?? title ?? "Mari";
   return (
     <div className={`flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-full min-h-0 overflow-hidden"}`}>
@@ -132,7 +139,7 @@ function MobileFrame({ active, title, children, grow = false }: { active: string
         <div className="ml-auto flex items-center gap-1">
           <button aria-label="Search" className="grid h-9 w-9 place-items-center rounded-[6px] text-ink/70 hover:bg-flysch"><Search size={17} /></button>
           <button aria-label="Notifications" className="grid h-9 w-9 place-items-center rounded-[6px] text-ink/70 hover:bg-flysch"><Bell size={17} /></button>
-          <span className="ml-1"><Avatar initials={USER.initials} /></span>
+          <span className="ml-1"><Avatar initials={user.initials} /></span>
         </div>
       </header>
       <main className={grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}>{children}</main>
@@ -140,7 +147,8 @@ function MobileFrame({ active, title, children, grow = false }: { active: string
   );
 }
 
-function DesktopStatic({ active, children }: { active: string; children: ReactNode }) {
+function DesktopStatic({ active, children, chrome }: { active: string; children: ReactNode; chrome?: ShellChrome }) {
+  const user = chrome?.user ?? NO_USER;
   return (
     <div className="flex min-h-screen w-full bg-paper text-ink">
       <div className="shrink-0 self-stretch border-r border-ink/10">
@@ -161,9 +169,9 @@ function DesktopStatic({ active, children }: { active: string; children: ReactNo
         <HeaderBar
           searchPlaceholder="Search knowledge, people, facts…"
           searchShortcut="⌘K"
-          actions={<HeaderActions />}
-          user={USER}
-          userMenu={<UserMenu />}
+          actions={<NotificationBell items={chrome?.notifications ?? []} />}
+          user={user}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} />}
         />
         <main className="flex-1 bg-flysch/40">{children}</main>
       </div>
@@ -172,15 +180,18 @@ function DesktopStatic({ active, children }: { active: string; children: ReactNo
 }
 
 export function PageFrame({
-  active, title, mobile = false, children,
+  active, title, mobile = false, chrome, children,
 }: {
   active: string;
   title?: string;
   mobile?: boolean;
+  /** Session + notifications for the topbar. */
+  chrome?: ShellChrome;
   children: ReactNode;
 }) {
-  if (mobile) return <MobileFrame active={active} title={title} grow={staticFrame}>{children}</MobileFrame>;
-  if (staticFrame) return <DesktopStatic active={active}>{children}</DesktopStatic>;
+  const user = chrome?.user ?? NO_USER;
+  if (mobile) return <MobileFrame active={active} title={title} grow={staticFrame} chrome={chrome}>{children}</MobileFrame>;
+  if (staticFrame) return <DesktopStatic active={active} chrome={chrome}>{children}</DesktopStatic>;
   return (
     <AppShell
       defaultCollapsed={false}
@@ -203,9 +214,9 @@ export function PageFrame({
           onToggleSidebar={toggle}
           searchPlaceholder="Search knowledge, people, facts…"
           searchShortcut="⌘K"
-          actions={<HeaderActions />}
-          user={USER}
-          userMenu={<UserMenu />}
+          actions={<NotificationBell items={chrome?.notifications ?? []} />}
+          user={user}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} />}
         />
       )}
     >

@@ -77,9 +77,9 @@ function Inspector({ data, error }: { data: KnowledgeData; error: string | null 
   return <KnowledgeInspector doc={data.doc} />;
 }
 
-function KnowledgePage({ data, loading = false, error = null, mobile = false }: PageProps<KnowledgeData>) {
+function KnowledgePage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<KnowledgeData>) {
   return (
-    <PageFrame active={navFor("knowledge")} title="Knowledge" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("knowledge")} title="Knowledge" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="detail" />
       ) : (

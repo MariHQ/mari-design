@@ -236,10 +236,10 @@ function Body({ data, error, mobile }: { data: FlowsData; error: string | null; 
   return list;
 }
 
-function FlowsPage({ data, loading = false, error = null, mobile = false }: PageProps<FlowsData>) {
+function FlowsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<FlowsData>) {
   const showHeader = showsHeader(data, error);
   return (
-    <PageFrame active={navFor("flows")} title="Flows" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("flows")} title="Flows" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="list" />
       ) : (

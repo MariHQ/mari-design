@@ -87,9 +87,9 @@ function isEmpty(d: OverviewData): boolean {
     && !d.docs.length && !d.sources.length && !d.flow;
 }
 
-function OverviewPage({ data, loading = false, error = null, mobile = false }: PageProps<OverviewData>) {
+function OverviewPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<OverviewData>) {
   return (
-    <PageFrame active={navFor("overview")} title="Overview" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("overview")} title="Overview" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (

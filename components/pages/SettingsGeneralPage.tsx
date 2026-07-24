@@ -251,9 +251,9 @@ function Body({ data, error }: { data: SettingsGeneralData; error: string | null
   );
 }
 
-function SettingsGeneralPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsGeneralData>) {
+function SettingsGeneralPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsGeneralData>) {
   return (
-    <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="settings" />
       ) : (

@@ -232,10 +232,10 @@ function Body({ data, error }: { data: FactsData; error: string | null }) {
   );
 }
 
-function FactsPage({ data, loading = false, error = null, mobile = false }: PageProps<FactsData>) {
+function FactsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<FactsData>) {
   if (loading) {
     return (
-      <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("facts")} title="Facts" mobile={mobile}>
         <SkeletonPage variant="table" />
       </PageFrame>
     );

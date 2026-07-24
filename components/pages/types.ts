@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { ShellChrome } from "./PageFrame";
 
 /** A named visual state of a page (default / loading / error / empty / edge).
     States are a CANVAS concept: they select which fixture the design canvas
@@ -35,6 +36,10 @@ export type PageProps<TData = unknown, TActions = Record<string, never>> = {
       same `error` surface it uses for a failed read, so a write that fails is
       as visible as a read that fails. */
   actions?: TActions;
+  /** Session and notifications for the app shell around the page. Omitted on
+      the canvas, which has no session; the frame then names that state rather
+      than inventing a person. */
+  chrome?: ShellChrome;
   /** Narrow viewport: the page collapses its grid and drops rails below the
       main column (CONVENTIONS §11). Components never breakpoint themselves. */
   mobile?: boolean;

@@ -215,9 +215,9 @@ function Body({ data, error }: { data: SettingsAuditLogData; error: string | nul
   return <SettingsAuditLog embedded events={data.events} total={data.total} />;
 }
 
-function SettingsAuditLogPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsAuditLogData>) {
+function SettingsAuditLogPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsAuditLogData>) {
   return (
-    <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="settings" />
       ) : (

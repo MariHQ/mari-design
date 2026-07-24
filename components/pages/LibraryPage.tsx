@@ -106,12 +106,12 @@ function isEmpty(d: LibraryData): boolean {
     && !d.templates.length && !d.checkerDocs.length;
 }
 
-function LibraryPage({ data, loading = false, error = null, mobile = false }: PageProps<LibraryData>) {
+function LibraryPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<LibraryData>) {
   const [tab, setTab] = useState<LibraryTab>(data.tab);
 
   if (loading) {
     return (
-      <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("library")} title="Library" mobile={mobile}>
         <SkeletonPage variant="list" />
       </PageFrame>
     );

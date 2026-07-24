@@ -234,10 +234,10 @@ function Body({ data, error, mobile }: { data: DecisionsData; error: string | nu
   );
 }
 
-function DecisionsPage({ data, loading = false, error = null, mobile = false }: PageProps<DecisionsData>) {
+function DecisionsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<DecisionsData>) {
   if (loading) {
     return (
-      <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("decisions")} title="Decisions" mobile={mobile}>
         <SkeletonPage variant="feed" />
       </PageFrame>
     );

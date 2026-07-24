@@ -210,9 +210,9 @@ function Body({ data, error }: { data: SettingsApiKeysData; error: string | null
   return <SettingsApiKeys embedded keys={data.keys} />;
 }
 
-function SettingsApiKeysPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsApiKeysData>) {
+function SettingsApiKeysPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsApiKeysData>) {
   return (
-    <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="settings" />
       ) : (

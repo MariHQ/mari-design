@@ -257,9 +257,9 @@ function Body({ data, error }: { data: SettingsModelsData; error: string | null 
   );
 }
 
-function SettingsModelsPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsModelsData>) {
+function SettingsModelsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsModelsData>) {
   return (
-    <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="settings" />
       ) : (

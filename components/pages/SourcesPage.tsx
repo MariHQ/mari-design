@@ -366,14 +366,14 @@ function Body({ data, error, tab }: { data: SourcesData; error: string | null; t
   );
 }
 
-function SourcesPage({ data, loading = false, error = null, mobile = false }: PageProps<SourcesData>) {
+function SourcesPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SourcesData>) {
   const [tab, setTab] = useState<Tab>(data.view === "bots" ? "bots" : "connectors");
   const pinned = data.view === "connect" || data.view === "sync-status";
   const bare = error !== null || isEmpty(data);
 
   if (loading) {
     return (
-      <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
         <SkeletonPage variant="gallery" />
       </PageFrame>
     );

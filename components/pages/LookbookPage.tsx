@@ -433,10 +433,10 @@ function Sections({ data }: { data: LookbookData }) {
   }
 }
 
-function LookbookPage({ data, loading = false, mobile = false }: PageProps<LookbookData>) {
+function LookbookPage({ data, loading = false, chrome, mobile = false }: PageProps<LookbookData>) {
   if (loading) {
     return (
-      <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
         <SkeletonPage variant="gallery" />
       </PageFrame>
     );

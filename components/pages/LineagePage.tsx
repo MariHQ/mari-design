@@ -281,10 +281,10 @@ function Body({ data, error, mobile }: { data: LineageData; error: string | null
   );
 }
 
-function LineagePage({ data, loading = false, error = null, mobile = false }: PageProps<LineageData>) {
+function LineagePage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<LineageData>) {
   const actions = <Button variant="default">{data.action}</Button>;
   return (
-    <PageFrame active={navFor("lineage")} title="Lineage" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("lineage")} title="Lineage" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="graph" />
       ) : (

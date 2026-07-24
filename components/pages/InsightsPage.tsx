@@ -157,9 +157,9 @@ function Body({ data, error, mobile }: { data: InsightsData; error: string | nul
   );
 }
 
-function InsightsPage({ data, loading = false, error = null, mobile = false }: PageProps<InsightsData>) {
+function InsightsPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<InsightsData>) {
   return (
-    <PageFrame active={navFor("insights")} title="Insights" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("insights")} title="Insights" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (

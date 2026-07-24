@@ -341,7 +341,7 @@ function Body({ data, error, mobile }: { data: AnswersData; error: string | null
   );
 }
 
-function AnswersPage({ data, loading = false, error = null, mobile = false }: PageProps<AnswersData>) {
+function AnswersPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<AnswersData>) {
   const actions = (
     <>
       <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
@@ -349,7 +349,7 @@ function AnswersPage({ data, loading = false, error = null, mobile = false }: Pa
     </>
   );
   return (
-    <PageFrame active={navFor("answers")} title="Answers" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("answers")} title="Answers" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="list" />
       ) : (

@@ -240,9 +240,9 @@ function Body({ data, error }: { data: SettingsMembersData; error: string | null
   );
 }
 
-function SettingsMembersPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsMembersData>) {
+function SettingsMembersPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<SettingsMembersData>) {
   return (
-    <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="settings" />
       ) : (

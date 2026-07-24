@@ -237,9 +237,9 @@ function Body({ data, error, mobile }: { data: TasksData; error: string | null; 
   );
 }
 
-function TasksPage({ data, loading = false, error = null, mobile = false }: PageProps<TasksData>) {
+function TasksPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<TasksData>) {
   return (
-    <PageFrame active={navFor("tasks")} title="Tasks" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("tasks")} title="Tasks" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="board" />
       ) : (

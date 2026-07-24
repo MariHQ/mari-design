@@ -257,10 +257,10 @@ function Body({ data, error, mobile }: { data: DocReviewData; error: string | nu
   );
 }
 
-function DocReviewPage({ data, loading = false, error = null, mobile = false }: PageProps<DocReviewData>) {
+function DocReviewPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<DocReviewData>) {
   const actions = <HeaderActions save={data.save} />;
   return (
-    <PageFrame active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="editor" />
       ) : (
