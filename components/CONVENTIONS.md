@@ -268,17 +268,15 @@ mid-column or a list cut off mid-row reads as "that's all there is".
 
 - Every scrollable region inside a component renders through
   `<Scrollable>` (`data-display/Scrollable.tsx`), never a bare
-  `overflow-x-auto` / `overflow-y-auto` div. It shows an always-visible
-  draggable scrollbar plus a quiet ink edge shadow on any edge with
-  hidden content, live-measured on scroll and resize. An ink shadow, not
-  a surface-colored fade: a paper fade over paper content is invisible,
-  which is where mobile needs the indicator most. No arrows or chevrons.
-- The indicator appears only when content is actually cut off in that
-  direction, and disappears at the end of the scroll range.
-- The scrollbar itself is visible whenever there is overflow, on both
-  axes, so it can be grabbed and dragged. Never rely on the macOS overlay
+  `overflow-x-auto` / `overflow-y-auto` div.
+- The indicator is the scrollbar itself, explicit and draggable, on both
+  axes, visible whenever there is overflow. No gradient fades, no edge
+  shadows, no arrows or chevrons. Never rely on the macOS overlay
   scrollbar that only appears mid-scroll; Scrollable styles a thin
   always-rendered bar.
+- Content never crushes to make itself fit: a row of crumbs, steps, or
+  tabs that cannot fit scrolls, it does not shrink each label to a
+  letter.
 - Match the fade to the surface: `fade="flysch"` inside code boxes and
   tinted panels, default paper elsewhere.
 - Page-level scrolling (the app shell's main column, full-page auth
