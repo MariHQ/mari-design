@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { Chip } from "./Chip";
 import { Scrollable } from "./Scrollable";
@@ -32,6 +33,9 @@ const sev = (s: string) => SEVERITY[s] ?? SEVERITY.minor;
  *  stretches the whole table past its container. */
 const WRAP = "[overflow-wrap:anywhere]";
 
+/** Document rows drawn per page. */
+const DOC_ROWS = 20;
+
 export type ImpactPanelProps = {
   loading?: boolean;
   loadingText?: string;
@@ -56,12 +60,16 @@ export function ImpactPanel({
   boxed = false,
   className = "",
 }: ImpactPanelProps) {
+  const [page, setPage] = useState(1);
   const { sort, onSort, sorted } = useSort(docs, {
     title: (d) => d.title,
     source: (d) => d.source,
     severity: (d) => sev(d.severity).rank,
     reason: (d) => d.reason,
   });
+
+  const shown = sorted.slice(0, DOC_ROWS * page);
+  const hidden = sorted.length - shown.length;
 
   const wrap = [
     "text-[13px] leading-[1.45]",
@@ -100,6 +108,14 @@ export function ImpactPanel({
       </div>
       {summary && <p className="mt-1.5 max-w-[640px] break-words text-ink/70">{summary}</p>}
       {docs.length === 0 && !summary && <span className="font-term text-[11px] text-ink/65">No impacted documents found.</span>}
+      {/* §13: the count strip renders ABOVE the rows it describes. It used to
+          sit under the table, next to the pager, where it read as a footnote
+          on the button rather than a fact about the list. */}
+      {docs.length > 0 && (
+        <p className="mt-2 font-term text-[11px] text-ink/65">
+          Showing {shown.length.toLocaleString("en-US")} of {sorted.length.toLocaleString("en-US")} documents
+        </p>
+      )}
       {docs.length > 0 && (
         <Scrollable className="mt-2">
           {/* table-fixed + a colgroup: column widths are declared, not derived
@@ -122,7 +138,7 @@ export function ImpactPanel({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((doc, i) => {
+              {shown.map((doc, i) => {
                 const s = sev(doc.severity);
                 return (
                   <tr key={`${doc.title}-${i}`} className="border-b border-ink/[0.06] last:border-b-0">
@@ -142,6 +158,13 @@ export function ImpactPanel({
             </tbody>
           </table>
         </Scrollable>
+      )}
+      {/* An analysis over a real graph returns hundreds of documents. Page the
+          table rather than growing the panel past the fold (CONVENTIONS §17). */}
+      {hidden > 0 && (
+        <div className="mt-2">
+          <Button compact onClick={() => setPage((p) => p + 1)}>Show {Math.min(hidden, DOC_ROWS)} more</Button>
+        </div>
       )}
       {footer && <div className="mt-2.5 flex flex-wrap items-center gap-2">{footer}</div>}
     </div>

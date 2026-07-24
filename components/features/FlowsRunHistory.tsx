@@ -76,7 +76,11 @@ export function FlowRunsTable({
   hint = "Durable and complete: every run, including tests. Inspect one to see its steps.",
   actions, loading = false, className = "",
 }: FlowRunsTableProps) {
-  const capped = runs.slice(0, limit);
+  const [showAll, setShowAll] = useState(false);
+  /* A flow's history is thousands of runs long. The table renders one page,
+     says so above the rows (§13), and the region itself scrolls (§20) instead
+     of the card growing to the height of the history. */
+  const capped = showAll ? runs.slice(0, limit * 4) : runs.slice(0, limit);
   const { sort, onSort, sorted } = useSort(capped, {
     number: (r) => r.number,
     workflowName: (r) => r.workflowName,
@@ -101,7 +105,20 @@ export function FlowRunsTable({
       ) : sorted.length === 0 ? (
         <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
       ) : (
-        <Scrollable>
+        <>
+        <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
+          <span className="font-term text-[11.5px] text-ink/65">
+            {sorted.length < runs.length
+              ? `Showing ${sorted.length} of ${runs.length.toLocaleString()} runs`
+              : `Showing all ${runs.length.toLocaleString()} run${runs.length === 1 ? "" : "s"}`}
+          </span>
+          {runs.length > limit && (
+            <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "Show fewer" : "Show more"}
+            </Button>
+          )}
+        </div>
+        <Scrollable axis="both" style={{ maxHeight: sorted.length > 8 ? 520 : undefined }}>
           <table className="w-full border-collapse text-left" style={{ minWidth: onSelect ? 720 : 620 }}>
             <thead>
               <tr>
@@ -141,6 +158,7 @@ export function FlowRunsTable({
             </tbody>
           </table>
         </Scrollable>
+        </>
       )}
     </div>
   );

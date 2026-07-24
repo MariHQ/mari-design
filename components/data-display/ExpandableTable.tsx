@@ -3,6 +3,7 @@ import { ChevronRight, Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { cellClass, sortRows, type Column } from "./DataTable";
+import { PagerBar, ResultCount, usePaged } from "./Pagination";
 import { Scrollable } from "./Scrollable";
 import { SkeletonTable } from "./Skeleton";
 import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
@@ -13,6 +14,7 @@ import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 export function ExpandableTable<T>({
   rows, columns, rowKey, renderDetail, single = false, defaultExpanded = [],
   minW = 720, empty = "No results", expandLabel = "Toggle details", loading = false,
+  pageSize = 12, noun = "rows",
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -25,6 +27,10 @@ export function ExpandableTable<T>({
   empty?: string;
   expandLabel?: string;
   loading?: boolean;
+  /** Rows per page: an expandable table of 400 rows must not grow its card. */
+  pageSize?: number;
+  /** Plural noun for the result-count strip. */
+  noun?: string;
 }) {
   const [open, setOpen] = useState<Set<string>>(new Set(defaultExpanded));
 
@@ -41,6 +47,7 @@ export function ExpandableTable<T>({
   const onSort = (key: string) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   const visible = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
+  const pager = usePaged(visible, pageSize);
 
   const colSpan = columns.length + 1;
 
@@ -54,6 +61,7 @@ export function ExpandableTable<T>({
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>
+      {pager.paged && <ResultCount from={pager.from} to={pager.to} total={pager.total} noun={noun} />}
       <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
           <thead>
@@ -82,7 +90,7 @@ export function ExpandableTable<T>({
                   </div>
                 </td>
               </tr>
-            ) : visible.map((row) => {
+            ) : pager.pageRows.map((row) => {
               const key = rowKey(row);
               const isOpen = open.has(key);
               return (
@@ -117,6 +125,7 @@ export function ExpandableTable<T>({
           </tbody>
         </table>
       </Scrollable>
+      {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
     </div>
   );
 }

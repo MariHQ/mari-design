@@ -55,6 +55,9 @@ const SORTS = [
 
 const KNOWN_OWNERS = ["Priya Nair", "Marcus Vale", "Dana Osei"];
 
+/** Result cards rendered per page. */
+const PAGE = 25;
+
 /* ── local sub-components ─────────────────────────────────────────────── */
 
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -143,7 +146,10 @@ export type KnowledgeBrowserProps = {
 /* One grid for the browser and its skeleton: a fixed 220px facet rail beside
    the results, or a single column when the page asks for the stacked layout. */
 const shell = (stacked: boolean, className: string) =>
-  `grid gap-4 items-start ${stacked ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[220px_minmax(0,1fr)]"} ${className}`.replace(/\s+/g, " ").trim();
+  /* The rail track is minmax(0,220px), not a hard 220px: on a frame narrower
+     than the rail plus a usable results column the rail gives way instead of
+     pushing the feed past the page edge (§17). */
+  `grid gap-4 items-start ${stacked ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,220px)_minmax(0,1fr)]"} ${className}`.replace(/\s+/g, " ").trim();
 
 /** Content-shaped skeleton for the browser: filter rail + search + result cards. */
 function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked?: boolean; className?: string }) {
@@ -190,6 +196,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
   const [sort, setSort] = useState("best");
   const [selId, setSelId] = useState<string | null>("r1");
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(PAGE);
 
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, v: string) => {
     const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n);
@@ -227,6 +234,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
 
   const owners = [...KNOWN_OWNERS, "Other people"];
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Best match";
+  const visible = sorted.slice(0, limit);
 
   if (loading) return <KnowledgeBrowserSkeleton stacked={stacked} className={className} />;
 
@@ -305,13 +313,32 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           </div>
         </Card>
 
-        <div className="font-term text-[11.5px] text-ink/65">{sorted.length} result{sorted.length === 1 ? "" : "s"}</div>
+        {/* Result count above the list (§13). A real corpus returns hundreds of
+            documents, so the feed renders one page at a time and says how many
+            of how many it is showing rather than laying out 400 cards. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-term text-[11.5px] text-ink/65">
+            {sorted.length === 0
+              ? "No results"
+              : visible.length < sorted.length
+                ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} results`
+                : `Showing all ${sorted.length.toLocaleString()} result${sorted.length === 1 ? "" : "s"}`}
+          </span>
+          {visible.length < sorted.length && (
+            <Button variant="link" onClick={() => setLimit((n) => n + PAGE)}>
+              Show {Math.min(PAGE, sorted.length - visible.length)} more
+            </Button>
+          )}
+          {limit > PAGE && (
+            <Button variant="link" onClick={() => setLimit(PAGE)}>Show fewer</Button>
+          )}
+        </div>
 
         {sorted.length === 0 ? (
           <Card><EmptyState icon={<Search size={20} />} title="No results">No results match these filters.</EmptyState></Card>
         ) : (
           <div className="flex flex-col gap-2.5">
-            {sorted.map((r) => {
+            {visible.map((r) => {
               const selected = selId === r.id;
               const isSaved = saved.has(r.id);
               const slack = r.kind === "thread";

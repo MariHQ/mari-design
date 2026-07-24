@@ -8,6 +8,8 @@ import { EmptyState } from "../data-display/EmptyState";
 import { Skeleton, SkeletonLine, SkeletonTable } from "../data-display/Skeleton";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 import { fmtDateTime } from "../tokens/format";
 
 /* Settings — Access log ───────────────────────────────────────────────────
@@ -54,6 +56,10 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
     when: (e) => e.at,
   });
 
+  /* An access log is thousands of rows deep. It pages, 15 at a time, instead
+     of rendering a mile of card (CONVENTIONS §13). */
+  const pager = usePaged(sorted, 15);
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
@@ -74,7 +80,8 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
         actions={<Button onClick={() => setNonce((n) => n + 1)}><RefreshCw size={14} /> Refresh{nonce > 0 ? ` (${nonce})` : ""}</Button>}
       />}
 
-      <Card variant="flush" title="Events" hint={`${shown.length} of ${total} events (last 50)`} actions={
+      {/* The count lives in the result strip, once (CONVENTIONS §13). */}
+      <Card variant="flush" title="Events" hint="Every change in this workspace, newest first" actions={
         <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
           <Search size={13} className="text-ink/65" />
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter events…" className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
@@ -85,8 +92,11 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
             {events.length === 0 ? "Workspace activity will appear here." : "No events match that filter."}
           </EmptyState>
         ) : (
+          <>
+          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="events"
+            note={filter.trim() ? `filtered from ${total.toLocaleString("en-US")}` : undefined} />
           <Scrollable>
-            <table className="w-full text-left border-collapse" style={{ minWidth: 760 }}>
+            <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
                 <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "36%" }} /><col style={{ width: "20%" }} />
               </colgroup>
@@ -99,22 +109,27 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((e) => (
+                {pager.pageRows.map((e) => (
                   <tr key={e.id} className="border-b border-ink/10 last:border-0 align-top">
                     <td className={tdPad}>
                       <span className="flex items-start gap-2.5">
                         <Avatar initials={initialsOf(e.actor)} />
-                        <span className="min-w-0 break-words text-[13px] font-medium text-ink">{e.actor}</span>
+                        <Truncate className="min-w-0 flex-1 text-[13px] font-medium text-ink">{e.actor}</Truncate>
                       </span>
                     </td>
-                    <td className={`${tdPad} text-[13px] text-ink/70`}>{e.verb}</td>
-                    <td className={`${tdPad} break-all text-[13px] text-ink/85`}>{e.target}</td>
+                    <td className={tdPad}><Truncate className="text-[13px] text-ink/70">{e.verb}</Truncate></td>
+                    {/* A target is an arbitrary identifier: truncate with the
+                        full value on hover, never wrap it a character at a
+                        time down the column (CONVENTIONS §12). */}
+                    <td className={tdPad}><Truncate className="text-[13px] text-ink/85">{e.target}</Truncate></td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDateTime(e.at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </Scrollable>
+          {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+          </>
         )}
       </Card>
     </div>

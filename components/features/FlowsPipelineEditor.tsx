@@ -104,6 +104,9 @@ const DEMO_RUNS: WorkflowRun[] = [
   { id: "r140", number: 140, workflowName: "Docs guardrail", status: "passed", started: "2026-07-18T16:44:00", duration: "00:00:38", dry: true, headline: "Dry run, 1 task previewed" },
 ];
 
+/** Steps rendered in the spine before "Show all". */
+const STEP_PAGE = 25;
+
 const asNum = (v: unknown, f = 0) => { const n = Number(v); return Number.isNaN(n) ? f : n; };
 const asStr = (v: unknown) => (v == null ? "" : String(v));
 
@@ -132,7 +135,9 @@ export function FlowsPipelineEditor({
   const [dirty, setDirty] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [allSteps, setAllSteps] = useState(false);
 
+  const visibleSteps = allSteps ? steps : steps.slice(0, STEP_PAGE);
   const selIdx = Math.min(sel, steps.length - 1);
   const selStep = steps[selIdx];
 
@@ -224,8 +229,22 @@ export function FlowsPipelineEditor({
         {/* Pipeline spine */}
         <div className="relative pl-10">
           <span aria-hidden className="pointer-events-none absolute left-[17px] top-4 bottom-8 border-l border-dashed border-ink/25" />
+          {/* Step count above the spine (§13). A long flow renders one page of
+              steps rather than a spine thousands of pixels tall. */}
+          {steps.length > STEP_PAGE && (
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="font-term text-[11.5px] text-ink/65">
+                {allSteps
+                  ? `Showing all ${steps.length.toLocaleString()} steps`
+                  : `Showing ${STEP_PAGE} of ${steps.length.toLocaleString()} steps`}
+              </span>
+              <Button variant="link" aria-expanded={allSteps} onClick={() => setAllSteps((v) => !v)}>
+                {allSteps ? "Show fewer" : "Show all"}
+              </Button>
+            </div>
+          )}
           <ol className="flex flex-col gap-1">
-            {steps.map((s, i) => {
+            {visibleSteps.map((s, i) => {
               const sec = SECTION_OF[s.kind];
               const meta = KIND_META[s.kind];
               const selected = i === selIdx;

@@ -6,6 +6,7 @@ import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
+import { Truncate, TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
@@ -45,6 +46,10 @@ export type LineageGraphProps = {
   focalId?: string | null;
   /** Show the "Impact of …" trace summary + dim everything outside it. */
   trace?: { originId: string; direction: "down" | "up" } | null;
+  /** Hard cap on how many node cards the canvas will draw at once. Past this
+   *  the graph keeps the best-connected nodes and says how many it dropped,
+   *  rather than painting an unreadable hairball. */
+  maxNodes?: number;
   onSelectNode?: (id: string) => void;
   onSelectEdge?: (id: string) => void;
   /** Render a content-shaped skeleton silhouette instead of the graph. */
@@ -86,6 +91,61 @@ function traceClosure(originId: string, dir: "down" | "up", edges: LEdge[]): Set
   return seen;
 }
 
+/* ── Volume defences ──────────────────────────────────────────────────────
+   A real lineage graph is hundreds of nodes and edges. Drawn literally, 150
+   cards over a 1000×560 canvas overlap into a hairball, every edge code stacks
+   on top of its neighbours, and nothing is readable. Three defences, in order:
+
+   1. CAP     — draw at most `maxNodes` cards, keeping the best-connected ones
+                (plus the focal / trace origin) and reporting the remainder.
+   2. GRID    — past DECLUTTER_AT cards, snap positions onto a lane grid so no
+                two cards can overlap. Small graphs keep their authored layout.
+   3. QUIET   — past LABEL_LIMIT edges, drop the per-edge relation codes; the
+                legend still carries them and the dash patterns still read. */
+
+const DEFAULT_MAX_NODES = 35;
+/** Above this many drawn cards the authored positions are replaced by lanes. */
+const DECLUTTER_AT = 18;
+/** Above this many drawn edges the per-edge codes stop being painted. */
+const LABEL_LIMIT = 40;
+/** Lane grid: 5 columns × 7 rows fits DEFAULT_MAX_NODES 152px cards with air
+    between them on a 900px canvas. More columns and the cards touch. The rows
+    start below the zoom controls and stop above the drag hint so the canvas
+    overlays never sit on a card. */
+const GRID_COLS = 5;
+const GRID_ROWS = 7;
+const GRID_TOP = 0.14;
+const GRID_BOTTOM = 0.85;
+
+/** Total edge count per node id, used to rank which nodes survive the cap. */
+function degreeMap(edges: LEdge[]): Map<string, number> {
+  const d = new Map<string, number>();
+  for (const e of edges) {
+    d.set(e.from, (d.get(e.from) ?? 0) + 1);
+    d.set(e.to, (d.get(e.to) ?? 0) + 1);
+  }
+  return d;
+}
+
+/** Lane layout: left-to-right by authored x, so the flow reading survives the
+    declutter, but on a fixed grid so cards never sit on top of each other. */
+function gridPositions(nodes: LNode[], pos: (n: LNode) => { x: number; y: number }) {
+  const out: Record<string, { x: number; y: number }> = {};
+  const order = [...nodes].sort((a, b) => pos(a).x - pos(b).x || pos(a).y - pos(b).y);
+  const cols = Math.min(GRID_COLS, Math.max(1, Math.ceil(order.length / GRID_ROWS)));
+  const perCol = Math.ceil(order.length / cols);
+  const colX = (i: number) => (cols === 1 ? 0.5 : 0.09 + (0.81 * i) / (cols - 1));
+  const span = GRID_BOTTOM - GRID_TOP;
+  for (let c = 0; c < cols; c++) {
+    const lane = order.slice(c * perCol, (c + 1) * perCol).sort((a, b) => pos(a).y - pos(b).y);
+    for (let r = 0; r < lane.length; r++) {
+      const y = lane.length === 1 ? 0.5 : GRID_TOP + (span * r) / (lane.length - 1);
+      out[lane[r].id] = { x: colX(c), y };
+    }
+  }
+  return out;
+}
+
 /** Timeline layout: x by event date rank, y kept from the flow layout. */
 function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: number }> {
   const dated = nodes.filter((n) => n.date).map((n) => n.date as string);
@@ -101,7 +161,8 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 
 export function LineageGraph({
   nodes = DEMO_NODES, edges = DEMO_EDGES, layout, lens, focalId = "n1",
-  trace: traceProp = null, onSelectNode, onSelectEdge, loading = false, className = "",
+  trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
+  onSelectNode, onSelectEdge, loading = false, className = "",
 }: LineageGraphProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [controls, setControls] = useLineageControls();
@@ -146,10 +207,30 @@ export function LineageGraph({
     return keep;
   }, [controls.scope, focalId, edges]);
 
-  const visibleNodes = useMemo(
+  const passing = useMemo(
     () => nodes.filter((n) => nodePasses(n, controls) && (!focusSet || focusSet.has(n.id))),
     [nodes, controls, focusSet],
   );
+
+  const closure = useMemo(
+    () => (trace ? traceClosure(trace.originId, trace.direction, edges) : null),
+    [trace, edges],
+  );
+
+  /* The cap: keep the best-connected nodes, and never drop the focal node, the
+     trace origin, or anything inside an active trace closure. */
+  const visibleNodes = useMemo(() => {
+    if (passing.length <= maxNodes) return passing;
+    const deg = degreeMap(edges);
+    const keep = [...passing].sort((a, b) => {
+      const pin = (n: LNode) => (n.id === focalId || n.id === trace?.originId ? 1 : 0) + (closure?.has(n.id) ? 1 : 0);
+      return pin(b) - pin(a) || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || a.id.localeCompare(b.id);
+    }).slice(0, maxNodes);
+    const kept = new Set(keep.map((n) => n.id));
+    // Restore the authored order so the layout is not reshuffled by ranking.
+    return passing.filter((n) => kept.has(n.id));
+  }, [passing, maxNodes, edges, focalId, trace?.originId, closure]);
+
   const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
     () => edges.filter((e) =>
@@ -158,12 +239,18 @@ export function LineageGraph({
     [edges, visibleIds, controls.rels],
   );
 
-  const closure = useMemo(
-    () => (trace ? traceClosure(trace.originId, trace.direction, edges) : null),
-    [trace, edges],
+  const basePos = (n: LNode) => (effLayout === "timeline" ? timeline[n.id] ?? { x: n.x, y: n.y } : { x: n.x, y: n.y });
+
+  /* Declutter: a dense canvas gets lanes instead of authored coordinates, so
+     no two cards can overlap. Small graphs keep the layout they were given. */
+  const lanes = useMemo(
+    () => (visibleNodes.length > DECLUTTER_AT ? gridPositions(visibleNodes, basePos) : null),
+    // basePos is derived from effLayout + timeline, both listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleNodes, effLayout, timeline],
   );
 
-  const posOf = (n: LNode) => moved[n.id] ?? (effLayout === "timeline" ? timeline[n.id] : { x: n.x, y: n.y });
+  const posOf = (n: LNode) => moved[n.id] ?? lanes?.[n.id] ?? basePos(n);
   const px = (n: LNode) => { const p = posOf(n); return { x: p.x * VB_W, y: p.y * VB_H }; };
   const dimmed = (id: string) => {
     if (closure && !closure.has(id)) return true;
@@ -235,7 +322,9 @@ export function LineageGraph({
     );
   }
 
-  const hiddenCount = nodes.length - visibleNodes.length;
+  const hiddenCount = nodes.length - passing.length;
+  const cappedCount = passing.length - visibleNodes.length;
+  const quietEdges = visibleEdges.length > LABEL_LIMIT;
 
   return (
     <div className={`${card} min-w-[560px] overflow-hidden font-display ${className}`.trim()}>
@@ -254,8 +343,19 @@ export function LineageGraph({
             </span>
           );
         })}
-        <span className="ml-auto font-term text-[11px] text-ink/65">
-          Lens: {effLens} · {visibleNodes.length}/{nodes.length} nodes
+        {/* The volume readout lives in the header, not over the canvas: a badge
+            floating top-left would sit on the first lane of cards. */}
+        <span className="ml-auto flex min-w-0 items-center gap-2">
+          {cappedCount > 0 && (
+            <span className="shrink-0 rounded-[3px] border border-clay/45 bg-clay/[0.10] px-1.5 py-0.5 font-term text-[10px] font-medium uppercase tracking-[0.06em] text-ink/80">
+              Capped
+            </span>
+          )}
+          <TruncateInline className="font-term text-[11px] text-ink/65">
+            {cappedCount > 0
+              ? `Lens: ${effLens} · showing ${visibleNodes.length} of ${nodes.length} nodes, ${visibleEdges.length} of ${edges.length} links, best-connected first`
+              : `Lens: ${effLens} · showing ${visibleNodes.length} of ${nodes.length} nodes`}
+          </TruncateInline>
         </span>
       </div>
 
@@ -321,13 +421,17 @@ export function LineageGraph({
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />
-                  <text
-                    x={midX} y={midY - 5} textAnchor="middle" fontSize="9.5"
-                    fill={s.color} stroke="#ffffff" strokeWidth={3} paintOrder="stroke"
-                    className="font-term" pointerEvents="none"
-                  >
-                    {agg && e.count && e.count > 1 ? `${s.code} ×${e.count}` : s.code}
-                  </text>
+                  {/* Past LABEL_LIMIT edges these codes stack into an
+                      illegible smear; the legend keeps carrying them. */}
+                  {!quietEdges && (
+                    <text
+                      x={midX} y={midY - 5} textAnchor="middle" fontSize="9.5"
+                      fill={s.color} stroke="#ffffff" strokeWidth={3} paintOrder="stroke"
+                      className="font-term" pointerEvents="none"
+                    >
+                      {agg && e.count && e.count > 1 ? `${s.code} ×${e.count}` : s.code}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -434,8 +538,8 @@ export function LineageGraph({
               className="pointer-events-none absolute z-20 max-w-[240px] -translate-x-1/2 rounded-[4px] border border-ink/20 bg-paper px-2.5 py-1.5"
               style={{ left: `clamp(76px, ${p.x * 100}%, calc(100% - 76px))`, top: `calc(${p.y * 100}% - 48px)` }}
             >
-              <div className="text-[12px] font-semibold text-ink">{n.title}</div>
-              <div className="font-term text-[10.5px] text-ink/70">
+              <Truncate lines={2} className="text-[12px] font-semibold text-ink">{n.title}</Truncate>
+              <div className="truncate font-term text-[10.5px] text-ink/70">
                 {[n.meta, typeof n.staleDays === "number" ? `${n.staleDays}d stale` : null].filter(Boolean).join(" · ")}
               </div>
             </div>
@@ -451,9 +555,9 @@ export function LineageGraph({
           }
           return (
             <div className="absolute bottom-3 left-3 z-20 max-w-[300px] rounded-[5px] border border-ink/20 bg-paper/95 p-3 backdrop-blur">
-              <div className="text-[12.5px] font-semibold text-ink">
-                {trace.direction === "down" ? "Impact of" : "Provenance of"} {origin?.title}
-              </div>
+              <Truncate lines={2} className="text-[12.5px] font-semibold text-ink" title={origin?.title}>
+                {`${trace.direction === "down" ? "Impact of" : "Provenance of"} ${origin?.title ?? ""}`}
+              </Truncate>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <Chip label={`${closure.size - 1} docs`} tone="info" />
                 {[...groups].map(([rel, count]) => (
@@ -469,7 +573,7 @@ export function LineageGraph({
 
         {/* filter readout — proves the toolbar reached the canvas */}
         {(hiddenCount > 0 || controls.query.trim()) && (
-          <div className="absolute left-3 top-3 z-20 rounded-[4px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 font-term text-[11px] text-ink/70 backdrop-blur">
+          <div className="absolute left-3 top-3 z-20 max-w-[260px] truncate rounded-[4px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 font-term text-[11px] text-ink/70 backdrop-blur">
             {hiddenCount > 0 ? `${hiddenCount} node${hiddenCount === 1 ? "" : "s"} filtered out` : "Filtered"}
             {controls.query.trim() && ` · matching “${controls.query.trim()}”`}
           </div>

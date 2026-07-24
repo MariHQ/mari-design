@@ -6,6 +6,12 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { EmptyState } from "./EmptyState";
+import { Scrollable } from "./Scrollable";
+
+/** Terms rendered before "Show all", and the row count past which the list
+    scrolls inside a bounded region instead of growing the card (§20). */
+const PAGE = 25;
+const BOUND_AT = 6;
 
 /* GlossaryPanel — an editable term → definition list. Ported from the
    console's library GlossaryPanel, decoupled from GraphQL: edit/add/delete
@@ -39,6 +45,7 @@ export function GlossaryPanel({
   const [editDef, setEditDef] = useState("");
   const [newTerm, setNewTerm] = useState("");
   const [newDef, setNewDef] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const startEdit = (e: GlossaryEntry) => { setEditId(e.id); setEditTerm(e.term); setEditDef(e.definition); };
   const saveEdit = () => {
@@ -49,16 +56,12 @@ export function GlossaryPanel({
     if (newTerm.trim() && newDef.trim()) { onAdd?.(newTerm.trim(), newDef.trim()); setNewTerm(""); setNewDef(""); }
   };
 
-  return (
-    <Card variant="flush" title={title} hint={hint} className={className}>
-      <div className="divide-y divide-ink/10 border-t border-ink/10">
-        {entries.length === 0 && (
-          <div className="px-4 py-3">
-            <EmptyState>No terms yet{onAdd ? ". Add the first one below." : "."}</EmptyState>
-          </div>
-        )}
+  const capped = entries.length > PAGE;
+  const shown = capped && !showAll ? entries.slice(0, PAGE) : entries;
 
-        {entries.map((e) =>
+  const rows = (
+    <div className="divide-y divide-ink/10">
+      {shown.map((e) =>
           editId === e.id ? (
             <div key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
               <Input className="w-40 shrink-0" value={editTerm} onChange={(ev) => setEditTerm(ev.target.value)} placeholder="Term" />
@@ -93,9 +96,41 @@ export function GlossaryPanel({
             </div>
           ),
         )}
+    </div>
+  );
+
+  return (
+    <Card variant="flush" title={title} hint={hint ?? `${entries.length} ${entries.length === 1 ? "term" : "terms"}`} className={className}>
+      <div className="border-t border-ink/10">
+        {entries.length === 0 ? (
+          <div className="px-4 py-3">
+            <EmptyState>No terms yet{onAdd ? ". Add the first one below." : "."}</EmptyState>
+          </div>
+        ) : (
+          <>
+            {/* Count strip above the list it describes (§13). */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 py-2">
+              <span className="font-term text-[11.5px] text-ink/65">
+                {capped && !showAll
+                  ? `Showing ${shown.length} of ${entries.length.toLocaleString()} terms`
+                  : `Showing all ${entries.length.toLocaleString()} ${entries.length === 1 ? "term" : "terms"}`}
+              </span>
+              {capped && (
+                <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? "Show fewer" : "Show all"}
+                </Button>
+              )}
+            </div>
+            {/* A glossary runs to hundreds of terms: it scrolls in place with a
+                visible scrollbar rather than growing the card forever (§20). */}
+            {shown.length > BOUND_AT
+              ? <Scrollable axis="y" style={{ maxHeight: 460 }}>{rows}</Scrollable>
+              : rows}
+          </>
+        )}
 
         {onAdd && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-ink/[0.015]">
+          <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-3 bg-ink/[0.015]">
             <Input className="w-40 shrink-0" placeholder="New term" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} />
             <Input className="flex-1 min-w-[12rem]" placeholder="What it means, in one sentence." value={newDef} onChange={(e) => setNewDef(e.target.value)} />
             <Button variant="primary" compact onClick={add} disabled={!newTerm.trim() || !newDef.trim()}>

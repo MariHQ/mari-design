@@ -12,6 +12,8 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 
 /* Settings — Models configuration ─────────────────────────────────────────
    Choose which models embed, search, and answer for the workspace: the
@@ -112,6 +114,9 @@ export function SettingsModelsConfig({
     overlap: (r) => r.overlap,
   });
 
+  /* One chunking row per connected source: a large workspace has dozens. */
+  const pager = usePaged(sorted, 10);
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
@@ -190,8 +195,10 @@ export function SettingsModelsConfig({
         {chunk.length === 0 ? (
           <EmptyState title="No chunking rules">Rules appear here once a source has synced at least once.</EmptyState>
         ) : (
+        <>
+        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="sources" />
         <Scrollable>
-          <table className="w-full text-left border-collapse" style={{ minWidth: 680 }}>
+          <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 680 }}>
             <colgroup><col style={{ width: "40%" }} /><col style={{ width: "22%" }} /><col style={{ width: "19%" }} /><col style={{ width: "19%" }} /></colgroup>
             <thead>
               <tr>
@@ -202,11 +209,13 @@ export function SettingsModelsConfig({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => {
+              {pager.pageRows.map((r) => {
                 const opts = STRATEGIES.includes(r.strategy) ? STRATEGIES : [r.strategy, ...STRATEGIES];
                 return (
                   <tr key={r.source} className="border-b border-ink/10 last:border-0 align-top">
-                    <td className={`${tdPad} break-all text-[13px] font-medium text-ink`}>{r.source}</td>
+                    {/* Source names truncate; they never widen the column
+                        (CONVENTIONS §12). */}
+                    <td className={tdPad}><Truncate className="text-[13px] font-medium text-ink">{r.source}</Truncate></td>
                     <td className={`${tdPad} text-center`}>
                       <Select value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8">
                         {opts.map((v) => <option key={v} value={v}>{strategyLabel(v)}</option>)}
@@ -220,6 +229,8 @@ export function SettingsModelsConfig({
             </tbody>
           </table>
         </Scrollable>
+        {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+        </>
         )}
         <div className="flex items-center gap-3 px-4 py-3 border-t border-ink/10"><Button variant="primary" compact onClick={() => flash(setChunkSaved)}>Save</Button><SavedNote show={chunkSaved} /></div>
       </Card>

@@ -5,7 +5,7 @@ import { IconRing } from "../data-display/IconRing";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
-import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Button } from "../actions/Button";
 import { fmtDate } from "../tokens/format";
 import { focusRing } from "../tokens/focusRing";
@@ -44,8 +44,9 @@ const DEMO_DOCS: RecentDoc[] = [
   { id: 106, source: "linear", title: "On-call guide: escalation ladder", date: "2026-07-08" },
 ];
 
-/** Collapsed height of the table, in rows. */
+/** Collapsed height of the table, in rows, and the expanded page size. */
 const PREVIEW_ROWS = 3;
+const EXPANDED_ROWS = 25;
 
 export type OverviewRecentDocsProps = {
   docs?: RecentDoc[];
@@ -73,7 +74,9 @@ export function OverviewRecentDocs({
   });
 
   const hidden = Math.max(0, docs.length - PREVIEW_ROWS);
-  const rows = expanded ? sorted : sorted.slice(0, PREVIEW_ROWS);
+  /* Expanding must not mean "render 400 rows and grow the card past the fold":
+     it renders one page, inside a height-capped scroll region (§20). */
+  const rows = expanded ? sorted.slice(0, EXPANDED_ROWS) : sorted.slice(0, PREVIEW_ROWS);
 
   const browse = () => {
     setExpanded((v) => !v);
@@ -111,7 +114,18 @@ export function OverviewRecentDocs({
         /* §8: failure copy comes from the catalog, never a bespoke string. */
         <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
       ) : (
-        <Scrollable>
+        <>
+        {/* Count strip above the list, below the card's action bar (§13). */}
+        {docs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
+            <span className="font-term text-[11.5px] text-ink/65">
+              {rows.length < docs.length
+                ? `Showing ${rows.length} of ${docs.length.toLocaleString()} documents`
+                : `Showing all ${docs.length.toLocaleString()} document${docs.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+        )}
+        <Scrollable axis="both" style={{ maxHeight: rows.length > 8 ? 420 : undefined }}>
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
@@ -155,14 +169,7 @@ export function OverviewRecentDocs({
             </tbody>
           </table>
         </Scrollable>
-      )}
-
-      {!loading && !offline && docs.length > 0 && (
-        <div className={`flex flex-wrap items-center gap-2 border-t border-ink/10 ${thPad}`}>
-          <span className="font-term text-[11.5px] text-ink/65">
-            {expanded ? `Showing all ${docs.length}` : `Showing ${rows.length} of ${docs.length}`}
-          </span>
-        </div>
+        </>
       )}
     </Card>
   );

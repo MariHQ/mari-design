@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { resolveTone, resolveToneKey } from "./Badge";
 import { focusRing } from "../tokens/focusRing";
@@ -83,6 +83,39 @@ export function Chip({
     );
   }
   return <span className={shared}>{body}</span>;
+}
+
+/* ── ChipList: a chip row that cannot become a wall ─────────────────────
+   Eighty chips wrapped into a block taller than the card they sit in, and
+   pushed the row's date/author line off the bottom. A chip row therefore
+   shows the first `max` and collapses the rest behind an honest "+N more"
+   toggle (CONVENTIONS §13: say the real count; §12: never grow the box). */
+export function ChipList({
+  children, max = 8, className = "", moreLabel = "more",
+}: {
+  children: ReactNode[];
+  /** Chips shown before the overflow toggle. */
+  max?: number;
+  className?: string;
+  moreLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const items = children.filter((c) => c != null && c !== false);
+  const hidden = items.length - max;
+  const shown = open || hidden <= 0 ? items : items.slice(0, max);
+
+  return (
+    <div className={`flex min-w-0 flex-wrap items-center gap-1.5 ${className}`.trim()}>
+      {shown}
+      {hidden > 0 && (
+        <Chip
+          label={open ? "Show less" : `+${hidden} ${moreLabel}`}
+          tone="neutral"
+          onClick={() => setOpen((v) => !v)}
+        />
+      )}
+    </div>
+  );
 }
 
 /* ── StatusChip: named lifecycle states, mapped onto the 5-tone scale ────

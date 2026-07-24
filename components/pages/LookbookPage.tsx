@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -432,7 +432,7 @@ function LookbookPage({ state = "all", mobile = false }: PageProps) {
             same left and right edge (§11). Single-exhibit sections run one
             full-width column rather than leaving a dead right half. Mobile
             always collapses to one column. */}
-        <div className={mobile || SINGLE_EXHIBIT.has(state) ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-2 items-start gap-5"}>
+        <div className={mobile || SINGLE_EXHIBIT.has(state) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
           <Sections state={state} />
         </div>
       </div>

@@ -7,7 +7,9 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Stat } from "../data-display/Stat";
-import { Chip } from "../data-display/Chip";
+import { Chip, ChipList } from "../data-display/Chip";
+import { Truncate } from "../data-display/Truncate";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { TagChip } from "../data-display/TagChip";
 import { Progress } from "../data-display/Progress";
 import { EmptyState } from "../data-display/EmptyState";
@@ -98,6 +100,10 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
     usage: (t) => t.usage,
   });
 
+  /* A mature vocabulary runs to hundreds of tags. The definition table pages
+     rather than growing the card to the height of the whole vocabulary. */
+  const pager = usePaged(sorted, 12);
+
   const tagged = rows.reduce((s, t) => s + t.usage, 0);
   const coverage = Math.min(100, Math.round((tagged / (TOTAL_DOCS * 1.4)) * 100));
   const needCuration = rows.filter((t) => t.id === "needs-review" || t.id === "stale").reduce((s, t) => s + t.usage, 0);
@@ -135,7 +141,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
   if (loading) {
     return (
       <div className={`flex flex-col gap-4 ${className}`.trim()} aria-hidden="true">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
         <div className="rounded-md border border-ink/12 bg-paper">
@@ -174,7 +180,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
   return (
     <div className={`flex flex-col gap-4 ${className}`.trim()}>
       {/* Stats strip */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Tag health">
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" aria-label="Tag health">
         <Stat value={rows.length} label="Active definitions" />
         <Stat value={`${coverage}%`} label="Documents tagged" tone="ok" sub={`${tagged.toLocaleString()} tags applied`} />
         <Stat value={needCuration} label="Need curation" tone="attention" />
@@ -202,20 +208,23 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                 <span className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/70">Corpus coverage · {TOTAL_DOCS} documents indexed</span>
                 <Button variant="link" onClick={() => setAnalyzing(false)}>Close</Button>
               </div>
-              <div className="flex flex-col gap-2.5">
+              {/* One row per tag: with a 200-tag vocabulary this panel alone
+                  ran 4,000px. It scrolls in a bounded box with a visible bar
+                  instead (CONVENTIONS §20). */}
+              <Scrollable axis="y" fade="flysch" className="max-h-[280px]" scrollerClassName="flex flex-col gap-2.5 pr-1">
                 {[...rows].sort((a, b) => b.usage - a.usage).map((t) => (
-                  <div key={t.id} className="grid grid-cols-[10rem_1fr_5.5rem] items-center gap-3">
+                  <div key={t.id} className="grid grid-cols-[10rem_minmax(0,1fr)_5.5rem] items-center gap-3">
                     <TagChip tag={t.id} label={t.name} tone={t.tone} />
                     <Progress value={Math.round((t.usage / maxUsage) * 100)} tone={t.tone === "neutral" ? "info" : t.tone} />
                     <span className="font-term text-[11px] text-ink/70 text-right">{t.usage} docs · {Math.round((t.usage / TOTAL_DOCS) * 100)}%</span>
                   </div>
                 ))}
-                <div className="grid grid-cols-[10rem_1fr_5.5rem] items-center gap-3">
+                <div className="grid grid-cols-[10rem_minmax(0,1fr)_5.5rem] items-center gap-3">
                   <span className="text-[12.5px] text-ink/70">Untagged</span>
                   <Progress value={Math.round((untagged / TOTAL_DOCS) * 100)} tone="attention" />
                   <span className="font-term text-[11px] text-ink/70 text-right">{untagged} docs</span>
                 </div>
-              </div>
+              </Scrollable>
               <div className="mt-3 font-term text-[11px] text-moss">{coverage}% of the corpus carries at least one project tag.</div>
             </div>
           )}
@@ -227,7 +236,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                 <span className="text-[13px] font-semibold text-ink">{editId ? "Edit tag" : "New tag"}</span>
                 <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/70 hover:text-ink"><X size={14} /></button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
                 <div><SectionLabel>Tag name</SectionLabel><Input autoFocus className="mt-1 w-full" value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Runbook" /></div>
                 <div><SectionLabel>Description</SectionLabel><Input className="mt-1 w-full" value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} placeholder="What it means" /></div>
                 <div><SectionLabel>Color</SectionLabel><Select className="mt-1 w-full block" value={draftTone} onChange={(e) => setDraftTone(e.target.value as Tone)}>{COLORS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></div>
@@ -244,6 +253,9 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
           {visible.length === 0 ? (
             <EmptyState icon={<Search size={20} />}>No tags match this search.</EmptyState>
           ) : (
+            <>
+            <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="tags"
+              note={query.trim() ? `filtered from ${rows.length.toLocaleString("en-US")}` : undefined} />
             <Scrollable>
               <table className="w-full min-w-[860px] table-fixed border-collapse text-left">
                 <colgroup>
@@ -265,18 +277,22 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((t) => (
+                  {pager.pageRows.map((t) => (
                     <tr key={t.id} className="border-b border-ink/10 align-top last:border-0">
                       <td className={tdPad}>
                         <TagChip tag={t.id} label={t.name} tone={t.tone} />
-                        <p className="mt-1 break-words text-[12.5px] text-ink/70">{t.description}</p>
+                        {/* Two lines, then an ellipsis: a paragraph-length
+                            description must not set the row height (§12). */}
+                        <Truncate as="p" lines={2} className="mt-1 text-[12.5px] text-ink/70">{t.description}</Truncate>
                       </td>
                       <td className={tdPad}>
-                        <div className="flex flex-wrap gap-1.5">
+                        {/* A tag with 30 behaviors used to wrap into a block
+                            taller than the rest of the row. */}
+                        <ChipList max={3}>
                           {t.behaviors.map((b) => <Chip key={b} label={b} tone="neutral" />)}
-                        </div>
+                        </ChipList>
                       </td>
-                      <td className={`${tdPad} break-words font-term text-[11px] text-ink/70`}>{t.evidence}</td>
+                      <td className={`${tdPad} font-term text-[11px] text-ink/70`}><Truncate lines={2}>{t.evidence}</Truncate></td>
                       <td className={`${tdPad} text-center`}>
                         {weightEditId === t.id ? (
                           <Input
@@ -312,6 +328,8 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                 </tbody>
               </table>
             </Scrollable>
+            {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+            </>
           )}
         </div>
       </Card>

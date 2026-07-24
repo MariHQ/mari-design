@@ -12,6 +12,7 @@ import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { ConnectionRow, type RelKey } from "./LineageDataModel";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* KnowledgeInspector — the sticky right-rail describing the selected search
    result: title/source, editable tags, a two-tab view (Document summary vs.
@@ -83,6 +84,37 @@ const DEMO: Doc = {
 
 type InsTab = "document" | "inspector";
 
+/* Volume. The rail is 360px wide and sits beside a page: every list in it
+   renders a page of rows, says honestly how many of how many that is (§13),
+   and scrolls inside a bounded region past BOUND_AT rows (§20). */
+const FACTS_PAGE = 6;
+const RELATED_PAGE = 4;
+const REVISIONS_PAGE = 3;
+const BOUND_AT = 8;
+
+function CountLine({
+  shown, total, noun, expanded, onToggle,
+}: { shown: number; total: number; noun: string; expanded?: boolean; onToggle?: () => void }) {
+  if (total <= shown && !expanded) return null;
+  return (
+    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+      <span className="font-term text-[11px] text-ink/65">
+        {shown < total ? `Showing ${shown} of ${total.toLocaleString()} ${noun}` : `Showing all ${total.toLocaleString()} ${noun}`}
+      </span>
+      {onToggle && (
+        <Button variant="link" aria-expanded={Boolean(expanded)} onClick={onToggle}>
+          {expanded ? "Show fewer" : "Show all"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function BoundedList({ bounded, children }: { bounded: boolean; children: React.ReactNode }) {
+  if (!bounded) return <>{children}</>;
+  return <Scrollable axis="y" style={{ maxHeight: 260 }} scrollerClassName="pr-2">{children}</Scrollable>;
+}
+
 export type KnowledgeInspectorProps = {
   doc?: Doc;
   loading?: boolean;
@@ -98,6 +130,12 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
   const [fullHistory, setFullHistory] = useState(false);
   const [lineageOpen, setLineageOpen] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [allFacts, setAllFacts] = useState(false);
+  const [allRelated, setAllRelated] = useState(false);
+
+  const factList = allFacts ? doc.facts : doc.facts.slice(0, FACTS_PAGE);
+  const relatedList = allRelated ? doc.related : doc.related.slice(0, RELATED_PAGE);
+  const revisions = fullHistory ? doc.timeline : doc.timeline.slice(0, REVISIONS_PAGE);
 
   const lineage: Link[] = doc.lineage ?? doc.related.map((r, i) => ({
     rel: REL_CYCLE[i % REL_CYCLE.length],
@@ -169,31 +207,52 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
             <p className="text-[13px] leading-relaxed text-ink/80">{doc.summary}</p>
 
             <CardSection label="Verified facts" count={doc.facts.length}>
-              <ul className="flex flex-col gap-1.5">
-                {doc.facts.slice(0, 6).map((f, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[12.5px] text-ink/80">
-                    <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-moss" />
-                    <span className="min-w-0 break-words">{f.text}</span>
-                  </li>
-                ))}
-                {doc.facts.length === 0 && (
-                  <li className="text-[12.5px] text-ink/70">No verified facts extracted from this document yet.</li>
-                )}
-              </ul>
+              {/* Honest count above the list it describes (§13): a well-mined
+                  document carries dozens of facts, and the rail shows a page of
+                  them instead of silently dropping the rest. */}
+              <CountLine
+                shown={factList.length}
+                total={doc.facts.length}
+                noun="facts"
+                expanded={allFacts}
+                onToggle={() => setAllFacts((v) => !v)}
+              />
+              <BoundedList bounded={factList.length > BOUND_AT}>
+                <ul className="flex min-w-0 flex-col gap-1.5">
+                  {factList.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[12.5px] text-ink/80">
+                      <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-moss" />
+                      <span className="min-w-0 break-words">{f.text}</span>
+                    </li>
+                  ))}
+                  {doc.facts.length === 0 && (
+                    <li className="text-[12.5px] text-ink/70">No verified facts extracted from this document yet.</li>
+                  )}
+                </ul>
+              </BoundedList>
             </CardSection>
 
             <CardSection label="Related docs" count={doc.related.length}>
-              <ul className="flex flex-col gap-1.5">
-                {doc.related.slice(0, 4).map((r, i) => (
-                  <li key={i} className="flex items-center gap-2 text-[12.5px] text-ink/80">
-                    <SourceMark provider={r.source} size={15} />
-                    <span className="min-w-0 truncate hover:text-biscay-2 cursor-pointer">{r.title}</span>
-                  </li>
-                ))}
-                {doc.related.length === 0 && (
-                  <li className="text-[12.5px] text-ink/70">Nothing links to this document yet.</li>
-                )}
-              </ul>
+              <CountLine
+                shown={relatedList.length}
+                total={doc.related.length}
+                noun="documents"
+                expanded={allRelated}
+                onToggle={() => setAllRelated((v) => !v)}
+              />
+              <BoundedList bounded={relatedList.length > BOUND_AT}>
+                <ul className="flex min-w-0 flex-col gap-1.5">
+                  {relatedList.map((r, i) => (
+                    <li key={i} className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink/80">
+                      <SourceMark provider={r.source} size={15} />
+                      <span className="min-w-0 truncate hover:text-biscay-2 cursor-pointer" title={r.title}>{r.title}</span>
+                    </li>
+                  ))}
+                  {doc.related.length === 0 && (
+                    <li className="text-[12.5px] text-ink/70">Nothing links to this document yet.</li>
+                  )}
+                </ul>
+              </BoundedList>
             </CardSection>
 
             {/* Source badge (slot 6) + status badge / tags (slot 7) */}
@@ -227,17 +286,20 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
 
             {/* Revision timeline, last */}
             <CardSection label="Revision timeline" count={doc.timeline.length}>
-              <ul className="flex flex-col gap-2">
-                {(fullHistory ? doc.timeline : doc.timeline.slice(0, 3)).map((r, i) => (
-                  <li key={i} className="break-words text-[12px] text-ink/75">
-                    <b className="font-term text-[11px] text-ink/65 block">{r.at}</b>
-                    {r.verb}, {r.actor}
-                  </li>
-                ))}
-                {doc.timeline.length === 0 && (
-                  <li className="text-[12.5px] text-ink/70">No revisions recorded for this document.</li>
-                )}
-              </ul>
+              <CountLine shown={revisions.length} total={doc.timeline.length} noun="revisions" />
+              <BoundedList bounded={revisions.length > BOUND_AT}>
+                <ul className="flex min-w-0 flex-col gap-2">
+                  {revisions.map((r, i) => (
+                    <li key={i} className="break-words text-[12px] text-ink/75">
+                      <b className="font-term text-[11px] text-ink/65 block">{r.at}</b>
+                      {r.verb}, {r.actor}
+                    </li>
+                  ))}
+                  {doc.timeline.length === 0 && (
+                    <li className="text-[12.5px] text-ink/70">No revisions recorded for this document.</li>
+                  )}
+                </ul>
+              </BoundedList>
 
               {lineageOpen && (
                 <div className="mt-3 rounded-[5px] border border-ink/12 bg-flysch/50 p-2.5">
@@ -247,6 +309,7 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
                   </div>
                   {/* Same ConnectionRow / EdgeSwatch the lineage drawers use, so
                       the preview reads as one component family. */}
+                  <BoundedList bounded={lineage.length > BOUND_AT}>
                   {lineage.map((l) => (
                     <ConnectionRow
                       key={l.title}
@@ -258,6 +321,7 @@ export function KnowledgeInspector({ doc = DEMO, loading = false, className = ""
                       onFocus={() => setFocused(l.title)}
                     />
                   ))}
+                  </BoundedList>
                 </div>
               )}
 

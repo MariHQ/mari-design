@@ -63,6 +63,9 @@ export type WfStep = {
   state?: ChipStatus;
 };
 
+/** Last-run checks listed before the count line takes over. */
+const CHECK_CAP = 6;
+
 /* ── StepStrip — horizontal When/Do/Check/Then bubbles + dotted connectors ── */
 function StepStrip({ steps, max = 4 }: { steps: WfStep[]; max?: number }) {
   const shown = steps.slice(0, max);
@@ -230,9 +233,16 @@ export function OverviewWorkflowStrip({
 
           {checks.length > 0 && (
             <CardSection label="Last run checks" className="mt-4 border-t border-ink/10 pt-3">
+              {/* A 60-step flow reports 60 checks: the list says how many of
+                  how many it shows (§13) and scrolls past CHECK_CAP (§20). */}
+              {checks.length > CHECK_CAP && (
+                <div className="mb-1.5 font-term text-[11px] text-ink/65">
+                  Showing {CHECK_CAP} of {checks.length.toLocaleString()} checks
+                </div>
+              )}
               <ul className="flex flex-col gap-1.5">
-                {checks.map((s) => (
-                  <li key={s.label} className="flex items-center justify-between gap-3">
+                {checks.slice(0, CHECK_CAP).map((s, i) => (
+                  <li key={`${s.label}-${i}`} className="flex items-center justify-between gap-3">
                     <Truncate className="text-[13px] text-ink/70">{s.label}</Truncate>
                     <StatusChip status={s.state!} />
                   </li>

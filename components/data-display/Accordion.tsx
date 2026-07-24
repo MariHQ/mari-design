@@ -3,6 +3,7 @@ import * as RA from "@radix-ui/react-accordion";
 import { ChevronDown } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Skeleton, SkeletonLine } from "./Skeleton";
+import { Scrollable } from "./Scrollable";
 
 export type AccordionItemData = { value: string; title: ReactNode; content: ReactNode };
 
@@ -29,9 +30,24 @@ function Items({ items }: { items: AccordionItemData[] }) {
   );
 }
 
+/* Past this many sections the panel scrolls in place rather than running to
+   thousands of pixels: 200 collapsed triggers is a 9,600px card (§20). */
+const BOUND_AT = 10;
+const MAX_HEIGHT = 480;
+
 export type AccordionProps =
   | { type?: "single"; items: AccordionItemData[]; defaultValue?: string; collapsible?: boolean; loading?: boolean }
   | { type: "multiple"; items: AccordionItemData[]; defaultValue?: string[]; loading?: boolean };
+
+/** Wraps a long section list in the one scroll container (§20). */
+function Bounded({ items, children }: { items: AccordionItemData[]; children: ReactNode }) {
+  if (items.length <= BOUND_AT) return <>{children}</>;
+  return (
+    <Scrollable axis="y" style={{ maxHeight: MAX_HEIGHT }} className="rounded-md border border-ink/15 bg-paper">
+      {children}
+    </Scrollable>
+  );
+}
 
 /** Disclosure sections — a settings page's grouped panels, an FAQ list. */
 export function Accordion(props: AccordionProps) {
@@ -47,16 +63,24 @@ export function Accordion(props: AccordionProps) {
       </div>
     );
   }
+  // The border lives on the scroll wrapper when there is one, so a bounded
+  // accordion still reads as exactly one boxed panel.
+  const rootClass = props.items.length > BOUND_AT ? "bg-paper" : ROOT_CLASS;
+
   if (props.type === "multiple") {
     return (
-      <RA.Root type="multiple" defaultValue={props.defaultValue} className={ROOT_CLASS}>
-        <Items items={props.items} />
-      </RA.Root>
+      <Bounded items={props.items}>
+        <RA.Root type="multiple" defaultValue={props.defaultValue} className={rootClass}>
+          <Items items={props.items} />
+        </RA.Root>
+      </Bounded>
     );
   }
   return (
-    <RA.Root type="single" collapsible={props.collapsible ?? true} defaultValue={props.defaultValue} className={ROOT_CLASS}>
-      <Items items={props.items} />
-    </RA.Root>
+    <Bounded items={props.items}>
+      <RA.Root type="single" collapsible={props.collapsible ?? true} defaultValue={props.defaultValue} className={rootClass}>
+        <Items items={props.items} />
+      </RA.Root>
+    </Bounded>
   );
 }

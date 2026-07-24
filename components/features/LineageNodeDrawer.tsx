@@ -28,6 +28,13 @@ import {
 
 type Tab = "overview" | "connections" | "history" | "impact";
 
+/** Connection rows drawn per page on the Connections tab. */
+const CONN_PAGE = 20;
+/** Reference rows previewed on Overview before "See all" takes over. */
+const REF_PREVIEW = 4;
+/** Tags shown before the rest collapse into a "+N more" chip. */
+const TAG_PREVIEW = 8;
+
 const DEMO_HISTORY: DocHistoryRow[] = [
   { at: "2026-07-19", actor: "Dev R", verb: "merged", detail: "PR #482 into main" },
   { at: "2026-07-15", actor: "Mari", verb: "linked", detail: "closes issue #91" },
@@ -70,6 +77,10 @@ export function LineageNodeDrawer({
     }
     return rows;
   }, [edges, node.id, byId]);
+
+  const [connPage, setConnPage] = useState(1);
+  const shownConnections = connections.slice(0, CONN_PAGE * connPage);
+  const hiddenConnections = connections.length - shownConnections.length;
 
   const downstream = connections.filter((c) => c.dir === "out").length;
   const upstream = connections.filter((c) => c.dir === "in").length;
@@ -179,16 +190,30 @@ export function LineageNodeDrawer({
           />
 
           {node.tags && node.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {node.tags.map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {node.tags.slice(0, TAG_PREVIEW).map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}
+              {node.tags.length > TAG_PREVIEW && (
+                <span
+                  className="font-term text-[11px] text-ink/65"
+                  title={node.tags.slice(TAG_PREVIEW).join(", ")}
+                >
+                  +{node.tags.length - TAG_PREVIEW} more
+                </span>
+              )}
             </div>
           )}
 
           {showReferences && (
-            <CardSection label="References" count={references.length}>
+            <CardSection
+              label="References"
+              count={references.length}
+              action={references.length > REF_PREVIEW
+                ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See all</button>
+                : undefined}
+            >
               {references.length === 0 ? (
                 <p className="text-[12.5px] text-ink/70">No extracted references yet.</p>
-              ) : references.map((c, i) => (
+              ) : references.slice(0, REF_PREVIEW).map((c, i) => (
                 <ConnectionRow
                   key={i}
                   rel={c.rel}
@@ -250,9 +275,9 @@ export function LineageNodeDrawer({
           {connections.length === 0 ? (
             <EmptyState title="No links">No links recorded for this node.</EmptyState>
           ) : (
-            connections.map((c, i) => (
+            shownConnections.map((c, i) => (
               <div key={i}>
-                {(i === 0 || connections[i - 1].rel !== c.rel || connections[i - 1].dir !== c.dir) && (
+                {(i === 0 || shownConnections[i - 1].rel !== c.rel || shownConnections[i - 1].dir !== c.dir) && (
                   <div className="mb-1 mt-3 flex items-center gap-2 first:mt-0">
                     <SectionLabel>{c.dir === "out" ? REL[c.rel].out : REL[c.rel].in}</SectionLabel>
                     <span className="font-term text-[11px] text-ink/65">
@@ -271,6 +296,20 @@ export function LineageNodeDrawer({
                 />
               </div>
             ))
+          )}
+          {/* A well-connected node has hundreds of links. Page them rather than
+              paying for hundreds of rows and an endless drawer scroll. */}
+          {connections.length > 0 && (
+            <div className="mt-3 flex items-center gap-3 border-t border-ink/10 pt-3">
+              {hiddenConnections > 0 && (
+                <Button compact onClick={() => setConnPage((p) => p + 1)}>
+                  Show {Math.min(hiddenConnections, CONN_PAGE)} more
+                </Button>
+              )}
+              <span className="font-term text-[11px] text-ink/65">
+                Showing {shownConnections.length} of {connections.length} links
+              </span>
+            </div>
           )}
         </div>
       )}

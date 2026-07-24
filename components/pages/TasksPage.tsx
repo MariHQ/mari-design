@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -255,9 +255,10 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 
       {(state === "overflow" || state === "stress") && <StressStrip pathological={state === "stress"} />}
 
-      {/* Two equal columns at every desktop width (§11); mobile collapses to
-          one column at the page level, not via a component breakpoint (§10). */}
-      <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-2 gap-5"}>
+      {/* Two equal columns on a full-size desktop (§11); mobile, and any window
+          too narrow for two task columns, collapses to one column at the page
+          level, not via a component breakpoint (§10). */}
+      <div className={mobile ? "grid grid-cols-1 gap-5" : DASH2}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
           {listBody(open, "Nothing open: all caught up.")}
         </Column>

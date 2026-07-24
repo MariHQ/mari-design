@@ -8,6 +8,7 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
+import { Scrollable } from "../data-display/Scrollable";
 import { SourceMark } from "../icons/marks";
 
 /* SourcesSyncStatus — a visual read-out of the sync state model that powers the
@@ -50,8 +51,14 @@ export function PhaseTracker({
   paused?: boolean;
   className?: string;
 }) {
+  /* The phase row SCROLLS, it does not wrap (CONVENTIONS.md §20: a row of
+     steps that cannot fit scrolls, it does not shrink each label). Wrapping
+     looked safe but was not: a phase label is wider than its min-content
+     floor, so once the column got under ~140px each `li` spilled out through
+     the card border instead of moving to the next line. */
   return (
-    <ol className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${className}`.trim()}>
+    <Scrollable axis="x">
+      <ol className={`flex items-center gap-x-4 whitespace-nowrap ${className}`.trim()}>
       {PHASES.map((p, i) => {
         const state: PhaseState =
           failed && i === current ? "error"
@@ -59,13 +66,14 @@ export function PhaseTracker({
             : i < current ? "done" : i === current ? "active" : "pending";
         const st = STATE_STYLE[state];
         return (
-          <li key={p} className="flex items-center gap-1.5">
-            <span className={`grid place-items-center w-[18px] h-[18px] rounded-[3px] border ${st.ring}`}>{st.icon}</span>
+          <li key={p} className="flex shrink-0 items-center gap-1.5">
+            <span className={`grid place-items-center w-[18px] h-[18px] shrink-0 rounded-[3px] border ${st.ring}`}>{st.icon}</span>
             <span className={`font-term text-[11.5px] ${st.text}`}>{PHASE_LABEL[p]}</span>
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </Scrollable>
   );
 }
 

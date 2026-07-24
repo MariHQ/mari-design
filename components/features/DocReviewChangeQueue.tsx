@@ -13,6 +13,8 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Tabs } from "../navigation/Tabs";
 import { SkeletonLine } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 
 /* ————— ported diff helpers ————— */
 
@@ -76,6 +78,10 @@ export function DocReviewChangeQueue({
 
   const pending = changes.filter((c) => c.state === "pending");
   const visible = tab === "review" ? pending : changes;
+  /* A full refinement pass proposes hundreds of edits. The queue pages so the
+     Accept-all control stays reachable instead of sitting below a mile of
+     diffs (CONVENTIONS §13, §17). */
+  const pager = usePaged(visible, 15);
 
   const isApplied = (c: Change) => c.state === "pending" && !bodyText.includes(cleanText(c.original));
 
@@ -136,8 +142,20 @@ export function DocReviewChangeQueue({
         />
       </div>
 
+      {/* Result count above the rows, never under them (CONVENTIONS §13). */}
+      {visible.length > 0 && (
+        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="changes"
+          className="mt-3 border-t" note={`${pending.length} pending`} />
+      )}
+
+      {/* Two diff columns plus an action rail need real width. In a narrow
+          frame the row SCROLLS sideways inside the card; it never crushes each
+          column to one word per line (CONVENTIONS §20). `compact` stacks
+          instead, for pages that ask for it (§10). */}
+      <Scrollable>
+      <div className={compact ? "" : "min-w-[660px]"}>
       {visible.length > 0 && !compact && (
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px] gap-3 px-4 pt-3 pb-1.5 border-b border-ink/10">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_168px] gap-3 px-4 pt-3 pb-1.5 border-b border-ink/10">
           <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>
           <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Proposed</span>
           <span />
@@ -145,13 +163,13 @@ export function DocReviewChangeQueue({
       )}
 
       <div>
-        {visible.map((c) => {
+        {pager.pageRows.map((c) => {
           const d = diffChange(cleanText(c.original), cleanText(c.proposed));
           const applied = isApplied(c);
           return (
             <div
               key={c.id}
-              className={`grid gap-3 px-4 py-3 border-b border-ink/8 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px]"} ${c.state === "rejected" ? "opacity-50" : ""}`}
+              className={`grid gap-3 px-4 py-3 border-b border-ink/8 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_168px]"} ${c.state === "rejected" ? "opacity-50" : ""}`}
             >
               {compact && <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Original</span>}
               <div className="min-w-0 break-words font-term text-[12.5px] leading-[1.55] text-ink/70">
@@ -171,7 +189,9 @@ export function DocReviewChangeQueue({
                 </span>
                 {c.state === "pending" ? (
                   applied ? (
-                    <div className="flex items-center gap-1.5">
+                    /* Stacked, so "Dismiss" keeps its own line and never
+                       wraps to "Dismis / s" in the action rail. */
+                    <div className="flex flex-col items-start gap-1">
                       <span className="text-[11px] text-ink/65">already applied</span>
                       <Button compact onClick={() => reject(c)}>Dismiss</Button>
                     </div>
@@ -196,14 +216,17 @@ export function DocReviewChangeQueue({
           <EmptyState>No pending changes. Run a refinement, or switch to “All changes”.</EmptyState>
         )}
       </div>
+      </div>
+      </Scrollable>
 
-      {/* Primary action bottom LEFT, the count reading bottom right
-          (CONVENTIONS.md §2). */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
+      {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+
+      {/* Primary action bottom LEFT (CONVENTIONS.md §2). The count reads from
+          the strip above the list, not from under it (§13). */}
+      <div className="flex items-center gap-3 px-4 py-3">
         <Button variant="primary" onClick={acceptAll} disabled={pending.length === 0}>
           Accept all {pending.length || ""} changes
         </Button>
-        <span className="text-[11px] text-ink/65">Showing {visible.length} of {changes.length} changes</span>
       </div>
     </Card>
   );

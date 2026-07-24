@@ -4,14 +4,20 @@ import { Button } from "../actions/Button";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { Scrollable } from "../data-display/Scrollable";
 import { GithubMark } from "../icons";
 import { fmtDate } from "../tokens/format";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow, groupParts, groupKindWord,
-  LgAuthor, LgOwners, LgSourceChip,
+  LgAuthor, LgOwners, LgSourceChip, GROUP_PAGE_SIZE,
   DEMO_EDGES, DEMO_NODES, nodeById, type LNode, type LEdge,
 } from "./LineageDataModel";
+
+/** Rows shown before the list becomes its own bounded, scrolling region. */
+const MEMBER_PREVIEW = 5;
+/** References rows shown before that list gets its own bounded scroll box. */
+const REF_PREVIEW = 4;
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage group (roll-up) drawer (feature: lineage-group-drawer)
@@ -95,7 +101,15 @@ export function LineageGroupDrawer({
     [members],
   );
   const kindWord = groupKindWord(kind, totalMembers);
-  const shown = isOpen ? ranked : ranked.slice(0, 5);
+
+  /* A 500-member bucket must not become 500 rows in the drawer body: the
+     Members list is its own bounded scroll region (§20) and pages in
+     GROUP_PAGE_SIZE at a time, so References and Owners stay reachable. */
+  const [page, setPage] = useState(1);
+  const budget = isOpen ? GROUP_PAGE_SIZE * page : MEMBER_PREVIEW;
+  const shown = ranked.slice(0, budget);
+  const more = ranked.length - shown.length;
+  const scrolls = shown.length > MEMBER_PREVIEW;
 
   if (loading) {
     return (
@@ -125,7 +139,7 @@ export function LineageGroupDrawer({
         <div className="flex w-full flex-col gap-2">
           {/* The expand/collapse toggle latches and actually redraws the list. */}
           <div className="flex flex-wrap gap-2">
-            <Button compact onClick={() => setIsOpen((o) => !o)} className={isOpen ? lgToggleOn : ""}>
+            <Button compact onClick={() => { setIsOpen((o) => !o); setPage(1); }} className={isOpen ? lgToggleOn : ""}>
               <ChevronsUpDown size={13} /> {isOpen ? "Collapse group" : "Expand group"}
             </Button>
           </div>
@@ -161,39 +175,66 @@ export function LineageGroupDrawer({
 
         {isOpen && (
           <LgResultPanel title="Group expanded on the canvas">
-            The {totalMembers} members now render as individual nodes, and every
-            listed member appears below instead of the top five.
+            The {totalMembers} members now render as individual nodes. The list
+            below pages through them {GROUP_PAGE_SIZE} at a time rather than
+            drawing every row at once.
           </LgResultPanel>
         )}
 
         <CardSection label="References" count={references.length}>
           {references.length === 0 ? (
             <p className="text-[12.5px] text-ink/70">This bucket links to nothing outside itself.</p>
-          ) : references.map((e) => (
-            <ConnectionRow
-              key={e.id}
-              rel={e.rel}
-              dir="out"
-              dashed={e.dashed}
-              title={graphById[e.to]?.title ?? e.to}
-              subline={e.count && e.count > 1 ? `${e.count} rolled-up links` : "1 link"}
-            />
-          ))}
+          ) : (
+            <Scrollable axis="y" className={references.length > REF_PREVIEW ? "max-h-[188px]" : ""} scrollerClassName={references.length > REF_PREVIEW ? "pr-1" : ""}>
+              {references.map((e) => (
+                <ConnectionRow
+                  key={e.id}
+                  rel={e.rel}
+                  dir="out"
+                  dashed={e.dashed}
+                  title={graphById[e.to]?.title ?? e.to}
+                  subline={e.count && e.count > 1 ? `${e.count} rolled-up links` : "1 link"}
+                />
+              ))}
+            </Scrollable>
+          )}
         </CardSection>
 
-        <CardSection label="Members" count={totalMembers}>
+        <CardSection
+          label="Members"
+          count={totalMembers}
+          action={
+            <span className="font-term text-[11px] text-ink/65">
+              {shown.length === 0 ? "None listed" : `Showing ${shown.length} of ${ranked.length} listed`}
+            </span>
+          }
+        >
           {shown.length === 0 ? (
             <EmptyState title="No members">Nothing in this bucket matches the current filters.</EmptyState>
-          ) : shown.map((m) => (
-            <ConnectionRow
-              key={m.id}
-              rel="references"
-              dir="out"
-              title={m.title}
-              subline={[m.owner, m.date ? fmtDate(m.date) : null, `${degreeOf.get(m.id) ?? m.inbound ?? 0} link${(m.inbound ?? 0) === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
-              onSelect={() => onSelectMember?.(m.id)}
-            />
-          ))}
+          ) : (
+            <>
+              {/* Bounded region, always with a visible bar once it scrolls. */}
+              <Scrollable axis="y" className={scrolls ? "max-h-[236px]" : ""} scrollerClassName={scrolls ? "pr-1" : ""}>
+                {shown.map((m) => (
+                  <ConnectionRow
+                    key={m.id}
+                    rel="references"
+                    dir="out"
+                    title={m.title}
+                    subline={[m.owner, m.date ? fmtDate(m.date) : null, `${degreeOf.get(m.id) ?? m.inbound ?? 0} link${(m.inbound ?? 0) === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
+                    onSelect={() => onSelectMember?.(m.id)}
+                  />
+                ))}
+              </Scrollable>
+              {more > 0 && (
+                <div className="mt-2">
+                  <Button compact onClick={() => { setIsOpen(true); setPage((p) => p + 1); }}>
+                    Show {Math.min(more, GROUP_PAGE_SIZE)} more
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </CardSection>
 
         <CardSection label="Owners">

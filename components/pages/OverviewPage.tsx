@@ -1,5 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
 import { Sprout } from "lucide-react";
 import { OverviewStatTiles } from "../features/OverviewStatTiles";
 import { OverviewDigestCard } from "../features/OverviewDigestCard";
@@ -29,22 +29,19 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* §11 dashboard grid. Every widget is a direct child of one
-   `grid grid-cols-3 gap-5`, so tile edges line up horizontally and vertically
-   and the body fills the whole 1400px container. Mobile collapses to one
-   column at the page level (§11), never via component breakpoints (§10). */
+/* §11 dashboard grid. Every widget is a direct child of one shared DASH3, so
+   tile edges line up horizontally and vertically and the body fills the whole
+   1400px container. The grid drops to two-up below 1280 and one-up below 1024
+   (see PageFrame), because a three-up row of console widgets does not fit
+   beside the 218px sidebar on a small laptop. Mobile falls out of the same
+   classes, never out of component breakpoints (§10). */
 function DashGrid({ mobile, children }: { mobile: boolean; children: React.ReactNode }) {
-  return (
-    <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-3 gap-5"}>
-      {children}
-    </div>
-  );
+  return <div className={mobile ? "grid grid-cols-1 gap-5" : DASH3}>{children}</div>;
 }
 
 /** A dashboard cell. `span` is ignored on mobile (single column). */
 function Cell({ mobile, span = 1, children }: { mobile: boolean; span?: 1 | 2 | 3; children: React.ReactNode }) {
-  const cls = mobile ? "min-w-0" : span === 3 ? "col-span-3 min-w-0" : span === 2 ? "col-span-2 min-w-0" : "col-span-1 min-w-0";
-  return <div className={cls}>{children}</div>;
+  return <div className={mobile ? "min-w-0" : SPAN[span]}>{children}</div>;
 }
 
 /* Stress states — drive every overview feature from its data props with

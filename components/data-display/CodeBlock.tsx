@@ -15,11 +15,18 @@ export type CodeBlockProps = {
   copy?: boolean;
   /** Soft-wrap long lines instead of scrolling. */
   wrap?: boolean;
+  /** Height cap in px before the code scrolls vertically. 0 disables the cap. */
+  maxHeight?: number;
   className?: string;
 };
 
-export function CodeBlock({ code, language, title, copy = true, wrap = false, className = "" }: CodeBlockProps) {
+export function CodeBlock({ code, language, title, copy = true, wrap = false, maxHeight = 360, className = "" }: CodeBlockProps) {
   const header = Boolean(title || language || copy);
+  /* A 2,000-line payload used to grow its card to twenty thousand pixels.
+     Past the cap the block scrolls inside itself, with a visible bar on both
+     axes (CONVENTIONS §20). */
+  const lines = code.split("\n").length;
+  const capped = maxHeight > 0 && (lines > 18 || code.length > 2000);
   return (
     <div className={`rounded-md border border-ink/15 bg-ink/[0.025] overflow-hidden ${className}`.trim()}>
       {header && (
@@ -37,11 +44,21 @@ export function CodeBlock({ code, language, title, copy = true, wrap = false, cl
           </div>
         )}
         {/* With `wrap` there is never horizontal overflow; the indicator just stays hidden. */}
-        <Scrollable>
+        <Scrollable
+          axis={capped ? "both" : "x"}
+          fade="flysch"
+          className={capped ? "min-h-0" : ""}
+          style={capped ? { maxHeight } : undefined}
+        >
           <pre className={`p-3.5 font-term text-[12.5px] leading-relaxed text-ink ${wrap ? "whitespace-pre-wrap break-words" : ""}`}>
             <code>{code}</code>
           </pre>
         </Scrollable>
+        {capped && (
+          <div className="border-t border-ink/10 px-3 py-1.5 font-term text-[11px] text-ink/65">
+            {lines.toLocaleString("en-US")} lines
+          </div>
+        )}
       </div>
     </div>
   );

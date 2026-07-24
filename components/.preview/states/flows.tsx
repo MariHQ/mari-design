@@ -86,6 +86,21 @@ const FLOW_OVERFLOW: Flow[] = [
   },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_FLOWS: Flow[] = Array.from({ length: 200 }, (_, i) => {
+  const base = FLOW_ROWS[i % FLOW_ROWS.length];
+  return {
+    ...base,
+    id: i + 1,
+    name: i % 31 === 0 ? HUGE : `${base.name} ${i + 1}`,
+    description: i % 17 === 0 ? LONG : base.description,
+    recentRuns: Array.from({ length: (i % 12) + 1 }, (_, j) => ({
+      number: 1000 + i * 20 + j,
+      status: (["passed", "failed", "waiting", "running", "skipped"] as const)[j % 5],
+    })),
+  };
+});
+
 const FLOWS_LIST: ComponentSpec = {
   id: "FlowsList", title: "FlowsList", width: 1180,
   states: [
@@ -96,6 +111,7 @@ const FLOWS_LIST: ComponentSpec = {
     { id: "overflow-text", label: "Overflow: long names, unbreakable strings, many run dots", node: <FlowsList flows={FLOW_OVERFLOW} /> },
     { id: "overflow-rows", label: "Overflow: too many rows", node: <FlowsList flows={[...FLOW_ROWS, ...FLOW_ROWS, ...FLOW_ROWS].map((f, i) => ({ ...f, id: i + 1 }))} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsList flows={FLOW_ROWS.slice(0, 2)} /> },
+    { id: "stress", label: "Volume: 200 flows, up to 12 run dots each", node: <FlowsList flows={STRESS_FLOWS} /> },
   ],
 };
 
@@ -121,6 +137,39 @@ const EDITOR_RUNS: WorkflowRun[] = [
   { id: "r140", number: 140, workflowName: "Docs guardrail", status: "passed", started: "2026-07-18T16:44:00", duration: "00:00:38", dry: true, headline: "Dry run, 1 task previewed" },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_STEPS: EditorStep[] = Array.from({ length: 60 }, (_, i) => (
+  i === 0
+    ? { kind: "trigger" as const, label: "GitHub PR merged", config: { label: "GitHub PR merged", query: "docs/**" } }
+    : {
+        kind: (["fetch_docs", "refine", "fact_check", "tag", "condition", "approval", "notify", "create_task"] as const)[i % 8],
+        label: i % 13 === 0 ? HUGE : `Step ${i + 1}: verify every claim in the fetched set`,
+        config: { query: "docs/**", k: 5, skill: "tighten", tag: "needs-review", field: "contradictions", greater_than: 0, assignee: "Aki K.", text: LONG },
+      }
+));
+
+const STRESS_RUNS: WorkflowRun[] = Array.from({ length: 200 }, (_, i) => ({
+  id: `sr${i}`,
+  number: 100000 + i,
+  workflowName: i % 29 === 0 ? HUGE : ["Docs guardrail", "Translation sync", "Stale sweeper", "Onboarding checker"][i % 4],
+  status: (["passed", "failed", "waiting", "running", "skipped", "pending"] as const)[i % 6],
+  dry: i % 5 === 0,
+  started: `2026-07-${String((i % 28) + 1).padStart(2, "0")}T10:02:00`,
+  duration: "00:01:12",
+  triggeredBy: `Triggered by: ${i % 7 === 0 ? HUGE : "docs/api.md merged"}`,
+  headline: i % 11 === 0 ? LONG : `Run ${i + 1}: no contradictions across 5 documents`,
+  rows: Array.from({ length: (i % 40) + 3 }, (_, j) => ({
+    step: j % 9 === 0 ? HUGE : `Step ${j + 1}`,
+    status: (["passed", "failed", "waiting", "skipped", "pending"] as const)[j % 5],
+    detail: j % 6 === 0 ? LONG : "3 documents matched",
+    duration: "0.5s",
+  })),
+  stats: [
+    { label: "Edits", value: 128000 }, { label: "Contradictions", value: 99999, bad: true },
+    { label: "Links", value: 4021 }, { label: "Facts", value: 288301 },
+  ],
+}));
+
 const PIPELINE_EDITOR: ComponentSpec = {
   id: "FlowsPipelineEditor", title: "FlowsPipelineEditor", width: 1100,
   states: [
@@ -130,6 +179,7 @@ const PIPELINE_EDITOR: ComponentSpec = {
     { id: "runs", label: "With run history", node: <FlowsPipelineEditor steps={EDITOR_STEPS} runs={EDITOR_RUNS} /> },
     { id: "overflow-text", label: "Overflow: long labels and unbreakable config", node: <FlowsPipelineEditor name={LONG} description={HUGE} steps={EDITOR_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsPipelineEditor steps={EDITOR_STEPS.slice(0, 3)} runs={EDITOR_RUNS.slice(0, 1)} /> },
+    { id: "stress", label: "Volume: 60-step flow, 200 runs", node: <FlowsPipelineEditor steps={STRESS_STEPS} runs={STRESS_RUNS} /> },
   ],
 };
 
@@ -186,6 +236,7 @@ const RUN_PANEL: ComponentSpec = {
     { id: "empty", label: "Empty (nothing to inspect)", node: <FlowsRunPanel runs={[]} /> },
     { id: "overflow-text", label: "Overflow: long headlines, many steps, huge numbers", node: <FlowsRunPanel runs={PANEL_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsRunPanel runs={PANEL_RUNS} /> },
+    { id: "stress", label: "Volume: 200 runs, up to 42 steps each", node: <FlowsRunPanel runs={STRESS_RUNS} /> },
   ],
 };
 
@@ -216,6 +267,7 @@ const RUN_HISTORY: ComponentSpec = {
     { id: "single", label: "One run", node: <FlowsRunHistory runs={[HISTORY_RUNS[3]]} /> },
     { id: "overflow-rows", label: "Overflow: many rows, every status, long text", node: <FlowsRunHistory runs={HISTORY_OVERFLOW} limit={16} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsRunHistory runs={HISTORY_RUNS.slice(0, 3)} /> },
+    { id: "stress", label: "Volume: 200 runs", node: <FlowsRunHistory runs={STRESS_RUNS} /> },
   ],
 };
 
@@ -242,6 +294,20 @@ const GLOSS_OVERFLOW: GlossRow[] = [
   { id: 1, term: LONG, variants: [LONG, HUGE], definition: `${LONG} ${HUGE}` },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_READ: ReadRow[] = Array.from({ length: 300 }, (_, i) => ({
+  ...READ_ROWS[i % READ_ROWS.length],
+  id: i + 1,
+  title: i % 23 === 0 ? HUGE : `${READ_ROWS[i % READ_ROWS.length].title} ${i + 1}`,
+  note: i % 13 === 0 ? LONG : READ_ROWS[i % READ_ROWS.length].note,
+}));
+
+const STRESS_GLOSS: GlossRow[] = Array.from({ length: 200 }, (_, i) => ({
+  ...GLOSS_ROWS[i % GLOSS_ROWS.length],
+  id: i + 1,
+  term: i % 19 === 0 ? HUGE : `${GLOSS_ROWS[i % GLOSS_ROWS.length].term} ${i + 1}`,
+}));
+
 const INSIGHTS_WIDGETS: ComponentSpec = {
   id: "InsightsWidgets", title: "InsightsWidgets", width: 1180,
   states: [
@@ -251,6 +317,7 @@ const INSIGHTS_WIDGETS: ComponentSpec = {
     { id: "overflow-text", label: "Overflow: long titles, notes, terms", node: <InsightsWidgets readability={READ_OVERFLOW} glossary={GLOSS_OVERFLOW} /> },
     { id: "overflow-rows", label: "Overflow: many readability rows", node: <InsightsWidgets readability={Array.from({ length: 14 }, (_, i) => ({ ...READ_ROWS[i % 4], id: i }))} glossary={GLOSS_ROWS} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <InsightsWidgets readability={READ_ROWS.slice(0, 2)} glossary={GLOSS_ROWS.slice(0, 1)} /> },
+    { id: "stress", label: "Volume: 300 readability rows, 200 glossary rows", node: <InsightsWidgets readability={STRESS_READ} glossary={STRESS_GLOSS} /> },
   ],
 };
 
@@ -264,6 +331,12 @@ const FRESHNESS: Freshness[] = [
   { source: "docs", fresh: 0, aging: 0, stale: 0 },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_FRESHNESS: Freshness[] = Array.from({ length: 40 }, (_, i) => ({
+  source: i % 11 === 0 ? HUGE : `${["github", "gdocs", "slack", "notion", "docs"][i % 5]}-workspace-${i + 1}`,
+  fresh: (i * 37) % 900, aging: (i * 17) % 400, stale: (i * 7) % 300,
+}));
+
 const FRESHNESS_CHART: ComponentSpec = {
   id: "InsightsFreshnessChart", title: "InsightsFreshnessChart", width: 720,
   states: [
@@ -273,6 +346,7 @@ const FRESHNESS_CHART: ComponentSpec = {
     { id: "single-tone", label: "Single-segment rows (colour-blind check)", node: <InsightsFreshnessChart freshness={[{ source: "github", fresh: 40, aging: 0, stale: 0 }, { source: "slack", fresh: 0, aging: 40, stale: 0 }, { source: "notion", fresh: 0, aging: 0, stale: 40 }, { source: "gdocs", fresh: 20, aging: 20, stale: 20 }]} /> },
     { id: "overflow-rows", label: "Overflow: long source names, many rows", node: <InsightsFreshnessChart freshness={[...FRESHNESS, { source: LONG, fresh: 3, aging: 900, stale: 1 }, { source: HUGE, fresh: 1, aging: 1, stale: 900000 }]} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <InsightsFreshnessChart freshness={FRESHNESS.slice(0, 3)} /> },
+    { id: "stress", label: "Volume: 40 sources", node: <InsightsFreshnessChart freshness={STRESS_FRESHNESS} /> },
   ],
 };
 
@@ -293,6 +367,14 @@ const FINDINGS_OVERFLOW: AuditFinding[] = [
   { id: 3, kind: "Coverage", title: LONG, detail: LONG, fixAction: "ingest", status: "fixed" },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_FINDINGS: AuditFinding[] = Array.from({ length: 200 }, (_, i) => ({
+  ...FINDINGS[i % FINDINGS.length],
+  id: i + 1,
+  title: i % 21 === 0 ? HUGE : `${FINDINGS[i % FINDINGS.length].title} (${i + 1})`,
+  detail: i % 9 === 0 ? LONG : FINDINGS[i % FINDINGS.length].detail,
+}));
+
 const AUDIT_CHECKLIST: ComponentSpec = {
   id: "AuditFindingsChecklist", title: "AuditFindingsChecklist", width: 960,
   states: [
@@ -303,6 +385,7 @@ const AUDIT_CHECKLIST: ComponentSpec = {
     { id: "many-members", label: "Many members in the mapping picker", node: <AuditFindingsChecklist findings={FINDINGS.filter((f) => f.fixAction === "invite_member")} members={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, name: `Member ${i + 1} Lastname` }))} /> },
     { id: "overflow-text", label: "Overflow: long titles and details", node: <AuditFindingsChecklist findings={FINDINGS_OVERFLOW} repo={HUGE} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <AuditFindingsChecklist findings={FINDINGS.slice(0, 3)} /> },
+    { id: "stress", label: "Volume: 200 findings", node: <AuditFindingsChecklist findings={STRESS_FINDINGS} /> },
   ],
 };
 
@@ -322,6 +405,14 @@ const FACTS_OVERFLOW: Fact[] = [
   { id: 2, claim: HUGE, source: LONG, owner: HUGE, status: "Verified", verified: "2026-07-18" },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_FACTS: Fact[] = Array.from({ length: 300 }, (_, i) => ({
+  ...FACTS[i % FACTS.length],
+  id: i + 1,
+  claim: i % 17 === 0 ? HUGE : `Claim ${i + 1}: ${FACTS[i % FACTS.length].claim}`,
+  owner: i % 11 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : FACTS[i % FACTS.length].owner,
+}));
+
 const FACTS_AUDIT: ComponentSpec = {
   id: "FactsVerificationAudit", title: "FactsVerificationAudit", width: 860,
   states: [
@@ -332,6 +423,7 @@ const FACTS_AUDIT: ComponentSpec = {
     { id: "all-fresh", label: "All fresh (no stale candidates)", node: <FactsVerificationAudit facts={FACTS.slice(0, 2)} /> },
     { id: "overflow-text", label: "Overflow: long claims and owners", node: <FactsVerificationAudit facts={FACTS_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FactsVerificationAudit facts={FACTS.slice(0, 3)} /> },
+    { id: "stress", label: "Volume: 300 facts", node: <FactsVerificationAudit facts={STRESS_FACTS} /> },
   ],
 };
 
@@ -348,6 +440,14 @@ const TERMS_OVERFLOW: Term[] = [
   { id: "t2", term: HUGE, definition: HUGE, owner: HUGE, updated: "2026-07-09" },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_TERMS: Term[] = Array.from({ length: 400 }, (_, i) => ({
+  ...TERMS[i % TERMS.length],
+  id: `st${i}`,
+  term: i % 23 === 0 ? HUGE : `${TERMS[i % TERMS.length].term} ${i + 1}`,
+  definition: i % 13 === 0 ? LONG : TERMS[i % TERMS.length].definition,
+}));
+
 const GLOSSARY_PANEL: ComponentSpec = {
   id: "LibraryGlossaryPanel", title: "LibraryGlossaryPanel", width: 940,
   states: [
@@ -357,6 +457,7 @@ const GLOSSARY_PANEL: ComponentSpec = {
     { id: "overflow-rows", label: "Overflow: many terms", node: <LibraryGlossaryPanel terms={Array.from({ length: 12 }, (_, i) => ({ ...TERMS[i % 3], id: `t${i}` }))} /> },
     { id: "overflow-text", label: "Overflow: long terms and definitions", node: <LibraryGlossaryPanel terms={TERMS_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryGlossaryPanel terms={TERMS.slice(0, 2)} /> },
+    { id: "stress", label: "Volume: 400 terms", node: <LibraryGlossaryPanel terms={STRESS_TERMS} /> },
   ],
 };
 
@@ -373,6 +474,15 @@ const GUIDES_OVERFLOW: Guide[] = [
   { id: "huge", name: HUGE, tone: "info", rules: 2, description: HUGE, preview: [HUGE, HUGE] },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_GUIDES: Guide[] = Array.from({ length: 40 }, (_, i) => ({
+  ...GUIDES[i % GUIDES.length],
+  id: `sg${i}`,
+  name: i % 9 === 0 ? HUGE : `${GUIDES[i % GUIDES.length].name} ${i + 1}`,
+  rules: 100 + i * 7,
+  preview: Array.from({ length: 12 }, (_, j) => (j % 5 === 0 ? HUGE : `Rule ${j + 1}: keep sentences under 25 words`)),
+}));
+
 const GUIDES_PANEL: ComponentSpec = {
   id: "LibraryGuidesPanel", title: "LibraryGuidesPanel", width: 1080,
   states: [
@@ -382,6 +492,7 @@ const GUIDES_PANEL: ComponentSpec = {
     { id: "other-default", label: "Non-first pack is the project default", node: <LibraryGuidesPanel guides={GUIDES} defaultPack="ap" /> },
     { id: "overflow-text", label: "Overflow: long pack names, rules, workspace", node: <LibraryGuidesPanel guides={GUIDES_OVERFLOW} workspace={LONG} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryGuidesPanel guides={GUIDES.slice(0, 2)} /> },
+    { id: "stress", label: "Volume: 40 packs, 12 preview rules each", node: <LibraryGuidesPanel guides={STRESS_GUIDES} /> },
   ],
 };
 
@@ -394,6 +505,7 @@ const RULES_PANEL: ComponentSpec = {
     { id: "loading", label: "Loading", node: <LibraryRulesPanel loading /> },
     { id: "overflow-text", label: "Overflow: very long workspace name", node: <LibraryRulesPanel workspace={HUGE} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryRulesPanel /> },
+    { id: "stress", label: "Volume: full catalog, long workspace name", node: <LibraryRulesPanel workspace={LONG} /> },
   ],
 };
 
@@ -412,6 +524,15 @@ const TAGS_OVERFLOW: TagDef[] = [
   { id: "huge", name: HUGE, tone: "blocked", evidence: HUGE, weight: 0.05, usage: 1, behaviors: [HUGE], standard: true, description: HUGE },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_TAGS: TagDef[] = Array.from({ length: 120 }, (_, i) => ({
+  ...TAGS[i % TAGS.length],
+  id: `stag${i}`,
+  name: i % 17 === 0 ? HUGE : `${TAGS[i % TAGS.length].name} ${i + 1}`,
+  usage: (i + 1) * 137,
+  behaviors: Array.from({ length: (i % 6) + 1 }, (_, j) => (j % 4 === 0 ? LONG : `Behaviour ${j + 1}`)),
+}));
+
 const TAGS_PANEL: ComponentSpec = {
   id: "LibraryTagsPanel", title: "LibraryTagsPanel", width: 1080,
   states: [
@@ -421,6 +542,7 @@ const TAGS_PANEL: ComponentSpec = {
     { id: "overflow-rows", label: "Overflow: many tags", node: <LibraryTagsPanel tags={Array.from({ length: 14 }, (_, i) => ({ ...TAGS[i % 5], id: `tag-${i}`, name: `${TAGS[i % 5].name} ${i}` }))} /> },
     { id: "overflow-text", label: "Overflow: long names, many behaviours", node: <LibraryTagsPanel tags={TAGS_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryTagsPanel tags={TAGS.slice(0, 3)} /> },
+    { id: "stress", label: "Volume: 120 tags", node: <LibraryTagsPanel tags={STRESS_TAGS} /> },
   ],
 };
 
@@ -437,6 +559,14 @@ const TEMPLATES_OVERFLOW: Template[] = [
   { id: "huge", name: HUGE, category: "Operations", icon: Clipboard, standard: true, description: HUGE, sections: [HUGE] },
 ];
 
+/* Volume fixture: production-sized data for the "stress" state. */
+const STRESS_TEMPLATES: Template[] = Array.from({ length: 120 }, (_, i) => ({
+  ...TEMPLATES[i % TEMPLATES.length],
+  id: `stpl${i}`,
+  name: i % 19 === 0 ? HUGE : `${TEMPLATES[i % TEMPLATES.length].name} ${i + 1}`,
+  sections: Array.from({ length: (i % 8) + 2 }, (_, j) => (j % 5 === 0 ? LONG : `Section ${j + 1}`)),
+}));
+
 const TEMPLATES_PANEL: ComponentSpec = {
   id: "LibraryTemplatesPanel", title: "LibraryTemplatesPanel", width: 1080,
   states: [
@@ -446,6 +576,7 @@ const TEMPLATES_PANEL: ComponentSpec = {
     { id: "overflow-rows", label: "Overflow: many templates", node: <LibraryTemplatesPanel templates={Array.from({ length: 12 }, (_, i) => ({ ...TEMPLATES[i % 3], id: `t-${i}`, name: `${TEMPLATES[i % 3].name} ${i}` }))} /> },
     { id: "overflow-text", label: "Overflow: long names, sections, descriptions", node: <LibraryTemplatesPanel templates={TEMPLATES_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryTemplatesPanel templates={TEMPLATES.slice(0, 2)} /> },
+    { id: "stress", label: "Volume: 120 templates", node: <LibraryTemplatesPanel templates={STRESS_TEMPLATES} /> },
   ],
 };
 

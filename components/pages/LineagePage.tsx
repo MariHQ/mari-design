@@ -132,12 +132,15 @@ function Drawer({ state }: { state: string }) {
    instrument can never push the drawer off-screen. LineageGraph has a hard
    720px minimum, so on a narrow console the *canvas alone* scrolls sideways
    inside its own column, leaving both outer edges of the page plumb. */
-function Rig({ rail, scroll = false, canvas, drawer }: {
-  rail: number | null; scroll?: boolean; canvas: React.ReactNode; drawer?: React.ReactNode;
+function Rig({ rail, canvas, drawer }: {
+  rail: number | null; canvas: React.ReactNode; drawer?: React.ReactNode;
 }) {
-  // Full-width canvas already clears its 720px minimum, so no scroller (a
-  // scroll container would clip the toolbar's search dropdown).
-  if (rail === null && !scroll) return <div className="relative flex min-w-0 flex-col gap-5">{canvas}</div>;
+  // Every branch scrolls, including the full-width one. It used to skip the
+  // scroller on the assumption that a rail-less canvas always clears its
+  // minimum — true at 1440, false as soon as the window shrinks: at 1024 the
+  // column is 741px and the toolbar's own 840px floor spilled 99px out through
+  // the page container. Scrolling the column keeps both outer page edges plumb
+  // (§11) and matches what the rail branches already do (§16).
   const column = (
     <div className="min-w-0">
       <Scrollable className="pb-1">
@@ -201,7 +204,6 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
         <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
         <Rig
           rail={mobile ? null : 420}
-          scroll={mobile}
           canvas={(
             <>
               <LineageToolbar />
@@ -231,7 +233,6 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     <div className="mt-6 flex flex-col gap-5">
       <Rig
         rail={rail}
-        scroll={mobile}
         canvas={(
           <>
             <LineageToolbar />

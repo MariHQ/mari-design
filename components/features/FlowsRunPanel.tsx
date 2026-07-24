@@ -5,6 +5,7 @@ import { Spinner } from "../data-display/Spinner";
 import { StatusChip, DryChip, type ChipStatus } from "../data-display/Chip";
 import { SkeletonList, SkeletonCard, SkeletonLine } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 import { type RunStatus, type WorkflowRun } from "../workflow/RunHistory";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -115,6 +116,9 @@ function TimelineIcon({ status }: { status: RunStatus }) {
   return <span className="inline-block h-2 w-2 rounded-[2px] border border-ink/30" />;
 }
 
+/** Steps rendered in the run timeline before the count line takes over. */
+const STEP_PAGE = 25;
+
 export type RunInspectorProps = {
   run: WorkflowRun | null;
   onClose?: () => void;
@@ -179,8 +183,15 @@ export function RunInspector({
         )}
 
         {run.rows?.length ? (
+          <>
+          {run.rows.length > STEP_PAGE && (
+            <div className="mt-4 font-term text-[11px] text-ink/65">
+              Showing {STEP_PAGE} of {run.rows.length.toLocaleString()} steps
+            </div>
+          )}
+          <Scrollable axis="y" style={{ maxHeight: run.rows.length > 10 ? 420 : undefined }} scrollerClassName="pr-1">
           <ol className="mt-4 flex flex-col gap-2">
-            {run.rows.map((r, i) => (
+            {run.rows.slice(0, STEP_PAGE).map((r, i) => (
               <li key={`${r.step}-${i}`} className="flex items-start gap-2.5">
                 <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-[4px] border ${RING[r.status]}`}>
                   <TimelineIcon status={r.status} />
@@ -195,6 +206,8 @@ export function RunInspector({
               </li>
             ))}
           </ol>
+          </Scrollable>
+          </>
         ) : (
           <div className="mt-4 text-[12.5px] text-ink/70">
             The step log wasn't retained for this run. The stats below are the recorded outcome.
@@ -252,6 +265,9 @@ export function RunInspector({
   );
 }
 
+/** Runs rendered in the live list beside the panel. */
+const LIST_PAGE = 30;
+
 export type FlowsRunPanelProps = {
   runs?: WorkflowRun[];
   /** Run number to open by default. */
@@ -270,6 +286,7 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading =
   const [note, setNote] = useState<string | null>(null);
 
   const run = openId ? runs.find((r) => r.id === openId) ?? null : null;
+  const visible = runs.slice(0, LIST_PAGE);
 
   const approve = (r: WorkflowRun) => {
     setBusy(true);
@@ -309,8 +326,20 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading =
           <h3 className="text-[15px] font-semibold text-ink">Recent runs</h3>
           <div className="mt-0.5 font-term text-[11px] text-ink/65">The panel stays live over the list, no backdrop.</div>
         </div>
+        {/* Count strip above the list (§13); the list itself scrolls in place
+            rather than growing to the height of the run history (§20). */}
+        {runs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 py-2">
+            <span className="font-term text-[11.5px] text-ink/65">
+              {visible.length < runs.length
+                ? `Showing ${visible.length} of ${runs.length.toLocaleString()} runs`
+                : `Showing all ${runs.length.toLocaleString()} run${runs.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+        )}
+        <Scrollable axis="y" style={{ maxHeight: visible.length > 8 ? 520 : undefined }}>
         <ul className="divide-y divide-ink/10">
-          {runs.map((r) => (
+          {visible.map((r) => (
             <li key={r.id}>
               <button
                 type="button" onClick={() => { setOpenId(r.id); setNote(null); }}
@@ -330,6 +359,7 @@ export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading =
             </li>
           ))}
         </ul>
+        </Scrollable>
       </div>
 
       {/* The run panel inspector */}

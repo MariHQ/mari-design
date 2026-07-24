@@ -29,8 +29,18 @@ const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i === -1 ? d : 
 const VIEW = opt("view", "both");
 const JSON_OUT = opt("json", null);
 const ONLY = opt("page", null);
+// Comma-separated state ids. For shrink defects the layout furniture is the
+// same across a page's lifecycle states, so `--state default,overflow,stress`
+// finds the same bugs as the full matrix in a fraction of the frames.
+const ONLY_STATE = (opt("state", null) || "").split(",").map((s) => s.trim()).filter(Boolean);
+// Extra desktop widths to sweep. 1440 and 390 alone hide every defect that
+// only appears while the window is being SHRUNK: a rail that stops fitting at
+// 1180, a toolbar that wraps at 1024, a table that escapes its card at 900.
+const WIDTHS = (opt("widths", null) || "").split(",").map((s) => Number(s.trim())).filter(Boolean);
 
-const PORT = 5496;
+// Overridable so two audits (e.g. a broad sweep and a --page iteration) can
+// run at once without --strictPort killing the second one.
+const PORT = Number(opt("port", 5496));
 const BASE = `http://localhost:${PORT}`;
 const SIZES = { desktop: { w: 1440, h: 900 }, mobile: { w: 390, h: 844 } };
 const CONCURRENCY = Math.max(2, Math.min(8, (os.cpus()?.length || 4) - 1));
@@ -112,7 +122,15 @@ async function main() {
     await list.close();
 
     const views = VIEW === "both" ? ["desktop", "mobile"] : [VIEW];
-    frames = frames.filter((f) => views.includes(f.view) && (!ONLY || f.page === ONLY));
+    frames = frames.filter((f) => views.includes(f.view)
+      && (!ONLY || f.page === ONLY)
+      && (!ONLY_STATE.length || ONLY_STATE.includes(f.state)));
+
+    // Each --widths entry re-runs every desktop frame at that viewport width.
+    if (WIDTHS.length) {
+      frames = frames.flatMap((f) =>
+        f.view !== "desktop" ? [f] : WIDTHS.map((w) => ({ ...f, width: w })));
+    }
 
     const findings = [];
     let cursor = 0, done = 0;
@@ -123,20 +141,36 @@ async function main() {
         if (i >= frames.length) break;
         const f = frames[i];
         const { w, h } = SIZES[f.view];
-        await page.setViewportSize({ width: w, height: h });
-        await page.goto(
-          `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}&full=1`,
-          { waitUntil: "load" },
-        );
-        await page.waitForTimeout(180);
-        const r = await page.evaluate(probe).catch(() => null);
-        if (r && (r.page.length || r.escapes.length || r.crushes.length)) {
-          findings.push({
-            page: f.page, state: f.state, view: f.view,
-            pageOverflow: r.page, escapes: r.escapes, crushes: r.crushes,
-          });
+        await page.setViewportSize({ width: f.width ?? w, height: h });
+        // The dev server occasionally aborts a navigation mid-flight; retry
+        // rather than losing the whole sweep to one flake.
+        const url = `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}&full=1`;
+        let r = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await page.goto(url, { waitUntil: "load" });
+            await page.waitForTimeout(180);
+            r = await page.evaluate(probe);
+            break;
+          } catch { await page.waitForTimeout(300); }
         }
-        if (++done % 50 === 0) process.stdout.write(`${done}/${frames.length} `);
+        if (r && (r.page.length || r.escapes.length || r.crushes.length)) {
+          const finding = {
+            page: f.page, state: f.state, view: f.view, width: f.width ?? w,
+            pageOverflow: r.page, escapes: r.escapes, crushes: r.crushes,
+          };
+          findings.push(finding);
+          // Stream it. A long sweep that prints nothing until it exits is a
+          // black box: you cannot tell a slow run from a hung one, and killing
+          // it throws away everything it had already found.
+          const kinds = [
+            finding.pageOverflow.length ? `PAGE_OVERFLOW` : null,
+            finding.escapes.length ? `ESCAPE x${finding.escapes.length}` : null,
+            finding.crushes.length ? `CRUSH x${finding.crushes.length}` : null,
+          ].filter(Boolean).join(" ");
+          console.log(`  HIT ${finding.page}/${finding.state}@${finding.width} ${kinds}`);
+        }
+        if (++done % 25 === 0) console.log(`  .. ${done}/${frames.length} scanned, ${findings.length} hits`);
       }
       await page.close();
     }
@@ -151,8 +185,10 @@ async function main() {
       e.overflow += f.pageOverflow?.length ?? 0;
       e.escapes += f.escapes.length;
       e.crushes += f.crushes.length;
-      for (const x of f.escapes.slice(0, 2)) e.worst.push(`${f.state}/${f.view} ESCAPE +${x.by}px ${x.el}`);
-      for (const x of f.crushes.slice(0, 2)) e.worst.push(`${f.state}/${f.view} CRUSH ${x.w}x${x.h} ${x.el}`);
+      const at = `${f.state}/${f.view}@${f.width}`;
+      if (f.pageOverflow?.length) e.worst.push(`${at} PAGE_OVERFLOW ${f.pageOverflow[0].scrollWidth}>${f.pageOverflow[0].clientWidth}`);
+      for (const x of f.escapes.slice(0, 2)) e.worst.push(`${at} ESCAPE +${x.by}px ${x.el}`);
+      for (const x of f.crushes.slice(0, 2)) e.worst.push(`${at} CRUSH ${x.w}x${x.h} ${x.el}`);
       byPage.set(f.page, e);
     }
     const rows = [...byPage.values()].sort((a, b) => (b.escapes + b.crushes) - (a.escapes + a.crushes));

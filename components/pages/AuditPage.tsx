@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Shield } from "lucide-react";
 import { AuditFindingsChecklist, type AuditFinding } from "../features/AuditFindingsChecklist";
 import { PageHeader } from "../layout/PageHeader";
@@ -153,14 +153,9 @@ function HistoryRail() {
 function withRail(main: ReactNode, mobile: boolean) {
   return (
     /* §11 two-column split: main column minmax(0,1fr) + standard 320px rail.
-       Mobile collapses to one column with the rail below the main content. */
-    <div
-      className={
-        mobile
-          ? "mt-6 flex flex-col gap-5"
-          : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5"
-      }
-    >
+       Mobile, and any window too narrow to hold both, collapses to one column
+       with the rail below the main content. */
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${SPLIT[320]}`}>
       <div className="min-w-0">{main}</div>
       <HistoryRail />
     </div>

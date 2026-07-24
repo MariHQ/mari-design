@@ -3,7 +3,8 @@ import type { ComponentSpec } from "./types";
 import {
   DecisionCard, ImpactPanel, TokenReveal, TagChip, TAG_OPTIONS, DigestCard,
   ConnectorCard, Timeline, ActivityFeed, PropertyList, Accordion, TreeView,
-  Button, Chip, type ImpactDoc, type DigestTopic, type TreeNode,
+  Button, Chip, AvatarGroup, ExpandableTable,
+  type ImpactDoc, type DigestTopic, type TreeNode,
 } from "../../index";
 
 /* State matrix for the cards group. Author EVERY state worth reviewing:
@@ -73,6 +74,36 @@ const TREE_LONG: TreeNode[] = [
       { id: "a", label: HUGE, children: [{ id: "a1", label: LONG }] },
       ...Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, label: `Nested document number ${i + 1}` })),
     ],
+  },
+];
+
+/* ── Volume fixtures ──────────────────────────────────────────────────────
+   The `stress` state of each spec is the realistic worst case: 250 impacted
+   documents, 80 chips, 60 avatars' worth of owners, a 400-node tree. These
+   are the states that prove a card bounds itself instead of growing. */
+
+const MANY_IMPACT: ImpactDoc[] = Array.from({ length: 250 }, (_, i) => ({
+  title: i % 9 === 0 ? LONG : `Regional addendum ${i + 1}`,
+  source: i % 13 === 0 ? HUGE : ["Drive", "Confluence", "Zendesk", "GitHub"][i % 4],
+  severity: (["update-required", "review", "minor"] as const)[i % 3],
+  reason: i % 5 === 0 ? BODY : "Restates the trial length in the fine print.",
+}));
+
+const MANY_TOPICS: DigestTopic[] = Array.from({ length: 40 }, (_, i) => ({
+  title: i % 7 === 0 ? LONG : `Topic ${i + 1}: the trial length changed again`,
+  summary: i % 4 === 0 ? `${BODY} ${HUGE}` : BODY,
+  where: Array.from({ length: (i % 9) + 1 }, (_, j) => ({ source: `s${j}`, label: `Source system ${j + 1}` })),
+  impact: Array.from({ length: (i % 12) + 1 }, (_, j) => ({ name: `Team ${j + 1}`, tone: (["attention", "info", "ok"] as const)[j % 3] })),
+}));
+
+const MANY_TREE: TreeNode[] = [
+  {
+    id: "root", label: "Knowledge base",
+    children: Array.from({ length: 60 }, (_, i) => ({
+      id: `n${i}`,
+      label: i % 11 === 0 ? LONG : `Space ${i + 1}`,
+      children: Array.from({ length: 6 }, (_, j) => ({ id: `n${i}-${j}`, label: j === 0 ? HUGE : `Document ${i + 1}.${j + 1}` })),
+    })),
   },
 ];
 
@@ -148,6 +179,17 @@ export const CARDS: ComponentSpec[] = [
           onRatify={() => {}}
           onIgnore={() => {}}
         />) },
+      { id: "stress", label: "Volume: 12 owners, impact strip with 250 rows", node: (
+        <DecisionCard
+          status="ratified"
+          statement={LONG}
+          context={BODY}
+          sourceLabel="Confluence space: engineering handbook"
+          owners={Array.from({ length: 12 }, (_, i) => `Owner ${i + 1} Konstantinopoulou`)}
+          decidedOn="2026-07-14"
+          impact={<ImpactPanel summary={BODY} docs={MANY_IMPACT} />}
+          onIgnore={() => {}}
+        />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <DecisionCard
           status="proposed"
@@ -179,6 +221,8 @@ export const CARDS: ComponentSpec[] = [
         <ImpactPanel boxed summary="Nothing downstream reads this claim, so no document needs an edit." />) },
       { id: "overflow", label: "Overflow: 10 rows, long cells", node: (
         <ImpactPanel summary={`${BODY} ${HUGE}`} docs={IMPACT_LONG} onClose={() => {}} />) },
+      { id: "stress", label: "Volume: 250 impacted documents", node: (
+        <ImpactPanel boxed summary={BODY} docs={MANY_IMPACT} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <ImpactPanel boxed summary={BODY} docs={IMPACT_LONG.slice(0, 3)} />) },
     ],
@@ -194,6 +238,8 @@ export const CARDS: ComponentSpec[] = [
       { id: "short", label: "Short token", node: <TokenReveal token="abc123" title="MCP token" /> },
       { id: "overflow", label: "Overflow: very long token and title", node: (
         <TokenReveal title={LONG} masked={false} token={`${HUGE}${HUGE}`} onDismiss={() => {}} />) },
+      { id: "stress", label: "Volume: 4,000-character token", node: (
+        <TokenReveal title={LONG} masked={false} token={HUGE.repeat(45)} onDismiss={() => {}} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <TokenReveal masked={false} token={HUGE} onDismiss={() => {}} />) },
     ],
@@ -223,6 +269,12 @@ export const CARDS: ComponentSpec[] = [
         </div>) },
       { id: "loading", label: "Loading", node: (
         <div className="flex flex-wrap gap-1.5"><TagChip tag="canonical" loading /><TagChip tag="draft" loading /></div>) },
+      { id: "stress", label: "Volume: 80 chips in one row", node: (
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: 80 }, (_, i) => (
+            <TagChip key={i} tag={TAG_OPTIONS[i % TAG_OPTIONS.length]} label={i % 9 === 0 ? LONG : undefined} />
+          ))}
+        </div>) },
       { id: "overflow", label: "Overflow: long labels, many chips, narrow", width: 320, node: (
         <div className="flex flex-wrap gap-1.5">
           <TagChip tag="canonical" label={LONG} />
@@ -241,6 +293,8 @@ export const CARDS: ComponentSpec[] = [
       { id: "error", label: "Error", node: <DigestCard topics={[]} error onRefresh={() => {}} /> },
       { id: "overflow", label: "Overflow: long topic, many chips", node: (
         <DigestCard title={LONG} topics={TOPICS_LONG} onRefresh={() => {}} />) },
+      { id: "stress", label: "Volume: 40 topics, a dozen chips each", node: (
+        <DigestCard topics={MANY_TOPICS} onRefresh={() => {}} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <DigestCard topics={TOPICS_LONG} onRefresh={() => {}} />) },
     ],
@@ -271,6 +325,9 @@ export const CARDS: ComponentSpec[] = [
       { id: "loading", label: "Loading", node: <ConnectorCard name="" loading /> },
       { id: "overflow", label: "Overflow: long name and lines", node: (
         <ConnectorCard name={HUGE} health="Error" counts={LONG} sync={BODY} onSyncNow={() => {}} onPause={() => {}} />) },
+      { id: "stress", label: "Volume: 400-point activity sparkline", node: (
+        <ConnectorCard name="Slack" counts="12,481,022 documents, 96,220,441 chunks" sync="Last sync: Jul 21, 2026"
+          bars={Array.from({ length: 400 }, (_, i) => (i * 37) % 13)} onSyncNow={() => {}} onPause={() => {}} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <ConnectorCard name={LONG} counts={HUGE} sync={BODY}
           bars={[3, 6, 4, 9, 7]} onSyncNow={() => {}} onPause={() => {}} />) },
@@ -302,6 +359,13 @@ export const CARDS: ComponentSpec[] = [
           { title: LONG, time: "Jul 21, 2026 at 14:32", tone: "attention", description: BODY },
           { title: HUGE, time: "Jul 20, 2026", tone: "blocked", description: HUGE },
         ]} />) },
+      { id: "stress", label: "Volume: 200 timeline entries", node: (
+        <Timeline items={Array.from({ length: 200 }, (_, i) => ({
+          title: i % 8 === 0 ? LONG : `Sync ${i + 1} finished`,
+          time: "Jul 21, 2026",
+          tone: (["ok", "info", "attention", "blocked"] as const)[i % 4],
+          description: i % 5 === 0 ? BODY : "12,481 documents indexed.",
+        }))} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <Timeline items={[
           { title: LONG, time: "Jul 21, 2026", tone: "ok", description: BODY },
@@ -330,6 +394,11 @@ export const CARDS: ComponentSpec[] = [
         <ActivityFeed items={Array.from({ length: 8 }, (_, i) => ({
           id: String(i), actor: i % 2 ? "Aleksandra Konstantinopoulou" : undefined,
           action: i % 3 === 0 ? HUGE : `${LONG} (${i + 1})`, time: "Jul 21, 2026",
+        }))} />) },
+      { id: "stress", label: "Volume: 300 feed entries", node: (
+        <ActivityFeed items={Array.from({ length: 300 }, (_, i) => ({
+          id: String(i), actor: i % 3 ? "Aleksandra Konstantinopoulou" : undefined,
+          action: i % 7 === 0 ? LONG : `tagged ${i + 1} documents as Stale.`, time: "Jul 21, 2026",
         }))} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <ActivityFeed items={[
@@ -371,6 +440,11 @@ export const CARDS: ComponentSpec[] = [
           { label: "Unbreakable", value: HUGE },
           { label: HUGE, value: LONG },
         ]} />) },
+      { id: "stress", label: "Volume: 120 properties", node: (
+        <PropertyList items={Array.from({ length: 120 }, (_, i) => ({
+          label: i % 9 === 0 ? LONG : `Property ${i + 1}`,
+          value: i % 5 === 0 ? HUGE : `Value ${i + 1}`,
+        }))} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <PropertyList items={[
           { label: "Owner", value: "Aleksandra Konstantinopoulou" },
@@ -406,6 +480,11 @@ export const CARDS: ComponentSpec[] = [
           { value: "a", title: LONG, content: `${BODY} ${HUGE}` },
           { value: "b", title: HUGE, content: BODY },
         ]} />) },
+      { id: "stress", label: "Volume: 100 sections, long bodies", node: (
+        <Accordion defaultValue="s0" items={Array.from({ length: 100 }, (_, i) => ({
+          value: `s${i}`, title: i % 8 === 0 ? LONG : `Section ${i + 1}`,
+          content: i % 4 === 0 ? `${BODY} ${HUGE}` : BODY,
+        }))} />) },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
         <Accordion defaultValue="a" items={[
           { value: "a", title: LONG, content: HUGE },
@@ -427,7 +506,79 @@ export const CARDS: ComponentSpec[] = [
       { id: "loading", label: "Loading", node: <TreeView data={[]} loading /> },
       { id: "empty", label: "Empty", node: <TreeView data={[]} /> },
       { id: "overflow", label: "Overflow: long labels, deep nesting", node: <TreeView data={TREE_LONG} /> },
+      { id: "stress", label: "Volume: 60 spaces, 360 leaves", node: <TreeView data={MANY_TREE} /> },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: <TreeView data={TREE_LONG} selected="a" /> },
+    ],
+  },
+  {
+    id: "AvatarGroup", title: "AvatarGroup", width: 480,
+    states: [
+      { id: "default", label: "Four people", node: (
+        <AvatarGroup people={["AR", "DP", "MC", "TE"].map((initials) => ({ initials }))} />) },
+      { id: "overflow", label: "Overflow bubble", node: (
+        <AvatarGroup people={Array.from({ length: 12 }, (_, i) => ({ initials: `P${i}` }))} />) },
+      { id: "stress", label: "Volume: 60 people, caller asks for max 60", node: (
+        <AvatarGroup max={60} people={Array.from({ length: 60 }, (_, i) => ({ initials: `P${i}` }))} />) },
+      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
+        <AvatarGroup max={20} people={Array.from({ length: 40 }, (_, i) => ({ initials: `P${i}` }))} />) },
+    ],
+  },
+  {
+    id: "ExpandableTable", title: "ExpandableTable", width: 820,
+    states: [
+      { id: "default", label: "Default", node: (
+        <ExpandableTable
+          rows={[
+            { id: "1", doc: "Pricing sheet", owner: "Ana Ruiz", status: "Verified" },
+            { id: "2", doc: "Onboarding runbook", owner: "Dev Park", status: "Stale" },
+          ]}
+          rowKey={(r) => r.id}
+          columns={[
+            { key: "doc", header: "Document", render: (r) => r.doc },
+            { key: "owner", header: "Owner", render: (r) => r.owner },
+            { key: "status", header: "Status", render: (r) => r.status },
+          ]}
+          renderDetail={(r) => <span className="text-[12.5px] text-ink/70">Detail for {r.doc}</span>}
+        />) },
+      { id: "empty", label: "Empty", node: (
+        <ExpandableTable rows={[] as { id: string; doc: string; owner: string; status: string }[]} rowKey={(r) => r.id}
+          columns={[{ key: "doc", header: "Document", render: (r) => r.doc }]}
+          renderDetail={() => null} />) },
+      { id: "loading", label: "Loading", node: (
+        <ExpandableTable loading rows={[] as { id: string; doc: string; owner: string; status: string }[]} rowKey={(r) => r.id}
+          columns={[{ key: "doc", header: "Document", render: (r) => r.doc }]}
+          renderDetail={() => null} />) },
+      { id: "stress", label: "Volume: 400 rows, 8 columns", node: (
+        <ExpandableTable
+          minW={1200}
+          rows={Array.from({ length: 400 }, (_, i) => ({
+            id: String(i), doc: i % 9 === 0 ? LONG : `Document ${i + 1}`, owner: `Owner ${i % 20}`,
+            status: (["Verified", "Stale", "Draft"] as const)[i % 3],
+          }))}
+          rowKey={(r) => r.id}
+          columns={[
+            { key: "doc", header: "Document", render: (r) => <span className="block max-w-[18rem] truncate" title={r.doc}>{r.doc}</span> },
+            { key: "owner", header: "Owner", render: (r) => r.owner },
+            { key: "status", header: "Status", render: (r) => r.status },
+            { key: "region", header: "Region", align: "center", render: () => "us-west-2" },
+            { key: "chunks", header: "Chunks", align: "center", render: (r) => r.id },
+            { key: "updated", header: "Updated", align: "center", render: () => "Jul 21, 2026" },
+            { key: "reviewer", header: "Reviewer", render: (r) => `Reviewer ${r.id}` },
+            { key: "score", header: "Score", align: "center", render: (r) => r.id },
+          ]}
+          renderDetail={(r) => <span className="text-[12.5px] text-ink/70">Detail for {r.doc}</span>}
+        />) },
+      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
+        <ExpandableTable
+          rows={Array.from({ length: 30 }, (_, i) => ({ id: String(i), doc: `Document ${i + 1}`, owner: "Ana Ruiz", status: "Verified" }))}
+          rowKey={(r) => r.id}
+          columns={[
+            { key: "doc", header: "Document", render: (r) => r.doc },
+            { key: "owner", header: "Owner", render: (r) => r.owner },
+            { key: "status", header: "Status", render: (r) => r.status },
+          ]}
+          renderDetail={(r) => <span className="text-[12.5px] text-ink/70">Detail for {r.doc}</span>}
+        />) },
     ],
   },
 ];

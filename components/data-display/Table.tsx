@@ -1,5 +1,6 @@
 import { Children, cloneElement, isValidElement, useMemo, type ReactElement, type ReactNode } from "react";
 import { card } from "../tokens/card";
+import { PagerBar, ResultCount, usePaged } from "./Pagination";
 import { Scrollable } from "./Scrollable";
 import { SkeletonLine } from "./Skeleton";
 import { SortHeader, tdPad, useSort, type Align } from "./sortable";
@@ -67,7 +68,7 @@ const rowCls = (cls?: string) =>
    every column carries the standard sort affordance and the shared spacing.
    Columns whose cells are all numeric center themselves (CONVENTIONS §3). */
 export function Table({
-  title, count, head, actions, footer, minW = 700, loading = false, children,
+  title, count, head, actions, footer, minW = 700, loading = false, pageSize = 25, noun = "rows", children,
 }: {
   title?: string;
   count?: number;
@@ -77,6 +78,11 @@ export function Table({
   footer?: ReactNode;
   minW?: number;
   loading?: boolean;
+  /** Rows per page. A real table carries hundreds of rows and must not grow
+      its card to ten thousand pixels; only plain <tr> children paginate. */
+  pageSize?: number;
+  /** Plural noun for the result-count strip. */
+  noun?: string;
   children: ReactNode;
 }) {
   const cols = useMemo(() => head.map(normalize), [head]);
@@ -118,8 +124,10 @@ export function Table({
   const alignOf = (i: number): Align => cols[i].align ?? (numericCol[i] ? "center" : "left");
   const alignClass = (a: Align) => (a === "center" ? "text-center" : a === "right" ? "text-right" : "");
 
+  const pager = usePaged(sorted, pageSize);
+
   const body = composable
-    ? sorted.map((row) =>
+    ? pager.pageRows.map((row) =>
         cloneElement(
           row,
           { className: rowCls(row.props.className) },
@@ -141,6 +149,9 @@ export function Table({
           {count != null && <span className="font-term text-[11px] font-medium text-ink/60 bg-flysch border border-ink/10 rounded-[3px] px-1.5 py-0.5">{count}</span>}
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
+      )}
+      {!loading && composable && pager.paged && (
+        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun={noun} />
       )}
       <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
@@ -176,6 +187,9 @@ export function Table({
           </tbody>
         </table>
       </Scrollable>
+      {!loading && composable && pager.paged && (
+        <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />
+      )}
       {!loading && footer}
     </div>
   );

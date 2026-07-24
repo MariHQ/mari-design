@@ -6,6 +6,7 @@ import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "..
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
+import { Truncate } from "../data-display/Truncate";
 import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
@@ -51,6 +52,9 @@ const OWNERS: { name: string; role: string }[] = [
 ];
 const PEOPLE = [{ initials: "AK" }, { initials: "SL" }, { initials: "MM" }, { initials: "DR" }, { initials: "JS" }];
 
+/** Impacted-document rows drawn per page. */
+const DOC_PAGE = 10;
+
 const BUCKETS: { key: Severity; label: string }[] = [
   { key: "update-required", label: "Direct contradiction" },
   { key: "review", label: "Needs update" },
@@ -74,6 +78,7 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
   const [filter, setFilter] = useState<Severity | null>(null);
   const [taskState, setTaskState] = useState<"idle" | "creating" | "done">("idle");
   const [exported, setExported] = useState(false);
+  const [docPage, setDocPage] = useState(1);
 
   const counts = useMemo(() => {
     const c: Record<Severity, number> = { "update-required": 0, review: 0, minor: 0 };
@@ -105,7 +110,11 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
   const stateWord = state === "running" ? "Running" : state === "completed" ? "Completed" : "Ready";
   const stateSub = state === "running" ? "Mari is reading the graph…" : state === "completed" ? `Analyzed ${analyzedAt}` : "Type an assertion to analyze";
 
-  const shown = result?.docs.filter((d) => !filter || d.severity === filter) ?? [];
+  const matching = result?.docs.filter((d) => !filter || d.severity === filter) ?? [];
+  /* An analysis over a real graph returns dozens of documents. Page them: the
+     drawer stays one readable panel instead of an endless scroll. */
+  const shown = matching.slice(0, DOC_PAGE * docPage);
+  const hiddenDocs = matching.length - shown.length;
 
   const taskLabel =
     taskState === "creating" ? "Creating tasks…" : taskState === "done" ? `Created ${taskCount} tasks ✓` : `Create ${taskCount} tasks`;
@@ -208,7 +217,7 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
                   key={b.key}
                   type="button"
                   disabled={!result}
-                  onClick={() => setFilter((f) => (f === b.key ? null : b.key))}
+                  onClick={() => { setFilter((f) => (f === b.key ? null : b.key)); setDocPage(1); }}
                   title={result ? undefined : "Run the analysis first"}
                   aria-pressed={active}
                   /* Disabled reads as a legible grey, never a 45% ghost (§6). */
@@ -235,27 +244,41 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
 
         <CardSection
           label={filter ? `${SEVERITY_META[filter].label} documents` : "Impacted documents"}
-          count={shown.length}
+          count={matching.length}
           action={filter
-            ? <button type="button" onClick={() => setFilter(null)} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>Clear filter</button>
+            ? <button type="button" onClick={() => { setFilter(null); setDocPage(1); }} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>Clear filter</button>
             : undefined}
         >
           {shown.length === 0 ? (
             <p className="text-[12.5px] text-ink/70">
               {result ? "No documents in this bucket. Clear the filter to show all." : "Nothing analyzed yet."}
             </p>
-          ) : shown.map((d, i) => (
-            <div key={i} className="border-b border-ink/10 py-2 last:border-0">
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{d.title}</span>
-                <Chip label={SEVERITY_META[d.severity].label} tone={SEVERITY_META[d.severity].tone} dot />
+          ) : (
+            <>
+              {shown.map((d, i) => (
+                <div key={i} className="border-b border-ink/10 py-2 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <Truncate className="min-w-0 flex-1 text-[13px] font-medium text-ink">{d.title}</Truncate>
+                    <span className="shrink-0"><Chip label={SEVERITY_META[d.severity].label} tone={SEVERITY_META[d.severity].tone} dot /></span>
+                  </div>
+                  <div className="mt-1 flex items-start gap-2">
+                    <LgSourceChip source={d.source} />
+                    <Truncate lines={2} className="min-w-0 flex-1 font-term text-[11px] leading-[1.6] text-ink/70">{d.reason}</Truncate>
+                  </div>
+                </div>
+              ))}
+              <div className="mt-2.5 flex items-center gap-3">
+                {hiddenDocs > 0 && (
+                  <Button compact onClick={() => setDocPage((p) => p + 1)}>
+                    Show {Math.min(hiddenDocs, DOC_PAGE)} more
+                  </Button>
+                )}
+                <span className="font-term text-[11px] text-ink/65">
+                  Showing {shown.length} of {matching.length} documents
+                </span>
               </div>
-              <div className="mt-1 flex items-start gap-2">
-                <LgSourceChip source={d.source} />
-                <span className="min-w-0 flex-1 font-term text-[11px] leading-[1.6] text-ink/70">{d.reason}</span>
-              </div>
-            </div>
-          ))}
+            </>
+          )}
         </CardSection>
 
         {result && (

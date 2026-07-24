@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { KnowledgeBrowser } from "../features/KnowledgeBrowser";
 import { KnowledgeInspector } from "../features/KnowledgeInspector";
 import { PageHeader, Card, EmptyState } from "../index";
@@ -216,13 +216,7 @@ function KnowledgePage({ state = "default", mobile = false }: PageProps) {
           title="Search the knowledge base"
           description="Every connected source in one index: filter, read the match in context, and inspect the document beside it."
         />
-        <div
-          className={
-            mobile
-              ? "mt-6 flex flex-col gap-5"
-              : "mt-6 grid gap-5 grid-cols-[minmax(0,1fr)_360px]"
-          }
-        >
+        <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[360]}`}>
           <div className="min-w-0">
             <Feed state={state} mobile={mobile} />
           </div>

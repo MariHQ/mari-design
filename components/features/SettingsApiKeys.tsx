@@ -13,6 +13,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { fmtDate } from "../tokens/format";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
@@ -78,6 +79,10 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
     status: (k) => (k.revoked ? "Revoked" : "Active"),
   });
 
+  /* CI fleets mint keys by the hundred; the table pages rather than growing
+     the card past the fold (CONVENTIONS §13). */
+  const pager = usePaged(sorted, 12);
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
@@ -121,6 +126,9 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
              100-character token let the Key column collapse to ~70px and wrap
              one character per line. The table keeps its 720px floor and
              scrolls inside this card. */
+          <>
+          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="keys"
+            note={`${keys.filter((k) => k.revoked).length} revoked`} />
           <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 720 }}>
               {/* Widths are binding under table-fixed, so the share is
@@ -144,7 +152,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((k) => (
+                {pager.pageRows.map((k) => (
                   <tr key={k.id} className={`border-b border-ink/10 last:border-0 align-top ${k.revoked ? "bg-flysch/60" : ""}`}>
                     <td className={tdPad}><Truncate className="text-[13px] font-medium text-ink">{k.name}</Truncate></td>
                     {/* A key is opaque: truncate with the full value on hover
@@ -160,6 +168,8 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
               </tbody>
             </table>
           </Scrollable>
+          {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+          </>
         )}
       </Card>
     </div>

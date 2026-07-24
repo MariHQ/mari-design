@@ -1,7 +1,7 @@
 import { useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { AnswerCard } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -433,13 +433,17 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className={mobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-3 gap-5"}>
+      {/* Stat strip as a §11 card gallery rather than a hard three-up grid: at
+          1024 and below a third of the content column is narrower than a stat
+          tile wants, and a grid would leave a dead cell instead of letting the
+          short last row stretch. */}
+      <div className={mobile ? "grid grid-cols-1 gap-5" : "flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[220px]"}>
         <Stat value="128" label="Approved" tone="ok" sub="serving verbatim" />
         <Stat value="6" label="Drafts" tone="attention" sub="awaiting review" />
         <Stat value="2,410" label="Served this week" tone="info" sub="+12% vs last week" />
       </div>
 
-      <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+      <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
         <div className="min-w-0">{main}</div>
         <div className="min-w-0">
           <CoverageRail state={state} withCoverage={!isCoverage} />

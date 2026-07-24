@@ -140,6 +140,44 @@ const LONG_REVISIONS = [
   ...REVISIONS.map((r) => ({ ...r, id: r.id + 10 })),
 ];
 
+/* ── Volume fixtures ──────────────────────────────────────────────────────
+   The `stress` state of each spec is the realistic worst case: a 600-line
+   document, 400 findings, 300 proposed changes, 500 extracted claims. */
+
+const HUGE_MD = `# ${LONG}\n\n` + Array.from({ length: 60 }, (_, i) => (
+  `## ${i + 1}. Section ${i + 1}\n${LONG}. The identifier ${HUGE} must not push the frame open.\n\n- ${LONG}\n- Bullet ${i + 1}\n\n\`\`\`bash\nGET /auth/${HUGE}?scope=${HUGE}\n\`\`\`\n`
+)).join("\n");
+
+const HUGE_FINDINGS = Array.from({ length: 400 }, (_, i) => ({
+  id: i + 1,
+  kind: ["fact", "prose", "freshness"][i % 3],
+  severity: (["error", "warn", "advisory"] as const)[i % 3],
+  text: i % 7 === 0 ? LONG : ["reduce login latency", "expected to", "every 24 hours", "seamless", "stateless"][i % 5],
+  note: i % 5 === 0 ? `Contradicts verified fact: ${LONG}` : "No verified source for this claim.",
+}));
+
+const HUGE_CLAIMS = Array.from({ length: 500 }, (_, i) => ({
+  claim: i % 9 === 0 ? `${LONG}.` : `Claim ${i + 1}: tokens are signed with RS256.`,
+  source: i % 11 === 0 ? HUGE : `Auth RFC v1.${i % 9}`,
+  status: ["Verified", "Contradicted", "Unsupported"][i % 3],
+  verified: i % 3 === 0 ? "May 1, 2024" : "Not verified",
+}));
+
+const HUGE_CHANGES: typeof CHANGES = Array.from({ length: 300 }, (_, i) => ({
+  id: i + 1,
+  original: i % 8 === 0 ? `${LONG} ${HUGE}` : `It is expected to reduce login latency by roughly ${40 + i}%`,
+  proposed: i % 8 === 0 ? `${LONG} rewritten in place` : `It reduces measured login latency by ${20 + i}%`,
+  rule: i % 4 === 0 ? `Fact check, ${LONG}` : "Tighten, cut vague scope",
+  state: (["pending", "pending", "pending", "accepted", "rejected"] as ChangeState[])[i % 5],
+}));
+
+const HUGE_REVISIONS = Array.from({ length: 400 }, (_, i) => ({
+  id: i + 1,
+  actor: i % 3 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : "Aki Kim",
+  verb: i % 7 === 0 ? `ran ${LONG}` : `accepted ${i + 1} changes`,
+  at: "Jul 21, 2026, 2:40 PM",
+}));
+
 export const DOCREVIEW: ComponentSpec[] = [
   {
     id: "DocReviewMarkdown", title: "DocReviewMarkdown", width: 880,
@@ -154,6 +192,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "headings", label: "Heading-heavy doc", node: <DocReviewMarkdown markdown={MD_HEADINGS} findings={[]} /> },
       { id: "many", label: "Overflow: far too many findings", node: <DocReviewMarkdown markdown={MD} findings={MANY_FINDINGS} /> },
       { id: "long", label: "Overflow: long text + 90-char unbreakable string", node: <DocReviewMarkdown markdown={MD_LONG} findings={MANY_FINDINGS} /> },
+      { id: "stress", label: "Volume: 600-line document, 400 findings", node: <DocReviewMarkdown markdown={HUGE_MD} findings={HUGE_FINDINGS} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewMarkdown markdown={MD_LONG} findings={MANY_FINDINGS} /> },
     ],
   },
@@ -168,6 +207,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "clean", label: "No contradiction, claims all verified", node: <DocReviewFindingsPanel findings={FINDINGS.filter((f) => f.severity !== "error")} claims={CLAIMS.filter((c) => c.status === "Verified")} /> },
       { id: "many", label: "Overflow: too many findings and claims", node: <DocReviewFindingsPanel findings={MANY_FINDINGS} claims={LONG_CLAIMS} /> },
       { id: "long", label: "Overflow: long claim text + unbreakable string", node: <DocReviewFindingsPanel findings={[{ id: 1, kind: "fact", severity: "error", text: LONG, note: `Contradicts verified fact: ${LONG} ${HUGE}` }]} claims={LONG_CLAIMS} /> },
+      { id: "stress", label: "Volume: 400 findings, 500 claims", node: <DocReviewFindingsPanel defaultTab="claims" findings={HUGE_FINDINGS} claims={HUGE_CLAIMS} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewFindingsPanel findings={MANY_FINDINGS} claims={LONG_CLAIMS} /> },
     ],
   },
@@ -178,6 +218,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "loading", label: "Loading", node: <DocReviewRefinePanel loading /> },
       { id: "empty", label: "Empty: no findings", node: <DocReviewRefinePanel errorN={0} warnN={0} advisoryN={0} /> },
       { id: "many", label: "Overflow: four-digit tallies", node: <DocReviewRefinePanel errorN={1284} warnN={9612} advisoryN={4470} /> },
+      { id: "stress", label: "Volume: six-digit tallies", node: <DocReviewRefinePanel errorN={128402} warnN={961244} advisoryN={447019} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewRefinePanel errorN={128} warnN={961} advisoryN={447} /> },
     ],
   },
@@ -189,6 +230,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "empty", label: "Empty: no headings, no revisions", node: <DocReviewOutlinePanel body="Just a paragraph, no headings at all." revisions={[]} /> },
       { id: "deep", label: "Deep outline with own-numbered headings", node: <DocReviewOutlinePanel body={MD_HEADINGS} revisions={REVISIONS} /> },
       { id: "many", label: "Overflow: long headings, long revisions", node: <DocReviewOutlinePanel body={MD_LONG} revisions={LONG_REVISIONS} /> },
+      { id: "stress", label: "Volume: 60 headings, 400 revisions", node: <DocReviewOutlinePanel body={HUGE_MD} revisions={HUGE_REVISIONS} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewOutlinePanel body={MD_LONG} revisions={LONG_REVISIONS} /> },
     ],
   },
@@ -201,6 +243,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "empty", label: "Empty: nothing proposed", node: <DocReviewChangeQueue changes={[]} /> },
       { id: "resolved", label: "All changes already resolved", node: <DocReviewChangeQueue changes={CHANGES.filter((c) => c.state !== "pending")} /> },
       { id: "long", label: "Overflow: long diff + unbreakable string", node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
+      { id: "stress", label: "Volume: 300 proposed changes", node: <DocReviewChangeQueue defaultTab="all" changes={HUGE_CHANGES} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
     ],
   },
@@ -212,6 +255,7 @@ export const DOCREVIEW: ComponentSpec[] = [
       { id: "empty", label: "Empty document, no findings", node: <DocReviewEditor body="" findings={[]} /> },
       { id: "many", label: "Overflow: far too many annotations", node: <DocReviewEditor body={MD} findings={MANY_FINDINGS} /> },
       { id: "long", label: "Overflow: long text + unbreakable string", node: <DocReviewEditor body={MD_LONG} findings={MANY_FINDINGS} /> },
+      { id: "stress", label: "Volume: 600-line body, 400 annotations", node: <DocReviewEditor body={HUGE_MD} findings={HUGE_FINDINGS} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewEditor body={MD_LONG} findings={MANY_FINDINGS} /> },
     ],
   },

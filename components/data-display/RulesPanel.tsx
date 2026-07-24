@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Card } from "../layout/Card";
+import { Button } from "../actions/Button";
 import { Chip, type ChipTone } from "./Chip";
 import { EmptyState } from "./EmptyState";
 import { Scrollable } from "./Scrollable";
@@ -52,6 +53,12 @@ const STATUS_STEPS: { id: RuleStatus; label: string }[] = [
 ];
 const STATUS_RANK: Record<RuleStatus, number> = { active: 0, zero: 1, ignored: 2 };
 
+/** Rows per page, family chips shown before "more families", and the row count
+    past which the table scrolls inside a capped region. */
+const PAGE = 25;
+const FAMILY_CHIPS = 10;
+const BOUND_AT = 8;
+
 export type RulesPanelProps = {
   rules: RuleRow[];
   onStatusChange?: (id: string, status: RuleStatus) => void;
@@ -66,6 +73,8 @@ export function RulesPanel({
 }: RulesPanelProps) {
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState<string | "All">("All");
+  const [showAll, setShowAll] = useState(false);
+  const [allFamilies, setAllFamilies] = useState(false);
 
   const families = useMemo(() => Array.from(new Set(rules.map((r) => r.family))), [rules]);
 
@@ -88,6 +97,15 @@ export function RulesPanel({
 
   const cols = onStatusChange ? 4 : 3;
 
+  /* Volume. A real rule catalog is hundreds of rules across dozens of
+     families. The family filter shows a bounded number of chips, and the table
+     renders one page of rows inside a height-capped scroll region, with an
+     honest count above it (§13, §20). */
+  const shownFamilies = allFamilies ? families : families.slice(0, FAMILY_CHIPS);
+  const hiddenFamilies = families.length - shownFamilies.length;
+  const capped = sorted.length > PAGE;
+  const rows = capped && !showAll ? sorted.slice(0, PAGE) : sorted;
+
   return (
     <Card variant="flush" title={title} hint={hint ?? `${rules.length} rules`} className={className}>
       <div className="border-t border-ink/10 px-4 pb-4 pt-3">
@@ -104,18 +122,39 @@ export function RulesPanel({
           </label>
         )}
 
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <Chip label="All families" tone={family === "All" ? "info" : "neutral"} selected={family === "All"} onClick={() => setFamily("All")} />
-          {families.map((f) => (
+          {shownFamilies.map((f) => (
             <Chip key={f} label={f} tone={family === f ? "info" : "neutral"} selected={family === f} onClick={() => setFamily(f)} />
           ))}
+          {(hiddenFamilies > 0 || allFamilies) && (
+            <Button variant="link" aria-expanded={allFamilies} onClick={() => setAllFamilies((v) => !v)}>
+              {allFamilies ? "Show fewer families" : `${hiddenFamilies} more families`}
+            </Button>
+          )}
         </div>
 
-        <Scrollable>
+        {/* Result count above the list, below the search and filter bar (§13). */}
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="font-term text-[11.5px] text-ink/65">
+            {capped && !showAll
+              ? `Showing ${rows.length} of ${sorted.length.toLocaleString()} rules`
+              : `Showing ${sorted.length.toLocaleString()} of ${rules.length.toLocaleString()} rules`}
+          </span>
+          {capped && (
+            <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "Show fewer" : "Show all"}
+            </Button>
+          )}
+        </div>
+
+        <Scrollable axis="both" style={{ maxHeight: rows.length > BOUND_AT ? 520 : undefined }}>
           {/* Explicit min width (not a utility class) so the fixed layout always has
               room for four columns and the wrapper scrolls, instead of the first
-              column collapsing to one character per line. */}
-          <table style={{ minWidth: 620 }} className="w-full table-fixed border-collapse text-left">
+              column collapsing to one character per line. 620 was not enough:
+              the three fixed columns ate 496px of it and the rule column was
+              left with 124px, which wrapped the rule id one word per line. */}
+          <table style={{ minWidth: 780 }} className="w-full table-fixed border-collapse text-left">
             <colgroup>
               <col />
               <col style={{ width: "9.5rem" }} />
@@ -132,7 +171,7 @@ export function RulesPanel({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => {
+              {rows.map((r) => {
                 const current = r.status ?? "active";
                 return (
                   <tr key={r.id} className="border-b border-ink/10 align-top last:border-0">

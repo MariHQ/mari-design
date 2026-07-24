@@ -13,6 +13,7 @@ import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard, SkeletonTable } f
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons/marks";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
@@ -111,6 +112,11 @@ export function SettingsMembersTable({
     status: (m) => m.status,
   });
 
+  /* A real workspace has hundreds of members. Rendering them all grew this
+     card past 15,000px and buried the provisioning cards below it, so the
+     table pages and says how many people there really are (§13, §20). */
+  const pager = usePaged(sorted, 12);
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
@@ -162,7 +168,9 @@ export function SettingsMembersTable({
           : <div className="flex min-w-0 flex-wrap items-center gap-3"><Truncate className="min-w-0 flex-1 basis-[12rem] font-display text-[20px] font-semibold text-ink">{name}</Truncate>{nameSaved && <span className="shrink-0 font-term text-[11.5px] text-moss">✓ Saved</span>}</div>}
       </Card>
 
-      <Card variant="flush" title="Members" hint={`${members.length} people`}>
+      {/* The row count lives in the result strip below the header, once
+          (CONVENTIONS §13), so the hint describes instead of counting. */}
+      <Card variant="flush" title="Members" hint="Everyone who can reach this workspace">
         {members.length === 0 ? (
           <EmptyState title="No members yet">Send the first invite to bring someone into this workspace.</EmptyState>
         ) : (
@@ -170,6 +178,8 @@ export function SettingsMembersTable({
              single unbreakable email collapsed the address column to ~80px and
              stacked it a character at a time. The table keeps its 760px floor
              and scrolls inside this card instead. */
+          <>
+          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="members" />
           <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
@@ -188,7 +198,7 @@ export function SettingsMembersTable({
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((m) => (
+                {pager.pageRows.map((m) => (
                   <tr key={m.id} className="border-b border-ink/10 last:border-0 align-top">
                     <td className={tdPad}>
                       <span className="flex items-start gap-2.5">
@@ -210,6 +220,8 @@ export function SettingsMembersTable({
               </tbody>
             </table>
           </Scrollable>
+          {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+          </>
         )}
       </Card>
 

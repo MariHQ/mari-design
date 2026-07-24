@@ -10,6 +10,8 @@ import { SectionLabel } from "../forms/SectionLabel";
 import { Truncate } from "../data-display/Truncate";
 import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
+import { ResultCount } from "../data-display/Pagination";
+import { Scrollable } from "../data-display/Scrollable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuItem } from "../navigation/Menu";
@@ -71,6 +73,11 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
   const [cat, setCat] = useState("Engineering");
   const [desc, setDesc] = useState("");
   const [count, setCount] = useState("5");
+  /* A gallery of 300 scaffolds is 100 rows of cards. Show a screenful, then
+     let the reader ask for the rest, with the real total on screen the whole
+     time (CONVENTIONS §13, §15). */
+  const [showAll, setShowAll] = useState(false);
+  const PAGE = 12;
 
   const visible = useMemo(
     () => rows.filter((t) => (category === "All" || t.category === category) && `${t.name} ${t.description}`.toLowerCase().includes(query.toLowerCase())),
@@ -142,7 +149,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
               <span className="text-[13px] font-semibold text-ink">New template</span>
               <button type="button" aria-label="Cancel" onClick={() => setComposerOpen(false)} className="text-ink/70 hover:text-ink"><X size={14} /></button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
               <div><SectionLabel>Name</SectionLabel><Input autoFocus className="mt-1 w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Design doc" /></div>
               <div><SectionLabel>Category</SectionLabel><Select className="mt-1 w-full block" value={cat} onChange={(e) => setCat(e.target.value)}>{CATEGORIES.filter((c) => c !== "All").map((c) => <option key={c} value={c}>{c}</option>)}</Select></div>
               <div><SectionLabel>Description</SectionLabel><Input className="mt-1 w-full" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="What it's for" /></div>
@@ -172,8 +179,22 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
              including a short last row, runs edge to edge with no dead corner
              (CONVENTIONS §11). Intrinsic basis also replaces the sm:/xl:
              breakpoints (§10). */
+          <>
+          <ResultCount
+            from={1}
+            to={showAll ? visible.length : Math.min(PAGE, visible.length)}
+            total={visible.length}
+            noun="templates"
+            note={category === "All" ? undefined : `category: ${category}`}
+            className="mt-3 border-t"
+            actions={visible.length > PAGE && (
+              <Button variant="link" compact onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : `Show all ${visible.length}`}
+              </Button>
+            )}
+          />
           <div className="flex flex-wrap gap-3 p-4">
-            {visible.map((t) => {
+            {(showAll ? visible : visible.slice(0, PAGE)).map((t) => {
               const Icon = t.icon;
               const open = previewId === t.id;
               const used = usedId === t.id;
@@ -194,9 +215,13 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
                   <Truncate as="p" lines={3} className="mt-2 text-[12.5px] text-ink/70 flex-1">{t.description}</Truncate>
 
                   {open && (
-                    <ol className="mt-2.5 flex flex-col gap-1 list-decimal list-inside">
-                      {t.sections.map((s) => <li key={s} title={s} className="truncate text-[12px] text-ink/70 marker:text-ink/65 marker:font-term">{s}</li>)}
-                    </ol>
+                    /* A 40-section scaffold must not make one card three
+                        times the height of its siblings (CONVENTIONS §15). */
+                    <Scrollable axis="y" className="mt-2.5 max-h-[150px]" scrollerClassName="pr-1">
+                      <ol className="flex list-inside list-decimal flex-col gap-1">
+                        {t.sections.map((s) => <li key={s} title={s} className="truncate text-[12px] text-ink/70 marker:text-ink/65 marker:font-term">{s}</li>)}
+                      </ol>
+                    </Scrollable>
                   )}
 
                   <div className="mt-3 flex items-center justify-between pt-2.5 border-t border-ink/10">
@@ -218,6 +243,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
               );
             })}
           </div>
+          </>
         )}
       </div>
     </Card>

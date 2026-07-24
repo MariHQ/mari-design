@@ -1,5 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Feather } from "lucide-react";
 import { DecisionCardFeature, type DecisionCardFeatureProps } from "../features/DecisionCardFeature";
 import { DecisionCard } from "../data-display/DecisionCard";
@@ -123,7 +123,7 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
     and mobile drops the rail below the main column. */
 function Shell({ mobile, filter = "all", lead, children }: { mobile: boolean; filter?: string; lead?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+    <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
       <div className="flex min-w-0 flex-col gap-5">
         {lead}
         <LedgerFilter filter={filter} />

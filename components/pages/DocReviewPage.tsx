@@ -196,21 +196,24 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
   return (
     <>
       {/* §11: main column carries minmax(0,1fr); both supporting rails at the
-          standard 320px so the internal plumb lines match every other page. */}
-      <div
-        className={
-          mobile
-            ? "flex flex-col gap-5"
-            : "grid gap-5 grid-cols-[320px_minmax(0,1fr)_320px]"
-        }
-      >
-        <div className="flex min-w-0 flex-col gap-5">
+          standard 320px so the internal plumb lines match every other page.
+
+          Two 320px rails plus the editor need ~1250px of content column, which
+          only exists from about 1530px of window. Narrower than that the row
+          sheds rails rather than squeezing the editor to a gutter (§12/§15):
+          at 2xl it is outline | editor | refine, at xl the editor keeps the
+          main column and both panels stack in one 320px rail beside it, and
+          below xl the three panels stack in reading order. The panels are
+          placed explicitly rather than reordered in the DOM so the editor is
+          always the second thing a screen reader reaches. */}
+      <div className={mobile ? "flex flex-col gap-5" : "grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[320px_minmax(0,1fr)_320px]"}>
+        <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-1 2xl:col-start-1">
           <DocReviewOutlinePanel {...(data ? { body: data.outlineBody, revisions: data.revisions } : {})} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
           <DocReviewEditor compact={mobile} {...(data ? { body: data.editorBody, findings: data.editorFindings } : {})} />
         </div>
-        <div className="flex min-w-0 flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
           <DocReviewRefinePanel {...(data ? data.refine : {})} />
         </div>
       </div>

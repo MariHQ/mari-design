@@ -25,12 +25,14 @@ export type FreshSegment = {
 
 export function LegendSwatch({ tone = "neutral", color, label }: { tone?: ChipTone; color?: string; label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/70">
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-term text-[11px] text-ink/70" title={label}>
       <span
-        className={`inline-block w-2.5 h-2.5 rounded-[2px] ${color ? "" : TONE_BG[tone]}`}
+        className={`inline-block w-2.5 h-2.5 shrink-0 rounded-[2px] ${color ? "" : TONE_BG[tone]}`}
         style={color ? { backgroundColor: color } : undefined}
       />
-      {label}
+      {/* A source name can run long; the legend truncates rather than
+          reflowing the widget (CONVENTIONS §12). */}
+      <span className="min-w-0 truncate">{label}</span>
     </span>
   );
 }
@@ -43,10 +45,33 @@ export type FreshBarProps = {
   showCounts?: boolean;
   /** Bar height in pixels. */
   height?: number;
+  /** Segments kept before the tail is folded into one "Other" band. */
+  maxSegments?: number;
+  /** Copy for the folded tail segment. */
+  otherLabel?: string;
   className?: string;
 };
 
-export function FreshBar({ segments, legend = true, showCounts = true, height = 10, className = "" }: FreshBarProps) {
+export function FreshBar({
+  segments: input, legend = true, showCounts = true, height = 10,
+  maxSegments = 7, otherLabel = "Other", className = "",
+}: FreshBarProps) {
+  /* Forty sources make forty sub-pixel slivers and a legend taller than the
+     widget. Keep the largest bands, fold the tail into one honest "Other"
+     (CONVENTIONS §15: a box does not grow to fit its content). */
+  const segments =
+    input.length <= maxSegments
+      ? input
+      : (() => {
+          const ranked = [...input].sort((a, b) => b.value - a.value);
+          const head = ranked.slice(0, maxSegments - 1);
+          const tail = ranked.slice(maxSegments - 1);
+          return [
+            ...input.filter((s) => head.includes(s)),
+            { label: `${otherLabel} (${tail.length})`, value: tail.reduce((n, s) => n + Math.max(0, s.value), 0), tone: "neutral" as ChipTone },
+          ];
+        })();
+
   const total = segments.reduce((n, s) => n + Math.max(0, s.value), 0);
 
   return (
@@ -63,7 +88,9 @@ export function FreshBar({ segments, legend = true, showCounts = true, height = 
               <span
                 key={i}
                 className={s.color ? "" : TONE_BG[s.tone ?? "neutral"]}
-                style={{ width: `${(s.value / total) * 100}%`, ...(s.color ? { backgroundColor: s.color } : {}) }}
+                /* A 0.2% band still has to be visible, so every drawn segment
+                   keeps a 2px floor. */
+                style={{ width: `${(s.value / total) * 100}%`, minWidth: 2, ...(s.color ? { backgroundColor: s.color } : {}) }}
               />
             ) : null,
           )}

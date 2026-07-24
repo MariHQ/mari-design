@@ -213,11 +213,15 @@ export type FlowsListProps = {
 
 const td = `${tdPad} align-middle border-b border-ink/[0.06]`;
 
+/** Flow rows rendered before "Show all". */
+const PAGE = 25;
+
 export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading = false, className = "" }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(null);
   const [draft, setDraft] = useState<{ from: Flow | null } | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const templates = useMemo(() => flows.slice(0, 4), [flows]);
 
@@ -229,6 +233,8 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
     lastRun: (r) => (r.lastRun ? new Date(String(r.lastRun.started)).getTime() || 0 : 0),
     runs: (r) => r.recentRuns.length,
   });
+
+  const visible = showAll ? sorted : sorted.slice(0, PAGE);
 
   const toggleStatus = (f: Flow) =>
     setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: r.status === "active" ? "paused" : "active" } : r)));
@@ -304,7 +310,22 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
             Start from a template or create one.
           </EmptyState>
         ) : (
-          <Scrollable>
+          <>
+          {/* Row count above the table it describes (§13). A workspace can hold
+              hundreds of flows; the table renders a page of them and scrolls. */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
+            <span className="font-term text-[11.5px] text-ink/65">
+              {visible.length < sorted.length
+                ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} flows`
+                : `Showing all ${sorted.length.toLocaleString()} flow${sorted.length === 1 ? "" : "s"}`}
+            </span>
+            {sorted.length > PAGE && (
+              <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : "Show all"}
+              </Button>
+            )}
+          </div>
+          <Scrollable axis="both" style={{ maxHeight: visible.length > 8 ? 540 : undefined }}>
             <table className="w-full border-collapse text-left" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
@@ -317,7 +338,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((f) => {
+                {visible.map((f) => {
                   const paused = f.status === "paused";
                   return (
                     <tr key={f.id} className={paused ? "bg-ink/[0.015]" : undefined}>
@@ -370,6 +391,7 @@ export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading 
               </tbody>
             </table>
           </Scrollable>
+          </>
         )}
         {note && <div className="border-t border-ink/10 px-4 py-2.5 font-term text-[11.5px] text-moss">{note}</div>}
       </div>

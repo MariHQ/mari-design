@@ -6,6 +6,8 @@ import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonLine, SkeletonText, SkeletonButton } from "../data-display/Skeleton";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 import { fmtDate } from "../tokens/format";
 
 /* LibraryGlossaryPanel — the Library › Glossary tab.
@@ -50,6 +52,12 @@ export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, clas
   const [editDef, setEditDef] = useState("");
   const [newTerm, setNewTerm] = useState("");
   const [newDef, setNewDef] = useState("");
+
+  /* A shared glossary grows to hundreds of terms. It pages, so the card stays
+     a card instead of a scroll of the whole vocabulary (CONVENTIONS §13).
+     Declared before the `loading` return: a conditional hook crashes the
+     panel the moment it flips from loading to loaded. */
+  const pager = usePaged(rows, 10);
 
   if (loading) {
     return (
@@ -104,14 +112,15 @@ export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, clas
       hint="Shared definitions Mari uses when writing and reviewing"
       className={className}
     >
-      <div className="divide-y divide-ink/10 border-t border-ink/10">
+      <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="terms" className="border-t" />
+      <div className="divide-y divide-ink/10">
         {rows.length === 0 && (
           <div className="px-4 py-3">
             <EmptyState>No terms yet. Add the first one below.</EmptyState>
           </div>
         )}
 
-        {rows.map((t) =>
+        {pager.pageRows.map((t) =>
           editId === t.id ? (
             <div key={t.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
               <Input className="w-40 shrink-0" value={editTerm} onChange={(e) => setEditTerm(e.target.value)} placeholder="Term" />
@@ -121,10 +130,12 @@ export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, clas
             </div>
           ) : (
             <div key={t.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
-              <div className="w-40 shrink-0 break-words text-[13.5px] font-semibold text-ink">{t.term}</div>
+              {/* A term is one line, ellipsised: a long term used to wrap and
+                  set the height of every row beside it (CONVENTIONS §12). */}
+              <Truncate className="w-40 shrink-0 text-[13.5px] font-semibold text-ink">{t.term}</Truncate>
               <div className="min-w-[16rem] flex-1">
-                <div className="break-words text-[13.5px] text-ink/80">{t.definition}</div>
-                <div className="mt-0.5 break-words font-term text-[11px] text-ink/65">
+                <Truncate lines={2} className="text-[13.5px] text-ink/80">{t.definition}</Truncate>
+                <div className="mt-0.5 truncate font-term text-[11px] text-ink/65">
                   {t.owner} · updated {fmtDate(t.updated)}
                 </div>
               </div>
@@ -140,6 +151,8 @@ export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, clas
             </div>
           ),
         )}
+
+        {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} className="border-t-0" />}
 
         <div className="flex flex-wrap items-center gap-2 bg-ink/[0.015] px-4 py-3">
           <Input className="w-40 shrink-0" placeholder="New term" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} />

@@ -131,6 +131,70 @@ const LONG_DOCS: RecentDoc[] = [
   { id: 303, source: "unknown-provider", title: "A doc from a source Mari has no mark for", date: "2026-07-18" },
 ];
 
+/* ── Volume fixtures ─────────────────────────────────────────────────────
+   The "stress" state of every component: production-sized data, not a demo
+   sample. A live workspace feed is hundreds of events, a task inbox hundreds
+   of rows, a source list dozens of tiles, a flow dozens of steps. Nothing here
+   may grow its card past the fold or push the page below it off screen. */
+
+const STRESS_TOPICS: DigestTopic[] = Array.from({ length: 40 }, (_, i) => ({
+  title: `Topic ${i + 1}: ${["Billing docs realigned to the new plan tiers", "Onboarding flow gained a self-serve SSO path", LONG][i % 3]}`,
+  summary: i % 4 === 0 ? LONG_SUMMARY : "Mari re-read the week and reconciled the overlapping passages across three sources.",
+  where: Array.from({ length: (i % 6) + 2 }, (_, j) => ({
+    source: ["notion", "gdocs", "github", "slack", "granola", "linear"][j % 6],
+    label: j === 3 ? HUGE : `Source document ${j + 1}`,
+    icon: mark(["notion", "gdocs", "github", "slack", "granola", "linear"][j % 6]),
+  })),
+  impact: Array.from({ length: (i % 5) + 2 }, (_, j) => ({
+    name: ["Support", "Sales", "Finance operations and revenue recognition", "SRE", "On-call"][j % 5],
+    tone: (["info", "ok", "attention", "blocked", "neutral"] as const)[j % 5],
+  })),
+}));
+
+const STRESS_TASKS: ReviewTask[] = Array.from({ length: 320 }, (_, i) => ({
+  id: i + 1,
+  text: i % 17 === 0 ? LONG : i % 23 === 0 ? HUGE : `Verify the proration rule in the billing runbook, pass ${i + 1}`,
+  who: ["DR", "MG", "PK", "SL"][i % 4],
+  pill: ["factcheck", "approval", "stale", "needs-review", "canonical"][i % 5],
+  pillText: ["Fact check", "Approval", "Stale", "Needs review", "Canonical"][i % 5],
+  done: i % 3 === 0,
+}));
+
+const STRESS_TILES: PulseTileData[] = Array.from({ length: 40 }, (_, i) => ({
+  key: ["github", "slack", "notion", "gdocs", "granola", "linear", "jira", "confluence", "zendesk", "salesforce"][i % 10],
+  name: i % 11 === 0 ? HUGE : `${["GitHub", "Slack", "Notion", "Google Drive", "Granola", "Linear", "Jira", "Confluence", "Zendesk", "Salesforce"][i % 10]} workspace ${i + 1}`,
+  stat: (1000 + i * 137).toLocaleString(),
+  unit: i % 2 ? "documents touched" : "messages",
+  status: (i % 3 === 0 ? "moderate" : "active") as PulseTileData["status"],
+  bars: [4, 7, 5, 9, 6, 11, 8].map((v) => v + (i % 5)),
+}));
+
+const STRESS_FEED: FeedItem[] = Array.from({ length: 400 }, (_, i) => ({
+  id: i + 1,
+  kind: ["run", "edit", "fact", "deploy", "sync", "link", "task"][i % 7],
+  actor: i % 19 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : ["Docs guardrail", "Dana R.", "Mari", "Stale sweeper", "Notion", "Priya K.", "Sam L."][i % 7],
+  text: "touched",
+  target: i % 13 === 0 ? HUGE : `Runbook section ${i + 1}: proration, credits, expansion`,
+  secondsAgo: 45 * (i + 1),
+}));
+
+const STRESS_FLOW: WfFlow = {
+  name: "Docs guardrail, nightly contradiction sweep across every connected source",
+  status: "active",
+  nodes: Array.from({ length: 60 }, (_, i) => ({
+    kind: (["trigger", "fetch_docs", "refine", "fact_check", "condition", "approval", "notify", "deploy_site"] as const)[i % 8],
+    label: i % 7 === 0 ? HUGE : `Step ${i + 1}: check every claim in the fetched set`,
+    state: (["supported", "queued", "succeeded", "failed"] as const)[i % 4],
+  })),
+};
+
+const STRESS_DOCS: RecentDoc[] = Array.from({ length: 400 }, (_, i) => ({
+  id: 1000 + i,
+  source: ["notion", "github", "granola", "gdocs", "linear", "slack"][i % 6],
+  title: i % 29 === 0 ? HUGE : `Runbook section ${i + 1}: proration, credits, and mid-term expansion`,
+  date: `2026-0${(i % 7) + 1}-${String((i % 28) + 1).padStart(2, "0")}`,
+}));
+
 export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewStatTiles", title: "Overview / Headline stat tiles", width: 900,
@@ -144,6 +208,8 @@ export const OVERVIEW: ComponentSpec[] = [
       { id: "bignumbers", label: "Overflow: huge numbers", node: (
         <OverviewStatTiles stats={{ changes: 1284905, factsReview: 998877, flowsRunning: 1234567 }} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: <OverviewStatTiles /> },
+      { id: "stress", label: "Volume: nine-figure counts", node: (
+        <OverviewStatTiles stats={{ changes: 128490512, factsReview: 99887766, flowsRunning: 412345678 }} />) },
     ],
   },
   {
@@ -164,6 +230,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewDigestCard topics={LONG_TOPICS} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewDigestCard topics={LONG_TOPICS} />) },
+      { id: "stress", label: "Volume: 40 topics, up to 7 sources each", node: (
+        <OverviewDigestCard topics={STRESS_TOPICS} />) },
     ],
   },
   {
@@ -182,6 +250,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewTodayReview tasks={LONG_TASKS} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewTodayReview tasks={LONG_TASKS} />) },
+      { id: "stress", label: "Volume: 320 tasks, expanded", node: (
+        <OverviewTodayReview tasks={STRESS_TASKS} defaultExpanded />) },
     ],
   },
   {
@@ -198,6 +268,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewSourcePulse tiles={LONG_TILES} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewSourcePulse tiles={LONG_TILES} />) },
+      { id: "stress", label: "Volume: 40 connected sources, expanded", node: (
+        <OverviewSourcePulse tiles={STRESS_TILES} defaultExpanded />) },
     ],
   },
   {
@@ -214,6 +286,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewLiveActivity items={LONG_FEED} pollMs={0} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewLiveActivity items={LONG_FEED} pollMs={0} />) },
+      { id: "stress", label: "Volume: 400 events", node: (
+        <OverviewLiveActivity items={STRESS_FEED} pollMs={0} />) },
     ],
   },
   {
@@ -241,6 +315,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewWorkflowStrip flow={LONG_FLOW} defaultConfiguring />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewWorkflowStrip flow={LONG_FLOW} />) },
+      { id: "stress", label: "Volume: 60-step flow, every step checked", node: (
+        <OverviewWorkflowStrip flow={STRESS_FLOW} defaultConfiguring />) },
     ],
   },
   {
@@ -257,6 +333,8 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewRecentDocs docs={LONG_DOCS} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
         <OverviewRecentDocs docs={LONG_DOCS} />) },
+      { id: "stress", label: "Volume: 400 documents, expanded", node: (
+        <OverviewRecentDocs docs={STRESS_DOCS} defaultExpanded />) },
     ],
   },
 ];

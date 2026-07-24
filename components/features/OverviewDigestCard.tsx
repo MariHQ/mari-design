@@ -10,6 +10,7 @@ import { CardBody, CardTitleBlock } from "../layout/CardShell";
 import type { DigestTopic } from "../data-display/DigestCard";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* Overview — This week's digest ──────────────────────────────────────────
    Mari's weekly, AI-generated summary of what changed across the workspace's
@@ -63,6 +64,10 @@ const DEMO_TOPICS: DigestTopic[] = [
   },
 ];
 
+/** Topics rendered before "Show all", and chips per row before "+N more". */
+const TOPIC_PAGE = 5;
+const CHIP_CAP = 5;
+
 /** The shared mono meta label used by both the Sources and Impact rows. */
 const metaLabel = "font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65";
 
@@ -72,16 +77,24 @@ function TopicBlock({ topic, dim }: { topic: DigestTopic; dim: boolean }) {
       <CardBody className="gap-2">
         {/* §1: title, then summary, then the source badges, then impact. */}
         <CardTitleBlock title={topic.title} summary={topic.summary} />
+        {/* Chip rows are capped: a topic that touched 40 sources used to render
+            40 chips and turn one topic into six rows of confetti (§14). */}
         {topic.where.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={metaLabel}>{topic.where.length === 1 ? "Source" : "Sources"}</span>
-            {topic.where.map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+            {topic.where.slice(0, CHIP_CAP).map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+            {topic.where.length > CHIP_CAP && (
+              <span className="font-term text-[11px] text-ink/65">+{topic.where.length - CHIP_CAP} more</span>
+            )}
           </div>
         )}
         {topic.impact.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={metaLabel}>Impact</span>
-            {topic.impact.map((i) => <Chip key={i.name} label={i.name} tone={i.tone ?? "neutral"} dot />)}
+            {topic.impact.slice(0, CHIP_CAP).map((i) => <Chip key={i.name} label={i.name} tone={i.tone ?? "neutral"} dot />)}
+            {topic.impact.length > CHIP_CAP && (
+              <span className="font-term text-[11px] text-ink/65">+{topic.impact.length - CHIP_CAP} more</span>
+            )}
           </div>
         )}
       </CardBody>
@@ -103,6 +116,8 @@ export function OverviewDigestCard({
 }: OverviewDigestCardProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [current, setCurrent] = useState<DigestTopic[]>(topics);
+  const [showAll, setShowAll] = useState(false);
+  const topics_ = showAll ? current : current.slice(0, TOPIC_PAGE);
 
   if (loading) {
     return (
@@ -156,9 +171,27 @@ export function OverviewDigestCard({
       ) : current.length === 0 ? (
         <EmptyState>No digest yet. Refresh to have Mari read the week.</EmptyState>
       ) : (
-        <div className="flex flex-col divide-y divide-ink/10">
-          {current.map((t) => <TopicBlock key={t.title} topic={t} dim={regenerating} />)}
-        </div>
+        <>
+          {/* Topic count above the topics it describes (§13). A busy week can
+              produce dozens; the card shows a page and scrolls the rest. */}
+          {current.length > TOPIC_PAGE && (
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="font-term text-[11.5px] text-ink/65">
+                {showAll
+                  ? `Showing all ${current.length.toLocaleString()} topics`
+                  : `Showing ${TOPIC_PAGE} of ${current.length.toLocaleString()} topics`}
+              </span>
+              <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : "Show all"}
+              </Button>
+            </div>
+          )}
+          <Scrollable axis="y" style={{ maxHeight: topics_.length > TOPIC_PAGE ? 560 : undefined }} scrollerClassName="pr-1">
+            <div className="flex flex-col divide-y divide-ink/10">
+              {topics_.map((t, i) => <TopicBlock key={`${t.title}-${i}`} topic={t} dim={regenerating} />)}
+            </div>
+          </Scrollable>
+        </>
       )}
     </Card>
   );

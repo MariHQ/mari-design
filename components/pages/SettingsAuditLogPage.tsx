@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { ScrollText, RefreshCw, Search, ChevronDown, X } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
@@ -76,7 +76,7 @@ const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
 
 function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
   return (
-    <div className={mobile ? "mt-6 flex flex-col gap-5" : "mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+    <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[320]}`}>
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
       <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
     </div>

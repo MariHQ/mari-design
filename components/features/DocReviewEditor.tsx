@@ -23,6 +23,7 @@ import { Chip } from "../data-display/Chip";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* ————— ported local helpers (browser-only; use the DOM) ————— */
 
@@ -350,7 +351,11 @@ export function DocReviewEditor({
           <SkeletonChip w={44} /><SkeletonChip w={28} /><SkeletonChip w={28} /><SkeletonChip w={28} />
           <span className="ml-auto"><SkeletonChip w={28} /></span>
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_190px] gap-4 p-5" aria-hidden="true">
+        {/* Same measure floor as the live editor below, and the same scroller,
+            so the skeleton and the thing it stands in for behave identically
+            in a column too narrow for both columns. */}
+        <Scrollable axis="x" scrollerClassName="p-5">
+        <div className="grid grid-cols-[minmax(360px,1fr)_190px] gap-4" aria-hidden="true">
           <div className="space-y-3">
             <Skeleton width="55%" height={24} />
             <SkeletonText lines={4} /><SkeletonText lines={3} /><SkeletonText lines={5} />
@@ -361,6 +366,7 @@ export function DocReviewEditor({
             ))}
           </div>
         </div>
+        </Scrollable>
       </Card>
     );
   }
@@ -420,10 +426,21 @@ export function DocReviewEditor({
         </div>
       </div>
 
-      {/* prose + margin */}
-      <div className={`grid gap-4 p-5 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_190px]"}`}>
-        <div
-          ref={editorRef}
+      {/* prose + margin.
+          The prose column carries a MEASURE FLOOR, not `minmax(0,1fr)`. With a
+          zero floor the 190px margin gutter wins every fight: at a 1024px
+          window this column collapsed to 59px and body text wrapped one or two
+          characters per line into a 1,076px-tall ribbon. A floor means the
+          column stops at a readable measure and the region scrolls instead
+          (§20) — content never crushes to make itself fit. */}
+      <Scrollable axis="x" scrollerClassName="p-5">
+        {/* The floor exists ONLY to stop the 190px annotation gutter from
+            winning the width fight. In compact mode there is no gutter, so the
+            prose column takes the card's full width and wraps normally — a
+            floor there would force pointless sideways scrolling on a phone. */}
+        <div className={`grid gap-4 ${compact ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[minmax(360px,1fr)_190px]"}`}>
+          <div
+            ref={editorRef}
           className={`relative min-w-0 ${MARKED}`}
           style={{
             textAlign: justify ? "justify" : undefined,
@@ -469,7 +486,8 @@ export function DocReviewEditor({
             </button>
           ))}
         </div>
-      </div>
+        </div>
+      </Scrollable>
     </Card>
   );
 }

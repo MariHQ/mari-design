@@ -9,10 +9,12 @@ export default defineConfig({
   root: ".preview",
   base: "/",
   plugins: [react()],
-  // `npm run dev` opens a browser for a human. Tooling that spawns its own
-  // dev server (scripts/shot.mjs) sets MARI_NO_OPEN so QA runs never throw
-  // stray Chrome windows at whoever is using the machine.
-  server: { open: !process.env.MARI_NO_OPEN },
+  // Opening a browser is OPT-IN, and only `npm run dev` opts in (MARI_OPEN=1).
+  // It used to be opt-out, which meant any ad-hoc script that spawned a dev
+  // server without setting MARI_NO_OPEN threw a stray Chrome window at
+  // whoever was using the machine. QA tooling must never do that, so the
+  // default has to be the safe one.
+  server: { open: !!process.env.MARI_OPEN },
   build: {
     outDir: resolve(__dirname, "dist"),
     emptyOutDir: true,

@@ -37,7 +37,10 @@ export function Inspector({
 }: InspectorProps) {
   return (
     <Card variant="flush" className={`${sticky ? "sticky top-4" : ""} ${className}`.trim()}>
-      <div className="p-5">
+      {/* min-w-0 all the way down: the rail is a grid child, and without it a
+          long value sets the column's min-content width and the whole rail
+          grows instead of the value truncating (§12). */}
+      <div className="min-w-0 p-5">
         {eyebrow && (
           <span className="block font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-biscay-2 mb-1">{eyebrow}</span>
         )}
@@ -55,14 +58,14 @@ export function Inspector({
         )}
 
         {sections?.map((s, i) => (
-          <div key={i} className="mt-5 first:mt-4">
+          <div key={i} className="mt-5 min-w-0 first:mt-4">
             {s.title && (
               <h4 className="flex items-center gap-1.5 mb-2 font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/65">
                 {s.title}
                 {s.count != null && <CountChip count={s.count} />}
               </h4>
             )}
-            <div className="text-[13.5px] text-ink/80">{s.content}</div>
+            <div className="min-w-0 text-[13.5px] text-ink/80">{s.content}</div>
           </div>
         ))}
       </div>

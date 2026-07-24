@@ -6,7 +6,9 @@ import { Select } from "../forms/Select";
 import { Textarea } from "../forms/Textarea";
 import { Checkbox } from "../forms/Checkbox";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Chip } from "../data-display/Chip";
+import { Chip, ChipList } from "../data-display/Chip";
+import { Truncate } from "../data-display/Truncate";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Stat } from "../data-display/Stat";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skeleton";
@@ -180,7 +182,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
     return (
       <div className={`flex flex-col gap-4 ${className}`.trim()} aria-hidden="true">
         <SkeletonCard lines={1} />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
         <SkeletonTable rows={6} cols={4} />
@@ -221,7 +223,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
       </Card>
 
       {/* Family grid */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
         {FAMILIES.map((f) => (
           <Stat key={f} value={familyCounts[f] ?? 0} label={f} sub={FAMILY_HELP[f]} tone="info" />
         ))}
@@ -262,8 +264,12 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
                   This content passes the current project configuration.
                 </EmptyState>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {findings.slice(0, 8).map((f, i) => (
+                <div className="overflow-hidden rounded-[5px] border border-ink/12">
+                <ResultCount from={1} to={findings.length} total={findings.length} noun="findings" />
+                {/* A slop-heavy document produces hundreds of findings: they
+                    scroll in a bounded box, never a mile of card (§20). */}
+                <Scrollable axis="y" className="max-h-[320px]" scrollerClassName="flex flex-col gap-2 p-2">
+                  {findings.map((f, i) => (
                     <div key={i} className="rounded-[4px] border border-ink/12 px-3 py-2.5">
                       <div className="flex items-center gap-2 mb-1.5">
                         <Chip label={f.severity} tone={SEV_TONE[f.severity]} caps />
@@ -278,6 +284,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
                       {f.suggestion && <div className="mt-1 text-[12px] text-ink/60">→ {f.suggestion}</div>}
                     </div>
                   ))}
+                </Scrollable>
                 </div>
               )}
             </div>
@@ -318,16 +325,27 @@ function RuleTable({
     status: (r) => STATUS_RANK[r.status ?? "active"],
   });
 
+  /* The real catalog is 170+ rules; the registry pages instead of rendering
+     every rule into one very tall card (CONVENTIONS §13). */
+  const pager = usePaged(sorted, 12);
+
   return (
     <Card variant="flush" title="Rule registry" hint={hint}>
       <div className="border-t border-ink/10 px-4 pb-4 pt-3">
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          <Chip label="All families" tone={family === "All" ? "info" : "neutral"} selected={family === "All"} onClick={() => setFamily("All")} />
-          {families.map((f) => (
-            <Chip key={f} label={f} tone={family === f ? "info" : "neutral"} selected={family === f} onClick={() => setFamily(f)} />
-          ))}
-        </div>
+        {/* A workspace can register dozens of families; the filter row folds
+            the tail behind "+N more" rather than becoming a chip wall. */}
+        <ChipList max={8} className="mb-3">
+          {[
+            <Chip key="__all" label="All families" tone={family === "All" ? "info" : "neutral"} selected={family === "All"} onClick={() => setFamily("All")} />,
+            ...families.map((f) => (
+              <Chip key={f} label={f} tone={family === f ? "info" : "neutral"} selected={family === f} onClick={() => setFamily(f)} />
+            )),
+          ]}
+        </ChipList>
 
+        <div className="overflow-hidden rounded-[5px] border border-ink/12">
+        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="rules"
+          note={family === "All" ? undefined : `family: ${family}`} />
         <Scrollable>
           <table className="w-full min-w-[620px] table-fixed border-collapse text-left">
             <colgroup>
@@ -345,17 +363,17 @@ function RuleTable({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => {
+              {pager.pageRows.map((r) => {
                 const current = r.status ?? "active";
                 return (
                   <tr key={r.id} className="border-b border-ink/10 align-top last:border-0">
                     <td className={tdPad}>
-                      <code className="break-words font-term text-[12px] font-medium text-ink">{r.id}</code>
-                      <div className="mt-0.5 break-words text-[12.5px] text-ink/70">{r.description}</div>
+                      <Truncate className="font-term text-[12px] font-medium text-ink">{r.id}</Truncate>
+                      <Truncate lines={2} className="mt-0.5 text-[12.5px] text-ink/70">{r.description}</Truncate>
                     </td>
                     <td className={tdPad}>
-                      <div className="break-words text-[12.5px] font-medium text-ink/80">{r.family}</div>
-                      {r.pack && <div className="break-words font-term text-[11px] text-ink/65">{r.pack}</div>}
+                      <Truncate className="text-[12.5px] font-medium text-ink/80">{r.family}</Truncate>
+                      {r.pack && <Truncate className="font-term text-[11px] text-ink/65">{r.pack}</Truncate>}
                     </td>
                     <td className={tdPad}><Chip label={r.severity} tone={SEVERITY_TONE[r.severity]} /></td>
                     <td className={tdPad}>
@@ -384,6 +402,8 @@ function RuleTable({
             </tbody>
           </table>
         </Scrollable>
+        {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+        </div>
       </div>
     </Card>
   );

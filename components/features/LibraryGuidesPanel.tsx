@@ -9,6 +9,9 @@ import { SectionLabel } from "../forms/SectionLabel";
 import { Badge } from "../data-display/Badge";
 import { IconRing, type IconRingTone } from "../data-display/IconRing";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonText } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 
 /* LibraryGuidesPanel — the Library › Style guides tab.
    Pick a trusted built-in style pack as the project default, then layer
@@ -109,7 +112,11 @@ export function LibraryGuidesPanel({
         hint={`${guides.length} packs`}
         actions={<Button compact onClick={() => setCustom(true)}>Custom guide</Button>}
       >
-        <div className="px-4 pb-4 border-t border-ink/10 pt-3 flex flex-col gap-2.5">
+        <ResultCount from={1} to={guides.length} total={guides.length} noun="packs" className="border-t" />
+        {/* A workspace can install dozens of packs; the list scrolls in a
+            bounded box with a visible bar rather than running the card off
+            the fold (CONVENTIONS §20). */}
+        <Scrollable axis="y" className="max-h-[560px]" scrollerClassName="flex flex-col gap-2.5 px-4 pb-4 pt-3">
           {custom && (
             <div className="flex items-start gap-2.5 rounded-[4px] border border-clay/35 bg-clay/[0.06] px-3 py-2.5 text-[12.5px] text-ink/80">
               <span className="flex-1">
@@ -130,12 +137,12 @@ export function LibraryGuidesPanel({
                 <div className="flex items-start gap-3">
                   <IconRing tone={g.tone}><Feather size={15} /></IconRing>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold text-ink">{g.name}</span>
-                      {on && <Check size={14} className="text-moss" />}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Truncate className="text-[14px] font-semibold text-ink">{g.name}</Truncate>
+                      {on && <Check size={14} className="shrink-0 text-moss" />}
                     </div>
-                    <div className="font-term text-[11px] text-ink/65">{on ? "Active · Project default" : "Built in"} · {g.preview.length} rules</div>
-                    <p className="mt-1 text-[12.5px] text-ink/70">{g.description}</p>
+                    <div className="truncate font-term text-[11px] text-ink/65">{on ? "Active · Project default" : "Built in"} · {g.preview.length} rules</div>
+                    <Truncate as="p" lines={2} className="mt-1 text-[12.5px] text-ink/70">{g.description}</Truncate>
                   </div>
                 </div>
                 <div className="mt-2.5 flex items-center gap-2 pl-[43px]">
@@ -145,18 +152,21 @@ export function LibraryGuidesPanel({
                   </Button>
                   {on ? <Badge label="Project default" tone="ok" /> : <Button compact onClick={() => setActive(g.id)}>Set as default</Button>}
                 </div>
-                {/* The whole rule list, never clipped with an "and N more". */}
+                {/* The whole rule list, never clipped with an "and N more":
+                    a 200-rule pack scrolls inside its own bounded box. */}
                 {open && (
-                  <ul className="mt-2 flex list-disc flex-col gap-1 pl-[59px] marker:text-ink/65">
-                    {g.preview.map((r) => (
-                      <li key={r} className="break-words text-[12.5px] text-ink/70">{r}</li>
-                    ))}
-                  </ul>
+                  <Scrollable axis="y" className="mt-2 max-h-[220px]" scrollerClassName="pl-[59px] pr-1">
+                    <ul className="flex list-disc flex-col gap-1 marker:text-ink/65">
+                      {g.preview.map((r) => (
+                        <li key={r} className="break-words text-[12.5px] text-ink/70">{r}</li>
+                      ))}
+                    </ul>
+                  </Scrollable>
                 )}
               </div>
             );
           })}
-        </div>
+        </Scrollable>
       </Card>
 
       {/* Right — project layer editor */}

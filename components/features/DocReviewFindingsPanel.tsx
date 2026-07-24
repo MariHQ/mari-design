@@ -17,6 +17,8 @@ import { Tabs } from "../navigation/Tabs";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
 
 type Finding = { id: number; kind: string; severity: string; text: string; note: string };
 type Claim = { claim: string; source: string; status: string; verified: string };
@@ -196,33 +198,41 @@ export function DocReviewFindingsPanel({
       </div>
 
       {tab === "claims" ? (
-        <div className="space-y-2 px-4 pb-4">
-          {claimFilter && (
-            <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-ink/70">
-              <span>Filtered to {claimFilter.toLowerCase()} claims.</span>
-              <Button variant="link" compact onClick={() => setClaimFilter(null)}>Show all claims</Button>
-            </div>
-          )}
-          {shownClaims.map((f) => (
-            <div key={f.claim} className="flex items-start gap-2.5">
-              <span className={`mt-0.5 shrink-0 ${f.status === "Verified" ? "text-moss" : "text-ink/65"}`}>
-                <CheckCircle2 size={15} />
-              </span>
-              <span className="min-w-0 break-words text-[13px] text-ink/85">
-                {f.claim}
-                <span className="mt-0.5 block break-words text-[11px] text-ink/65">
-                  {f.source} · {f.status} · {f.verified}
+        <div className="pb-4">
+          {/* Count above the list, filter clause included (CONVENTIONS §13). */}
+          <ResultCount
+            from={1} to={shownClaims.length} total={shownClaims.length} noun="claims"
+            note={claimFilter ? `filtered to ${claimFilter.toLowerCase()}, ${claims.length} in total` : undefined}
+            className="border-t"
+            actions={claimFilter && (
+              <Button variant="link" compact onClick={() => setClaimFilter(null)}>Show all</Button>
+            )}
+          />
+          {/* A long document yields hundreds of claims: the list scrolls in a
+              bounded box with a visible bar, it does not run off the rail
+              (CONVENTIONS §20). */}
+          <Scrollable axis="y" className="max-h-[420px]" scrollerClassName="space-y-2 px-4 pt-3">
+            {shownClaims.map((f, i) => (
+              <div key={`${f.claim}-${i}`} className="flex items-start gap-2.5">
+                <span className={`mt-0.5 shrink-0 ${f.status === "Verified" ? "text-moss" : "text-ink/65"}`}>
+                  <CheckCircle2 size={15} />
                 </span>
-              </span>
-            </div>
-          ))}
-          {shownClaims.length === 0 && (
-            <p className="text-[12.5px] text-ink/70">
-              {claims.length === 0
-                ? "No claims extracted yet. Run a fact check to scan the document."
-                : "No claims in this state."}
-            </p>
-          )}
+                <span className="min-w-0 flex-1 text-[13px] text-ink/85">
+                  <Truncate lines={3}>{f.claim}</Truncate>
+                  <Truncate className="mt-0.5 text-[11px] text-ink/65">
+                    {f.source} · {f.status} · {f.verified}
+                  </Truncate>
+                </span>
+              </div>
+            ))}
+            {shownClaims.length === 0 && (
+              <p className="text-[12.5px] text-ink/70">
+                {claims.length === 0
+                  ? "No claims extracted yet. Run a fact check to scan the document."
+                  : "No claims in this state."}
+              </p>
+            )}
+          </Scrollable>
         </div>
       ) : (
         <div className="px-4 pb-4">

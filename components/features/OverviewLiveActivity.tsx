@@ -52,6 +52,9 @@ const DEMO_FEED: FeedItem[] = [
 
 const isNoise = (e: FeedItem) => /slack/i.test(`${e.kind} ${e.text}`);
 
+/** Events on screen before the feed's own "Show all". */
+const FEED_ROWS = 8;
+
 export type OverviewLiveActivityProps = {
   items?: FeedItem[];
   loading?: boolean;
@@ -75,7 +78,11 @@ export function OverviewLiveActivity({
     return () => clearInterval(t);
   }, [pollMs]);
 
-  const rows = items.filter((e) => !isNoise(e)).slice(0, 8);
+  /* The widget shows the newest FEED_ROWS events. It hands the whole feed to
+     <ActivityFeed> rather than slicing it away, so the count strip can say
+     honestly how many of how many are on screen (§13) and the reader can open
+     the rest inside the feed's own bounded scroll region (§20). */
+  const rows = items.filter((e) => !isNoise(e));
   // "Running" means the feed is live and has work to show; a feed with nothing
   // in it reads as paused rather than pretending to be busy.
   const running = !loading && !offline && rows.length > 0;
@@ -111,7 +118,7 @@ export function OverviewLiveActivity({
       ) : rows.length === 0 ? (
         <p className="py-4 text-[13px] text-ink/70">Quiet for now, nothing running.</p>
       ) : (
-        <ActivityFeed items={activityItems} />
+        <ActivityFeed items={activityItems} max={FEED_ROWS} maxHeight={360} />
       )}
     </Card>
   );

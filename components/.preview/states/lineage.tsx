@@ -4,7 +4,7 @@ import {
   LineageNodeDrawer, LineageEdgeDrawer, LineageGroupDrawer, LineageAssertDrawer,
 } from "../../features";
 import { Lineage } from "../../index";
-import { DEMO_NODES, DEMO_EDGES, type LNode, type LEdge } from "../../features/LineageDataModel";
+import { DEMO_NODES, DEMO_EDGES, REL_ORDER, type LNode, type LEdge } from "../../features/LineageDataModel";
 
 /* State matrix for the lineage group. Author EVERY state worth reviewing:
    default, each variant, loading, empty, error, disabled, selected, and the
@@ -57,6 +57,107 @@ const MANY_MEMBERS: LNode[] = Array.from({ length: 24 }, (_, i) => ({
   x: 0, y: 0, owner: i % 3 === 0 ? LONG_OWNER : "Dev R", date: "2026-07-19", inbound: 24 - i,
 }));
 
+/* ── volume fixtures ───────────────────────────────────────────────────────
+   The tiny demo graph hides every density problem. These are the honest worst
+   cases: a 150-node / ~400-edge graph, a 500-member bucket, an 80-document
+   impact analysis, a 30-source workspace, and a hub node wired to ~60 others.
+   Deterministic (a tiny LCG) so a contact sheet is reproducible. */
+
+let seed = 20260724;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+
+const VOL_SOURCES = ["docs", "github", "slack", "notion", "granola", "gdocs", "docsite"];
+const VOL_OWNERS = ["Ana K", "Dev R", "Mia M", "Sam L", "Jo S", LONG_OWNER, "Priya N", "Tom W"];
+const VOL_TITLES = [
+  "Pricing policy", "Free-tier limits", "Billing FAQ", "Seat cap rollout", "Refund workflow",
+  "Enterprise agreement template", "Usage-based true-up rules", "Regional tax carve-outs",
+  "Launch brief", "Support macro: billing", "Onboarding guide", "Trial conversion plan",
+];
+
+/** 150 document nodes spread over the canvas, a handful deliberately warned. */
+const VOL_NODES: LNode[] = Array.from({ length: 150 }, (_, i) => {
+  const source = VOL_SOURCES[i % VOL_SOURCES.length];
+  const stale = Math.floor(rnd() * 120);
+  return {
+    id: `v${i}`,
+    source,
+    title: i % 17 === 0 ? LONG : `${VOL_TITLES[i % VOL_TITLES.length]} ${i + 1}`,
+    meta: `Page · owner ${VOL_OWNERS[i % VOL_OWNERS.length]} · ${stale}d ago`,
+    icon: source,
+    docKind: (["page", "commit", "pr", "issue", "answer", "decision"] as const)[i % 6],
+    group: "",
+    x: 0.05 + rnd() * 0.9,
+    y: 0.05 + rnd() * 0.9,
+    date: `2026-0${1 + (i % 7)}-${String(1 + (i % 28)).padStart(2, "0")}`,
+    owner: VOL_OWNERS[i % VOL_OWNERS.length],
+    staleDays: stale,
+    warn: stale > 90,
+    tags: i % 5 === 0 ? ["customer-facing", "pricing", "revenue", "enterprise", "tax", "q3", "legal-reviewed", "renewals", "emea", "long-tag-name-that-runs-on"] : undefined,
+    inbound: 0,
+    outbound: 0,
+  };
+});
+
+/** ~400 edges, with v0 as a hub carrying ~60 of them. */
+const VOL_EDGES: LEdge[] = [
+  ...Array.from({ length: 60 }, (_, i) => ({
+    id: `vh${i}`,
+    from: i % 2 === 0 ? "v0" : `v${1 + i}`,
+    to: i % 2 === 0 ? `v${1 + i}` : "v0",
+    rel: REL_ORDER[i % REL_ORDER.length],
+    date: "2026-07-19",
+    meta: { note: i % 3 === 0 ? LONG : undefined, evidence: i % 4 === 0 ? HUGE : undefined },
+  })),
+  ...Array.from({ length: 340 }, (_, i) => {
+    const from = Math.floor(rnd() * 150);
+    const to = (from + 1 + Math.floor(rnd() * 20)) % 150;
+    return {
+      id: `ve${i}`,
+      from: `v${from}`,
+      to: `v${to}`,
+      rel: REL_ORDER[i % REL_ORDER.length],
+      date: "2026-06-10",
+    };
+  }),
+];
+
+for (const n of VOL_NODES) {
+  n.inbound = VOL_EDGES.filter((e) => e.to === n.id).length;
+  n.outbound = VOL_EDGES.filter((e) => e.from === n.id).length;
+}
+
+/** 30 connected sources, the wide end of what a workspace can wire up. */
+const VOL_SOURCE_NODES: LNode[] = Array.from({ length: 30 }, (_, i) => ({
+  id: `vs${i}`,
+  source: i < VOL_SOURCES.length ? VOL_SOURCES[i] : `connector-${String(i).padStart(2, "0")}-with-a-long-name`,
+  title: `${VOL_TITLES[i % VOL_TITLES.length]} ${i + 1}`,
+  meta: "Page · owner Ana K · 5d ago",
+  icon: "doc", docKind: "page" as const, group: "",
+  x: 0.05 + (i % 10) * 0.1, y: 0.1 + Math.floor(i / 10) * 0.3,
+  date: "2026-07-01", owner: VOL_OWNERS[i % VOL_OWNERS.length], staleDays: i, inbound: i, outbound: 30 - i,
+}));
+
+/** 500 commits in one roll-up bucket. */
+const VOL_MEMBERS: LNode[] = Array.from({ length: 500 }, (_, i) => ({
+  id: `vm${i}`, source: "github",
+  title: i % 11 === 0 ? LONG : i % 13 === 0 ? HUGE : `fix: billing edge case #${i + 1}`,
+  meta: "commit", icon: "github", docKind: "commit" as const, group: "gh:MariHQ/web:commits",
+  x: 0, y: 0, owner: VOL_OWNERS[i % VOL_OWNERS.length],
+  date: `2026-0${1 + (i % 7)}-${String(1 + (i % 28)).padStart(2, "0")}`, inbound: 500 - i,
+}));
+
+/** An 80-document impact analysis. */
+const VOL_IMPACT = {
+  claim: "Free tier ends September 1",
+  summary: "412 documents reference the free tier. 27 directly contradict the new end date, 31 need a review pass, and 22 mention it in passing.",
+  docs: Array.from({ length: 80 }, (_, i) => ({
+    title: i % 9 === 0 ? LONG : i % 11 === 0 ? HUGE : `${VOL_TITLES[i % VOL_TITLES.length]} ${i + 1}`,
+    source: VOL_SOURCES[i % VOL_SOURCES.length],
+    severity: (["update-required", "review", "minor"] as const)[i % 3],
+    reason: i % 4 === 0 ? LONG : "states the free tier is permanent",
+  })),
+};
+
 /* ── data-display Lineage fixtures ─────────────────────────────────────── */
 
 const UP = [
@@ -90,6 +191,10 @@ export const LINEAGE: ComponentSpec[] = [
       { id: "single", label: "One orphan node, no edges", node: <LineageGraph nodes={LONE_NODES} edges={[]} focalId="solo" /> },
       { id: "overflow", label: "Overflow: absurd titles, unbreakable string, long owners",
         node: <LineageGraph nodes={OVER_NODES} edges={OVER_EDGES} focalId="n1" /> },
+      { id: "stress", label: "Volume: 150 nodes, 400 edges (capped, decluttered, counted)",
+        node: <LineageGraph nodes={VOL_NODES} edges={VOL_EDGES} focalId="v0" /> },
+      { id: "stress-trace", label: "Volume: 150 nodes, downstream trace from the hub node",
+        node: <LineageGraph nodes={VOL_NODES} edges={VOL_EDGES} focalId="v0" trace={{ originId: "v0", direction: "down" }} /> },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: <LineageGraph /> },
     ],
   },
@@ -102,6 +207,8 @@ export const LINEAGE: ComponentSpec[] = [
       { id: "loading", label: "Loading skeleton", node: <LineageToolbar loading /> },
       { id: "empty", label: "No nodes (no sources to filter by)", node: <LineageToolbar nodes={[]} /> },
       { id: "overflow", label: "Overflow: many long source names", node: <LineageToolbar nodes={OVER_NODES.concat(DEMO_NODES)} /> },
+      { id: "stress", label: "Volume: 30 connected sources, 150-node graph",
+        node: <LineageToolbar nodes={VOL_SOURCE_NODES.concat(VOL_NODES)} /> },
       { id: "narrow", label: "Overflow: narrow frame", width: 320, node: <LineageToolbar /> },
     ],
   },
@@ -143,6 +250,8 @@ export const LINEAGE: ComponentSpec[] = [
         node: <LineageNodeDrawer nodes={OVER_NODES} edges={OVER_EDGES} nodeId="n1" /> },
       { id: "overflow-unbreakable", label: "Overflow: 90-char unbreakable title",
         node: <LineageNodeDrawer nodes={OVER_NODES} edges={OVER_EDGES} nodeId="n2" /> },
+      { id: "stress", label: "Volume: hub node with ~60 links, 10 tags",
+        node: <LineageNodeDrawer nodes={VOL_NODES} edges={VOL_EDGES} nodeId="v0" /> },
       { id: "narrow", label: "Overflow: narrow frame (fixed width must not shrink)", width: 320,
         node: <LineageNodeDrawer nodeId="n4" /> },
     ],
@@ -159,6 +268,8 @@ export const LINEAGE: ComponentSpec[] = [
       { id: "loading", label: "Loading skeleton", node: <LineageEdgeDrawer loading /> },
       { id: "overflow", label: "Overflow: absurd endpoint titles + unbreakable evidence",
         node: <LineageEdgeDrawer nodes={OVER_NODES} edges={OVER_EDGES} edgeId="e1" /> },
+      { id: "stress", label: "Volume: edge inside a 400-edge graph, both endpoints heavily linked",
+        node: <LineageEdgeDrawer nodes={VOL_NODES} edges={VOL_EDGES} edgeId="vh0" /> },
       { id: "narrow", label: "Overflow: narrow frame (fixed width must not shrink)", width: 320,
         node: <LineageEdgeDrawer edgeId="e3" /> },
     ],
@@ -175,6 +286,8 @@ export const LINEAGE: ComponentSpec[] = [
       { id: "empty", label: "Empty: no members left after filters", node: <LineageGroupDrawer totalMembers={0} members={[]} /> },
       { id: "overflow", label: "Overflow: absurd repo id and member titles",
         node: <LineageGroupDrawer groupId={`gh:MariHQ/${HUGE}:commits`} totalMembers={248} members={MANY_MEMBERS} /> },
+      { id: "stress", label: "Volume: 500 members in one bucket",
+        node: <LineageGroupDrawer totalMembers={500} members={VOL_MEMBERS} /> },
       { id: "narrow", label: "Overflow: narrow frame (fixed width must not shrink)", width: 320,
         node: <LineageGroupDrawer /> },
     ],
@@ -201,6 +314,8 @@ export const LINEAGE: ComponentSpec[] = [
               })),
             }}
           />) },
+      { id: "stress", label: "Volume: 80 impacted documents",
+        node: <LineageAssertDrawer result={VOL_IMPACT} /> },
       { id: "narrow", label: "Overflow: narrow frame (fixed width must not shrink)", width: 320,
         node: <LineageAssertDrawer /> },
     ],
@@ -224,6 +339,12 @@ export const LINEAGE: ComponentSpec[] = [
           upstream={[{ id: "u1", label: LONG, sublabel: LONG_OWNER }, { id: "u2", label: HUGE, sublabel: HUGE }]}
           focus={{ id: "f", label: LONG, sublabel: HUGE }}
           downstream={[{ id: "d1", label: HUGE, sublabel: "doc site" }]} /> },
+      { id: "stress", label: "Volume: 40 upstream and 40 downstream nodes",
+        node: <Lineage
+          upstream={Array.from({ length: 40 }, (_, i) => ({ id: `su${i}`, label: i % 7 === 0 ? LONG : `Upstream document ${i + 1}`, sublabel: "docs", tone: (["ok", "info", "attention", "blocked", "neutral"] as const)[i % 5] }))}
+          focus={FOCUS}
+          downstream={Array.from({ length: 40 }, (_, i) => ({ id: `sd${i}`, label: i % 9 === 0 ? HUGE : `Downstream document ${i + 1}`, sublabel: "notion" }))}
+          onSelect={() => {}} /> },
       { id: "narrow", label: "Overflow: narrow frame", width: 320,
         node: <Lineage upstream={UP} focus={FOCUS} downstream={DOWN} /> },
     ],

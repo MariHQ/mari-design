@@ -1,8 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
+import { Inbox, Search } from "lucide-react";
 import { card } from "../tokens/card";
 import { cellText } from "./Table";
-import { pagerBtn } from "./Pagination";
+import { PagerBar, ResultCount } from "./Pagination";
 import { Scrollable } from "./Scrollable";
 import { SkeletonTable } from "./Skeleton";
 import { SortHeader, tdPad, type Align, type SortState } from "./sortable";
@@ -58,6 +58,7 @@ export function allOptionLabel(label: string) {
 export function DataTable<T>({
   title, count, rows, columns, rowKey, search, searchPlaceholder = "Search…",
   facet, actions, onRowClick, pageSize = 8, minW = 720, empty = "No results", loading = false,
+  noun = "rows",
 }: {
   title?: string;
   count?: number;
@@ -81,6 +82,8 @@ export function DataTable<T>({
   minW?: number;
   empty?: string;
   loading?: boolean;
+  /** Plural noun for the result-count strip: "members", "keys", "events". */
+  noun?: string;
 }) {
   const [query, setQuery] = useState("");
   const [facetVal, setFacetVal] = useState("");
@@ -153,6 +156,15 @@ export function DataTable<T>({
           <p className="mt-2 text-[13px] text-ink/70">{query || facetVal ? "No matches. Try clearing filters." : empty}</p>
         </div>
       ) : (
+        <>
+        {/* Result count above the rows, never under them (CONVENTIONS §13). */}
+        <ResultCount
+          from={cur * pageSize + 1}
+          to={Math.min((cur + 1) * pageSize, filtered.length)}
+          total={filtered.length}
+          noun={noun}
+          note={query || facetVal ? `filtered from ${rows.length.toLocaleString("en-US")}` : undefined}
+        />
         <Scrollable>
           <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
             <thead>
@@ -179,16 +191,11 @@ export function DataTable<T>({
             </tbody>
           </table>
         </Scrollable>
+        </>
       )}
 
       {filtered.length > pageSize && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-ink/10 font-term text-[11.5px] text-ink/65">
-          <span>{cur * pageSize + 1} to {Math.min((cur + 1) * pageSize, filtered.length)} of {filtered.length}</span>
-          <div className="flex items-center gap-1">
-            <button disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} aria-label="Previous page" className={pagerBtn}><ChevronLeft size={14} /></button>
-            <button disabled={cur >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} aria-label="Next page" className={pagerBtn}><ChevronRight size={14} /></button>
-          </div>
-        </div>
+        <PagerBar page={cur} pageCount={pageCount} onChange={setPage} />
       )}
     </div>
   );

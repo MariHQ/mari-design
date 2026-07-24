@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Layers, ShieldCheck, CheckCircle2, ArrowRight, ExternalLink, UploadCloud, FileText } from "lucide-react";
 import { card } from "../tokens/card";
 import { PageHeader } from "../layout/PageHeader";
@@ -55,7 +55,7 @@ const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 function SplitBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
   return (
-    <div className={mobile ? "flex flex-col gap-5" : "grid grid-cols-[minmax(0,1fr)_320px] gap-5"}>
+    <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
       <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
     </div>

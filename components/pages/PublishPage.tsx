@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Send, ExternalLink, FileText, Check, Plus, GripVertical } from "lucide-react";
 import { card } from "../tokens/card";
 import { PageHeader } from "../layout/PageHeader";
@@ -341,7 +341,7 @@ function SiteEditorInline({ tab, mobile }: { tab: EditorTab; mobile: boolean }) 
         className={
           tab === "preview" || mobile
             ? "grid items-start gap-5 [&>*]:min-w-0"
-            : "grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5 [&>*]:min-w-0"
+            : `items-start [&>*]:min-w-0 ${SPLIT[320]}`
         }
       >
         <Card>
@@ -378,7 +378,7 @@ function PublishFlow({ phase, mobile }: { phase: PublishPhase; mobile: boolean }
       className={
         mobile
           ? "flex flex-col gap-5 [&>*]:min-w-0"
-          : "grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5 [&>*]:min-w-0"
+          : `items-start [&>*]:min-w-0 ${SPLIT[320]}`
       }
     >
       <div className={`${card} p-5`}>

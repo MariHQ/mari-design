@@ -100,6 +100,41 @@ const LONG_DOC = {
   timeline: Array.from({ length: 12 }, (_, i) => ({ at: `Jul ${(i % 28) + 1}, 2026, 4:12 PM`, actor: "Aleksandra Konstantinopoulou-Whitfield", verb: i % 2 ? LONG : HUGE })),
 };
 
+/* ── Volume fixtures ─────────────────────────────────────────────────────
+   Production-sized knowledge: a corpus search returns hundreds of documents,
+   and a well-mined runbook carries dozens of facts, related docs and
+   revisions. The browser must page them, not lay 400 cards on the floor. */
+
+const STRESS_RESULTS: Result[] = Array.from({ length: 400 }, (_, i) => {
+  const base = RESULTS[i % RESULTS.length];
+  return {
+    ...base,
+    id: `s${i}`,
+    title: i % 37 === 0 ? HUGE : i % 11 === 0 ? LONG : `${base.title} (${i + 1})`,
+    snippet: i % 13 === 0 ? `${LONG}. ${LONG}.` : base.snippet,
+    author: i % 23 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : base.author,
+    date: `2026-0${(i % 7) + 1}-${String((i % 28) + 1).padStart(2, "0")}`,
+  };
+});
+
+const STRESS_DOC = {
+  ...DOC,
+  title: "Payments incident runbook, consolidated across every connected source",
+  tags: ["canonical", "customer-facing", "internal", "needs-review", "draft", "deprecated", "stale", "verified"],
+  facts: Array.from({ length: 120 }, (_, i) => ({
+    text: i % 19 === 0 ? `${HUGE}_${i}` : `Fact ${i + 1}: the settlement alarm fires when queue depth exceeds ${(i + 1) * 1000}.`,
+  })),
+  related: Array.from({ length: 90 }, (_, i) => ({
+    source: ["github", "slack", "docs", "notion"][i % 4],
+    title: i % 17 === 0 ? HUGE : `Related document ${i + 1}: settlement retry behaviour`,
+  })),
+  timeline: Array.from({ length: 240 }, (_, i) => ({
+    at: `Jul ${(i % 28) + 1}, 2026, 4:12 PM`,
+    actor: i % 11 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : "Priya Nair",
+    verb: i % 7 === 0 ? LONG : "verified the runbook",
+  })),
+};
+
 export const KNOWLEDGE: ComponentSpec[] = [
   {
     id: "KnowledgeBrowser", title: "KnowledgeBrowser", width: 1080,
@@ -110,7 +145,11 @@ export const KNOWLEDGE: ComponentSpec[] = [
       { id: "single", label: "Single result", node: <KnowledgeBrowser results={[RESULTS[1]]} /> },
       { id: "many", label: "Overflow: far too many results", node: <KnowledgeBrowser results={LONG_RESULTS} /> },
       { id: "long", label: "Overflow: long titles + 90-char unbreakable string", node: <KnowledgeBrowser results={LONG_RESULTS.slice(0, 3)} /> },
-      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <KnowledgeBrowser results={LONG_RESULTS.slice(0, 3)} /> },
+      /* A 320px frame is the mobile case, and mobile is composed at the page
+         level: the page passes `stacked` so the facet rail sits above the feed
+         instead of squeezing it (CONVENTIONS.md §10). */
+      { id: "narrow", label: "Overflow: narrow 320px frame (stacked, as a page renders it)", width: 320, node: <KnowledgeBrowser stacked results={LONG_RESULTS.slice(0, 3)} /> },
+      { id: "stress", label: "Volume: 400-document corpus", node: <KnowledgeBrowser results={STRESS_RESULTS} /> },
     ],
   },
   {
@@ -122,6 +161,7 @@ export const KNOWLEDGE: ComponentSpec[] = [
       { id: "slack", label: "Slack decision excerpt (tags suppressed)", node: <KnowledgeInspector doc={SLACK_DOC} /> },
       { id: "long", label: "Overflow: long text, too many chips + unbreakable string", node: <KnowledgeInspector doc={LONG_DOC} /> },
       { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <KnowledgeInspector doc={LONG_DOC} /> },
+      { id: "stress", label: "Volume: 120 facts, 90 related docs, 240 revisions", node: <KnowledgeInspector doc={STRESS_DOC} /> },
     ],
   },
 ];

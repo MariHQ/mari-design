@@ -7,6 +7,8 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonTable } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Facts verification audit — a client-side audit derived entirely from the
@@ -84,6 +86,10 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
 
   const staleCount = auditRows.filter((r) => r.age != null && r.age > STALE_AFTER_DAYS).length;
 
+  /* A mature knowledge base verifies thousands of facts; the audit pages
+     instead of rendering every one into the panel (CONVENTIONS §13). */
+  const pager = usePaged(sorted, 10);
+
   const createReviewTask = (f: Fact) => {
     setTaskState((s) => ({ ...s, [f.id]: "creating" }));
     // Emulate the createTask mutation resolving. The button has to leave
@@ -126,8 +132,18 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
       {auditRows.length === 0 ? (
         <EmptyState icon={<ShieldCheck size={24} />} title="Nothing to audit">No verified facts to audit yet.</EmptyState>
       ) : (
+        <>
+        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="verified facts"
+          note={`${staleCount.toLocaleString("en-US")} stale`} />
         <Scrollable>
-          <table className="w-full border-collapse text-left" style={{ minWidth: 700 }}>
+          {/* table-fixed + a floor wide enough that "Create review task"
+              never has to wrap: the widths are binding, so the claim column
+              gives up space rather than the action column collapsing. */}
+          <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 820 }}>
+            <colgroup>
+              <col style={{ width: "31%" }} /><col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+              <col style={{ width: "18%" }} /><col style={{ width: "26%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <SortHeader label="Claim" sortKey="claim" sort={sort} onSort={onSort} />
@@ -138,23 +154,27 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
               </tr>
             </thead>
             <tbody>
-              {sorted.map(({ fact, age }) => {
+              {pager.pageRows.map(({ fact, age }) => {
                 const stale = age != null && age > STALE_AFTER_DAYS;
                 const state = taskState[fact.id] ?? "idle";
                 return (
                   <Fragment key={fact.id}>
                     <tr className="border-b border-ink/[0.06]">
-                      <td className={`${td} max-w-[320px] align-top`}>
-                        <b className="block text-[13px] font-medium text-ink">{fact.claim}</b>
-                        <div className="mt-0.5 truncate font-term text-[11px] text-ink/65">{fact.source}</div>
+                      <td className={`${td} align-top`}>
+                        <Truncate lines={2} className="text-[13px] font-medium text-ink">{fact.claim}</Truncate>
+                        <Truncate className="mt-0.5 font-term text-[11px] text-ink/65">{fact.source}</Truncate>
                       </td>
-                      <td className={`${td} max-w-[160px] truncate align-top`}>{fact.owner}</td>
+                      <td className={`${td} align-top`}><Truncate>{fact.owner}</Truncate></td>
                       <td className={`${td} whitespace-nowrap text-center align-top font-term text-[12px] text-ink/70`}>
                         {fact.verified ? fmtDate(fact.verified) : "Not recorded"}
                         {age != null && <span className="block text-ink/65">{age}d ago</span>}
                       </td>
                       <td className={`${td} whitespace-nowrap align-top`}>
-                        <Chip label={stale ? "Stale candidate" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
+                        {/* "Stale", not "Stale candidate": the longer label
+                            did not fit the column and rendered as an
+                            ellipsised chip. The card hint carries the full
+                            meaning. */}
+                        <Chip label={stale ? "Stale" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
                       </td>
                       <td className={`${td} whitespace-nowrap text-right align-top`}>
                         {stale && (
@@ -188,6 +208,8 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
             </tbody>
           </table>
         </Scrollable>
+        {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+        </>
       )}
     </Card>
   );

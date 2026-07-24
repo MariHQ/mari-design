@@ -8,7 +8,9 @@ import { CopyButton } from "../actions/CopyButton";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Chip, CountChip } from "../data-display/Chip";
+import { Chip, ChipList, CountChip } from "../data-display/Chip";
+import { ResultCount } from "../data-display/Pagination";
+import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
@@ -94,6 +96,10 @@ export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, load
   const [scope, setScope] = useState<McpScope>("workspace");
   const [caps, setCaps] = useState<string[]>(["search", "facts"]);
   const [fresh, setFresh] = useState<{ name: string; token: string } | null>(null);
+  /* A platform team runs dozens of servers. Show a screenful of cards and name
+     the remainder rather than stacking 60 cards (CONVENTIONS §13). */
+  const [showAll, setShowAll] = useState(false);
+  const PAGE = 8;
 
   const toggleCap = (setter: (fn: (c: string[]) => string[]) => void) => (k: string) =>
     setter((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
@@ -159,7 +165,18 @@ export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, load
         <Card><EmptyState icon={<KeyRound size={24} />} title="No MCP servers yet">Create one to expose this knowledge base to agents.</EmptyState></Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {servers.map((s) => (
+          <div className="overflow-hidden rounded-md border border-ink/12 bg-paper">
+            <ResultCount
+              from={1} to={showAll ? servers.length : Math.min(PAGE, servers.length)} total={servers.length} noun="servers"
+              className="border-b-0"
+              actions={servers.length > PAGE && (
+                <Button variant="link" compact onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? "Show fewer" : `Show all ${servers.length}`}
+                </Button>
+              )}
+            />
+          </div>
+          {(showAll ? servers : servers.slice(0, PAGE)).map((s) => (
             <ServerCard key={s.id} server={s} freshToken={fresh?.name === s.name ? fresh.token : undefined} onDelete={() => del(s.id)} onSave={(scope, caps) => saveCaps(s.id, scope, caps)} />
           ))}
         </div>
@@ -188,17 +205,23 @@ function ServerCard({ server, freshToken, onDelete, onSave }: {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-        <span className="min-w-0 break-all text-[14px] font-semibold text-ink">{server.name}</span>
+        <span className={`w-2 h-2 shrink-0 rounded-full ${dotColor}`} />
+        {/* A server name is a slug of arbitrary length: one line, ellipsised,
+            full value on hover (CONVENTIONS §12). */}
+        <Truncate className="min-w-0 max-w-[18rem] flex-1 basis-[10rem] text-[14px] font-semibold text-ink">{server.name}</Truncate>
         <Chip label={SCOPE_LABEL[normalizeScope(server.scope)] ?? server.scope} tone="neutral" caps />
-        <span className="font-term text-[11.5px] text-ink/65">{capTools(server.capabilities)} tools</span>
-        <span className="font-term text-[11.5px] text-ink/65 truncate max-w-[220px] hidden sm:inline">{server.url}</span>
-        <CopyButton value={server.url} label="Copy" className="ml-auto" />
+        <span className="shrink-0 font-term text-[11.5px] text-ink/65">{capTools(server.capabilities)} tools</span>
+        <TruncateInline className="hidden max-w-[220px] font-term text-[11.5px] text-ink/65 sm:inline-block">{server.url}</TruncateInline>
+        <CopyButton value={server.url} label="Copy" className="ml-auto shrink-0" />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        {server.capabilities.length === 0 ? <span className="text-[12.5px] italic text-ink/65">Capabilities not set</span> : server.capabilities.map((c) => <Chip key={c} label={c} tone="info" caps />)}
-      </div>
+      {server.capabilities.length === 0 ? (
+        <div className="mt-3 text-[12.5px] italic text-ink/65">Capabilities not set</div>
+      ) : (
+        <ChipList max={8} className="mt-3">
+          {server.capabilities.map((c) => <Chip key={c} label={c} tone="info" caps />)}
+        </ChipList>
+      )}
 
       {/* Actions bottom LEFT, primary first (CONVENTIONS.md §2). */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">

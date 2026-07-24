@@ -1,5 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
 import { Sparkles, BookOpen, FileCheck } from "lucide-react";
 import { InsightsWidgets } from "../features/InsightsWidgets";
 import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFreshnessChart";
@@ -148,15 +148,17 @@ function BareHeader() {
   );
 }
 
-/* §11 dashboard grid: one three-column grid for the whole body so every tile
-   shares the same left/right edges and the same vertical rhythm. Widgets span
-   the columns they need. */
-const GRID = "grid grid-cols-3 items-start gap-5 [&>*]:min-w-0";
+/* §11 dashboard grid: one grid for the whole body so every tile shares the
+   same left/right edges and the same vertical rhythm. Widgets span the columns
+   they need, and the shared DASH3/SPAN pair drops the row from three-up to
+   two-up to one-up as the window narrows (see PageFrame) so a widget is never
+   squeezed to a gutter. */
+const GRID = `${DASH3} items-start [&>*]:min-w-0`;
 const GRID_M = "flex flex-col gap-5 [&>*]:min-w-0";
 
 function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const grid = mobile ? GRID_M : GRID;
-  const full = mobile ? "" : "col-span-3";
+  const full = mobile ? "" : SPAN[3];
   if (state === "error") {
     return (
       <>
@@ -189,8 +191,8 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           glossary={stressGlossary(p)}
           activity={stressActivity(p)}
         />
-        <div className={mobile ? "" : "col-span-2"}><InsightsFreshnessChart /></div>
-        <div className={mobile ? "" : "col-span-1"}><StressExtras pathological={p} /></div>
+        <div className={mobile ? "" : SPAN[2]}><InsightsFreshnessChart /></div>
+        <div className={mobile ? "" : SPAN[1]}><StressExtras pathological={p} /></div>
       </div>
     );
   }

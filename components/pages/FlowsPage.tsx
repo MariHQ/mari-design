@@ -1,5 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor } from "./PageFrame";
+import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Workflow, Bell, FileText } from "lucide-react";
 import { FlowsList } from "../features/FlowsList";
 import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
@@ -240,7 +240,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
       );
     }
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-5">
+      <div className={`items-start ${SPLIT[320]}`}>
         <div className="min-w-0"><FlowsList /></div>
         <div className="min-w-0"><TriggerEditorPreview kind={triggerKind} /></div>
       </div>

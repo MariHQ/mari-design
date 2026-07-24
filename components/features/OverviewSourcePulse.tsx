@@ -8,6 +8,7 @@ import { ErrorMessage } from "../feedback/ErrorMessage";
 import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* Overview — Source pulse ─────────────────────────────────────────────────
    A grid of per-source activity tiles showing each connected source's 7-day
@@ -100,8 +101,9 @@ export type OverviewSourcePulseProps = {
   className?: string;
 };
 
-/** Collapsed height of the grid, in tiles. */
+/** Collapsed height of the grid, in tiles, and the expanded page size. */
 const PREVIEW_TILES = 4;
+const EXPANDED_TILES = 24;
 
 export function OverviewSourcePulse({
   tiles = DEMO_TILES, loading = false, offline = false, onViewAll, onRetry,
@@ -109,7 +111,7 @@ export function OverviewSourcePulse({
 }: OverviewSourcePulseProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const hidden = Math.max(0, tiles.length - PREVIEW_TILES);
-  const visible = expanded ? tiles : tiles.slice(0, PREVIEW_TILES);
+  const visible = expanded ? tiles.slice(0, EXPANDED_TILES) : tiles.slice(0, PREVIEW_TILES);
 
   const viewAll = () => {
     setExpanded((v) => !v);
@@ -143,21 +145,30 @@ export function OverviewSourcePulse({
       ) : tiles.length === 0 ? (
         <EmptyState>No sources connected yet. Connect one in Sources.</EmptyState>
       ) : (
-        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] items-stretch gap-2.5">
-          {visible.map((t) => <PulseTile key={t.key} tile={t} />)}
-        </div>
-      )}
-      {!loading && !offline && hidden > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3">
-          <Button compact onClick={viewAll}>
-            {expanded
-              ? <><ChevronUp size={14} /> Show fewer sources</>
-              : <><ChevronDown size={14} /> View all sources</>}
-          </Button>
-          <span className="font-term text-[11.5px] text-ink/65">
-            {expanded ? `${tiles.length} connected` : `${hidden} more connected`}
-          </span>
-        </div>
+        <>
+          {/* Count strip + the control that changes it, above the grid (§13). */}
+          <div className="mb-2.5 flex flex-wrap items-center gap-2">
+            <span className="font-term text-[11.5px] text-ink/65">
+              {visible.length < tiles.length
+                ? `Showing ${visible.length} of ${tiles.length.toLocaleString()} sources`
+                : `Showing all ${tiles.length.toLocaleString()} connected source${tiles.length === 1 ? "" : "s"}`}
+            </span>
+            {hidden > 0 && (
+              <Button compact onClick={viewAll} aria-expanded={expanded}>
+                {expanded
+                  ? <><ChevronUp size={14} /> Show fewer sources</>
+                  : <><ChevronDown size={14} /> View all sources</>}
+              </Button>
+            )}
+          </div>
+          {/* A workspace can connect dozens of sources: the grid scrolls inside
+              a capped region instead of running past the fold (§20). */}
+          <Scrollable axis="y" style={{ maxHeight: visible.length > 8 ? 380 : undefined }} scrollerClassName="pr-1">
+            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] items-stretch gap-2.5">
+              {visible.map((t) => <PulseTile key={t.key} tile={t} />)}
+            </div>
+          </Scrollable>
+        </>
       )}
     </Card>
   );

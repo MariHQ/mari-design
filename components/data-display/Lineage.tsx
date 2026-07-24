@@ -24,7 +24,13 @@ export type LineageProps = {
   downstream?: LineageNode[];
   onSelect?: (node: LineageNode) => void;
   ariaLabel?: string;
+  /** Cards drawn per column before the rest roll up into one summary card.
+   *  A 40-node column drawn literally is 2,700px tall; the roll-up keeps the
+   *  view one screen high and still reports the true count. */
+  maxPerColumn?: number;
 };
+
+const DEFAULT_MAX_PER_COLUMN = 7;
 
 const NODE_H = 56; // px — must match the h-14 card below
 const GAP = 14; // px — vertical gap between stacked nodes
@@ -76,6 +82,24 @@ function NodeCard({ node, focus = false, onSelect }: { node: LineageNode; focus?
   );
 }
 
+/** Stands in for the members of a column that were not drawn. Same height and
+    width as a node card, so the fan of connectors still converges precisely. */
+function RollupCard({ n, word }: { n: number; word: string }) {
+  return (
+    <div
+      style={{ height: NODE_H }}
+      className="w-40 shrink-0 flex items-center gap-2 rounded-[5px] border border-dashed border-ink/25 bg-flysch/60 px-3 text-left"
+      title={`${n} more ${word} documents are not drawn`}
+    >
+      <span className="shrink-0 w-[3px] h-6 rounded-[1px] bg-ink/25" aria-hidden />
+      <span className="min-w-0">
+        <span className="block text-[12.5px] font-medium text-ink truncate">{n} more</span>
+        <span className="block font-term text-[10.5px] text-ink/65 truncate">{word}, not drawn</span>
+      </span>
+    </div>
+  );
+}
+
 /* Fan of curves between a column of `count` nodes and the single focus node.
    dir="in": sources on the left flow rightward into the focus.
    dir="out": focus on the left flows rightward out to dependents. */
@@ -108,26 +132,43 @@ function Connector({ count, dir }: { count: number; dir: "in" | "out" }) {
   );
 }
 
-export function Lineage({ upstream = [], focus, downstream = [], onSelect, ariaLabel = "Lineage" }: LineageProps) {
+export function Lineage({
+  upstream = [], focus, downstream = [], onSelect, ariaLabel = "Lineage",
+  maxPerColumn = DEFAULT_MAX_PER_COLUMN,
+}: LineageProps) {
+  /* Draw at most `maxPerColumn` cards per side. When a side is over budget the
+     last slot becomes a roll-up card, so the column height is capped and the
+     count is still honest. */
+  const split = (list: LineageNode[]) => {
+    if (list.length <= maxPerColumn) return { shown: list, rest: 0 };
+    return { shown: list.slice(0, maxPerColumn - 1), rest: list.length - (maxPerColumn - 1) };
+  };
+  const up = split(upstream);
+  const down = split(downstream);
+  const upSlots = up.shown.length + (up.rest ? 1 : 0);
+  const downSlots = down.shown.length + (down.rest ? 1 : 0);
+
   return (
     <Scrollable aria-label={ariaLabel}>
       <div className="inline-flex items-center gap-0 py-2">
-        {upstream.length > 0 && (
+        {upSlots > 0 && (
           <>
             <div className="flex flex-col justify-center" style={{ gap: GAP }}>
-              {upstream.map((n) => <NodeCard key={n.id} node={n} onSelect={onSelect} />)}
+              {up.shown.map((n) => <NodeCard key={n.id} node={n} onSelect={onSelect} />)}
+              {up.rest > 0 && <RollupCard n={up.rest} word="upstream" />}
             </div>
-            <Connector count={upstream.length} dir="in" />
+            <Connector count={upSlots} dir="in" />
           </>
         )}
 
         <NodeCard node={focus} focus onSelect={onSelect} />
 
-        {downstream.length > 0 && (
+        {downSlots > 0 && (
           <>
-            <Connector count={downstream.length} dir="out" />
+            <Connector count={downSlots} dir="out" />
             <div className="flex flex-col justify-center" style={{ gap: GAP }}>
-              {downstream.map((n) => <NodeCard key={n.id} node={n} onSelect={onSelect} />)}
+              {down.shown.map((n) => <NodeCard key={n.id} node={n} onSelect={onSelect} />)}
+              {down.rest > 0 && <RollupCard n={down.rest} word="downstream" />}
             </div>
           </>
         )}

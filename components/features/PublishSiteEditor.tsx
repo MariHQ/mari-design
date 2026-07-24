@@ -6,11 +6,14 @@ import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Chip } from "../data-display/Chip";
+import { Chip, ChipList } from "../data-display/Chip";
 import { Swatch } from "../data-display/Swatch";
 import { Stepper } from "../data-display/Stepper";
 import { TagChip } from "../data-display/TagChip";
 import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
+import { Truncate } from "../data-display/Truncate";
 import { focusRing } from "../tokens/focusRing";
 
 /* Publish · Site editor ───────────────────────────────────────────────────
@@ -78,10 +81,16 @@ const TABS: { id: EditorTab; label: string }[] = [
   { id: "content", label: "Content" }, { id: "nav", label: "Nav" }, { id: "theme", label: "Theme" }, { id: "deploy", label: "Deploy" },
 ];
 
-export type PublishSiteEditorProps = { site?: Site; loading?: boolean; className?: string };
+export type PublishSiteEditorProps = {
+  site?: Site;
+  /** Which config tab opens first, so each tab can be reviewed on its own. */
+  defaultTab?: EditorTab;
+  loading?: boolean;
+  className?: string;
+};
 
-export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className = "" }: PublishSiteEditorProps) {
-  const [tab, setTab] = useState<EditorTab>("theme");
+export function PublishSiteEditor({ site = DEMO_SITE, defaultTab = "theme", loading = false, className = "" }: PublishSiteEditorProps) {
+  const [tab, setTab] = useState<EditorTab>(defaultTab);
   const [theme, setTheme] = useState(THEMES[0]);
   const [accent, setAccent] = useState(THEMES[0].accent);
   const [radius, setRadius] = useState<"S" | "M" | "L">("M");
@@ -168,7 +177,9 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
             <div className="flex flex-col gap-4">
               <div>
                 <SectionLabel>Sources</SectionLabel>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">{site.sources.map((s) => <TagChip key={s} tag={s} />)}</div>
+                {/* A site can draw on dozens of tags; the row folds its tail
+                    instead of becoming a wall of chips (CONVENTIONS §13). */}
+                <ChipList max={8} className="mt-1.5">{site.sources.map((s) => <TagChip key={s} tag={s} />)}</ChipList>
                 <p className="mt-1.5 text-[12px] text-ink/65">Sources are set at creation and drive which docs are eligible.</p>
               </div>
               <div className="flex items-center gap-2">
@@ -178,27 +189,36 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
               </div>
               <div>
                 <SectionLabel>Pre-publish gates</SectionLabel>
-                <ul className="mt-1.5 flex flex-col gap-1.5">
+                {/* One gate per rule pack: a large site has dozens, so the
+                    list scrolls in a bounded box (CONVENTIONS §20). */}
+                <Scrollable axis="y" className="mt-1.5 max-h-[200px]" scrollerClassName="flex flex-col gap-1.5 pr-1">
                   {site.gates.map((g) => (
-                    <li key={g.name} className="flex items-center gap-2 text-[13px]">
-                      <Check size={14} className={g.ok ? "text-moss" : "text-clay"} />
-                      <span className="text-ink/85">{g.name}</span>
-                      <span className={`font-term text-[11.5px] ${g.ok ? "text-ink/65" : "text-clay"}`}>· {g.note}</span>
-                    </li>
+                    <div key={g.name} className="flex min-w-0 items-center gap-2 text-[13px]">
+                      <Check size={14} className={`shrink-0 ${g.ok ? "text-moss" : "text-clay"}`} />
+                      <Truncate className="min-w-0 flex-1 text-ink/85">{g.name}</Truncate>
+                      <span className={`shrink-0 truncate font-term text-[11.5px] ${g.ok ? "text-ink/65" : "text-clay"}`}>· {g.note}</span>
+                    </div>
                   ))}
-                </ul>
+                </Scrollable>
               </div>
             </div>
           )}
 
           {tab === "nav" && (
             <div className="flex flex-col gap-2">
-              {site.nav.map((n) => (
-                <div key={n.label}>
-                  <div className={`flex items-center gap-2 text-[13px] font-medium ${n.active ? "text-biscay-2" : "text-ink"}`}><FileText size={14} className="text-ink/65" /> {n.label}</div>
-                  {n.children && <div className="ml-6 mt-1 flex flex-col gap-0.5">{n.children.map((c) => <span key={c} className="text-[12.5px] text-ink/65">{c}</span>)}</div>}
-                </div>
-              ))}
+              {/* A published site's nav runs to hundreds of entries; it
+                  scrolls inside the tab rather than growing the card. */}
+              <Scrollable axis="y" className="max-h-[420px]" scrollerClassName="flex flex-col gap-2 pr-1">
+                {site.nav.map((n) => (
+                  <div key={n.label} className="min-w-0">
+                    <div className={`flex min-w-0 items-center gap-2 text-[13px] font-medium ${n.active ? "text-biscay-2" : "text-ink"}`}>
+                      <FileText size={14} className="shrink-0 text-ink/65" />
+                      <Truncate>{n.label}</Truncate>
+                    </div>
+                    {n.children && <div className="ml-6 mt-1 flex min-w-0 flex-col gap-0.5">{n.children.map((c) => <Truncate key={c} className="text-[12.5px] text-ink/65">{c}</Truncate>)}</div>}
+                  </div>
+                ))}
+              </Scrollable>
               <p className="mt-2 text-[12px] text-ink/65">Drag to reorder. Empty sections derive from doc headings at build time.</p>
             </div>
           )}
@@ -274,17 +294,22 @@ export function PublishSiteEditor({ site = DEMO_SITE, loading = false, className
               </div>
 
               <div>
-                <SectionLabel>Release history</SectionLabel>
-                <ul className="mt-1.5 flex flex-col divide-y divide-ink/10">
-                  {history.length === 0 ? <li className="py-3 text-[13px] text-ink/65">No previous releases.</li> : history.map((r) => (
-                    <li key={r.id} className="flex items-center gap-3 py-2.5">
-                      <span className="w-2 h-2 rounded-full bg-ink/30" />
-                      <span className="text-[13px] font-medium text-ink">{r.version}</span>
-                      <span className="font-term text-[11.5px] text-ink/65 flex-1">{r.notes ?? "deployed"}</span>
-                      <Button compact onClick={() => { setRollingBack(r.id); setTimeout(() => setRollingBack(null), 900); }}>{rollingBack === r.id ? "Rolling back…" : "Rollback"}</Button>
-                    </li>
+              <SectionLabel>Release history</SectionLabel>
+              <div className="mt-1.5 overflow-hidden rounded-md border border-ink/12">
+                {/* A live site deploys hundreds of times: the history scrolls
+                    in a bounded box under an honest count (§13, §20). */}
+                <ResultCount from={1} to={history.length} total={history.length} noun="previous releases" />
+                <Scrollable axis="y" className="max-h-[240px]" scrollerClassName="flex flex-col divide-y divide-ink/10 px-3">
+                  {history.length === 0 ? <div className="py-3 text-[13px] text-ink/65">No previous releases.</div> : history.map((r) => (
+                    <div key={r.id} className="flex min-w-0 items-center gap-3 py-2.5">
+                      <span className="w-2 h-2 shrink-0 rounded-full bg-ink/30" />
+                      <span className="shrink-0 text-[13px] font-medium text-ink">{r.version}</span>
+                      <Truncate className="min-w-0 flex-1 font-term text-[11.5px] text-ink/65">{r.notes ?? "deployed"}</Truncate>
+                      <Button compact className="shrink-0" onClick={() => { setRollingBack(r.id); setTimeout(() => setRollingBack(null), 900); }}>{rollingBack === r.id ? "Rolling back…" : "Rollback"}</Button>
+                    </div>
                   ))}
-                </ul>
+                </Scrollable>
+              </div>
               </div>
             </div>
           )}
@@ -326,8 +351,11 @@ function MockPreview({ accent, bg, name, nav, dark, radius }: { accent: string; 
         <div className="flex min-h-[280px]">
           <aside className="w-1/3 border-r border-ink/10 p-3" style={{ borderColor: dark ? "rgba(255,255,255,0.08)" : undefined }}>
             <div className="text-[13px] font-bold mb-2.5" style={{ color: accent }}>{name}</div>
-            <ul className="flex flex-col gap-1.5">
-              {nav.map((n, i) => <li key={n.label} className="text-[11px] font-medium" style={{ color: i === 0 ? accent : muted }}>{n.label}</li>)}
+            {/* The preview is a thumbnail: it shows the first few nav entries
+                and says how many more there are, never all 300. */}
+            <ul className="flex min-w-0 flex-col gap-1.5">
+              {nav.slice(0, 6).map((n, i) => <li key={n.label} className="truncate text-[11px] font-medium" style={{ color: i === 0 ? accent : muted }}>{n.label}</li>)}
+              {nav.length > 6 && <li className="text-[11px]" style={{ color: muted }}>+{nav.length - 6} more</li>}
             </ul>
           </aside>
           <main className="flex-1 p-4">

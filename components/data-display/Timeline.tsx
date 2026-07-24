@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { ChipTone } from "./Chip";
 import { SkeletonLine } from "./Skeleton";
+import { Scrollable } from "./Scrollable";
+import { Button } from "../actions/Button";
 
 /* Timeline — a vertical event timeline: a hairline rail with tone-colored
    nodes, each carrying a title, optional time, description and icon. Distinct
@@ -30,11 +32,21 @@ export type TimelineProps = {
   items: TimelineItem[];
   className?: string;
   loading?: boolean;
+  /** Events rendered before "Show all". */
+  max?: number;
+  /** Height cap, in px, once the timeline is long enough to scroll. */
+  maxHeight?: number;
 };
 
 const titleWidths = ["58%", "44%", "66%", "50%"];
 
-export function Timeline({ items, className = "", loading = false }: TimelineProps) {
+/** Events past which the timeline scrolls inside a bounded region (§20). */
+const BOUND_AT = 12;
+
+export function Timeline({ items, className = "", loading = false, max = 25, maxHeight = 440 }: TimelineProps) {
+  const [expanded, setExpanded] = useState(false);
+  const bounded = Math.min(items.length, expanded ? items.length : max) > BOUND_AT;
+
   if (loading) {
     return (
       <ol className={`relative ${className}`.trim()} aria-hidden="true">
@@ -57,10 +69,13 @@ export function Timeline({ items, className = "", loading = false }: TimelinePro
     );
   }
 
-  return (
-    <ol className={`relative ${className}`.trim()}>
-      {items.map((it, i) => {
-        const last = i === items.length - 1;
+  const capped = items.length > max;
+  const shown = capped && !expanded ? items.slice(0, max) : items;
+
+  const list = (
+    <ol className={`relative min-w-0 ${bounded ? "" : className}`.trim()}>
+      {shown.map((it, i) => {
+        const last = i === shown.length - 1;
         return (
           <li key={i} className="relative flex gap-3 pb-5 last:pb-0">
             {/* rail */}
@@ -88,5 +103,28 @@ export function Timeline({ items, className = "", loading = false }: TimelinePro
         );
       })}
     </ol>
+  );
+
+  if (!capped && !bounded) return list;
+
+  return (
+    <div className={`flex min-w-0 flex-col gap-2 ${className}`.trim()}>
+      {/* Count strip above the events it describes (§13). */}
+      {capped && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-term text-[11.5px] text-ink/65">
+            {expanded
+              ? `Showing all ${items.length.toLocaleString()} events`
+              : `Showing ${shown.length} of ${items.length.toLocaleString()} events`}
+          </span>
+          <Button variant="link" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "Show fewer" : "Show all"}
+          </Button>
+        </div>
+      )}
+      {bounded
+        ? <Scrollable axis="y" style={{ maxHeight }} scrollerClassName="pr-2">{list}</Scrollable>
+        : list}
+    </div>
   );
 }

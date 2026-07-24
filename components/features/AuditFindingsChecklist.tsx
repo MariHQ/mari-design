@@ -84,6 +84,11 @@ export function AuditFindingsChecklist({
   const [pulse, setPulse] = useState<Kind | null>(null);
   const [pick, setPick] = useState<Record<number, string>>({});
   const [scanning, setScanning] = useState(false);
+  /* A repo audit routinely returns 200+ findings in one kind. Each section
+     shows a screenful and names the real remainder, rather than rendering a
+     10,000px column of checklist rows (CONVENTIONS §13, §15). */
+  const [expandedKind, setExpandedKind] = useState<Set<Kind>>(new Set());
+  const PER_SECTION = 8;
 
   const statusOf = (f: AuditFinding): FindingStatus => overrides[f.id]?.status ?? f.status;
 
@@ -203,6 +208,9 @@ export function AuditFindingsChecklist({
         const isCollapsed = collapsed.has(k);
         const open = openCount(k);
         const visible = hideHandled ? rows.filter((f) => statusOf(f) === "open") : rows;
+        const showAll = expandedKind.has(k);
+        const shown = showAll ? visible : visible.slice(0, PER_SECTION);
+        const hidden = visible.length - shown.length;
         return (
           <Card key={k} variant="flush" className={pulse === k ? "ring-2 ring-biscay-2/40 transition-shadow" : ""}>
             <div className="flex items-center gap-3 px-4 py-3">
@@ -221,8 +229,22 @@ export function AuditFindingsChecklist({
                 {visible.length === 0 ? (
                   <div className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-moss"><Check size={14} /> All handled.</div>
                 ) : (
+                  <>
+                  <div className="flex items-center gap-3 border-b border-ink/10 bg-flysch/40 px-4 py-2 font-term text-[11.5px] text-ink/65">
+                    <span className="min-w-0 truncate">
+                      {hidden > 0
+                        ? `Showing ${shown.length} of ${visible.length} findings`
+                        : `${visible.length} finding${visible.length === 1 ? "" : "s"}`}
+                    </span>
+                    {(hidden > 0 || showAll) && (
+                      <Button variant="link" compact className="ml-auto" onClick={() =>
+                        setExpandedKind((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; })}>
+                        {showAll ? "Show fewer" : `Show all ${visible.length}`}
+                      </Button>
+                    )}
+                  </div>
                   <ul className="divide-y divide-ink/10">
-                    {visible.map((f) => {
+                    {shown.map((f) => {
                       const st = statusOf(f);
                       const ov = overrides[f.id];
                       return (
@@ -246,6 +268,7 @@ export function AuditFindingsChecklist({
                       );
                     })}
                   </ul>
+                  </>
                 )}
               </div>
             )}

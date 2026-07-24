@@ -8,6 +8,7 @@ import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSe
 import { Badge } from "../data-display/Badge";
 import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
+import { TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
   useLineageControls, clamp,
@@ -30,6 +31,9 @@ import {
    ──────────────────────────────────────────────────────────────────────── */
 
 type SearchResult = { id: string; node: LNode };
+
+/** Source rows a menu shows before it becomes a bounded scroll region. */
+const SOURCE_MENU_ROWS = 9;
 
 export type LineageToolbarProps = {
   nodes?: LNode[];
@@ -208,14 +212,19 @@ export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className 
         </div>
 
         <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.sources} label="Sources" value={sourceValue} />}>
-          {sources.map((s) => (
-            <MenuCheckboxItem key={s} checked={onSources.includes(s)} onCheckedChange={(c) => toggleSource(s, c)}>
-              <span className="flex items-center gap-2">
-                <NodeGlyph node={{ source: s }} size={14} /> {SOURCE_LABELS[s] ?? s}
-                <span className="ml-auto font-term text-[11px] text-ink/65">{docs.filter((n) => n.source === s).length}</span>
-              </span>
-            </MenuCheckboxItem>
-          ))}
+          {/* A workspace with 30 connected sources must not run a menu off the
+              bottom of the screen: the list is bounded and scrolls (§20). */}
+          <Scrollable axis="y" className={sources.length > SOURCE_MENU_ROWS ? "max-h-[264px] w-[228px]" : ""}>
+            {sources.map((s) => (
+              <MenuCheckboxItem key={s} checked={onSources.includes(s)} onCheckedChange={(c) => toggleSource(s, c)}>
+                <span className="flex min-w-0 items-center gap-2">
+                  <NodeGlyph node={{ source: s }} size={14} />
+                  <TruncateInline>{SOURCE_LABELS[s] ?? s}</TruncateInline>
+                  <span className="ml-auto shrink-0 font-term text-[11px] text-ink/65">{docs.filter((n) => n.source === s).length}</span>
+                </span>
+              </MenuCheckboxItem>
+            ))}
+          </Scrollable>
           <MenuSeparator />
           <MenuItem onSelect={() => applyView("All documents", { sources: null })}>All sources</MenuItem>
         </Menu>

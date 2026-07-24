@@ -105,7 +105,7 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
 
   if (loading) {
     return (
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()} aria-hidden="true">
+      <div className={`grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 ${className}`.trim()} aria-hidden="true">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="space-y-3 rounded-md border border-ink/12 bg-paper p-4">
             <div className="flex items-center gap-2.5">
@@ -178,8 +178,13 @@ export function SourcesConnectorCard({ sources = DEMO, loading = false, classNam
     );
   }
 
+  /* Auto-fill, not a fixed column count (CONVENTIONS.md §11). `lg:grid-cols-3`
+     held three columns no matter how narrow the page column got, which
+     squeezed each card to 124px and pushed its name and health chip out
+     through the border. Auto-fill drops to two columns, then one, and never
+     renders a card under 260px. */
   return (
-    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className}`.trim()}>
+    <div className={`grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 ${className}`.trim()}>
       {items.map((s) => {
         const isBusy = Boolean(busy[s.id]);
         const running = s.state === "running";

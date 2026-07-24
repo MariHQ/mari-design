@@ -60,6 +60,9 @@ const DEMO_ACTIVITY: ActivityItem[] = [
 
 const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-middle`;
 
+/** Rows revealed per page in the readability table and the glossary list. */
+const PAGE = 25;
+
 export type InsightsWidgetsProps = {
   stats?: typeof DEMO_STATS;
   readability?: ReadRow[];
@@ -90,12 +93,22 @@ export function InsightsWidgets({
 
   const resolve = (c: GlossRow) => setHidden((h) => [...h, c.id]);
 
+  /* Neither list may render its whole input. A 300-document scoring run turned
+     the readability card into a ~20,000px column, and the page below it was
+     unreachable. Both page a screenful at a time and say what they are
+     holding back (§13: the count strip sits above the list). */
+  const [readShown, setReadShown] = useState(PAGE);
+  const [glossShown, setGlossShown] = useState(PAGE);
+  const readRows = readSort.sorted.slice(0, readShown);
+  const glossRows = candidates.slice(0, glossShown);
+  const shownActivity = activity.filter((a) => !String(a.action).startsWith("__"));
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
         {/* Percentage, not 340px: a fixed skeleton line overran a phone column. */}
         <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w="88%" h={11} /></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
         {/* Readability is a five-column table, so it gets the wider column. */}
@@ -111,8 +124,13 @@ export function InsightsWidgets({
     <div className={`flex flex-col gap-5 ${className}`}>
       <PageHeader eyebrow="Insights" title="Insights" description={`Usage, quality, and coverage, counting since ${fmtDate(since)}.`} />
 
-      {/* 1. Stat row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* 1. Stat row. Auto-fill, not `lg:grid-cols-4` (§11): four fixed columns
+          held even when the column could not afford them, and the tiles pushed
+          27px out through the page container at a 1024px window.
+          The 200px floor is not arbitrary: it MATCHES `Stat`'s own
+          `min-w-[200px]`. At 190 the grid sized three tracks it thought would
+          fit, each tile refused to go under 200, and the row escaped by 5px. */}
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
         {stats.map((s) => (
           <Stat
             key={s.key}
@@ -135,6 +153,11 @@ export function InsightsWidgets({
           {readability.length === 0 ? (
             <EmptyState icon={<Search size={24} />} title="Nothing scored yet">Score your documents to see readability grades.</EmptyState>
           ) : (
+            <>
+            {/* §13: the count strip renders above the rows it describes. */}
+            <p className="px-4 pb-2 font-term text-[11px] text-ink/65">
+              Showing {readRows.length.toLocaleString("en-US")} of {readSort.sorted.length.toLocaleString("en-US")} scored documents
+            </p>
             <Scrollable>
               <table className="w-full border-collapse text-left">
                 <thead>
@@ -146,7 +169,7 @@ export function InsightsWidgets({
                   </tr>
                 </thead>
                 <tbody>
-                  {readSort.sorted.map((r) => (
+                  {readRows.map((r) => (
                     <tr key={r.id} className="hover:bg-flysch/50">
                       <td className={`${td} max-w-[260px] truncate font-medium text-ink`}>{r.title}</td>
                       <td className={`${td} whitespace-nowrap`}><span className="inline-flex items-center gap-1.5"><SourceMark provider={r.source} size={15} /> <span className="capitalize">{r.source}</span></span></td>
@@ -157,6 +180,14 @@ export function InsightsWidgets({
                 </tbody>
               </table>
             </Scrollable>
+            {readShown < readSort.sorted.length && (
+              <div className="px-4 pt-3">
+                <Button compact onClick={() => setReadShown((n) => n + PAGE)}>
+                  Show {Math.min(PAGE, readSort.sorted.length - readShown)} more
+                </Button>
+              </div>
+            )}
+            </>
           )}
           <p className="px-4 py-3 text-[12px] text-ink/70">Deterministic A to C grades from the local model. Re-run scoring after big edits.</p>
         </Card>
@@ -175,8 +206,12 @@ export function InsightsWidgets({
           {candidates.length === 0 && !harvesting ? (
             <EmptyState icon={<BookOpen size={24} />} title="All clear">No inconsistencies pending. Harvest to re-check.</EmptyState>
           ) : (
+            <>
+            <p className="pb-2 font-term text-[11px] text-ink/65">
+              Showing {glossRows.length.toLocaleString("en-US")} of {candidates.length.toLocaleString("en-US")} candidate terms
+            </p>
             <ul className="flex flex-col divide-y divide-ink/10">
-              {candidates.map((c) => (
+              {glossRows.map((c) => (
                 <li key={c.id} className="flex items-start gap-3 py-3 first:pt-0">
                   {/* Glossary terms are user data and can be a single opaque
                       token; wrapping them drove the card 615px past its
@@ -194,6 +229,14 @@ export function InsightsWidgets({
                 </li>
               ))}
             </ul>
+            {glossShown < candidates.length && (
+              <div className="pt-3">
+                <Button compact onClick={() => setGlossShown((n) => n + PAGE)}>
+                  Show {Math.min(PAGE, candidates.length - glossShown)} more
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </Card>
       </div>
@@ -207,7 +250,14 @@ export function InsightsWidgets({
         {activity.length === 0 ? (
           <EmptyState icon={<Clock size={24} />} title="Nothing logged yet">Actions on Insights will show up here.</EmptyState>
         ) : (
-          <ActivityFeed items={activity.filter((a) => !String(a.action).startsWith("__")).slice(0, 8)} />
+          /* The slice used to be silent: 400 events in, 8 rendered, nothing
+             said so. Cutting data is fine; hiding that you cut it is not. */
+          <>
+            <p className="pb-2 font-term text-[11px] text-ink/65">
+              Showing {Math.min(8, shownActivity.length)} of {shownActivity.length.toLocaleString("en-US")} events
+            </p>
+            <ActivityFeed items={shownActivity.slice(0, 8)} />
+          </>
         )}
       </Card>
     </div>

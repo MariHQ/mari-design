@@ -42,8 +42,9 @@ const DEMO_TASKS: ReviewTask[] = [
   { id: 7, text: "Confirm the Okta walkthrough screenshots are current", who: "PK", pill: "factcheck", pillText: "Fact check" },
 ];
 
-/** Collapsed height of the table, in rows. */
+/** Collapsed height of the table, in rows, and the expanded page size. */
 const PREVIEW_ROWS = 4;
+const EXPANDED_ROWS = 25;
 
 function TaskCheck({ done, onToggle }: { done: boolean; onToggle: () => void }) {
   return (
@@ -98,7 +99,9 @@ export function OverviewTodayReview({
     setRows((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   const clearDone = () => setRows((ts) => ts.filter((t) => !t.done));
 
-  const visible = expanded ? sorted : sorted.slice(0, PREVIEW_ROWS);
+  /* Expanding renders one page inside a capped scroll region rather than
+     laying out a 400-row inbox and pushing the page below it off screen. */
+  const visible = expanded ? sorted.slice(0, EXPANDED_ROWS) : sorted.slice(0, PREVIEW_ROWS);
   const hidden = Math.max(0, rows.length - PREVIEW_ROWS);
   const anyDone = rows.some((t) => t.done);
   const doneCount = rows.filter((t) => t.done).length;
@@ -140,7 +143,19 @@ export function OverviewTodayReview({
         /* §8: failure copy comes from the catalog, never a bespoke string. */
         <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
       ) : (
-        <Scrollable>
+        <>
+        {/* Result/stat strip above the list it describes (§13). */}
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink/10 px-4 pb-2.5">
+            <span className="font-term text-[11.5px] text-ink/65">
+              {visible.length < rows.length
+                ? `Showing ${visible.length} of ${rows.length.toLocaleString()} tasks`
+                : `Showing all ${rows.length.toLocaleString()} task${rows.length === 1 ? "" : "s"}`}
+            </span>
+            <span className="font-term text-[11.5px] text-ink/65">{openCount.toLocaleString()} open</span>
+          </div>
+        )}
+        <Scrollable axis="both" style={{ maxHeight: visible.length > 8 ? 440 : undefined }}>
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
@@ -204,6 +219,7 @@ export function OverviewTodayReview({
             </tbody>
           </table>
         </Scrollable>
+        </>
       )}
 
       {!loading && !offline && (
@@ -218,7 +234,6 @@ export function OverviewTodayReview({
           >
             <Trash2 size={13} /> {doneCount > 0 ? `Clear ${doneCount} done` : "Clear done"}
           </ConfirmButton>
-          <span className="font-term text-[11.5px] text-ink/65">{openCount} open</span>
         </div>
       )}
     </Card>
