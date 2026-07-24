@@ -1,14 +1,13 @@
 import type { HTMLAttributes, MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
 /* Scrollable — the one scroll container (CONVENTIONS.md §20).
  *
  * A scrollable region must SHOW that it scrolls: macOS hides scrollbars until
  * the user is already scrolling, so a table cut off mid-column or a tab row
- * cut off mid-label reads as "that's all there is". This wrapper measures the
- * scroller and, on any edge with hidden content, overlays a paper fade with a
- * small chevron. The overlays are pointer-transparent and update live on
+ * cut off mid-label reads as "that's all there is". This wrapper renders an
+ * always-visible, draggable scrollbar and, on any edge with hidden content, a
+ * quiet gradient fade. The fades are pointer-transparent and update live on
  * scroll and on resize.
  *
  *   <Scrollable>…wide table…</Scrollable>
@@ -34,9 +33,8 @@ export type ScrollableProps = HTMLAttributes<HTMLDivElement> & {
   scrollerRef?: MutableRefObject<HTMLDivElement | null> | ((el: HTMLDivElement | null) => void);
 };
 
-/* biscay = the dark sidebar rail; its chevron flips to white for contrast. */
+/* biscay = the dark sidebar rail. */
 const FADE_FROM = { paper: "from-paper", flysch: "from-flysch", biscay: "from-biscay" } as const;
-const HINT_INK = { paper: "text-ink/45", flysch: "text-ink/45", biscay: "text-white/60" } as const;
 
 /* The scrollbar is visible and draggable whenever there is overflow, on both
    axes. Styling ::-webkit-scrollbar opts Chrome/Safari out of the macOS
@@ -89,23 +87,15 @@ export function Scrollable({
 
   const overflow = axis === "x" ? "overflow-x-auto" : axis === "y" ? "max-h-full overflow-y-auto" : "max-h-full overflow-auto";
   const from = FADE_FROM[fade];
-  const hint = `pointer-events-none absolute z-10 flex ${HINT_INK[fade]} transition-opacity duration-150`;
+  const hint = "pointer-events-none absolute z-10 transition-opacity duration-150";
 
   return (
     <div className={`relative min-w-0 ${className}`.trim()} {...rest}>
       <div ref={setScroller} className={`${overflow} ${BAR[fade]} ${scrollerClassName}`.trim()}>{children}</div>
-      <span aria-hidden className={`${hint} left-0 top-0 bottom-0 w-6 items-center justify-start bg-gradient-to-r ${from} ${edge.left ? "opacity-100" : "opacity-0"}`}>
-        <ChevronLeft size={13} strokeWidth={2.4} />
-      </span>
-      <span aria-hidden className={`${hint} right-0 top-0 bottom-0 w-6 items-center justify-end bg-gradient-to-l ${from} ${edge.right ? "opacity-100" : "opacity-0"}`}>
-        <ChevronRight size={13} strokeWidth={2.4} />
-      </span>
-      <span aria-hidden className={`${hint} top-0 left-0 right-0 h-6 items-start justify-center bg-gradient-to-b ${from} ${edge.up ? "opacity-100" : "opacity-0"}`}>
-        <ChevronUp size={13} strokeWidth={2.4} />
-      </span>
-      <span aria-hidden className={`${hint} bottom-0 left-0 right-0 h-6 items-end justify-center bg-gradient-to-t ${from} ${edge.down ? "opacity-100" : "opacity-0"}`}>
-        <ChevronDown size={13} strokeWidth={2.4} />
-      </span>
+      <span aria-hidden className={`${hint} left-0 top-0 bottom-0 w-6 bg-gradient-to-r ${from} ${edge.left ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} right-0 top-0 bottom-0 w-6 bg-gradient-to-l ${from} ${edge.right ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} top-0 left-0 right-0 h-6 bg-gradient-to-b ${from} ${edge.up ? "opacity-100" : "opacity-0"}`} />
+      <span aria-hidden className={`${hint} bottom-0 left-0 right-0 h-6 bg-gradient-to-t ${from} ${edge.down ? "opacity-100" : "opacity-0"}`} />
     </div>
   );
 }
