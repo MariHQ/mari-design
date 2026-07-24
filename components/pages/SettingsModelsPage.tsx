@@ -13,20 +13,21 @@ import { Spinner } from "../data-display/Spinner";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { AvatarGroup } from "../data-display/AvatarGroup";
-import { PropertyList } from "../data-display/PropertyList";
-import { SettingsModelsConfig } from "../features/SettingsModelsConfig";
+import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT,
-  HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS,
-} from "./stress";
+  SettingsModelsConfig, type ChunkRow, type ProviderKeys,
+} from "../features/SettingsModelsConfig";
 
 /* Settings → Models (pages/settings-models.md). Configure the embedding model,
    LLM provider + keys, connection test, and per-source chunking. The default
    view renders the SettingsModelsConfig feature; the editing / test-connection
    / saved variants render inline cards so each lifecycle step (edit embedding,
    edit LLM, test idle/testing/ok/fail, saved) is captured directly. Under the
-   shared settings tab strip. */
+   shared settings tab strip.
+
+   Pure presenter: the model selection, the provider keys, the chunking table
+   and the rail summary all arrive in `data`. "Not configured" is derived from
+   there being no model and no provider, never from a flag. */
 
 const STATES = [
   { id: "default", label: "Model config" },
@@ -43,6 +44,34 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** Which lifecycle step of the model form is on screen. */
+export type ModelsPhase =
+  | "config" | "editing-embedding" | "editing-llm"
+  | "test-idle" | "test-testing" | "test-ok" | "test-fail" | "saved";
+
+/** Everything Settings → Models renders. */
+export type SettingsModelsData = {
+  phase: ModelsPhase;
+  /** The models this workspace is configured with. Empty strings mean the
+      workspace has not chosen one yet. */
+  embedding: string;
+  llm: string;
+  dims: number;
+  /** What the two dropdowns can offer. */
+  embeddingOptions: string[];
+  llmOptions: string[];
+  /** Per-source chunking table. */
+  chunking: ChunkRow[];
+  keys: ProviderKeys;
+  /** Corpus line appended to a healthy connection test. */
+  indexSummary: string;
+  /** Detail lines the last connection test produced. */
+  testOk: string;
+  testError: string;
+  /** Read-only facts in the rail. */
+  summary: PropertyItem[];
+};
 
 type SettingsTab =
   | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
@@ -85,39 +114,35 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
   );
 }
 
-const EMB_OPTIONS = ["openai:text-embedding-3-small", "openai:text-embedding-3-large", "local:bge-base-en"];
-const LLM_OPTIONS = ["anthropic:claude-3-5-sonnet", "openai:gpt-4o", "openai:gpt-4o-mini", "ollama:llama3.1"];
-
-type ModelsVariant = "editing-embedding" | "editing-llm" | "test-idle" | "test-testing" | "test-ok" | "test-fail" | "saved";
-
 function SavedNote() {
   return <span className="font-term text-[11.5px] text-moss">✓ Saved</span>;
 }
 
-function TestResult({ variant }: { variant: ModelsVariant }) {
-  if (variant === "test-testing") {
+function TestResult({ data }: { data: SettingsModelsData }) {
+  if (data.phase === "test-testing") {
     return <span className="inline-flex items-center gap-2 text-[11.5px] text-ink/60"><Spinner size="sm" /> Contacting provider…</span>;
   }
-  if (variant === "test-ok") {
+  if (data.phase === "test-ok") {
     return (
       <span className="inline-flex items-center gap-2">
         <Chip label="Connected" tone="ok" dot caps />
-        <span className="font-term text-[11.5px] text-ink/60">mari-api · 12,480 documents · 12,201 embedded</span>
+        <span className="font-term text-[11.5px] text-ink/60">{data.testOk}</span>
       </span>
     );
   }
-  if (variant === "test-fail") {
+  if (data.phase === "test-fail") {
     return (
       <span className="inline-flex items-center gap-2">
         <Chip label="Unreachable" tone="blocked" dot caps />
-        <span className="font-term text-[11.5px] text-espelette">401: invalid API key for provider openai</span>
+        <span className="font-term text-[11.5px] text-espelette">{data.testError}</span>
       </span>
     );
   }
   return null;
 }
 
-function ModelsInline({ variant }: { variant: ModelsVariant }) {
+function ModelsInline({ data }: { data: SettingsModelsData }) {
+  const variant = data.phase;
   const embDirty = variant === "editing-embedding";
   const llmDirty = variant === "editing-llm";
   return (
@@ -126,24 +151,24 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
         <div className={FORM_GRID}>
           <Field label="Embedding model">
             <Select
-              defaultValue={embDirty ? EMB_OPTIONS[1] : EMB_OPTIONS[0]}
+              defaultValue={data.embedding}
               className={`w-full ${embDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
             >
-              {EMB_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {data.embeddingOptions.map((o) => <option key={o} value={o}>{o}</option>)}
             </Select>
             {embDirty && <p className="mt-1 text-[11.5px] text-ink/65">Re-indexes all documents</p>}
           </Field>
           <Field label="LLM provider">
             <Select
-              defaultValue={llmDirty ? LLM_OPTIONS[1] : LLM_OPTIONS[0]}
+              defaultValue={data.llm}
               className={`w-full ${llmDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
             >
-              {LLM_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {data.llmOptions.map((o) => <option key={o} value={o}>{o}</option>)}
             </Select>
             {llmDirty && <p className="mt-1 text-[11.5px] text-ink/65">Unsaved changes</p>}
           </Field>
           <Field label="Embedding dimensions">
-            <Select defaultValue="1536" className="w-full">
+            <Select defaultValue={String(data.dims)} className="w-full">
               <option value="768">768</option>
               <option value="1536">1536</option>
               <option value="3072">3072</option>
@@ -160,13 +185,13 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
         <div className={FORM_GRID}>
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
-              <Input type="password" defaultValue="sk-proj-9f2ac0d18b7e4a3c" className="w-full font-term" />
+              <Input type="password" defaultValue={data.keys.openai} className="w-full font-term" />
               <Button icon compact aria-label="Reveal key"><Eye size={14} /></Button>
             </div>
           </Field>
           <Field label="Anthropic (sk-ant-…)">
             <div className="flex items-center gap-1.5">
-              <Input type="text" defaultValue="sk-ant-api03-77de10bc2f" className="w-full font-term" />
+              <Input type="text" defaultValue={data.keys.anthropic} className="w-full font-term" />
               <Button icon compact aria-label="Hide key"><EyeOff size={14} /></Button>
             </div>
           </Field>
@@ -176,7 +201,7 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
           <Button disabled={variant === "test-testing"}>
             {variant === "test-testing" ? "Testing…" : "Test connection"}
           </Button>
-          <TestResult variant={variant} />
+          <TestResult data={data} />
           {variant === "saved" && <SavedNote />}
         </div>
       </Card>
@@ -184,65 +209,12 @@ function ModelsInline({ variant }: { variant: ModelsVariant }) {
   );
 }
 
-const INLINE: ModelsVariant[] = ["editing-embedding", "editing-llm", "test-idle", "test-testing", "test-ok", "test-fail", "saved"];
-
-function StressModels({ extreme }: { extreme: boolean }) {
-  const opt = extreme ? UNBREAKABLE : LONG_SOURCE;
-  return (
-    <>
-      <Card icon={<Layers size={16} className="text-biscay-2" />} title={extreme ? UNBREAKABLE : LONG_TITLE} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
-        <div className={FORM_GRID}>
-          <Field label="Model">
-            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
-          </Field>
-          <Field label="Provider">
-            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
-          </Field>
-          <Field label={extreme ? UNBREAKABLE : LONG_TITLE}>
-            <Select defaultValue={opt} className="w-full"><option value={opt}>{opt}</option></Select>
-          </Field>
-        </div>
-      </Card>
-      <Card icon={<KeyRound size={16} className="text-clay" />} title={extreme ? UNBREAKABLE : "Provider keys, endpoints, and every model label"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
-        <div className={FORM_GRID}>
-          <Field label="OpenAI (sk-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
-          <Field label="Anthropic (sk-ant-…)"><Input defaultValue={extreme ? UNBREAKABLE : LONG_SOURCE} className="w-full font-term" /></Field>
-        </div>
-        <PropertyList
-          className="mt-4"
-          items={[
-            { label: "Endpoint", value: extreme ? UNBREAKABLE : LONG_SOURCE, stacked: true },
-            { label: "Documents", value: extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} embedded` },
-            { label: "Notes", value: extreme ? `${LONG_WORD} ${MIXED_SCRIPT}` : LONG_PARAGRAPH, stacked: true },
-          ]}
-        />
-      </Card>
-      <Card title={extreme ? UNBREAKABLE : "Reviewers and every capability tag"} hint={extreme ? MIXED_SCRIPT : LONG_SOURCE}>
-        <div className="flex items-center gap-3">
-          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} tokens/day`}</span>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
-        </div>
-      </Card>
-    </>
-  );
-}
-
 /* Supporting rail (§11, 320px) — matches the other four Settings rails. */
-function ModelsRail() {
+function ModelsRail({ summary }: { summary: PropertyItem[] }) {
   return (
     <>
       <Card title="At a glance" hint="Read only">
-        <PropertyList
-          items={[
-            { label: "Documents embedded", value: "12,201 of 12,480" },
-            { label: "Vector dimensions", value: "1536" },
-            { label: "Tokens per day", value: "1.4M" },
-            { label: "Last re-index", value: "Jul 18, 2026" },
-          ]}
-        />
+        <PropertyList items={summary} />
       </Card>
       <Card title="Changing a model">
         <p className="text-[12.5px] leading-relaxed text-ink/70">
@@ -255,32 +227,40 @@ function ModelsRail() {
   );
 }
 
-function Body({ state }: { state: string }) {
-  if (state === "overflow" || state === "stress") return <StressModels extreme={state === "stress"} />;
-  if (state === "error") {
-    return (
-      <EmptyState icon={<Layers size={22} />} title="API offline">
-        Model configuration is temporarily unavailable. Retrying…
-      </EmptyState>
-    );
+/** A workspace that has chosen no models at all. Derived from the data. */
+function isEmpty(d: SettingsModelsData): boolean {
+  return !d.embedding && !d.llm;
+}
+
+function Body({ data, error }: { data: SettingsModelsData; error: string | null }) {
+  if (error) {
+    return <EmptyState icon={<Layers size={22} />} title="API offline">{error}</EmptyState>;
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <EmptyState icon={<Layers size={22} />} title="No models configured">
         Choose an embedding model and LLM provider to start indexing.
       </EmptyState>
     );
   }
-  if ((INLINE as string[]).includes(state)) {
-    return <ModelsInline variant={state as ModelsVariant} />;
-  }
-  return <SettingsModelsConfig embedded />;
+  if (data.phase !== "config") return <ModelsInline data={data} />;
+  return (
+    <SettingsModelsConfig
+      embedded
+      embedding={data.embedding}
+      llm={data.llm}
+      dims={data.dims}
+      chunking={data.chunking}
+      keys={data.keys}
+      indexSummary={data.indexSummary}
+    />
+  );
 }
 
-function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
+function SettingsModelsPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsModelsData>) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="settings" />
       ) : (
         <div className={PAGE}>
@@ -290,8 +270,8 @@ function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
             description="Which models embed, search, and answer for this workspace."
           />
           <div className="mt-5"><SettingsTabs active="models" /></div>
-          <SettingsBody mobile={mobile} rail={<ModelsRail />}>
-            <Body state={state} />
+          <SettingsBody mobile={mobile} rail={<ModelsRail summary={data.summary} />}>
+            <Body data={data} error={error} />
           </SettingsBody>
         </div>
       )}
@@ -299,7 +279,7 @@ function SettingsModelsPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<SettingsModelsData> = {
   id: "settings-models",
   title: "Settings · Models",
   route: "/settings/models",

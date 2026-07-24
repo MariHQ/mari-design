@@ -22,7 +22,7 @@ import { focusRing } from "../tokens/focusRing";
    Standalone — Import returns a baked harvest result; nothing hits :root, the
    preview is scoped inline (no network). */
 
-type Branding = {
+export type Branding = {
   accent?: string; accentDeep?: string; accentInk?: string;
   green?: string; blue?: string; gold?: string;
   displayFont?: string; bodyFont?: string; fontUrl?: string;
@@ -67,14 +67,20 @@ function effectiveColor(d: Branding, key: keyof Branding): string {
   return "#000000";
 }
 
-const DEMO_HARVEST = {
-  title: "Northwind Analytics",
-  themeColor: "#0B5CAD",
-  cssColors: [["#0B5CAD", 42], ["#F4A11C", 18], ["#12333E", 12], ["#E8EEF3", 9], ["#7A2E1F", 5]] as [string, number][],
-  fonts: ["Sora", "Inter", "Source Serif Pro"],
-  logo: null as string | null,
-  warnings: ["No favicon found, used the theme-color meta tag instead."],
+/** What reading a homepage turned up: the palette, the fonts, and anything
+    the harvester could not find. Plain JSON, exactly as an API returns it. */
+export type BrandHarvest = {
+  title: string;
+  themeColor: string;
+  /** [hex, occurrences] pairs, most used first. */
+  cssColors: [string, number][];
+  fonts: string[];
+  logo: string | null;
+  warnings: string[];
 };
+
+/** One tile in the live preview: the branded page this workspace would ship. */
+export type BrandPreviewStat = { value: string; label: string };
 
 function ColorField({ label, value, onChange, onAuto, explicit }: { label: string; value: string; onChange: (v: string) => void; onAuto: () => void; explicit: boolean }) {
   return (
@@ -91,15 +97,23 @@ function ColorField({ label, value, onChange, onAuto, explicit }: { label: strin
   );
 }
 
-export type BrandingEditorProps = { branding?: Branding; loading?: boolean; className?: string };
+export type BrandingEditorProps = {
+  branding: Branding;
+  /** Result the import flow returns for the URL the user typed. */
+  harvest: BrandHarvest;
+  /** Figures the live preview shows off. */
+  previewStats: BrandPreviewStat[];
+  loading?: boolean;
+  className?: string;
+};
 
-export function BrandingEditor({ branding = {}, loading = false, className = "" }: BrandingEditorProps) {
+export function BrandingEditor({ branding, harvest, previewStats, loading = false, className = "" }: BrandingEditorProps) {
   const [draft, setDraft] = useState<Branding>(branding);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
-  const [evidence, setEvidence] = useState<typeof DEMO_HARVEST | null>(null);
+  const [evidence, setEvidence] = useState<BrandHarvest | null>(null);
 
   const patch = (p: Branding) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const clearKey = (key: keyof Branding) => { setDraft((d) => { const next = { ...d }; delete next[key]; return next; }); setDirty(true); };
@@ -108,8 +122,8 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
     if (!url.trim()) return;
     setImporting(true);
     setTimeout(() => {
-      setEvidence(DEMO_HARVEST);
-      patch({ accent: DEMO_HARVEST.themeColor, displayFont: DEMO_HARVEST.fonts[0], bodyFont: DEMO_HARVEST.fonts[2] });
+      setEvidence(harvest);
+      patch({ accent: harvest.themeColor, displayFont: harvest.fonts[0], bodyFont: harvest.fonts[2] });
       setImporting(false);
     }, 700);
   };
@@ -223,10 +237,10 @@ export function BrandingEditor({ branding = {}, loading = false, className = "" 
             ))}
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
-            {[["1,284", "documents"], ["98%", "verified"], ["3", "sites live"]].map(([v, l], i) => (
-              <div key={l} className="grid place-items-center rounded-md border border-ink/15 p-3 text-center">
-                <div className="text-[22px] font-bold" style={{ color: i === 0 ? "var(--b-accent)" : i === 1 ? "var(--b-green)" : "var(--b-blue)" }}>{v}</div>
-                <div className="text-[12px] text-ink/70">{l}</div>
+            {previewStats.map(({ value, label }, i) => (
+              <div key={label} className="grid place-items-center rounded-md border border-ink/15 p-3 text-center">
+                <div className="text-[22px] font-bold" style={{ color: i === 0 ? "var(--b-accent)" : i === 1 ? "var(--b-green)" : "var(--b-blue)" }}>{value}</div>
+                <div className="text-[12px] text-ink/70">{label}</div>
               </div>
             ))}
           </div>

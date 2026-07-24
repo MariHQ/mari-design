@@ -16,56 +16,49 @@ import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 
 /* ————— ported helpers ————— */
 
-const blockText = (html: string): string => {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return (div.textContent ?? "").replace(/ /g, " ").trim();
+/* Strip tags without touching the DOM.
+ *
+ * This used to round-trip through `document.createElement("div")`, which threw
+ * `ReferenceError: document is not defined` the moment anything server-rendered
+ * the panel — during a render pass, so there was no way for a caller to guard
+ * it. An outline is derived from a heading's text, and that is a string
+ * operation; it never needed a live document.
+ *
+ * Block HTML here comes from `parseMarkdown`, so the tag set is known and
+ * closed (no scripts, no comments, no CDATA). Entities are decoded for the
+ * handful the renderer can emit. */
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " ",
 };
+
+const blockText = (html: string): string =>
+  html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (m) => ENTITIES[m] ?? m)
+    .replace(/ /g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 const hasOwnNumbering = (s: string) => /^\s*\d+(\.\d+)*[.)]?(\s|$)/.test(s);
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
 
 type OutlineItem = { id: number; n: string; t: string; sub: boolean };
-type Rev = { id: number; actor: string; verb: string; at: string };
+/** One revision-history row. */
+export type DocRevision = { id: number; actor: string; verb: string; at: string };
 
 /* ————— demo data ————— */
 
-const DEMO_MD = `# Authentication Service Migration
-
-## Overview
-intro
-
-## 2. Rollout phases
-body
-
-### Canary
-body
-
-### Ramp
-body
-
-## Risks
-body`;
-
 /* Every timestamp carries its year (CONVENTIONS.md §5) — the list used to mix
    "2h ago" and "Jul 18, 11:03 AM", so two rows could not be compared. */
-const DEMO_REVS: Rev[] = [
-  { id: 1, actor: "Aki Kim", verb: "edited Overview", at: "Jul 21, 2026, 2:40 PM" },
-  { id: 2, actor: "Lena Shah", verb: "ran Tighten", at: "Jul 20, 2026, 4:12 PM" },
-  { id: 3, actor: "Maya Chen", verb: "accepted 3 changes", at: "Jul 18, 2026, 11:03 AM" },
-  { id: 4, actor: "Aki Kim", verb: "ran fact check", at: "Jul 17, 2026, 9:40 AM" },
-  { id: 5, actor: "Sam Ortiz", verb: "created the document", at: "Jul 15, 2026, 2:15 PM" },
-  { id: 6, actor: "Lena Shah", verb: "imported from docs", at: "Jul 15, 2026, 2:14 PM" },
-];
 
 export function DocReviewOutlinePanel({
-  body = DEMO_MD,
-  revisions = DEMO_REVS,
+  body,
+  revisions,
   onJump,
   loading = false,
 }: {
-  body?: string;
-  revisions?: Rev[];
+  body: string;
+  revisions: DocRevision[];
   onJump?: (id: number) => void;
   loading?: boolean;
 }) {

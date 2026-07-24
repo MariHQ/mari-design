@@ -114,21 +114,13 @@ function FreshnessBar({ row, height = 14 }: { row: Freshness; height?: number })
 }
 
 export type InsightsFreshnessChartProps = {
-  freshness?: Freshness[];
+  freshness: Freshness[];
   /** Render a content-shaped skeleton silhouette instead of the chart. */
   loading?: boolean;
   className?: string;
 };
 
-const DEMO_FRESHNESS: Freshness[] = [
-  { source: "github", fresh: 128, aging: 34, stale: 12 },
-  { source: "gdocs", fresh: 62, aging: 41, stale: 27 },
-  { source: "slack", fresh: 210, aging: 18, stale: 4 },
-  { source: "notion", fresh: 44, aging: 22, stale: 31 },
-  { source: "docs", fresh: 0, aging: 0, stale: 0 },
-];
-
-export function InsightsFreshnessChart({ freshness = DEMO_FRESHNESS, loading = false, className = "" }: InsightsFreshnessChartProps) {
+export function InsightsFreshnessChart({ freshness, loading = false, className = "" }: InsightsFreshnessChartProps) {
   const grandTotal = freshness.reduce((n, r) => n + r.fresh + r.aging + r.stale, 0);
 
   if (loading) {

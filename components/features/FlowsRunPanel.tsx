@@ -40,59 +40,6 @@ export function RunStatusChips({ status, dry }: { status: RunStatus; dry?: boole
   );
 }
 
-const DEMO_RUNS: WorkflowRun[] = [
-  {
-    id: "r209", number: 209, workflowName: "Translation sync", status: "waiting",
-    started: "2026-07-21T08:30:00", duration: "00:01:04",
-    triggeredBy: "Triggered by: handbook/pricing.md changed",
-    rows: [
-      { step: "Doc changed", status: "passed", detail: "handbook/pricing.md", duration: "0.2s" },
-      { step: "Fetch docs", status: "passed", detail: "3 documents matched", duration: "0.8s" },
-      { step: "Summarize", status: "passed", detail: "Draft written for review", duration: "42s" },
-      { step: "Approval", status: "waiting", detail: "Waiting on Aki K." },
-      { step: "Deploy site", status: "pending" },
-    ],
-    stats: [
-      { label: "Edits", value: 6 }, { label: "Contradictions", value: 0 },
-      { label: "Links", value: 2 }, { label: "Facts", value: 11 },
-    ],
-    headline: "Draft written for review, waiting on approval",
-  },
-  {
-    id: "r145", number: 145, workflowName: "Docs guardrail", status: "passed",
-    started: "2026-07-20T14:12:00", duration: "00:00:41",
-    triggeredBy: "Triggered by: docs/api.md merged",
-    rows: [
-      { step: "GitHub PR merged", status: "passed", detail: "PR #482", duration: "0.1s" },
-      { step: "Fetch docs", status: "passed", detail: "5 documents matched", duration: "0.6s" },
-      { step: "Fact check", status: "passed", detail: "No contradictions found", duration: "38s" },
-      { step: "Contradictions?", status: "skipped", detail: "0, yes-branch skipped" },
-      { step: "Create task", status: "skipped", detail: "Not on this branch" },
-    ],
-    stats: [
-      { label: "Edits", value: 0 }, { label: "Contradictions", value: 0 },
-      { label: "Links", value: 0 }, { label: "Facts", value: 14 },
-    ],
-    headline: "No contradictions across 5 docs",
-  },
-  {
-    id: "r143", number: 143, workflowName: "Docs guardrail", status: "failed", dry: true,
-    started: "2026-07-19T10:02:00", duration: "00:01:12",
-    rows: [
-      { step: "GitHub PR merged", status: "passed", detail: "PR #479", duration: "0.1s" },
-      { step: "Fetch docs", status: "passed", detail: "4 documents matched", duration: "0.5s" },
-      { step: "Fact check", status: "failed", detail: "2 contradictions against accepted facts", duration: "44s" },
-      { step: "Contradictions?", status: "passed", detail: "2 > 0, yes-branch taken" },
-      { step: "Create task", status: "passed", detail: "Review task previewed (dry run)" },
-    ],
-    stats: [
-      { label: "Edits", value: 3 }, { label: "Contradictions", value: 2, bad: true },
-      { label: "Links", value: 1 }, { label: "Facts", value: 9 },
-    ],
-    headline: "2 contradictions, review task previewed",
-  },
-];
-
 const DOT: Record<string, string> = {
   passed: "bg-moss", failed: "bg-espelette", running: "bg-biscay-2 animate-pulse",
   waiting: "bg-clay", skipped: "bg-ink/30", pending: "bg-ink/30",
@@ -269,7 +216,8 @@ export function RunInspector({
 const LIST_PAGE = 30;
 
 export type FlowsRunPanelProps = {
-  runs?: WorkflowRun[];
+  /** The runs listed down the left. Required: no invented run history. */
+  runs: WorkflowRun[];
   /** Run number to open by default. */
   openNumber?: number;
   /** Render a content-shaped skeleton silhouette instead of the panel. */
@@ -277,7 +225,7 @@ export type FlowsRunPanelProps = {
   className?: string;
 };
 
-export function FlowsRunPanel({ runs: initial = DEMO_RUNS, openNumber, loading = false, className = "" }: FlowsRunPanelProps) {
+export function FlowsRunPanel({ runs: initial, openNumber, loading = false, className = "" }: FlowsRunPanelProps) {
   const [runs, setRuns] = useState<WorkflowRun[]>(initial);
   const [openId, setOpenId] = useState<string | null>(
     (openNumber != null ? runs.find((r) => r.number === openNumber) : runs[0])?.id ?? null,

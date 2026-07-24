@@ -1,9 +1,8 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Feather } from "lucide-react";
-import { DecisionCardFeature, type DecisionCardFeatureProps } from "../features/DecisionCardFeature";
+import { DecisionCardFeature, type Decision } from "../features/DecisionCardFeature";
 import { DecisionCard } from "../data-display/DecisionCard";
-import { type ImpactDoc } from "../data-display/ImpactPanel";
 import { SourceMark } from "../icons/marks";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
@@ -14,18 +13,17 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Chip } from "../index";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT,
-  MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
-} from "./stress";
 
 /* Decisions (pages/decisions.md). A decision ledger — one decision, one record,
    ratified by the people accountable. The main column is a timeline of decision
    cards (DecisionCardFeature); the right rail carries "Awaiting sign-off",
-   "How this works", and a ledger filter. The prerender canvas walks the ratify
-   flow, the run-impact phases (loading / docs / collapsed), the capture composer
-   (open / saving), superseded + filtered ledgers, and the load/error/empty edges. */
+   "How this works", and a ledger filter.
+
+   This page is a pure presenter: it holds no demo content. The ledger, the
+   rail, and the composer all arrive in `data`, so a workspace that has never
+   recorded a decision renders the empty state rather than someone's invented
+   ledger. The design canvas supplies the same shape from
+   `.preview/fixtures/decisions.ts`. */
 
 const STATES = [
   { id: "default", label: "Default: ledger timeline" },
@@ -46,73 +44,73 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-const FILTERS = [
-  { id: "all", label: "All", count: 6 },
-  { id: "proposed", label: "Proposed", count: 2 },
-  { id: "ratified", label: "Ratified", count: 3 },
-  { id: "superseded", label: "Superseded", count: 1 },
-];
+/** One tab of the ledger filter, with the number of records behind it. */
+export type LedgerFilterTab = { id: string; label: string; count: number };
 
-type Decisions = NonNullable<DecisionCardFeatureProps["decisions"]>;
-type Impact = Decisions[number]["impact"];
+/** The capture composer, prefilled with whatever the user has typed so far. */
+export type DecisionComposer = {
+  statement: string;
+  context: string;
+  source: string;
+  /** The capture is in flight: the buttons lock and the primary reads
+      "Capturing…". */
+  saving: boolean;
+};
 
-const NO_IMPACT: Impact = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
+/** A single decision pulled out for sign-off, in place of the timeline. */
+export type RatifyCard = {
+  statement: string;
+  context: string;
+  status: Decision["status"];
+  fresh: boolean;
+  sourceLabel: string;
+  /** Source key, e.g. "slack". The page draws the mark; data stays JSON. */
+  provider: string;
+  owners: string[];
+};
 
-const DOCS: ImpactDoc[] = [
-  { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; must move to short-lived JWTs." },
-  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft: revisit under the new scheme." },
-  { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
-];
+/** The accountability strip above the timeline: where a decision sits in the
+    knowledge base, its tags, and everyone signed on to it. */
+export type DecisionExtras = {
+  breadcrumb: string[];
+  tags: string[];
+  /** Initials of the accountable people. */
+  people: string[];
+  /** Avatars shown before the stack rolls up into a "+N". */
+  avatarMax: number;
+};
 
-const AWAITING: Decisions = [
-  { id: 1, statement: "Adopt short-lived JWTs for service-to-service auth", context: "Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window.", status: "proposed", fresh: true, source: "Mari scan · #eng-security", provider: "slack", owners: ["Dana Ito", "Reza Okafor"], impact: { ...NO_IMPACT } },
-  { id: 2, statement: "Freeze the public API surface for v2", context: "Downstream teams need a stable contract before the SDK release.", status: "proposed", source: "Architecture sync", provider: "gdocs", owners: ["Priya Nair"], impact: { ...NO_IMPACT } },
-  { id: 3, statement: "Move CI to the shared runner pool", context: "Dedicated runners sit idle 80% of the day.", status: "proposed", source: "Platform review", provider: "notion", owners: ["Alex Chen"], impact: { ...NO_IMPACT } },
-];
+/** Everything the Decisions page renders. */
+export type DecisionsData = {
+  decisions: Decision[];
+  /** Which ledger filter tab is selected. */
+  filter: string;
+  filters: LedgerFilterTab[];
+  /** Rail: statements still waiting for a signature. */
+  awaiting: string[];
+  /** Rail: the explainer paragraph. */
+  howItWorks: string;
+  composer: DecisionComposer | null;
+  ratify: RatifyCard | null;
+  extras: DecisionExtras | null;
+};
 
-const RATIFIED: Decisions = [
-  { id: 1, statement: "Adopt short-lived JWTs for service-to-service auth", context: "Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window.", status: "ratified", fresh: true, source: "Mari scan · #eng-security", provider: "slack", owners: ["Dana Ito", "Reza Okafor"], decidedOn: "2026-07-21", impact: { ...NO_IMPACT } },
-  { id: 2, statement: "Standardize on Postgres 16 across all environments", status: "ratified", source: "Architecture sync", provider: "gdocs", owners: ["Priya Nair"], decidedOn: "2026-07-09", impact: { ...NO_IMPACT, count: 5, summary: "5 documents reference database version constraints." } },
-];
+/** A ledger with nothing in it at all. Derived from the data, not from a state
+    flag, so it is true in the real app for exactly the same reason it is true
+    on the canvas. */
+function isEmpty(d: DecisionsData): boolean {
+  return !d.decisions.length && !d.ratify && !d.composer && !d.extras && !d.awaiting.length;
+}
 
-const impactDecision = (impact: Impact): Decisions => [
-  { id: 1, statement: "Adopt short-lived JWTs for service-to-service auth", context: "Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window.", status: "ratified", source: "Architecture sync", provider: "gdocs", owners: ["Dana Ito", "Reza Okafor"], decidedOn: "2026-07-14", impact },
-];
-
-const RATIFIED_ONLY: Decisions = [
-  { id: 2, statement: "Standardize on Postgres 16 across all environments", context: "Two services still run 13. Aligning removes three migration branches.", status: "ratified", source: "Architecture sync", provider: "gdocs", owners: ["Priya Nair"], decidedOn: "2026-07-09", impact: { ...NO_IMPACT, count: 5, summary: "5 documents reference database version constraints." } },
-  { id: 3, statement: "Ship the console as a single-page app, not per-page routes", context: "The agent dock and command palette need to survive navigation.", status: "ratified", source: "Design review", provider: "notion", owners: ["Alex Chen", "Wei Zhang"], decidedOn: "2026-06-28", impact: { ...NO_IMPACT } },
-];
-
-const SUPERSEDED: Decisions = [
-  { id: 4, statement: "Use REST for the public API surface", status: "superseded", source: "Founders memo", provider: "docs", owners: ["Sam Rowe"], decidedOn: "2025-11-14", supersededBy: "Expose a typed GraphQL gateway in front of the internal services", impact: { ...NO_IMPACT } },
-  { id: 5, statement: "Expose a typed GraphQL gateway in front of the internal services", context: "Replaces the REST-only decision; unifies typing across clients.", status: "ratified", source: "Architecture sync", provider: "gdocs", owners: ["Sam Rowe", "Wei Zhang"], decidedOn: "2026-05-02", impact: { ...NO_IMPACT } },
-];
-
-/* Overflow — long statements, multi-sentence context, long owner names. */
-const OVERFLOW_DECISIONS: Decisions = [
-  { id: 1, statement: LONG_TITLE, context: LONG_PARAGRAPH, status: "ratified", fresh: true, source: LONG_SOURCE, provider: "slack", owners: [LONG_NAME, "Priya Nair", "Alexandra Featherstonehaugh-Montgomery"], decidedOn: "2026-07-21", impact: { ...NO_IMPACT, count: 5, summary: LONG_PARAGRAPH } },
-  { id: 2, statement: "Freeze the entire public API surface for v2 until every downstream team has migrated off the legacy header and onto the typed gateway contract", context: LONG_PARAGRAPH, status: "proposed", source: "Architecture sync spanning the platform, reliability, and security guilds across every region", provider: "gdocs", owners: [LONG_NAME], impact: { ...NO_IMPACT } },
-];
-
-/* Stress — unbreakable tokens, mixed scripts, huge numbers, long owner stack. */
-const STRESS_DECISIONS: Decisions = [
-  { id: 1, statement: UNBREAKABLE, context: LONG_URL, status: "ratified", fresh: true, source: UNBREAKABLE, provider: "slack", owners: MANY_INITIALS, decidedOn: "2026-07-21", impact: { ...NO_IMPACT, count: HUGE_NUMBER, summary: `${HUGE_NUMBER_STR} documents reference ${MIXED_SCRIPT}` } },
-  { id: 2, statement: MIXED_SCRIPT, context: LONG_WORD, status: "proposed", source: LONG_DOC_TITLE, provider: "gdocs", owners: MANY_INITIALS, impact: { ...NO_IMPACT } },
-  { id: 3, statement: LONG_WORD, status: "superseded", source: UNBREAKABLE, provider: "docs", owners: [LONG_NAME], decidedOn: "2025-11-14", supersededBy: UNBREAKABLE, impact: { ...NO_IMPACT } },
-];
-
-function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
-  const tags = mode === "stress" ? [...MANY_TAGS, MIXED_SCRIPT, UNBREAKABLE] : MANY_TAGS.slice(0, 6);
-  const people = (mode === "stress" ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }));
+function StressExtras({ extras }: { extras: DecisionExtras }) {
   return (
     <Card variant="plain" title="Accountable & tags">
       <div className="space-y-3">
-        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+        <Breadcrumb items={extras.breadcrumb.map((label) => ({ label }))} />
         <div className="flex flex-wrap gap-1.5">
-          {tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
+          {extras.tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
         </div>
-        <AvatarGroup people={people} max={mode === "stress" ? 5 : 6} />
+        <AvatarGroup people={extras.people.map((initials) => ({ initials }))} max={extras.avatarMax} />
       </div>
     </Card>
   );
@@ -121,49 +119,35 @@ function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
 /** Main column + the standard 320px rail (§11). One plumb line for every
     ledger view: `minmax(0,1fr)` keeps long content from pushing the rail out,
     and mobile drops the rail below the main column. */
-function Shell({ mobile, filter = "all", lead, children }: { mobile: boolean; filter?: string; lead?: React.ReactNode; children: React.ReactNode }) {
+function Shell({ data, mobile, children }: { data: DecisionsData; mobile: boolean; children: React.ReactNode }) {
   return (
     <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
       <div className="flex min-w-0 flex-col gap-5">
-        {lead}
-        <LedgerFilter filter={filter} />
+        {data.composer && <Composer composer={data.composer} />}
+        <LedgerFilter filters={data.filters} filter={data.filter} />
+        {data.extras && <StressExtras extras={data.extras} />}
         {children}
       </div>
-      <Rail />
+      <Rail awaiting={data.awaiting} howItWorks={data.howItWorks} />
     </div>
   );
 }
 
-function StressLedger({ mode, mobile }: { mode: "overflow" | "stress"; mobile: boolean }) {
-  return (
-    <Shell mobile={mobile}>
-      <StressExtras mode={mode} />
-      <DecisionCardFeature decisions={mode === "stress" ? STRESS_DECISIONS : OVERFLOW_DECISIONS} />
-    </Shell>
-  );
-}
-
-function Rail() {
+function Rail({ awaiting, howItWorks }: { awaiting: string[]; howItWorks: string }) {
   return (
     <aside className="flex min-w-0 flex-col gap-5">
       <Card variant="plain" title="Awaiting sign-off">
         <ul className="space-y-2 text-[12.5px]">
-          <li className="rounded-[5px] border border-ink/12 p-2.5">
-            <div className="font-medium text-ink">Adopt short-lived JWTs for service auth</div>
-            <div className="mt-1.5"><Button variant="success" compact>Ratify</Button></div>
-          </li>
-          <li className="rounded-[5px] border border-ink/12 p-2.5">
-            <div className="font-medium text-ink">Freeze the public API surface for v2</div>
-            <div className="mt-1.5"><Button variant="success" compact>Ratify</Button></div>
-          </li>
+          {awaiting.map((statement) => (
+            <li key={statement} className="rounded-[5px] border border-ink/12 p-2.5">
+              <div className="font-medium text-ink">{statement}</div>
+              <div className="mt-1.5"><Button variant="success" compact>Ratify</Button></div>
+            </li>
+          ))}
         </ul>
       </Card>
       <Card variant="plain" title="How this works">
-        <p className="text-[12.5px] leading-relaxed text-ink/70">
-          Decisions are captured from Slack or written by hand, sit “Proposed” until
-          ratified, then can have impact run against the corpus. Superseding a decision
-          keeps the old record, struck through.
-        </p>
+        <p className="text-[12.5px] leading-relaxed text-ink/70">{howItWorks}</p>
       </Card>
     </aside>
   );
@@ -171,28 +155,32 @@ function Rail() {
 
 /** The ledger filter lives in the main column, above the timeline: the same
     place Facts puts its status filter, and wide enough that no tab clips. */
-function LedgerFilter({ filter = "all" }: { filter?: string }) {
-  return <Tabs ariaLabel="Filter the ledger" options={FILTERS} value={filter} onChange={() => {}} />;
+function LedgerFilter({ filters, filter }: { filters: LedgerFilterTab[]; filter: string }) {
+  return <Tabs ariaLabel="Filter the ledger" options={filters} value={filter} onChange={() => {}} />;
 }
 
-function Composer({ saving = false }: { saving?: boolean }) {
+/* The composer sits at the top of the main column, not above the whole layout:
+   otherwise it runs edge-to-edge while the ledger below it stops at the rail
+   (§11 "cards share the same left and right edge"). */
+function Composer({ composer }: { composer: DecisionComposer }) {
+  const { saving } = composer;
   return (
     <Card variant="default" title="Capture decision">
       <div className="space-y-2.5">
         <input
           className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
           placeholder="Statement: the decision, in one sentence"
-          defaultValue={saving ? "Adopt trunk-based development for the web app" : ""}
+          defaultValue={composer.statement}
         />
         <textarea
           className="min-h-[72px] w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
           placeholder="Context: why, and what it closes off"
-          defaultValue={saving ? "Long-lived feature branches keep drifting; short-lived branches behind flags keep main releasable." : ""}
+          defaultValue={composer.context}
         />
         <input
           className="w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65"
           placeholder="Source: e.g. slack · #eng-security"
-          defaultValue={saving ? "slack · #eng-web" : ""}
+          defaultValue={composer.source}
         />
         <div className="flex items-center gap-2">
           <Button variant="primary" disabled={saving}>{saving ? "Capturing…" : "Capture"}</Button>
@@ -203,42 +191,19 @@ function Composer({ saving = false }: { saving?: boolean }) {
   );
 }
 
-function Ledger({ decisions, filter = "all", mobile, lead }: { decisions?: Decisions; filter?: string; mobile: boolean; lead?: React.ReactNode }) {
-  return (
-    <Shell mobile={mobile} filter={filter} lead={lead}>
-      <DecisionCardFeature decisions={decisions} />
-    </Shell>
-  );
-}
-
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  if (state === "error") {
-    return <EmptyState title="API offline">The decisions ledger is temporarily unavailable. Retrying…</EmptyState>;
-  }
-  if (state === "empty") {
+function Body({ data, error, mobile }: { data: DecisionsData; error: string | null; mobile: boolean }) {
+  if (error) return <EmptyState title="API offline">{error}</EmptyState>;
+  if (isEmpty(data)) {
     return (
       <EmptyState title="No decisions yet">
         Capture a decision or run “Scan for decisions” to start the ledger.
       </EmptyState>
     );
   }
-  /* The composer sits at the top of the main column, not above the whole
-     layout: otherwise it runs edge-to-edge while the ledger below it stops at
-     the rail (§11 "cards share the same left and right edge"). */
-  if (state === "composer") return <Ledger mobile={mobile} lead={<Composer />} />;
-  if (state === "composer-saving") return <Ledger mobile={mobile} lead={<Composer saving />} />;
-  if (state === "awaiting") return <Ledger decisions={AWAITING} filter="proposed" mobile={mobile} />;
-  if (state === "ratified") return <Ledger decisions={RATIFIED} mobile={mobile} />;
-  if (state === "impact-loading") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: true, loading: true })} filter="ratified" />;
-  if (state === "impact-docs") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: true, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
-  if (state === "impact-collapsed") return <Ledger mobile={mobile} decisions={impactDecision({ ...NO_IMPACT, open: false, docs: DOCS, count: DOCS.length, summary: "3 documents reference the old cookie-session flow." })} filter="ratified" />;
-  if (state === "overflow") return <StressLedger mode="overflow" mobile={mobile} />;
-  if (state === "stress") return <StressLedger mode="stress" mobile={mobile} />;
-  if (state === "superseded") return <Ledger decisions={SUPERSEDED} filter="superseded" mobile={mobile} />;
-  if (state === "filtered") return <Ledger decisions={RATIFIED_ONLY} filter="ratified" mobile={mobile} />;
-  if (state === "ratifying") {
+  if (data.ratify) {
+    const r = data.ratify;
     return (
-      <Shell mobile={mobile} filter="proposed">
+      <Shell data={data} mobile={mobile}>
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
@@ -246,13 +211,13 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           </div>
           <div>
             <DecisionCard
-              statement="Adopt short-lived JWTs for service-to-service auth"
-              context="Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window."
-              status="proposed"
-              fresh
-              sourceLabel="Mari scan · #eng-security"
-              sourceIcon={<SourceMark provider="slack" size={13} />}
-              owners={["Dana Ito", "Reza Okafor"]}
+              statement={r.statement}
+              context={r.context}
+              status={r.status}
+              fresh={r.fresh}
+              sourceLabel={r.sourceLabel}
+              sourceIcon={<SourceMark provider={r.provider} size={13} />}
+              owners={r.owners}
               ratifying
               onRatify={() => {}}
               spine={false}
@@ -262,11 +227,15 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
       </Shell>
     );
   }
-  return <Ledger mobile={mobile} />;
+  return (
+    <Shell data={data} mobile={mobile}>
+      <DecisionCardFeature decisions={data.decisions} />
+    </Shell>
+  );
 }
 
-function DecisionsPage({ state = "default", mobile = false }: PageProps) {
-  if (state === "loading") {
+function DecisionsPage({ data, loading = false, error = null, mobile = false }: PageProps<DecisionsData>) {
+  if (loading) {
     return (
       <PageFrame active={navFor("decisions")} title="Decisions" mobile={mobile}>
         <SkeletonPage variant="feed" />
@@ -291,14 +260,14 @@ function DecisionsPage({ state = "default", mobile = false }: PageProps) {
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <div className="mt-6">
-          <Body state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<DecisionsData> = {
   id: "decisions",
   title: "Decisions",
   route: "/decisions",

@@ -8,6 +8,7 @@ import { Spinner } from "../data-display/Spinner";
 import { Button } from "../actions/Button";
 import { CardBody, CardTitleBlock } from "../layout/CardShell";
 import type { DigestTopic } from "../data-display/DigestCard";
+export type { DigestTopic };
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 import { Scrollable } from "../data-display/Scrollable";
@@ -24,45 +25,6 @@ import { Scrollable } from "../data-display/Scrollable";
    slot for. Source: web/src/pages/overview/DigestCard.tsx. */
 
 const mark = (provider: string) => <SourceMark provider={provider} size={13} />;
-
-const DEMO_TOPICS: DigestTopic[] = [
-  {
-    title: "Billing docs realigned to the new plan tiers",
-    where: [
-      { source: "notion", label: "Pricing FAQ", icon: mark("notion") },
-      { source: "gdocs", label: "Billing runbook", icon: mark("gdocs") },
-    ],
-    summary:
-      "Three pages drifted after the Growth-tier rename. Mari rewrote the overlap and flagged one contradiction between the FAQ and the runbook's proration rule.",
-    impact: [
-      { name: "Support", tone: "info" },
-      { name: "Sales", tone: "ok" },
-    ],
-  },
-  {
-    title: "Onboarding flow gained a self-serve SSO path",
-    where: [
-      { source: "github", label: "auth/README", icon: mark("github") },
-      { source: "slack", label: "#eng-identity", icon: mark("slack") },
-    ],
-    summary:
-      "The SAML setup guide was expanded with an Okta walkthrough. Two stale screenshots were retired and the admin-only caveat now leads the section.",
-    impact: [
-      { name: "Onboarding", tone: "ok" },
-      { name: "Security", tone: "attention" },
-    ],
-  },
-  {
-    title: "Incident retro synthesized into a runbook update",
-    where: [{ source: "granola", label: "Postmortem sync", icon: mark("granola") }],
-    summary:
-      "The Jul 14, 2026 latency incident's action items landed as a new escalation ladder. Mari cross-linked it from the on-call guide.",
-    impact: [
-      { name: "SRE", tone: "blocked" },
-      { name: "On-call", tone: "attention" },
-    ],
-  },
-];
 
 /** Topics rendered before "Show all", and chips per row before "+N more". */
 const TOPIC_PAGE = 5;
@@ -82,7 +44,7 @@ function TopicBlock({ topic, dim }: { topic: DigestTopic; dim: boolean }) {
         {topic.where.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={metaLabel}>{topic.where.length === 1 ? "Source" : "Sources"}</span>
-            {topic.where.slice(0, CHIP_CAP).map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+            {topic.where.slice(0, CHIP_CAP).map((w) => <Chip key={w.label} label={w.label} icon={mark(w.source)} />)}
             {topic.where.length > CHIP_CAP && (
               <span className="font-term text-[11px] text-ink/65">+{topic.where.length - CHIP_CAP} more</span>
             )}
@@ -103,7 +65,7 @@ function TopicBlock({ topic, dim }: { topic: DigestTopic; dim: boolean }) {
 }
 
 export type OverviewDigestCardProps = {
-  topics?: DigestTopic[];
+  topics: DigestTopic[];
   loading?: boolean;
   error?: boolean;
   /** Wires the error banner's Retry control. Omitted = no button. */
@@ -112,7 +74,7 @@ export type OverviewDigestCardProps = {
 };
 
 export function OverviewDigestCard({
-  topics = DEMO_TOPICS, loading = false, error = false, onRetry, className = "",
+  topics, loading = false, error = false, onRetry, className = "",
 }: OverviewDigestCardProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [current, setCurrent] = useState<DigestTopic[]>(topics);

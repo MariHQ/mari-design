@@ -36,7 +36,7 @@ export type OverviewStats = {
 
 export type OverviewStatTilesProps = {
   /** Live counts. Omit to use the baked-in demo numbers. */
-  stats?: OverviewStats | null;
+  stats: OverviewStats | null;
   /** Force the loading (spinner) state. */
   loading?: boolean;
   /** No data + not loading → "API offline" placeholders. */
@@ -47,12 +47,10 @@ export type OverviewStatTilesProps = {
   className?: string;
 };
 
-const DEMO: OverviewStats = { changes: 47, factsReview: 6, flowsRunning: 3 };
-
 type Tile = { key: StatIconKey; label: string; tone: Tone; num: number | null; sub: string | null };
 
 export function OverviewStatTiles({
-  stats = DEMO, loading = false, offline = false, swatch = true, onNavigate, className = "",
+  stats, loading = false, offline = false, swatch = true, onNavigate, className = "",
 }: OverviewStatTilesProps) {
   const [area, setArea] = useState<string | null>(null);
   const go = (a: string) => { setArea(a); onNavigate?.(a); };

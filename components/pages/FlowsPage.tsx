@@ -1,16 +1,12 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Workflow, Bell, FileText } from "lucide-react";
-import { FlowsList } from "../features/FlowsList";
-import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
+import { FlowsList, type Flow, type SourceRef } from "../features/FlowsList";
+import { FlowsPipelineEditor, type EditorStep, type SiteRef } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
 import { FlowsRunPanel } from "../features/FlowsRunPanel";
 import type { WorkflowRun } from "../workflow/RunHistory";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT,
-  HUGE_NUMBER, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
-} from "./stress";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { Drawer } from "../layout/Drawer";
@@ -22,15 +18,15 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 
 /* Flows (pages/flows.md). The automation surface — a single route that swaps
-   between three surfaces held in local state: the list view (template gallery +
-   flow list + run history), the full-screen pipeline editor, and the slide-in
-   run / trigger panels layered over whichever surface is showing.
+   between three surfaces: the list view (template gallery + flow list + run
+   history), the full-screen pipeline editor, and the slide-in run / trigger
+   panels layered over whichever surface is showing.
 
-   The `state` prop enumerates every reasonable view: the list, the editor
-   (linear flow and a branching flow), the run panel across its lifecycle
-   (approval / passed / failed dry-run), the durable run-history table, the
-   trigger editor for each trigger kind (manual / schedule / document), plus
-   loading / offline / empty. */
+   This page is a pure presenter. It holds no demo content: which surface it
+   shows is derived from the data it was handed — an `editor` payload means the
+   pipeline editor, a `runPanel` means the run inspector, and a workspace with
+   no flows at all falls out of `isEmpty`. The canvas supplies the same shape
+   from `.preview/fixtures/flows.ts`. */
 
 const STATES = [
   { id: "default", label: "Default (list)" },
@@ -50,70 +46,71 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* Overflow / stress runs: long headlines, workflow names, and step labels
-   injected as data props into the run-history table + panel. `overflow` uses
-   natural long text; `stress` uses pathological tokens + huge run numbers. */
-function stressRuns(pathological: boolean): WorkflowRun[] {
-  const STATUS = ["passed", "running", "waiting", "failed", "skipped"] as const;
-  return repeat((i) => ({
-    id: `sr${i}`,
-    number: pathological ? HUGE_NUMBER + i : 1000 + i,
-    workflowName: pathological ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3] : LONG_TITLE,
-    status: STATUS[i % STATUS.length],
-    dry: i % 2 === 0,
-    started: "2026-07-21T08:30:00",
-    duration: "00:01:04",
-    triggeredBy: `Triggered by: ${pathological ? UNBREAKABLE : LONG_SOURCE}`,
-    headline: pathological ? `${MIXED_SCRIPT} ${HUGE_NUMBER_STR}` : LONG_PARAGRAPH,
-    rows: [
-      { step: pathological ? UNBREAKABLE : LONG_TITLE, status: "passed", detail: pathological ? LONG_WORD : LONG_SOURCE, duration: "0.2s" },
-      { step: pathological ? LONG_WORD : "Fetch every document across every source and region", status: "running", detail: pathological ? HUGE_NUMBER_STR : LONG_PARAGRAPH },
-    ],
-    stats: [
-      { label: pathological ? LONG_WORD : "Contradictions found", value: pathological ? HUGE_NUMBER : 128, bad: true },
-      { label: "Facts", value: pathological ? HUGE_NUMBER + i : 9 },
-    ],
-  }), pathological ? 24 : 6);
-}
+export type TriggerKind = "manual" | "schedule" | "document";
 
-function StressExtras({ pathological }: { pathological: boolean }) {
+/** The pipeline editor, open on one flow. */
+export type FlowsEditor = {
+  name: string;
+  description: string;
+  steps: EditorStep[];
+  runs: WorkflowRun[];
+  members: string[];
+  sites: SiteRef[];
+  tags: string[];
+};
+
+/** The trigger editor, open beside the list. */
+export type FlowsTrigger = {
+  kind: TriggerKind;
+  /** The flow whose trigger is being edited. */
+  flow: string;
+  /** The selected "On" event, "" for manual only. */
+  on: string;
+};
+
+/** A supporting card carrying long label content. Only the long-text states
+    have one, which is why it is nullable. */
+export type FlowsExtras = {
+  title: string;
+  crumbs: string[];
+  tags: string[];
+  people: string[];
+  avatarMax: number;
+};
+
+/** Everything the Flows page renders. Which surface shows is a function of
+    which of these is present, so there is one rendering path for the app and
+    for the canvas alike. */
+export type FlowsData = {
+  flows: Flow[];
+  sources: SourceRef[];
+  editor: FlowsEditor | null;
+  runPanel: { runs: WorkflowRun[]; openNumber?: number } | null;
+  runHistory: { runs: WorkflowRun[]; limit: number } | null;
+  trigger: FlowsTrigger | null;
+  extras: FlowsExtras | null;
+};
+
+function Extras({ extras }: { extras: FlowsExtras }) {
   return (
-    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE}>
-      <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+    <Card title={extras.title}>
+      <Breadcrumb items={extras.crumbs.map((label) => ({ label }))} />
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {(pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
+        {extras.tags.map((t) => <Chip key={t} label={t} />)}
       </div>
       <div className="mt-3">
-        <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={pathological ? 4 : 6} />
+        <AvatarGroup people={extras.people.map((initials) => ({ initials }))} max={extras.avatarMax} />
       </div>
     </Card>
   );
 }
 
-const BRANCH_STEPS: EditorStep[] = [
-  { kind: "trigger", label: "Weekly scan", config: { label: "Weekly scan", query: "stale" } },
-  { kind: "fetch_docs", label: "Fetch stale docs", config: { query: "stale", k: 8 } },
-  { kind: "fact_check", label: "Verify facts", config: {} },
-  { kind: "condition", label: "Contradictions?", config: { field: "contradictions", greater_than: 0 } },
-  { kind: "create_task", label: "Open review task", config: { title: "Resolve contradiction", kind: "factcheck", kind_label: "Fact check" }, only_if_branch: true },
-  { kind: "notify", label: "Ping the owner", config: { text: "A contradiction needs a look", detail: "" }, only_if_branch: true },
-];
-
 /* ── inline trigger editor ──────────────────────────────────────────────────
    A static preview of the Trigger Drawer from FlowsList (which owns its own
    open state and can't be pre-opened via props). Rebuilt here from catalog
    primitives so each trigger kind shows as its own gallery state. */
-
-type TriggerKind = "manual" | "schedule" | "document";
-
-const TRIGGER_META: Record<TriggerKind, { flow: string; on: string }> = {
-  manual: { flow: "Onboarding checker", on: "" },
-  schedule: { flow: "Slack digest", on: "schedule" },
-  document: { flow: "Docs guardrail", on: "document_changed" },
-};
-
-function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
-  const meta = TRIGGER_META[kind];
+function TriggerEditorPreview({ trigger }: { trigger: FlowsTrigger }) {
+  const { kind } = trigger;
   return (
     <Drawer
       open
@@ -121,7 +118,7 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
       closable
       onClose={() => {}}
       title="Trigger"
-      subtitle={meta.flow}
+      subtitle={trigger.flow}
       icon={<Bell size={16} className="text-ink/65" />}
       footer={
         <>
@@ -131,7 +128,7 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
       }
     >
       <Field label="On">
-        <Select value={meta.on} onChange={() => {}} className="w-full">
+        <Select value={trigger.on} onChange={() => {}} className="w-full">
           <option value="">Manual only</option>
           <option value="document_added">Document added</option>
           <option value="document_changed">Document changed</option>
@@ -178,20 +175,24 @@ function TriggerEditorPreview({ kind }: { kind: TriggerKind }) {
   );
 }
 
-const TRIGGER_STATE: Record<string, TriggerKind> = {
-  "trigger-manual": "manual",
-  "trigger-schedule": "schedule",
-  "trigger-document": "document",
-};
+/** No automation in the workspace at all, on any surface. Derived from the
+    data, so it is true in the real app for the same reason it is true here. */
+function isEmpty(d: FlowsData): boolean {
+  return !d.flows.length && !d.editor && !d.runPanel && !d.runHistory && !d.trigger && !d.extras;
+}
 
-/* States that render <FlowsList/>, which brings its OWN page header (title,
-   summary, and a working "New flow"). The page must not stack a second header
-   on top of it, so `pageHeaderFor` returns null for these. */
-const LIST_STATES = (state: string) => state === "default" || state in TRIGGER_STATE;
+/* The list surface brings its OWN page header (title, summary, and a working
+   "New flow"), and so does the pipeline editor. Stacking a second header on
+   top of either is the bug this guards. */
+function showsHeader(d: FlowsData, error: string | null): boolean {
+  if (error || isEmpty(d)) return true;
+  if (d.editor) return false;
+  return Boolean(d.extras || d.runHistory || d.runPanel);
+}
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  if (state === "error") return <ErrorMessage id="server.unavailable" />;
-  if (state === "empty") {
+function Body({ data, error, mobile }: { data: FlowsData; error: string | null; mobile: boolean }) {
+  if (error) return <ErrorMessage id="server.unavailable" />;
+  if (isEmpty(data)) {
     return (
       <EmptyState icon={<Workflow size={22} />} title="No flows yet">
         Start from a template or create one to automate editorial work.
@@ -199,63 +200,47 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     );
   }
 
-  if (state === "overflow" || state === "stress") {
-    const p = state === "stress";
+  if (data.editor) return <FlowsPipelineEditor {...data.editor} />;
+
+  if (data.extras || data.runHistory || data.runPanel) {
     return (
       <>
-        <StressExtras pathological={p} />
-        <FlowsRunHistory runs={stressRuns(p)} limit={p ? 24 : 6} />
+        {data.extras && <Extras extras={data.extras} />}
+        {data.runHistory && <FlowsRunHistory runs={data.runHistory.runs} limit={data.runHistory.limit} />}
+        {data.runPanel && <FlowsRunPanel runs={data.runPanel.runs} openNumber={data.runPanel.openNumber} />}
       </>
     );
   }
 
-  if (state === "pipeline-editor") return <FlowsPipelineEditor />;
-  if (state === "pipeline-branch") {
-    return (
-      <FlowsPipelineEditor
-        name="Stale sweeper"
-        description="Flags docs that have gone quiet and routes contradictions for review."
-        steps={BRANCH_STEPS}
-      />
-    );
-  }
+  const list = <FlowsList flows={data.flows} sources={data.sources} />;
 
-  if (state === "run-history") return <FlowsRunHistory />;
-
-  if (state === "run" || state === "run-passed" || state === "run-failed") {
-    const openNumber = state === "run-passed" ? 145 : state === "run-failed" ? 143 : 209;
-    return <FlowsRunPanel openNumber={openNumber} />;
-  }
-
-  const triggerKind = TRIGGER_STATE[state];
-  if (triggerKind) {
+  if (data.trigger) {
     /* Standard 320px supporting rail beside the list on desktop (§11; §10: no
        flex-col/lg:flex-row); on mobile the rail stacks under the list. */
     if (mobile) {
       return (
         <div className="flex flex-col gap-5">
-          <FlowsList />
-          <TriggerEditorPreview kind={triggerKind} />
+          {list}
+          <TriggerEditorPreview trigger={data.trigger} />
         </div>
       );
     }
     return (
       <div className={`items-start ${SPLIT[320]}`}>
-        <div className="min-w-0"><FlowsList /></div>
-        <div className="min-w-0"><TriggerEditorPreview kind={triggerKind} /></div>
+        <div className="min-w-0">{list}</div>
+        <div className="min-w-0"><TriggerEditorPreview trigger={data.trigger} /></div>
       </div>
     );
   }
 
-  return <FlowsList />;
+  return list;
 }
 
-function FlowsPage({ state = "default", mobile = false }: PageProps) {
-  const editing = state === "pipeline-editor" || state === "pipeline-branch";
-  const showHeader = !editing && !LIST_STATES(state);
+function FlowsPage({ data, loading = false, error = null, mobile = false }: PageProps<FlowsData>) {
+  const showHeader = showsHeader(data, error);
   return (
     <PageFrame active={navFor("flows")} title="Flows" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="list" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
@@ -267,7 +252,7 @@ function FlowsPage({ state = "default", mobile = false }: PageProps) {
             />
           )}
           <div className={`flex flex-col gap-5 [&>*]:min-w-0 ${showHeader ? "mt-6" : ""}`}>
-            <Body state={state} mobile={mobile} />
+            <Body data={data} error={error} mobile={mobile} />
           </div>
         </div>
       )}
@@ -275,7 +260,7 @@ function FlowsPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<FlowsData> = {
   id: "flows",
   title: "Flows",
   route: "/flows",

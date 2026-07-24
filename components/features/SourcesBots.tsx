@@ -23,11 +23,8 @@ import { fmtDateTime } from "../tokens/format";
    Chip/Input/CodeBlock; the /bots/status + updateSetting layer is baked in.
    Standalone: the Slack setup drawer opens by default. */
 
-type SlackStatus = { configured: boolean; teamName?: string; lastEventAt?: string; lastError?: string };
-type GithubStatus = { webhookConfigured: boolean; lastDeliveryAt?: string; repos: string[] };
-
-const SLACK_DEMO: SlackStatus = { configured: true, teamName: "Acme HQ", lastEventAt: "2026-07-21T13:58:00" };
-const GITHUB_DEMO: GithubStatus = { webhookConfigured: true, repos: ["acme/handbook", "acme/api"] };
+export type SlackStatus = { configured: boolean; teamName?: string; lastEventAt?: string; lastError?: string };
+export type GithubStatus = { webhookConfigured: boolean; lastDeliveryAt?: string; repos: string[] };
 
 const SLACK_MANIFEST = `display_information:
   name: Mari
@@ -239,8 +236,8 @@ function GithubDrawer({
 
 /* ── BotsTab ────────────────────────────────────────────────────────────── */
 export type SourcesBotsProps = {
-  slack?: SlackStatus;
-  github?: GithubStatus;
+  slack: SlackStatus;
+  github: GithubStatus;
   /** Which setup drawer opens on mount (so it shows in a static gallery). */
   defaultOpen?: "slack" | "github" | null;
   loading?: boolean;
@@ -248,7 +245,7 @@ export type SourcesBotsProps = {
 };
 
 export function SourcesBots({
-  slack = SLACK_DEMO, github = GITHUB_DEMO, defaultOpen = "slack", loading = false, className = "",
+  slack, github, defaultOpen = "slack", loading = false, className = "",
 }: SourcesBotsProps) {
   const [drawer, setDrawer] = useState<"slack" | "github" | null>(defaultOpen);
 

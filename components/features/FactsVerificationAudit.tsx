@@ -16,7 +16,7 @@ import { fmtDate, type DateInput } from "../tokens/format";
    verified more than 60 days ago as a stale candidate, offering a one-click
    Create review task. Ages are anchored to the newest verification on record so
    mixed seed/live data never yields negative ages. Composes Card + Table + Chip
-   + Button. Renders standalone with baked facts. */
+   + Button. */
 
 const STALE_AFTER_DAYS = 60;
 
@@ -31,16 +31,6 @@ export type Fact = {
   verified?: DateInput | null;
 };
 
-const DEMO_FACTS: Fact[] = [
-  { id: 1, claim: "Free tier includes 3 connected sources.", source: "Pricing page", owner: "Aki K.", status: "Verified", verified: "2026-07-18" },
-  { id: 2, claim: "SSO is available on the Team plan and above.", source: "Sales deck", owner: "Dana R.", status: "Verified", verified: "2026-07-02" },
-  { id: 3, claim: "Data is encrypted at rest with AES-256.", source: "Security whitepaper", owner: "Priya S.", status: "Verified", verified: "2026-05-30" },
-  { id: 4, claim: "The scheduler polls twice a minute.", source: "Flows docs", owner: "Aki K.", status: "Verified", verified: "2026-04-11" },
-  { id: 5, claim: "Uploaded PDFs are OCR'd on ingest.", source: "Sources docs", owner: "Dana R.", status: "Verified", verified: "2026-02-20" },
-  { id: 6, claim: "Beta regions include eu-west and us-east.", source: "Roadmap", owner: "Priya S.", status: "Draft", verified: null },
-  { id: 7, claim: "Support SLA is 1 business day.", source: "Support page", owner: "Aki K.", status: "Needs evidence", verified: null },
-];
-
 type TaskState = "idle" | "creating" | "done" | "error";
 
 function toDate(input: DateInput): Date { return input instanceof Date ? input : new Date(input); }
@@ -53,7 +43,8 @@ function verifiedAgeDays(verified: DateInput | null | undefined, anchor: number)
 }
 
 export type FactsVerificationAuditProps = {
-  facts?: Fact[];
+  /** The facts to audit. Required: the panel never invents claims. */
+  facts: Fact[];
   /** Render the surrounding close affordance (the panel is toggled open). */
   onClose?: () => void;
   /** Render a content-shaped skeleton while the audit is computing. */
@@ -61,7 +52,7 @@ export type FactsVerificationAuditProps = {
   className?: string;
 };
 
-export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = false, className = "" }: FactsVerificationAuditProps) {
+export function FactsVerificationAudit({ facts, onClose, loading = false, className = "" }: FactsVerificationAuditProps) {
   const [taskState, setTaskState] = useState<Record<number, TaskState>>({});
   const [tasks, setTasks] = useState<Record<number, string>>({});
 
@@ -141,7 +132,12 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
               gives up space rather than the action column collapsing. */}
           <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 820 }}>
             <colgroup>
-              <col style={{ width: "31%" }} /><col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+              {/* Verified is 14%, not 13%: at the 820px floor that column is
+                  the only one holding two no-wrap lines ("May 30, 2026" over
+                  "148d ago"), and 13% left it 3px short, so the date spilled
+                  through the cell border. The width comes off Claim, which
+                  truncates anyway. */}
+              <col style={{ width: "30%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} />
               <col style={{ width: "18%" }} /><col style={{ width: "26%" }} />
             </colgroup>
             <thead>

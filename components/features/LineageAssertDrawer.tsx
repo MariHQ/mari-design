@@ -28,30 +28,6 @@ import {
    shows in the gallery.
    ──────────────────────────────────────────────────────────────────────── */
 
-const DEMO_RESULT: ImpactResult = {
-  claim: "Free tier ends September 1",
-  summary: "36 documents reference the free tier. 3 directly contradict the new end date and must be corrected before launch; 11 need a review pass; 22 mention it in passing.",
-  docs: [
-    { title: "Billing FAQ", source: "docsite", severity: "update-required", reason: "states the free tier is permanent" },
-    { title: "Pricing policy", source: "docs", severity: "update-required", reason: "no sunset date recorded" },
-    { title: "Onboarding guide", source: "notion", severity: "update-required", reason: "promises free-forever workspace" },
-    { title: "Pricing deck Q3", source: "gdocs", severity: "review", reason: "tier table predates the change" },
-    { title: "#pricing thread", source: "slack", severity: "review", reason: "unresolved customer question" },
-    { title: "Free-tier limits", source: "docs", severity: "review", reason: "caps may need restating" },
-    { title: "Sept launch brief", source: "granola", severity: "minor", reason: "mentions the date in passing" },
-    { title: "Issue #91 · stale FAQ", source: "github", severity: "minor", reason: "loosely related" },
-  ],
-};
-
-/** Top owners of the impacted documents (demo, derived from DEMO_RESULT). */
-const OWNERS: { name: string; role: string }[] = [
-  { name: "Ana K", role: "3 documents" },
-  { name: "Sam L", role: "2 documents" },
-  { name: "Mia M", role: "2 documents" },
-  { name: "Dev R", role: "1 document" },
-];
-const PEOPLE = [{ initials: "AK" }, { initials: "SL" }, { initials: "MM" }, { initials: "DR" }, { initials: "JS" }];
-
 /** Impacted-document rows drawn per page. */
 const DOC_PAGE = 10;
 
@@ -62,16 +38,29 @@ const BUCKETS: { key: Severity; label: string }[] = [
 ];
 
 export type LineageAssertDrawerProps = {
-  /** Pre-loaded analysis result; pass null to show the pre-analysis empty state. */
-  result?: ImpactResult | null;
+  /** What running the analysis yields. Required: the drawer never invents an
+      impact set. `analyzed` decides whether it is already on screen. */
+  result: ImpactResult;
+  /** Start with the analysis already resolved (false = pre-analysis state). */
+  analyzed: boolean;
+  /** The claim the drawer starts with, before an analysis has run. */
+  claim: string;
+  /** Top owners of the impacted documents. */
+  owners: { name: string; role: string }[];
+  /** Initials for the owner avatar stack. */
+  people: string[];
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
   className?: string;
 };
 
-export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, loading = false, className = "" }: LineageAssertDrawerProps) {
-  const [claim, setClaim] = useState(initial?.claim ?? "Free tier ends September 1");
+export function LineageAssertDrawer({
+  result: outcome, analyzed, claim: initialClaim, owners, people,
+  onClose, loading = false, className = "",
+}: LineageAssertDrawerProps) {
+  const initial = analyzed ? outcome : null;
+  const [claim, setClaim] = useState(initial?.claim ?? initialClaim);
   const [result, setResult] = useState<ImpactResult | null>(initial);
   const [running, setRunning] = useState(false);
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(initial ? "just now" : null);
@@ -94,7 +83,7 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
     setTaskState("idle");
     setFilter(null);
     setTimeout(() => {
-      setResult(DEMO_RESULT);
+      setResult(outcome);
       setAnalyzedAt("just now");
       setRunning(false);
     }, 1400);
@@ -282,8 +271,8 @@ export function LineageAssertDrawer({ result: initial = DEMO_RESULT, onClose, lo
         </CardSection>
 
         {result && (
-          <CardSection label="Owners" count={5} action={<AvatarGroup people={PEOPLE} max={4} />}>
-            <LgOwners owners={OWNERS} />
+          <CardSection label="Owners" count={people.length} action={<AvatarGroup people={people.map((initials) => ({ initials }))} max={4} />}>
+            <LgOwners owners={owners} />
           </CardSection>
         )}
       </CardBody>

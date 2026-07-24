@@ -52,20 +52,10 @@ const COLORS: { id: Tone; label: string }[] = [
   { id: "neutral", label: "Ink" },
 ];
 
-const DEMO_TAGS: TagDef[] = [
-  { id: "canonical", name: "Canonical", tone: "ok", evidence: "Preferred evidence", weight: 1.6, usage: 142, behaviors: ["Ranks first", "Trusted for facts"], standard: true, description: "The current source of truth." },
-  { id: "verified", name: "Verified", tone: "info", evidence: "Trusted evidence", weight: 1.3, usage: 98, behaviors: ["Facts extracted are trusted"], standard: true, description: "Facts extracted from it are trusted." },
-  { id: "customer-facing", name: "Customer-facing", tone: "info", evidence: "Surface in audits", weight: 1.0, usage: 61, behaviors: ["Published surfaces", "Audit coverage"], standard: true, description: "Approved for external and published surfaces." },
-  { id: "needs-review", name: "Needs review", tone: "attention", evidence: "Flagged, not evidence", weight: 0.6, usage: 27, behaviors: ["Routed to a person"], standard: true, description: "Flagged for a person to make a judgment." },
-  { id: "stale", name: "Stale", tone: "attention", evidence: "Flagged, not evidence", weight: 0.4, usage: 19, behaviors: ["Excluded from evidence"], standard: true, description: "Known to be out of date and ready for review." },
-  { id: "deprecated", name: "Deprecated", tone: "blocked", evidence: "Not evidence", weight: 0.2, usage: 8, behaviors: ["Superseded"], standard: true, description: "Superseded by a newer document." },
-  { id: "runbook", name: "Runbook", tone: "info", evidence: "Normal evidence", weight: 1.1, usage: 34, behaviors: ["Ops workflows"], standard: false, description: "Operational runbooks and on-call docs." },
-];
-
-const TOTAL_DOCS = 420;
-
 export type LibraryTagsPanelProps = {
-  tags?: TagDef[];
+  tags: TagDef[];
+  /** Documents in the corpus, for the "used on N of M" coverage line. */
+  totalDocs: number;
   loading?: boolean;
   /** Narrow-column composition: the filter field moves out of the card header
       onto its own row, so the action cluster still fits (CONVENTIONS.md §10 —
@@ -74,7 +64,7 @@ export type LibraryTagsPanelProps = {
   className?: string;
 };
 
-export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
+export function LibraryTagsPanel({ tags, totalDocs, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
   const [rows, setRows] = useState<TagDef[]>(tags);
   const [query, setQuery] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -105,7 +95,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
   const pager = usePaged(sorted, 12);
 
   const tagged = rows.reduce((s, t) => s + t.usage, 0);
-  const coverage = Math.min(100, Math.round((tagged / (TOTAL_DOCS * 1.4)) * 100));
+  const coverage = Math.min(100, Math.round((tagged / (totalDocs * 1.4)) * 100));
   const needCuration = rows.filter((t) => t.id === "needs-review" || t.id === "stale").reduce((s, t) => s + t.usage, 0);
   const rankingRules = rows.filter((t) => t.weight !== 1).length;
 
@@ -136,7 +126,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
   const del = (id: string) => setRows((prev) => prev.filter((t) => t.id !== id));
 
   const maxUsage = Math.max(1, ...rows.map((t) => t.usage));
-  const untagged = Math.max(0, TOTAL_DOCS - Math.round(tagged / 1.4));
+  const untagged = Math.max(0, totalDocs - Math.round(tagged / 1.4));
 
   if (loading) {
     return (
@@ -205,7 +195,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
           {analyzing && (
             <div className="px-4 py-3.5 bg-ink/[0.015] border-b border-ink/10">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/70">Corpus coverage · {TOTAL_DOCS} documents indexed</span>
+                <span className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/70">Corpus coverage · {totalDocs} documents indexed</span>
                 <Button variant="link" onClick={() => setAnalyzing(false)}>Close</Button>
               </div>
               {/* One row per tag: with a 200-tag vocabulary this panel alone
@@ -216,12 +206,12 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                   <div key={t.id} className="grid grid-cols-[10rem_minmax(0,1fr)_5.5rem] items-center gap-3">
                     <TagChip tag={t.id} label={t.name} tone={t.tone} />
                     <Progress value={Math.round((t.usage / maxUsage) * 100)} tone={t.tone === "neutral" ? "info" : t.tone} />
-                    <span className="font-term text-[11px] text-ink/70 text-right">{t.usage} docs · {Math.round((t.usage / TOTAL_DOCS) * 100)}%</span>
+                    <span className="font-term text-[11px] text-ink/70 text-right">{t.usage} docs · {Math.round((t.usage / totalDocs) * 100)}%</span>
                   </div>
                 ))}
                 <div className="grid grid-cols-[10rem_minmax(0,1fr)_5.5rem] items-center gap-3">
                   <span className="text-[12.5px] text-ink/70">Untagged</span>
-                  <Progress value={Math.round((untagged / TOTAL_DOCS) * 100)} tone="attention" />
+                  <Progress value={Math.round((untagged / totalDocs) * 100)} tone="attention" />
                   <span className="font-term text-[11px] text-ink/70 text-right">{untagged} docs</span>
                 </div>
               </Scrollable>

@@ -3,6 +3,7 @@ import { PageFrame, navFor } from "./PageFrame";
 import { Shield, ShieldCheck } from "lucide-react";
 import { FactsVerificationAudit, type Fact } from "../features/FactsVerificationAudit";
 import { ImpactPanelFeature } from "../features/ImpactPanelFeature";
+import type { ImpactDoc } from "../data-display/ImpactPanel";
 import { PageHeader } from "../layout/PageHeader";
 import { Tabs } from "../navigation/Tabs";
 import { Button } from "../actions/Button";
@@ -15,17 +16,15 @@ import { Alert } from "../feedback/Alert";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
 import { fmtDate } from "../tokens/format";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
-  MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
-} from "./stress";
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
-   impact analysis and a toggled client-side verification audit. The prerender
-   canvas walks the status filters, the impact expansion, the create-review-task
-   lifecycle, content-volume variants, and the loading / error / empty edges. */
+   impact analysis and a toggled client-side verification audit.
+
+   This page is a pure presenter. It holds no demo content: the filter tabs,
+   the rows, the banner, the audit panel and the impact expansion all arrive in
+   `data`, and every section renders only if the data carries it. The canvas
+   supplies the same shape from `.preview/fixtures/facts.ts`. */
 
 const STATES = [
   { id: "default", label: "Default: all facts + audit" },
@@ -47,60 +46,75 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-const FILTERS = [
-  { id: "all", label: "All", count: 12 },
-  { id: "verified", label: "Verified", count: 6 },
-  { id: "review", label: "Needs review", count: 2 },
-  { id: "contradicted", label: "Contradicted", count: 1 },
-  { id: "stale", label: "Stale", count: 2 },
-];
+/** One status filter tab, with the count the workspace actually holds. */
+export type FactFilter = { id: string; label: string; count: number };
 
-const FACTS: Fact[] = [
-  { id: 1, claim: "Free tier includes 3 connected sources.", source: "Pricing page", owner: "Aki K.", status: "Verified", verified: "2026-07-18" },
-  { id: 2, claim: "SSO is available on the Team plan and above.", source: "Sales deck", owner: "Dana R.", status: "Verified", verified: "2026-07-02" },
-  { id: 3, claim: "Data is encrypted at rest with AES-256.", source: "Security whitepaper", owner: "Priya S.", status: "Verified", verified: "2026-05-30" },
-  { id: 4, claim: "The scheduler polls twice a minute.", source: "Flows docs", owner: "Aki K.", status: "Verified", verified: "2026-04-11" },
-  { id: 5, claim: "Uploaded PDFs are OCR'd on ingest.", source: "Sources docs", owner: "Dana R.", status: "Verified", verified: "2026-02-20" },
-  { id: 6, claim: "Data is retained for 90 days on the free tier.", source: "Legal FAQ", owner: "Priya S.", status: "Verified", verified: "2026-06-14" },
-  { id: 7, claim: "Support SLA is 1 business day.", source: "Support page", owner: "Aki K.", status: "Needs review", verified: null },
-  { id: 8, claim: "Beta regions include eu-west and us-east.", source: "Roadmap", owner: "Priya S.", status: "Needs review", verified: null },
-  { id: 9, claim: "The API rate limit is 1000 requests/min.", source: "Old changelog", owner: "Dana R.", status: "Contradicted", verified: "2026-01-08" },
-];
+/** A verified fact expanded into its impact analysis. */
+export type FactImpact = {
+  /** Card title: the claim being traced. */
+  title: string;
+  claim: string;
+  source: string;
+  /** ISO timestamp of the last verification, rendered as an age. */
+  verifiedAt: string;
+  summary: string;
+  docs: ImpactDoc[];
+  /** The analysis has already run, so the strip is resolved on arrival. */
+  analyzed: boolean;
+};
 
-const MANY: Fact[] = [
-  ...FACTS,
-  { id: 10, claim: "Webhooks retry three times with backoff.", source: "Integrations docs", owner: "Aki K.", status: "Verified", verified: "2026-06-30" },
-  { id: 11, claim: "Custom domains require a paid plan.", source: "Billing page", owner: "Dana R.", status: "Verified", verified: "2026-05-11" },
-  { id: 12, claim: "Search covers up to 50k documents per workspace.", source: "Limits table", owner: "Priya S.", status: "Verified", verified: "2026-03-22" },
-];
+/** A frozen create-review-task mutation, one phase at a time, so each phase of
+    the lifecycle is a capturable state rather than a timing accident. */
+export type FactTaskAudit = {
+  title: string;
+  hint: string;
+  claim: string;
+  meta: string;
+  /** ISO date of the verification the row is about. */
+  verified: string;
+  age: string;
+  statusLabel: string;
+  phase: "creating" | "done" | "error";
+  errorText: string;
+};
 
-/* Overflow — natural but very long text: multi-sentence claims, long owner
-   names, long sources. Exercises wrapping / truncation / line-clamp. */
-const OVERFLOW_FACTS: Fact[] = [
-  { id: 1, claim: LONG_PARAGRAPH, source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-05-30" },
-  { id: 2, claim: LONG_TITLE, source: "Consolidated reliability, incident-response, and on-call escalation runbook: superseding all prior drafts", owner: LONG_NAME, status: "Needs review", verified: null },
-  { id: 3, claim: "The platform reliability guild reconciles every claim against the last four quarters of incident retrospectives before it is marked verified, and re-reviews after any Sev-1 incident anywhere in the fleet.", source: LONG_SOURCE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
-];
+/** A supporting card carrying long owner/tag content. Only the long-text
+    states have one, which is why it is nullable. */
+export type FactsExtras = {
+  title: string;
+  crumbs: string[];
+  tags: string[];
+  people: string[];
+  avatarMax: number;
+};
 
-/* Stress — pathological content: unbreakable tokens, single long word, huge
-   numbers, mixed scripts + emoji. Exercises horizontal overflow / break-words. */
-const STRESS_FACTS: Fact[] = [
-  { id: 1, claim: UNBREAKABLE, source: LONG_URL, owner: LONG_WORD, status: "Verified", verified: "2026-05-30" },
-  { id: 2, claim: MIXED_SCRIPT, source: LONG_DOC_TITLE, owner: MIXED_SCRIPT, status: "Needs review", verified: null },
-  { id: 3, claim: `${LONG_WORD}, ${HUGE_NUMBER_STR} requests/min at ${HUGE_PERCENT} availability`, source: UNBREAKABLE, owner: LONG_NAME, status: "Verified", verified: "2026-06-14" },
-];
+/** Everything the Facts page renders. */
+export type FactsData = {
+  filters: FactFilter[];
+  /** Which filter tab is selected. */
+  filter: string;
+  /** The rows of the facts table. Empty = the table is not rendered at all. */
+  facts: Fact[];
+  /** A banner above the table (e.g. a contradiction warning). */
+  banner: { title: string; body: string } | null;
+  /** The verification-audit card. `null` = not shown for this view. */
+  audit: Fact[] | null;
+  /** A frozen create-review-task mutation, shown instead of the audit. */
+  taskAudit: FactTaskAudit | null;
+  /** An expanded fact's impact analysis, shown instead of the table. */
+  impact: FactImpact | null;
+  extras: FactsExtras | null;
+};
 
-function StressExtras({ mode }: { mode: "overflow" | "stress" }) {
-  const tags = mode === "stress" ? [...MANY_TAGS, MIXED_SCRIPT, UNBREAKABLE] : MANY_TAGS.slice(0, 6);
-  const people = (mode === "stress" ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }));
+function Extras({ extras }: { extras: FactsExtras }) {
   return (
-    <Card variant="plain" title="Owners & tags">
+    <Card variant="plain" title={extras.title}>
       <div className="space-y-3">
-        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
+        <Breadcrumb items={extras.crumbs.map((label) => ({ label }))} />
         <div className="flex flex-wrap gap-1.5">
-          {tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
+          {extras.tags.map((t, i) => <Chip key={i} label={t} tone="info" />)}
         </div>
-        <AvatarGroup people={people} max={mode === "stress" ? 5 : 6} />
+        <AvatarGroup people={extras.people.map((initials) => ({ initials }))} max={extras.avatarMax} />
       </div>
     </Card>
   );
@@ -140,28 +154,28 @@ function FactsTable({ facts }: { facts: Fact[] }) {
 
 /* Frozen create-review-task lifecycle — mirrors FactsVerificationAudit's stale
    row so each mutation phase (creating / done / error) is capturable. */
-function ReviewTaskAudit({ phase }: { phase: "creating" | "done" | "error" }) {
+function ReviewTaskAudit({ task }: { task: FactTaskAudit }) {
   return (
     <Card
       icon={<ShieldCheck size={17} className="text-moss" />}
-      title="Verification audit"
-      hint="1 verified more than 60 days ago: stale candidate."
+      title={task.title}
+      hint={task.hint}
       variant="flush"
     >
       {/* The row carries a clickable action, so status is second-to-last (§3). */}
       <Table head={["Claim", "Verified", "Status", ""]} minW={640}>
         <tr className="border-b border-ink/[0.06] last:border-0">
           <td className="px-4 py-3 align-top">
-            <b className="block break-words text-[13px] font-medium text-ink">Uploaded PDFs are OCR'd on ingest.</b>
-            <div className="mt-0.5 font-term text-[11px] text-ink/65">Sources docs · Dana R.</div>
+            <b className="block break-words text-[13px] font-medium text-ink">{task.claim}</b>
+            <div className="mt-0.5 font-term text-[11px] text-ink/65">{task.meta}</div>
           </td>
-          <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">{fmtDate("2026-02-20")} <span className="text-ink/65">· 148d ago</span></td>
-          <td className="px-4 py-3 align-top"><Chip label="Stale candidate" tone="attention" dot /></td>
+          <td className="px-4 py-3 align-top text-[12.5px] text-ink/70">{fmtDate(task.verified)} <span className="text-ink/65">{`· ${task.age}`}</span></td>
+          <td className="px-4 py-3 align-top"><Chip label={task.statusLabel} tone="attention" dot /></td>
           <td className="px-4 py-3 align-top text-right">
-            {phase === "error" ? (
-              <span className="font-term text-[11.5px] text-espelette">Couldn’t reach Mari.</span>
+            {task.phase === "error" ? (
+              <span className="font-term text-[11.5px] text-espelette">{task.errorText}</span>
             ) : (
-              <Button compact disabled>{phase === "done" ? "Task created" : "Creating…"}</Button>
+              <Button compact disabled>{task.phase === "done" ? "Task created" : "Creating…"}</Button>
             )}
           </td>
         </tr>
@@ -170,15 +184,21 @@ function ReviewTaskAudit({ phase }: { phase: "creating" | "done" | "error" }) {
   );
 }
 
-function Body({ state }: { state: string }) {
-  if (state === "error") {
+/** A workspace with no facts at all. Derived from the data, so it is true in
+    the real app for exactly the same reason it is true on the canvas. */
+function isEmpty(d: FactsData): boolean {
+  return !d.facts.length && !d.audit?.length && !d.taskAudit && !d.impact && !d.extras;
+}
+
+function Body({ data, error }: { data: FactsData; error: string | null }) {
+  if (error) {
     return (
       <div className="mt-6">
-        <EmptyState title="API offline">The facts service is temporarily unavailable. Retrying…</EmptyState>
+        <EmptyState title="API offline">{error}</EmptyState>
       </div>
     );
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <div className="mt-6">
         <EmptyState title="No facts yet">
@@ -187,117 +207,33 @@ function Body({ state }: { state: string }) {
       </div>
     );
   }
-  if (state === "verified") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
-        <FactsTable facts={FACTS.filter((f) => f.status === "Verified")} />
-      </div>
-    );
-  }
-  if (state === "review") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="review" onChange={() => {}} />
-        <FactsTable facts={FACTS.filter((f) => f.status === "Needs review")} />
-      </div>
-    );
-  }
-  if (state === "contradicted") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="contradicted" onChange={() => {}} />
-        <Alert tone="blocked" title="1 fact is contradicted by a newer source">
-          A more recent document conflicts with this claim. Re-verify or supersede it.
-        </Alert>
-        <FactsTable facts={FACTS.filter((f) => f.status === "Contradicted")} />
-      </div>
-    );
-  }
-  if (state === "stale") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
-        <FactsVerificationAudit />
-      </div>
-    );
-  }
-  if (state === "impact") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
-        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
-          <ImpactPanelFeature />
-        </Card>
-      </div>
-    );
-  }
-  if (state === "impact-analyzed") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="verified" onChange={() => {}} />
-        <Card variant="plain" title="Free tier includes 3 connected sources." eyebrow="Verified fact: expanded">
-          <ImpactPanelFeature analyzed />
-        </Card>
-      </div>
-    );
-  }
-  if (state === "task-creating" || state === "task-done" || state === "task-error") {
-    const phase = state === "task-creating" ? "creating" : state === "task-done" ? "done" : "error";
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="stale" onChange={() => {}} />
-        <ReviewTaskAudit phase={phase} />
-      </div>
-    );
-  }
-  if (state === "overflow") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
-        <StressExtras mode="overflow" />
-        <FactsTable facts={OVERFLOW_FACTS} />
-        <FactsVerificationAudit facts={OVERFLOW_FACTS} />
-      </div>
-    );
-  }
-  if (state === "stress") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
-        <StressExtras mode="stress" />
-        <FactsTable facts={STRESS_FACTS} />
-        <FactsVerificationAudit facts={STRESS_FACTS} />
-      </div>
-    );
-  }
-  if (state === "single") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
-        <FactsTable facts={[FACTS[0]]} />
-      </div>
-    );
-  }
-  if (state === "many") {
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
-        <FactsTable facts={MANY} />
-      </div>
-    );
-  }
   return (
     <div className="mt-6 flex flex-col gap-5">
-      <Tabs ariaLabel="Filter facts" options={FILTERS} value="all" onChange={() => {}} />
-      <FactsTable facts={FACTS} />
-      <FactsVerificationAudit />
+      <Tabs ariaLabel="Filter facts" options={data.filters} value={data.filter} onChange={() => {}} />
+      {data.banner && <Alert tone="blocked" title={data.banner.title}>{data.banner.body}</Alert>}
+      {data.extras && <Extras extras={data.extras} />}
+      {data.impact ? (
+        <Card variant="plain" title={data.impact.title} eyebrow="Verified fact: expanded">
+          <ImpactPanelFeature
+            claim={data.impact.claim}
+            source={data.impact.source}
+            verifiedAt={data.impact.verifiedAt}
+            summary={data.impact.summary}
+            docs={data.impact.docs}
+            analyzed={data.impact.analyzed}
+          />
+        </Card>
+      ) : (
+        data.facts.length > 0 && <FactsTable facts={data.facts} />
+      )}
+      {data.taskAudit && <ReviewTaskAudit task={data.taskAudit} />}
+      {data.audit && <FactsVerificationAudit facts={data.audit} />}
     </div>
   );
 }
 
-function FactsPage({ state = "default", mobile = false }: PageProps) {
-  if (state === "loading") {
+function FactsPage({ data, loading = false, error = null, mobile = false }: PageProps<FactsData>) {
+  if (loading) {
     return (
       <PageFrame active={navFor("facts")} title="Facts" mobile={mobile}>
         <SkeletonPage variant="table" />
@@ -322,13 +258,13 @@ function FactsPage({ state = "default", mobile = false }: PageProps) {
           actions={mobile ? undefined : actions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-        <Body state={state} />
+        <Body data={data} error={error} />
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<FactsData> = {
   id: "facts",
   title: "Facts",
   route: "/facts",

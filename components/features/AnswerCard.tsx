@@ -20,12 +20,13 @@ import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } fr
    sparkline. Supports inline edit, approve/retire, and per-channel serving
    toggles. Standalone with a baked demo answer. */
 
-type AnswerStatus = "approved" | "draft" | "retired";
+export type AnswerStatus = "approved" | "draft" | "retired";
 const CHANNELS = ["slack-bot", "support-widget", "docs-site"] as const;
 type Channel = (typeof CHANNELS)[number];
 const CHANNEL_LABEL: Record<Channel, string> = { "slack-bot": "Slack bot", "support-widget": "Support widget", "docs-site": "Docs site" };
 
-type Answer = {
+/** One curated answer, as the Answers page and its fixtures compose it. */
+export type Answer = {
   id: number;
   question: string;
   answer: string;
@@ -38,28 +39,15 @@ type Answer = {
   updated: string;
 };
 
-const DEMO: Answer = {
-  id: 1,
-  question: "How long do sessions last before they expire?",
-  answer: "Sessions are 30-day rolling tokens: each request within the window extends them. Signing in on a new device revokes the oldest session once you pass the five-device cap, and signing out revokes the current session immediately. Admins can force-revoke every session for a member from the members table.",
-  status: "approved",
-  owner: "Priya Nair",
-  channels: ["slack-bot", "docs-site"],
-  sources: [{ source: "docs", title: "Sign-in and session model" }, { source: "notion", title: "Auth overview" }],
-  served: 1284,
-  spark: [4, 6, 5, 9, 8, 12, 11, 15, 14, 18],
-  updated: "2026-07-16",
-};
-
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join(""); }
 
 export type AnswerCardProps = {
-  answer?: Answer;
+  answer: Answer;
   loading?: boolean;
   className?: string;
 };
 
-export function AnswerCard({ answer: initial = DEMO, loading = false, className = "" }: AnswerCardProps) {
+export function AnswerCard({ answer: initial, loading = false, className = "" }: AnswerCardProps) {
   const [a, setA] = useState<Answer>(initial);
   const [editing, setEditing] = useState(false);
   const [editQ, setEditQ] = useState(a.question);

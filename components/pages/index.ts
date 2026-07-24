@@ -26,7 +26,7 @@ import { page as login } from "./LoginPage";
 import { page as setup } from "./SetupPage";
 import { page as welcome } from "./WelcomePage";
 
-export const PAGES: PageModule[] = [
+export const PAGES: PageModule<any>[] = [
   overview,
   knowledge,
   docReview,

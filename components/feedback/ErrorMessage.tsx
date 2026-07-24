@@ -37,9 +37,12 @@ export function FieldError({ id, children }: { id?: ErrorId; children?: ReactNod
   const text = children ?? (id ? ERRORS[id].title : null);
   if (!text) return null;
   return (
-    <p role="alert" className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-espelette">
-      <AlertCircle size={13} aria-hidden />
-      {text}
+    /* items-start + min-w-0 + wrapping text: the message is whatever the
+       server said, so it is arbitrary length. Centred, non-shrinking flex
+       children pushed a long one 174px out through the form. */
+    <p role="alert" className="mt-1 flex min-w-0 items-start gap-1.5 text-[12px] font-medium text-espelette">
+      <AlertCircle size={13} aria-hidden className="mt-[2px] shrink-0" />
+      <span className="min-w-0 [overflow-wrap:anywhere]">{text}</span>
     </p>
   );
 }

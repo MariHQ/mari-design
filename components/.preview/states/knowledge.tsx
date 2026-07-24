@@ -1,5 +1,6 @@
 import type { ComponentSpec } from "./types";
 import { KnowledgeBrowser, KnowledgeInspector } from "../../features";
+import { KNOWLEDGE_RESULTS, KNOWLEDGE_DOC } from "../fixtures/features";
 
 /* State matrix for the knowledge group. Author EVERY state worth reviewing:
    default, each variant, loading, empty, error, disabled, selected, and the
@@ -139,8 +140,8 @@ export const KNOWLEDGE: ComponentSpec[] = [
   {
     id: "KnowledgeBrowser", title: "KnowledgeBrowser", width: 1080,
     states: [
-      { id: "default", label: "Default (All tab, first result selected)", node: <KnowledgeBrowser /> },
-      { id: "loading", label: "Loading", node: <KnowledgeBrowser loading /> },
+      { id: "default", label: "Default (All tab, first result selected)", node: <KnowledgeBrowser results={KNOWLEDGE_RESULTS} /> },
+      { id: "loading", label: "Loading", node: <KnowledgeBrowser results={[]} loading /> },
       { id: "empty", label: "Empty corpus", node: <KnowledgeBrowser results={[]} /> },
       { id: "single", label: "Single result", node: <KnowledgeBrowser results={[RESULTS[1]]} /> },
       { id: "many", label: "Overflow: far too many results", node: <KnowledgeBrowser results={LONG_RESULTS} /> },
@@ -155,8 +156,8 @@ export const KNOWLEDGE: ComponentSpec[] = [
   {
     id: "KnowledgeInspector", title: "KnowledgeInspector", width: 420,
     states: [
-      { id: "default", label: "Default (Document tab)", node: <KnowledgeInspector /> },
-      { id: "loading", label: "Loading", node: <KnowledgeInspector loading /> },
+      { id: "default", label: "Default (Document tab)", node: <KnowledgeInspector doc={KNOWLEDGE_DOC} /> },
+      { id: "loading", label: "Loading", node: <KnowledgeInspector doc={KNOWLEDGE_DOC} loading /> },
       { id: "empty", label: "Empty: no facts, related, or revisions", node: <KnowledgeInspector doc={EMPTY_DOC} /> },
       { id: "slack", label: "Slack decision excerpt (tags suppressed)", node: <KnowledgeInspector doc={SLACK_DOC} /> },
       { id: "long", label: "Overflow: long text, too many chips + unbreakable string", node: <KnowledgeInspector doc={LONG_DOC} /> },

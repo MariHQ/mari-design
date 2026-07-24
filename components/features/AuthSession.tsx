@@ -20,8 +20,6 @@ import { focusRing } from "../tokens/focusRing";
 
 export type AuthUser = { name: string; email: string; role: string; initials: string; provider: string };
 
-const DEMO_USER: AuthUser = { name: "Maya Chen", email: "maya@team.com", role: "admin", initials: "MC", provider: "password" };
-
 function GoogleMark({ size = 17 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
@@ -38,13 +36,17 @@ const DIVIDER = "flex items-center gap-3 text-center font-term text-[11px] upper
 export type AuthSessionProps = {
   /** Start in the signed-in session view. */
   initialUser?: AuthUser | null;
+  /** The identity a successful sign-in resolves to. A real app passes the
+      authenticated user; this component does not invent one, so it can never
+      show a fabricated name to somebody who actually signed in. */
+  signedInAs: AuthUser;
   bypassEnabled?: boolean;
   oauth?: { github: boolean; google: boolean };
   loading?: boolean;
   className?: string;
 };
 
-export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = { github: true, google: false }, loading = false, className = "" }: AuthSessionProps) {
+export function AuthSession({ initialUser = null, signedInAs, bypassEnabled = true, oauth = { github: true, google: false }, loading = false, className = "" }: AuthSessionProps) {
   const [user, setUser] = useState<AuthUser | null>(initialUser);
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const [name, setName] = useState("");
@@ -56,7 +58,7 @@ export function AuthSession({ initialUser = null, bypassEnabled = true, oauth = 
   const signIn = (provider: string, override?: Partial<AuthUser>) => {
     setBusy(true);
     setTimeout(() => {
-      setUser({ ...DEMO_USER, provider, ...(email ? { email } : {}), ...(name ? { name, initials: name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() } : {}), ...override });
+      setUser({ ...signedInAs, provider, ...(email ? { email } : {}), ...(name ? { name, initials: name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() } : {}), ...override });
       setBusy(false);
     }, 500);
   };

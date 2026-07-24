@@ -39,24 +39,13 @@ export type FeedItem = {
   secondsAgo: number;
 };
 
-const DEMO_FEED: FeedItem[] = [
-  { id: 1, kind: "run", actor: "Docs guardrail", text: "completed a run over", target: "billing/*.md", secondsAgo: 42 },
-  { id: 2, kind: "edit", actor: "Dana R.", text: "refined", target: "Pricing FAQ", secondsAgo: 190 },
-  { id: 3, kind: "fact", actor: "Mari", text: "verified a fact in", target: "Proration rule", secondsAgo: 380 },
-  { id: 4, kind: "deploy", actor: "Stale sweeper", text: "deployed", target: "help.mari.guru", secondsAgo: 900 },
-  { id: 5, kind: "sync", actor: "Notion", text: "synced", target: "Onboarding space", secondsAgo: 1500 },
-  { id: 6, kind: "link", actor: "Mari", text: "derived links between", target: "on-call guide", secondsAgo: 2400 },
-  { id: 7, kind: "task", actor: "Priya K.", text: "closed a task on", target: "auth/README", secondsAgo: 3600 },
-  { id: 8, kind: "edit", actor: "Sam L.", text: "edited", target: "Escalation ladder", secondsAgo: 5400 },
-];
-
 const isNoise = (e: FeedItem) => /slack/i.test(`${e.kind} ${e.text}`);
 
 /** Events on screen before the feed's own "Show all". */
 const FEED_ROWS = 8;
 
 export type OverviewLiveActivityProps = {
-  items?: FeedItem[];
+  items: FeedItem[];
   loading?: boolean;
   offline?: boolean;
   /** Poll interval in ms (re-stamps times to feel live). 0 disables. */
@@ -67,7 +56,7 @@ export type OverviewLiveActivityProps = {
 };
 
 export function OverviewLiveActivity({
-  items = DEMO_FEED, loading = false, offline = false, pollMs = 10_000,
+  items, loading = false, offline = false, pollMs = 10_000,
   onRetry, className = "",
 }: OverviewLiveActivityProps) {
   const [now, setNow] = useState(() => Date.now());

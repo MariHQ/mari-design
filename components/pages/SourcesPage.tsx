@@ -18,16 +18,12 @@ import { Textarea } from "../forms/Textarea";
 import { SectionLabel } from "../forms/SectionLabel";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark } from "../icons/marks";
-import { SourcesConnectorCard } from "../features/SourcesConnectorCard";
-import { SourcesConnectorWizard } from "../features/SourcesConnectorWizard";
+import { SourcesConnectorCard, type Source } from "../features/SourcesConnectorCard";
+import { SourcesConnectorWizard, type WizardProviderSpec } from "../features/SourcesConnectorWizard";
 import { SourcesSyncStatus, PhaseTracker } from "../features/SourcesSyncStatus";
-import { SourcesBots } from "../features/SourcesBots";
-import { Avatar } from "../data-display/Avatar";
+import { SourcesBots, type GithubStatus, type SlackStatus } from "../features/SourcesBots";
 import { Truncate } from "../data-display/Truncate";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_SOURCE, LONG_DOC_TITLE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, MIXED_SCRIPT, MANY_INITIALS,
-} from "./stress";
+import type { PropertyItem } from "../data-display/PropertyList";
 
 /* Sources & connectors (pages/sources.md). Settings → Sources: the hub for
    bringing every product conversation into one trusted library. Two tabs —
@@ -38,7 +34,12 @@ import {
    provider — choose → configure credentials → syncing → done — composed
    directly in the page body (provider header, credential Fields, a live
    SyncPanel) rather than a portalled dialog, so a static screenshot reads the
-   whole flow. States: connect-<provider>-configure / -sync / -done. */
+   whole flow. States: connect-<provider>-configure / -sync / -done.
+
+   Pure presenter: the connector catalog, the connected sources, the connect
+   flow's credential fields, the first-sync row and the bot statuses all arrive
+   in `data`. Brand marks are derived from the provider key, never carried in
+   the data. "No sources connected" is derived from the source list. */
 
 type Tab = "connectors" | "bots";
 
@@ -62,100 +63,70 @@ function SplitBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNod
   );
 }
 
-/* ── Inline connector catalog ──────────────────────────────────────────────
-   Sample-filled credential fields so the configure screenshot reads populated;
-   sync/done counts feed the SyncPanel step. */
-type ConnField = { label: string; value: string; secret?: boolean; help?: string; multiline?: boolean };
-type Connector = {
+/* ── Inline connect flow ───────────────────────────────────────────────────
+   Credential fields come in already filled so the configure screenshot reads
+   populated; the sync counts feed the SyncPanel step. */
+
+/** One credential field on the configure step. */
+export type ConnField = { label: string; value: string; secret?: boolean; help?: string; multiline?: boolean };
+
+/** The provider being connected, and what its first sync will report. */
+export type Connector = {
+  /** Provider key: also selects the brand mark. */
   key: string;
   name: string;
   blurb: string;
   docsUrl?: string;
   detail: string;
   fields: ConnField[];
+  /** File-upload connector: no credentials, a drop zone instead. */
   upload?: boolean;
   sync: { done: number; total: number; docCount: number; chunkCount: number; embeddedCount: number };
 };
 
-const CONNECTORS: Record<string, Connector> = {
-  github: {
-    key: "github", name: "GitHub", blurb: "Sync Markdown docs from a repository, read-only.",
-    docsUrl: "https://docs.github.com/authentication", detail: "acme/handbook",
-    fields: [
-      { label: "Repository", value: "acme/handbook", help: "owner/name of a repo your token can read." },
-      { label: "Access token", value: "ghp_R8xQ2v••••••••••••••", secret: true },
-      { label: "Paths filter (glob)", value: "**/*.md" },
-    ],
-    sync: { done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340 },
-  },
-  slack: {
-    key: "slack", name: "Slack", blurb: "Import channel history into your knowledge library.",
-    detail: "#engineering",
-    fields: [
-      { label: "Bot token", value: "xoxb-2481••••••••••••", secret: true, help: "Needs channels:history + channels:read." },
-      { label: "Channel", value: "#engineering" },
-    ],
-    sync: { done: 210, total: 480, docCount: 4210, chunkCount: 15330, embeddedCount: 12040 },
-  },
-  notion: {
-    key: "notion", name: "Notion", blurb: "Sync pages from a Notion database.",
-    detail: "Product wiki",
-    fields: [
-      { label: "Internal integration token", value: "secret_9Fa2••••••••", secret: true },
-      { label: "Database ID", value: "8a5f0e2c-91d4-4b77-a1e2-6f3c" },
-    ],
-    sync: { done: 88, total: 240, docCount: 620, chunkCount: 3120, embeddedCount: 2140 },
-  },
-  gdrive: {
-    key: "gdrive", name: "Google Drive", blurb: "Index docs from a shared Drive folder.",
-    detail: "Design",
-    fields: [
-      { label: "Service account JSON", value: '{ "type": "service_account", "project_id": "acme-docs", "private_key_id": "a1b2c3" … }', secret: true, multiline: true },
-      { label: "Folder ID", value: "1a2B3c4D5e6F7g8H9i0J" },
-    ],
-    sync: { done: 44, total: 120, docCount: 340, chunkCount: 1980, embeddedCount: 1120 },
-  },
-  confluence: {
-    key: "confluence", name: "Confluence", blurb: "Index spaces and pages from Confluence Cloud.",
-    detail: "Ops space",
-    fields: [
-      { label: "Base URL", value: "https://acme.atlassian.net/wiki" },
-      { label: "Email", value: "dana@acme.com" },
-      { label: "API token", value: "ATATT3xFfGF0••••••••", secret: true },
-    ],
-    sync: { done: 160, total: 512, docCount: 512, chunkCount: 3100, embeddedCount: 2870 },
-  },
-  jira: {
-    key: "jira", name: "Jira", blurb: "Sync issues and comments from a Jira project.",
-    detail: "PLAT project",
-    fields: [
-      { label: "Base URL", value: "https://acme.atlassian.net" },
-      { label: "Email", value: "dana@acme.com" },
-      { label: "API token", value: "ATATT3xFfGF0••••••••", secret: true },
-      { label: "Project key", value: "PLAT" },
-    ],
-    sync: { done: 96, total: 320, docCount: 780, chunkCount: 4200, embeddedCount: 3010 },
-  },
-  linear: {
-    key: "linear", name: "Linear", blurb: "Index issues and docs from Linear.",
-    detail: "Engineering team",
-    fields: [
-      { label: "API key", value: "lin_api_9Xa2••••••••", secret: true },
-      { label: "Team", value: "Engineering" },
-    ],
-    sync: { done: 120, total: 260, docCount: 430, chunkCount: 1740, embeddedCount: 1290 },
-  },
-  upload: {
-    key: "upload", name: "Upload", blurb: "Drop files to index them directly — no credentials needed.",
-    detail: "6 files", upload: true, fields: [],
-    sync: { done: 4, total: 6, docCount: 6, chunkCount: 210, embeddedCount: 140 },
-  },
+/** Which screen of Sources is on. An app drives it from its own route. */
+export type SourcesView = "grid" | "wizard" | "bots" | "connect" | "sync-status";
+/** Step of the inline per-provider connect flow. */
+export type ConnectPhase = "configure" | "sync" | "done";
+/** State of the standalone first-sync row. */
+export type SyncPhase = "queued" | "syncing" | "done" | "error";
+
+/** The one source the first-sync panel is reporting on. */
+export type FirstSync = {
+  /** Provider key, which selects the brand mark. */
+  provider: string;
+  name: string;
+  phase: string;
+  done: number;
+  total: number;
+  docCount: number;
+  chunkCount: number;
+  embeddedCount: number;
+  lastSyncAt: string;
+  error: string;
 };
 
-const UPLOAD_FILES = [
-  "product-brief.pdf", "pricing-2026.md", "security-overview.docx",
-  "onboarding-runbook.md", "faq.md", "architecture.pdf",
-];
+/** Everything Sources renders. */
+export type SourcesData = {
+  view: SourcesView;
+  /** Connectors already wired up. */
+  sources: Source[];
+  /** Catalog the Add-source wizard offers. */
+  catalog: WizardProviderSpec[];
+  /** `connect` view: the provider being set up and how far it has got. */
+  connector: Connector | null;
+  connectPhase: ConnectPhase;
+  /** Files chosen for the upload connector. */
+  uploadFiles: string[];
+  /** `sync-status` view. */
+  syncPhase: SyncPhase;
+  firstSync: FirstSync;
+  /** Bots tab. */
+  slack: SlackStatus;
+  github: GithubStatus;
+  /** Read-only facts in the rail. */
+  summary: PropertyItem[];
+};
 
 function DocsLink({ c }: { c: Connector }) {
   if (!c.docsUrl) return null;
@@ -166,7 +137,7 @@ function DocsLink({ c }: { c: Connector }) {
   );
 }
 
-function ConfigureBody({ c }: { c: Connector }) {
+function ConfigureBody({ c, uploadFiles }: { c: Connector; uploadFiles: string[] }) {
   if (c.upload) {
     return (
       <div>
@@ -176,9 +147,9 @@ function ConfigureBody({ c }: { c: Connector }) {
           <p className="font-term text-[11px] text-ink/65">PDF · Markdown · Word · text · up to 50 MB each</p>
         </div>
         <div className="mt-3">
-          <SectionLabel>Selected files — {UPLOAD_FILES.length}</SectionLabel>
+          <SectionLabel>Selected files — {uploadFiles.length}</SectionLabel>
           <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
-            {UPLOAD_FILES.map((f) => (
+            {uploadFiles.map((f) => (
               <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
                 <FileText size={13} className="text-ink/65" /> {f}
               </li>
@@ -227,7 +198,7 @@ function connectorSyncSource(c: Connector, phase: "sync" | "done"): SyncSource {
   };
 }
 
-function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" | "done" }) {
+function ConnectFlow({ c, phase, uploadFiles }: { c: Connector; phase: ConnectPhase; uploadFiles: string[] }) {
   const stepIdx = phase === "configure" ? 1 : 2;
   const configuring = phase === "configure";
   return (
@@ -247,7 +218,7 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
         <div className="mt-5 min-h-[200px]">
           {/* Phase tracker lives in the 320px rail (§11) so the panel below can
               run the full width of the main column. */}
-          {configuring ? <ConfigureBody c={c} /> : <SyncPanel sources={[connectorSyncSource(c, phase)]} />}
+          {configuring ? <ConfigureBody c={c} uploadFiles={uploadFiles} /> : <SyncPanel sources={[connectorSyncSource(c, phase)]} />}
         </div>
 
         {/* Primary bottom LEFT, secondaries to its right (§2). */}
@@ -271,13 +242,15 @@ function ConnectFlow({ c, phase }: { c: Connector; phase: "configure" | "sync" |
 }
 
 /* ── Standalone sync-status phases ─────────────────────────────────────────*/
-function syncPhaseSource(phase: "queued" | "syncing" | "done" | "error"): SyncSource {
-  const base = { id: "gh", name: "GitHub · acme/handbook", mark: <SourceMark provider="github" size={24} /> } as const;
+function syncPhaseSource(f: FirstSync, phase: SyncPhase): SyncSource {
+  /* The brand mark is built here from the provider key: the data stays plain
+     JSON, exactly as an API would return it. */
+  const base = { id: f.provider, name: f.name, mark: <SourceMark provider={f.provider} size={24} /> } as const;
   switch (phase) {
     case "queued": return { ...base, state: "queued" };
-    case "syncing": return { ...base, state: "syncing", phase: "Chunking", done: 180, total: 512, chunkCount: 8912, embeddedCount: 3100 };
-    case "done": return { ...base, state: "done", docCount: 500, chunkCount: 8912, embeddedCount: 8912, lastSyncAt: "2026-07-21T14:12:00" };
-    case "error": return { ...base, state: "error", error: "GET /repos/acme/handbook returned 401: the token expired or was revoked." };
+    case "syncing": return { ...base, state: "syncing", phase: f.phase, done: f.done, total: f.total, chunkCount: f.chunkCount, embeddedCount: f.embeddedCount };
+    case "done": return { ...base, state: "done", docCount: f.docCount, chunkCount: f.chunkCount, embeddedCount: f.chunkCount, lastSyncAt: f.lastSyncAt };
+    case "error": return { ...base, state: "error", error: f.error };
   }
 }
 
@@ -316,104 +289,23 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* ── Overflow / stress fixtures (see pages/stress.ts) ───────────────────────
-   Long connector names + the credential token/URL fields are the prime
-   horizontal-overflow cases here. Injected via data props into the real
-   connector grid, the SyncPanel row, and an inline connect flow. */
-function SourcesStressBody({ stress }: { stress: boolean }) {
-  return (
-    <>
-      {stress && (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex -space-x-2">
-            {MANY_INITIALS.map((ini, n) => (
-              <span key={n} className="rounded-full ring-2 ring-paper"><Avatar initials={ini} /></span>
-            ))}
-          </div>
-          <Truncate className="min-w-0 flex-1 basis-[10rem] font-term text-[11px] text-ink/65">{MIXED_SCRIPT}</Truncate>
-        </div>
-      )}
-
-      <SourcesConnectorCard
-        sources={
-          stress
-            ? [
-                { id: "gh", provider: "github", name: UNBREAKABLE, tier: "live", state: "running", phase: "embedding", done: 340, total: 512, docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER, lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11] },
-                { id: "conf", provider: "confluence", name: LONG_WORD, tier: "live", state: "failed", docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER, lastSyncAt: "2026-07-20T22:15:00", lastError: `${UNBREAKABLE} ${LONG_URL}` },
-                { id: "mix", provider: "slack", name: MIXED_SCRIPT, tier: "legacy", state: "healthy", docsCount: HUGE_NUMBER, lastSyncAt: "2026-07-19T18:02:00" },
-              ]
-            : [
-                { id: "gh", provider: "github", name: `GitHub · ${LONG_SOURCE}`, tier: "live", state: "running", phase: "embedding", done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340, lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11] },
-                { id: "conf", provider: "confluence", name: `Confluence · ${LONG_TITLE}`, tier: "live", state: "failed", docCount: 512, chunkCount: 3100, embeddedCount: 2870, lastSyncAt: "2026-07-20T22:15:00", lastError: LONG_PARAGRAPH },
-                { id: "web", provider: "website", name: LONG_DOC_TITLE, tier: "legacy", state: "paused", docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3] },
-              ]
-        }
-      />
-
-      <SyncPanel
-        sources={[
-          stress
-            ? { id: "gh", name: MIXED_SCRIPT, mark: <SourceMark provider="github" size={24} />, state: "error", error: `${UNBREAKABLE} ${LONG_URL}` }
-            : { id: "gh", name: `GitHub · ${LONG_SOURCE}`, mark: <SourceMark provider="github" size={24} />, state: "syncing", phase: "Embedding chunks across every service, region, and on-call team", done: 340, total: 512, chunkCount: 8912, embeddedCount: 8340 },
-        ]}
-        onRetry={() => {}}
-      />
-
-      <ConnectFlow
-        c={
-          stress
-            ? { key: "github", name: UNBREAKABLE, blurb: MIXED_SCRIPT, detail: LONG_URL, fields: [
-                { label: "Base URL", value: LONG_URL },
-                { label: "Access token", value: UNBREAKABLE, secret: true, help: LONG_URL },
-                { label: "Service account JSON", value: `${MIXED_SCRIPT} ${UNBREAKABLE}`, secret: true, multiline: true },
-              ], sync: { done: 340, total: 512, docCount: HUGE_NUMBER, chunkCount: HUGE_NUMBER, embeddedCount: HUGE_NUMBER } }
-            : { key: "github", name: LONG_SOURCE, blurb: LONG_PARAGRAPH, docsUrl: LONG_URL, detail: LONG_TITLE, fields: [
-                { label: "Repository", value: LONG_SOURCE, help: LONG_PARAGRAPH },
-                { label: "Access token", value: "ghp_R8xQ2v••••••••••••••", secret: true },
-                { label: "Paths filter (glob)", value: "docs/**/runbooks/**/incident-response/**/*.md" },
-              ], sync: { done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340 } }
-        }
-        phase="configure"
-      />
-    </>
-  );
-}
-
-function tabForState(state: string): Tab {
-  return state === "bots" ? "bots" : "connectors";
-}
-
-/** Parse a connect-<provider>-<phase> state id. */
-function parseConnect(state: string): { c: Connector; phase: "configure" | "sync" | "done" } | null {
-  if (!state.startsWith("connect-")) return null;
-  const rest = state.slice("connect-".length);
-  const idx = rest.lastIndexOf("-");
-  if (idx < 0) return null;
-  const key = rest.slice(0, idx);
-  const p = rest.slice(idx + 1);
-  const c = CONNECTORS[key];
-  if (!c) return null;
-  if (p !== "configure" && p !== "sync" && p !== "done") return null;
-  return { c, phase: p };
-}
-
 /* Supporting rail (§11, 320px). Same shape as the Settings rails: one
    read-only summary card plus one explanatory card. The connect and first-sync
    states swap the summary for the live phase tracker, which is what used to
    sit above the panel and force a half-width body. */
-function SourcesRail({ state }: { state: string }) {
-  const connect = parseConnect(state);
-  const syncPhase = state.startsWith("sync-") ? state.slice("sync-".length) : null;
+function SourcesRail({ data }: { data: SourcesData }) {
+  const connect = data.view === "connect" && data.connector !== null;
+  const syncing = data.view === "sync-status";
 
-  if (connect || syncPhase) {
+  if (connect || syncing) {
     const current = connect
-      ? (connect.phase === "configure" ? 0 : connect.phase === "done" ? 5 : 3)
-      : syncPhase === "queued" ? 0 : syncPhase === "done" ? 5 : 2;
+      ? (data.connectPhase === "configure" ? 0 : data.connectPhase === "done" ? 5 : 3)
+      : data.syncPhase === "queued" ? 0 : data.syncPhase === "done" ? 5 : 2;
     return (
       <>
         <div className={`${card} p-4`}>
           <SectionLabel>{connect ? "Sync phases" : "First-sync status"}</SectionLabel>
-          <div className="mt-3"><PhaseTracker current={current} failed={syncPhase === "error"} /></div>
+          <div className="mt-3"><PhaseTracker current={current} failed={data.syncPhase === "error" && syncing} /></div>
         </div>
         <div className={`${card} p-4`}>
           <SectionLabel>What happens next</SectionLabel>
@@ -430,15 +322,7 @@ function SourcesRail({ state }: { state: string }) {
     <>
       <div className={`${card} p-4`}>
         <SectionLabel>At a glance</SectionLabel>
-        <PropertyList
-          className="mt-3"
-          items={[
-            { label: "Connected sources", value: "6 of 14" },
-            { label: "Documents", value: "12,480" },
-            { label: "Chunks embedded", value: "12,201" },
-            { label: "Last sync", value: "Jul 21, 2026" },
-          ]}
-        />
+        <PropertyList className="mt-3" items={data.summary} />
       </div>
       <div className={`${card} p-4`}>
         <SectionLabel>Credentials</SectionLabel>
@@ -451,41 +335,43 @@ function SourcesRail({ state }: { state: string }) {
   );
 }
 
-function Body({ state, tab }: { state: string; tab: Tab }): ReactNode {
-  if (state === "error") return <EmptyState title="API offline">The API didn't answer. If the server is still starting up, retry in a moment.</EmptyState>;
-  if (state === "empty") return <EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState>;
-  if (state === "overflow" || state === "stress") return <SourcesStressBody stress={state === "stress"} />;
+/** A workspace with nothing connected at all. Derived from the data. */
+function isEmpty(d: SourcesData): boolean {
+  return d.sources.length === 0 && d.connector === null && d.view === "grid";
+}
 
-  const connect = parseConnect(state);
-  if (connect) return <ConnectFlow c={connect.c} phase={connect.phase} />;
+function Body({ data, error, tab }: { data: SourcesData; error: string | null; tab: Tab }): ReactNode {
+  if (error) return <EmptyState title="API offline">{error}</EmptyState>;
+  if (isEmpty(data)) return <EmptyState title="No sources connected yet">Connect GitHub or another source to start building your knowledge base.</EmptyState>;
 
-  if (state.startsWith("sync-")) {
-    const phase = state.slice("sync-".length) as "queued" | "syncing" | "done" | "error";
-    return <SyncPanel sources={[syncPhaseSource(phase)]} onRetry={() => {}} />;
+  if (data.view === "connect" && data.connector) {
+    return <ConnectFlow c={data.connector} phase={data.connectPhase} uploadFiles={data.uploadFiles} />;
+  }
+  if (data.view === "sync-status") {
+    return <SyncPanel sources={[syncPhaseSource(data.firstSync, data.syncPhase)]} onRetry={() => {}} />;
+  }
+  if (data.view === "bots" || tab === "bots") {
+    return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} />;
   }
 
-  if (tab === "bots") return <SourcesBots defaultOpen={null} />;
-
-  // default / adding → connectors grid
+  // grid / wizard → connectors grid
   return (
     <div className="flex flex-col gap-5">
       <div className="flex justify-end">
-        <SourcesConnectorWizard defaultOpen={state === "adding"} />
+        <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={data.catalog} />
       </div>
-      <SourcesConnectorCard />
+      <SourcesConnectorCard sources={data.sources} />
       <SourcesSyncStatus animate={false} />
     </div>
   );
 }
 
-function SourcesPage({ state = "default", mobile = false }: PageProps) {
-  const [tab, setTab] = useState<Tab>(tabForState(state));
-  const isConnect = state.startsWith("connect-");
-  const isSyncPhase = state.startsWith("sync-");
-  const bareState = state === "loading" || state === "error" || state === "empty";
-  const showTabs = !bareState;
+function SourcesPage({ data, loading = false, error = null, mobile = false }: PageProps<SourcesData>) {
+  const [tab, setTab] = useState<Tab>(data.view === "bots" ? "bots" : "connectors");
+  const pinned = data.view === "connect" || data.view === "sync-status";
+  const bare = error !== null || isEmpty(data);
 
-  if (state === "loading") {
+  if (loading) {
     return (
       <PageFrame active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
         <SkeletonPage variant="gallery" />
@@ -502,14 +388,14 @@ function SourcesPage({ state = "default", mobile = false }: PageProps) {
           description="Bring every product conversation into one trusted library."
           icon={<span className="text-moss"><Layers size={24} /></span>}
         />
-        {showTabs && (
+        {!bare && (
           <div className="mt-5">
-            <Tabs<Tab> ariaLabel="Sources sections" variant="underline" options={TAB_OPTIONS} value={isConnect || isSyncPhase ? "connectors" : tab} onChange={setTab} />
+            <Tabs<Tab> ariaLabel="Sources sections" variant="underline" options={TAB_OPTIONS} value={pinned ? "connectors" : tab} onChange={setTab} />
           </div>
         )}
         <div className="mt-6">
-          <SplitBody mobile={mobile} rail={<SourcesRail state={state} />}>
-            <Body state={state} tab={tab} />
+          <SplitBody mobile={mobile} rail={<SourcesRail data={data} />}>
+            <Body data={data} error={error} tab={tab} />
           </SplitBody>
         </div>
       </div>
@@ -517,7 +403,7 @@ function SourcesPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<SourcesData> = {
   id: "sources",
   title: "Sources & connectors",
   route: "/sources",

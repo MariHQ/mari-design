@@ -53,7 +53,7 @@ export { FactsVerificationAudit } from "./FactsVerificationAudit";
 // Library
 export { LibraryGlossaryPanel } from "./LibraryGlossaryPanel";
 export { LibraryGuidesPanel } from "./LibraryGuidesPanel";
-export { LibraryRulesPanel } from "./LibraryRulesPanel";
+export { LibraryRulesPanel, RULE_COUNT, type CheckerDoc } from "./LibraryRulesPanel";
 export { LibraryTagsPanel } from "./LibraryTagsPanel";
 export { LibraryTemplatesPanel } from "./LibraryTemplatesPanel";
 
@@ -62,7 +62,7 @@ export { AnswersHarvestWizard } from "./AnswersHarvestWizard";
 export { AnswerCard } from "./AnswerCard";
 
 // Sources
-export { SourcesConnectorCard } from "./SourcesConnectorCard";
+export { SourcesConnectorCard, type Source, type Tier, type SyncState } from "./SourcesConnectorCard";
 export { SourcesConnectorWizard } from "./SourcesConnectorWizard";
 export { SourcesSyncStatus } from "./SourcesSyncStatus";
 export { SourcesBots } from "./SourcesBots";

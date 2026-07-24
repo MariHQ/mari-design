@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SourceMark } from "../icons/marks";
 import { CheckCircle2, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { card } from "../tokens/card";
 import { fmtAgo, type DateInput } from "../tokens/format";
@@ -22,8 +23,10 @@ export type SyncSource = {
   id: string;
   /** Display name, e.g. "GitHub · acme/docs". */
   name: string;
-  /** Provider logo/mark (an <img> or brand glyph). */
-  mark?: ReactNode;
+  /** Provider key ("github", "slack", …). The panel draws the mark itself:
+      a data shape that carries a React element cannot come from an API, which
+      forced every caller to build JSX just to describe a row. */
+  provider?: string;
   state: SyncState;
   /** Current phase label while syncing, e.g. "Embedding". */
   phase?: string;
@@ -69,7 +72,7 @@ function SyncRow({ s, onRetry }: { s: SyncSource; onRetry?: (id: string) => void
   const pct = pctOf(s);
   return (
     <div className="flex items-start gap-3 py-3 border-b border-ink/10 last:border-0">
-      {s.mark && <span className="grid place-items-center shrink-0 w-6 h-6 mt-0.5">{s.mark}</span>}
+      {s.provider && <span className="grid place-items-center shrink-0 w-6 h-6 mt-0.5"><SourceMark provider={s.provider} size={20} /></span>}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-[13.5px] font-semibold text-ink truncate">{s.name}</span>

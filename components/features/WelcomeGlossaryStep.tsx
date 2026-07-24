@@ -15,20 +15,21 @@ import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton } from "../data-di
    fallback is flagged honestly. Local ReviewChecklist is built here; harvest /
    upsertGlossary are baked in. Standalone in the "Start" state. */
 
-type Candidate = { term: string; definition: string; evidence: string };
-
-const DEMO_CANDIDATES: Candidate[] = [
-  { term: "Backfill", definition: "The initial full sync that ingests every historical document from a source.", evidence: "sources/ingest.md" },
-  { term: "Content hash", definition: "A fingerprint of a chunk's text; unchanged chunks are skipped on re-sync.", evidence: "architecture/dedupe.md" },
-  { term: "Canonical", definition: "The single source-of-truth version of a fact or document.", evidence: "glossary/status.md" },
-  { term: "Embedding", definition: "A vector representation of a text chunk used for semantic retrieval.", evidence: "search/retrieval.md" },
-  { term: "Flow", definition: "A scheduled or triggered pipeline that keeps knowledge fresh.", evidence: "flows/overview.md" },
-];
+export type Candidate = {
+  term: string;
+  definition: string;
+  /** Where the term was found, e.g. the document title. */
+  evidence: string;
+  /** The document the evidence came from, when it is a known document, so the
+      citation can be followed. The harvester now verifies a candidate against
+      the corpus before proposing it, so this is a real id or nothing. */
+  evidenceDocId?: number;
+};
 
 type Mode = "start" | "scanning" | "review" | "adding";
 
 export type WelcomeGlossaryStepProps = {
-  candidates?: Candidate[];
+  candidates: Candidate[];
   /** Simulate the "LLM unavailable" deterministic fallback. */
   llm?: boolean;
   /** Open straight into a given step (used by the state gallery). */
@@ -37,7 +38,7 @@ export type WelcomeGlossaryStepProps = {
   className?: string;
 };
 
-export function WelcomeGlossaryStep({ candidates = DEMO_CANDIDATES, llm = true, defaultMode = "start", loading = false, className = "" }: WelcomeGlossaryStepProps) {
+export function WelcomeGlossaryStep({ candidates, llm = true, defaultMode = "start", loading = false, className = "" }: WelcomeGlossaryStepProps) {
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [checked, setChecked] = useState<Set<string>>(new Set(defaultMode === "review" ? candidates.map((c) => c.term) : []));
   const [progress, setProgress] = useState({ done: 0, total: 0 });

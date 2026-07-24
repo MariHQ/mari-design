@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Unlink } from "lucide-react";
+import { EmptyState } from "../data-display/EmptyState";
 import { ExternalLink, ClipboardCheck, Download } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
@@ -10,7 +12,7 @@ import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList 
 import {
   REL, EdgeSwatch, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
   LgAuthor, LgOwners, LgSourceChip,
-  DEMO_NODES, DEMO_EDGES, nodeById,
+  nodeById,
   type LNode, type LEdge,
 } from "./LineageDataModel";
 
@@ -29,10 +31,10 @@ import {
    ──────────────────────────────────────────────────────────────────────── */
 
 export type LineageEdgeDrawerProps = {
-  nodes?: LNode[];
-  edges?: LEdge[];
-  /** Which edge to open (defaults to a demo edge with evidence + note). */
-  edgeId?: string;
+  nodes: LNode[];
+  edges: LEdge[];
+  /** Which edge to open. */
+  edgeId: string;
   onSelectNode?: (id: string) => void;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
@@ -41,27 +43,30 @@ export type LineageEdgeDrawerProps = {
 };
 
 export function LineageEdgeDrawer({
-  nodes = DEMO_NODES, edges = DEMO_EDGES, edgeId = "e3", onSelectNode, onClose, loading = false, className = "",
+  nodes, edges, edgeId, onSelectNode, onClose, loading = false, className = "",
 }: LineageEdgeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId] = useState(edgeId);
   const [taskMade, setTaskMade] = useState(false);
   const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
-  const edge = edges.find((e) => e.id === openId) ?? edges[0];
-  const from = byId[edge.from];
-  const to = byId[edge.to];
-  const s = REL[edge.rel];
-  const confirmed = edge.meta?.status === "confirmed";
-  const statusLabel = confirmed ? "Confirmed" : edge.llm ? "Derived by Mari" : "Observed";
+  /* Nullable: `edges[0]` is undefined while a query is in flight, and this was
+     dereferenced as `edge.from` ABOVE the `if (loading)` return, so the normal
+     first render of an empty graph threw and blanked the drawer. */
+  const edge: LEdge | null = edges.find((e) => e.id === openId) ?? edges[0] ?? null;
+  const from = edge ? byId[edge.from] : undefined;
+  const to = edge ? byId[edge.to] : undefined;
+  const s = edge ? REL[edge.rel] : null;
+  const confirmed = edge?.meta?.status === "confirmed";
+  const statusLabel = confirmed ? "Confirmed" : edge?.llm ? "Derived by Mari" : "Observed";
 
   const owners = useMemo(() => {
     const rows: { name: string; role: string }[] = [];
     if (from?.owner) rows.push({ name: from.owner, role: "Source owner" });
     if (to?.owner && to.owner !== from?.owner) rows.push({ name: to.owner, role: "Target owner" });
-    if (edge.llm) rows.push({ name: "Mari", role: "Derived by" });
+    if (edge?.llm) rows.push({ name: "Mari", role: "Derived by" });
     return rows;
-  }, [from?.owner, to?.owner, edge.llm]);
+  }, [from?.owner, to?.owner, edge?.llm]);
 
   if (loading) {
     return (
@@ -75,6 +80,17 @@ export function LineageEdgeDrawer({
         <div className="mb-3"><SkeletonLine w="40%" h={12} /></div>
         <SkeletonText lines={3} />
         <div className="mt-4"><SkeletonList rows={2} /></div>
+      </LgDrawerShell>
+    );
+  }
+
+  /* Loaded, but there is no relationship to describe. */
+  if (!edge || !s) {
+    return (
+      <LgDrawerShell className={className} onClose={onClose} width={LG_DRAWER_W} title="Relationship" icon={<Unlink size={19} />}>
+        <EmptyState title="No relationship selected">
+          This graph has no links yet. Relationships appear once Mari connects documents across your sources.
+        </EmptyState>
       </LgDrawerShell>
     );
   }

@@ -6,6 +6,7 @@ import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "..
 import { Tabs } from "../navigation/Tabs";
 import { Pill } from "../data-display/Pill";
 import { SectionLabel } from "../forms/SectionLabel";
+import { FileQuestion } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
 import { Timeline } from "../data-display/Timeline";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
@@ -13,7 +14,7 @@ import { fmtDate } from "../tokens/format";
 import {
   REL, staleColor, NodeGlyph, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
   LgSourceChip, LgNodeStatusChip, LgAuthor, LgOwners,
-  DEMO_NODES, DEMO_EDGES, nodeById,
+  nodeById,
   type LNode, type LEdge, type DocHistoryRow,
 } from "./LineageDataModel";
 
@@ -35,18 +36,13 @@ const REF_PREVIEW = 4;
 /** Tags shown before the rest collapse into a "+N more" chip. */
 const TAG_PREVIEW = 8;
 
-const DEMO_HISTORY: DocHistoryRow[] = [
-  { at: "2026-07-19", actor: "Dev R", verb: "merged", detail: "PR #482 into main" },
-  { at: "2026-07-15", actor: "Mari", verb: "linked", detail: "closes issue #91" },
-  { at: "2026-07-11", actor: "Ana K", verb: "reviewed", detail: "approved billing changes" },
-  { at: "2026-07-10", actor: "Dev R", verb: "opened", detail: "PR #482 · billing revamp" },
-];
-
 export type LineageNodeDrawerProps = {
-  nodes?: LNode[];
-  edges?: LEdge[];
+  nodes: LNode[];
+  edges: LEdge[];
   /** Which node to open. */
-  nodeId?: string;
+  nodeId: string;
+  /** The document's revision history, newest first. */
+  history: DocHistoryRow[];
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -54,7 +50,7 @@ export type LineageNodeDrawerProps = {
 };
 
 export function LineageNodeDrawer({
-  nodes = DEMO_NODES, edges = DEMO_EDGES, nodeId = "n4", onClose, loading = false, className = "",
+  nodes, edges, nodeId, history, onClose, loading = false, className = "",
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
@@ -67,16 +63,22 @@ export function LineageNodeDrawer({
   /** Inline result for the otherwise-inert trace/export buttons. */
   const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
-  const node = byId[openId] ?? nodes[0];
+  /* Nullable, and every derivation below tolerates it. This used to be
+     `byId[openId] ?? nodes[0]`, dereferenced immediately as `node.id` — above
+     the `if (loading)` return — so an in-flight query, which by definition has
+     no rows yet, threw a TypeError and blanked the drawer. `loading` with an
+     empty graph is the normal first render, not an edge case. */
+  const node: LNode | null = byId[openId] ?? nodes[0] ?? null;
 
   const connections = useMemo(() => {
     const rows: { rel: keyof typeof REL; dir: "out" | "in"; other: LNode; edge: LEdge }[] = [];
+    if (!node) return rows;
     for (const e of edges) {
       if (e.from === node.id && byId[e.to]) rows.push({ rel: e.rel, dir: "out", other: byId[e.to], edge: e });
       if (e.to === node.id && byId[e.from]) rows.push({ rel: e.rel, dir: "in", other: byId[e.from], edge: e });
     }
     return rows;
-  }, [edges, node.id, byId]);
+  }, [edges, node?.id, byId]);
 
   const [connPage, setConnPage] = useState(1);
   const shownConnections = connections.slice(0, CONN_PAGE * connPage);
@@ -84,20 +86,21 @@ export function LineageNodeDrawer({
 
   const downstream = connections.filter((c) => c.dir === "out").length;
   const upstream = connections.filter((c) => c.dir === "in").length;
-  const showReferences = ["pr", "issue", "commit"].includes(node.docKind);
+  const showReferences = !!node && ["pr", "issue", "commit"].includes(node.docKind);
   const references = connections.filter((c) => c.rel === "references");
 
   /* Owners block: the document owner plus whoever last approved it. Derived,
      never invented — an unowned document says so. */
   const owners = useMemo(() => {
     const rows: { name: string; role: string }[] = [];
+    if (!node) return rows;
     if (node.owner) rows.push({ name: node.owner, role: "Owner" });
-    const approver = DEMO_HISTORY.find((h) => h.verb === "reviewed")?.actor;
+    const approver = history.find((h) => h.verb === "reviewed")?.actor;
     if (approver && approver !== node.owner) rows.push({ name: approver, role: "Approver" });
     return rows;
-  }, [node.owner]);
+  }, [node?.owner]);
 
-  const metaParts = node.meta.split("·").map((s) => s.trim()).filter(Boolean);
+  const metaParts = node ? node.meta.split("·").map((s) => s.trim()).filter(Boolean) : [];
 
   const copyLink = () => { setCopied(true); setTimeout(() => setCopied(false), 1600); };
 
@@ -113,6 +116,18 @@ export function LineageNodeDrawer({
         <div className="mb-3"><SkeletonLine w="55%" h={12} /></div>
         <SkeletonText lines={4} />
         <div className="mt-4"><SkeletonList rows={4} /></div>
+      </LgDrawerShell>
+    );
+  }
+
+  /* Loaded, but the graph has no node to show: say so rather than render a
+     drawer describing nothing. */
+  if (!node) {
+    return (
+      <LgDrawerShell className={className} onClose={onClose} width={LG_DRAWER_W} title="Document" icon={<FileQuestion size={19} />}>
+        <EmptyState title="No node selected">
+          This graph has no nodes to inspect. Connect a source to build the lineage graph.
+        </EmptyState>
       </LgDrawerShell>
     );
   }
@@ -316,7 +331,7 @@ export function LineageNodeDrawer({
 
       {tab === "history" && (
         <Timeline
-          items={DEMO_HISTORY.map((h) => ({
+          items={history.map((h) => ({
             title: <span><span className="font-semibold text-ink">{h.actor}</span> {h.verb}</span>,
             description: h.detail,
             time: fmtDate(h.at),

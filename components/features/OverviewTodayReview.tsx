@@ -32,16 +32,6 @@ export type ReviewTask = {
   done?: boolean;
 };
 
-const DEMO_TASKS: ReviewTask[] = [
-  { id: 1, text: "Verify the new proration rule in the billing runbook", who: "DR", pill: "factcheck", pillText: "Fact check" },
-  { id: 2, text: "Approve the SSO onboarding guide for publish", who: "MG", pill: "approval", pillText: "Approval" },
-  { id: 3, text: "Retire two stale screenshots in auth/README", who: "PK", pill: "stale", pillText: "Stale", done: true },
-  { id: 4, text: "Review the incident escalation ladder", who: "SL", pill: "needs-review", pillText: "Needs review" },
-  { id: 5, text: "Tag the pricing FAQ as canonical", who: "DR", pill: "canonical", pillText: "Canonical" },
-  { id: 6, text: "Link the on-call guide to the escalation ladder", who: "MG", pill: "needs-review", pillText: "Needs review" },
-  { id: 7, text: "Confirm the Okta walkthrough screenshots are current", who: "PK", pill: "factcheck", pillText: "Fact check" },
-];
-
 /** Collapsed height of the table, in rows, and the expanded page size. */
 const PREVIEW_ROWS = 4;
 const EXPANDED_ROWS = 25;
@@ -65,7 +55,7 @@ function TaskCheck({ done, onToggle }: { done: boolean; onToggle: () => void }) 
 }
 
 export type OverviewTodayReviewProps = {
-  tasks?: ReviewTask[] | null;
+  tasks: ReviewTask[] | null;
   loading?: boolean;
   offline?: boolean;
   onViewAll?: () => void;
@@ -77,7 +67,7 @@ export type OverviewTodayReviewProps = {
 };
 
 export function OverviewTodayReview({
-  tasks = DEMO_TASKS, loading = false, offline = false, onViewAll, onRetry,
+  tasks, loading = false, offline = false, onViewAll, onRetry,
   defaultExpanded = false, className = "",
 }: OverviewTodayReviewProps) {
   const [rows, setRows] = useState<ReviewTask[]>(tasks ?? []);

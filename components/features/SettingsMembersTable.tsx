@@ -23,8 +23,9 @@ import { Truncate, TruncateInline } from "../data-display/Truncate";
    inline role editing and removal, edit the workspace name, and configure
    member provisioning (GitHub team sync + a static provisioning card).
    Composes PageHeader, Card, Avatar, Chip, Select, ConfirmButton.
-   Source: web/src/pages/settings/Members.tsx. Standalone with demo data —
-   all mutations are local state (no network). */
+   Source: web/src/pages/settings/Members.tsx. Pure presenter: the roster, the
+   workspace name and the GitHub team all arrive as required props; mutations
+   are local state (no network). */
 
 const ROLES = ["admin", "manager", "user"] as const;
 type Role = (typeof ROLES)[number] | string;
@@ -39,12 +40,8 @@ export type Member = {
   joined: string;
 };
 
-const DEMO_MEMBERS: Member[] = [
-  { id: 1, name: "Maya Chen", initials: "MC", email: "maya@team.com", role: "admin", status: "active", joined: "2024-11-03" },
-  { id: 2, name: "Devon Park", initials: "DP", email: "devon@team.com", role: "manager", status: "active", joined: "2025-01-18" },
-  { id: 3, name: "Priya Nair", initials: "PN", email: "priya@team.com", role: "user", status: "active", joined: "2025-03-22" },
-  { id: 4, name: "Sam Okafor", initials: "SO", email: "sam@team.com", role: "user", status: "invited", joined: "2025-06-30" },
-];
+/** The GitHub team members are auto-provisioned from. */
+export type GithubTeamSync = { connected: boolean; team: string };
 
 /** Role ids are lowercase on the wire; the dropdown shows them Capitalized
     (CONVENTIONS.md §7). */
@@ -54,17 +51,17 @@ const roleLabel = (r: Role) => ROLE_LABEL[r] ?? (String(r).charAt(0).toUpperCase
 export type SettingsMembersTableProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
   embedded?: boolean;
-  members?: Member[];
-  workspaceName?: string;
-  githubTeam?: { connected: boolean; team: string };
+  members: Member[];
+  workspaceName: string;
+  githubTeam: GithubTeamSync;
   loading?: boolean;
   className?: string;
 };
 
 export function SettingsMembersTable({
-  members: initialMembers = DEMO_MEMBERS,
-  workspaceName = "Acme Data Platform",
-  githubTeam = { connected: true, team: "acme/data-eng" },
+  members: initialMembers,
+  workspaceName,
+  githubTeam,
   loading = false,
   embedded = false,
   className = "",

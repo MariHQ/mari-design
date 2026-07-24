@@ -14,20 +14,14 @@ import { fmtAgo } from "../tokens/format";
    Renders standalone with baked-in demo documents.
    Source: web/src/components/TagPicker.tsx across document surfaces. */
 
-type Doc = { id: string; title: string; provider: string; source: string; updatedAt: string; tags: string[] };
-
-const DEMO_DOCS: Doc[] = [
-  { id: "d1", title: "Incident response runbook", provider: "notion", source: "notion · SRE", updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), tags: ["canonical", "internal"] },
-  { id: "d2", title: "Q3 pricing announcement", provider: "gdocs", source: "gdocs · marketing", updatedAt: new Date(Date.now() - 5 * 86400_000).toISOString(), tags: ["draft", "customer-facing"] },
-  { id: "d3", title: "Legacy webhook migration", provider: "github", source: "github · docs/webhooks.md", updatedAt: new Date(Date.now() - 40 * 86400_000).toISOString(), tags: ["deprecated", "needs-review"] },
-];
+export type Doc = { id: string; title: string; provider: string; source: string; updatedAt: string; tags: string[] };
 
 export type TagPickerFeatureProps = {
-  docs?: Doc[];
+  docs: Doc[];
   className?: string;
 };
 
-export function TagPickerFeature({ docs = DEMO_DOCS, className = "" }: TagPickerFeatureProps) {
+export function TagPickerFeature({ docs, className = "" }: TagPickerFeatureProps) {
   const [rows, setRows] = useState<Doc[]>(docs);
   const setTags = (id: string, tags: string[]) =>
     setRows((cur) => cur.map((d) => (d.id === id ? { ...d, tags } : d)));

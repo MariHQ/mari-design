@@ -8,27 +8,19 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { Scrollable } from "../data-display/Scrollable";
-import { Chip } from "../data-display/Chip";
-import { AvatarGroup } from "../data-display/AvatarGroup";
 import { GithubMark } from "../icons/marks";
 import { FieldError } from "../feedback/ErrorMessage";
 import { focusRing } from "../tokens/focusRing";
 import { btnDisabled } from "../actions/buttons";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD,
-  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
-} from "./stress";
-
-const LONG_EMAIL =
-  "alexandra.wilhelmina.featherstonehaugh-montgomery@platform-reliability-and-incident-response.enterprise-workspace.example.com";
 
 /* Login (pages/login.md). Unauthenticated route — renders OUTSIDE the console
    shell. A centered auth card on a full-bleed backdrop with decorative brand
-   marks in the corners. Each state is a self-contained, presentational framing
-   of the sign-in experience so the canvas can capture the full auth surface:
-   sign-in, register, in-flight, bad-credentials, OAuth hand-off (GitHub /
-   Google), magic-link sent, and the 2FA code prompt. */
+   marks in the corners.
+
+   Pure presenter: which step of the auth flow is on screen, what the workspace
+   is branded as, and which identity providers it offers all arrive in `data`.
+   The canvas supplies them from `.preview/fixtures/login.ts`; a real app
+   supplies them from its router and its workspace config. */
 
 const STATES = [
   { id: "sign-in", label: "Sign in" },
@@ -42,6 +34,41 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** A third-party identity provider the workspace offers. */
+export type LoginProvider = "github" | "google" | "sso";
+
+/** Which step of the auth flow is on screen. An app drives this from its own
+    route/local state; it is never inferred from the shape of the data. */
+export type LoginScreen = "credentials" | "oauth" | "magic-link" | "two-factor";
+
+/** Everything the Login screen renders. */
+export type LoginData = {
+  screen: LoginScreen;
+  /** Branding above the card. */
+  title: string;
+  sub: string;
+  /** `credentials`: create an account rather than sign in. */
+  register: boolean;
+  /** Prefilled credential values. Empty string leaves a field blank. */
+  name: string;
+  email: string;
+  password: string;
+  /** Workspace named by the invite/SSO link. `null` hides the workspace field
+      and the workspace goes unnamed on the submit button. */
+  workspace: string | null;
+  /** Providers this workspace offers. Empty renders the form on its own. */
+  providers: LoginProvider[];
+  /** Offer to switch between signing in and creating an account. */
+  allowRegister: boolean;
+  /** `oauth`: the provider we handed off to. */
+  handoff: "github" | "google" | null;
+  /** `magic-link`: where the link went, and the resend countdown. */
+  magicLinkTo: string;
+  resendIn: string;
+  /** `two-factor`: one entry per code box, "" for an empty box. */
+  codeDigits: string[];
+};
 
 function GoogleMark({ size = 17 }: { size?: number }) {
   return (
@@ -89,31 +116,40 @@ const DIVIDER =
 /* Third-party sign-in. SSO sits here rather than on the credential form: it is
    an alternative identity provider, not a second password field, and giving it
    its own full-width row keeps the enterprise path obvious without crowding
-   the two consumer providers. */
-function OAuthRow({ busy }: { busy?: string }) {
+   the two consumer providers. Rendered only for the providers the workspace
+   actually offers, so a credentials-only workspace shows no dead buttons. */
+function OAuthRow({ providers }: { providers: LoginProvider[] }) {
+  if (!providers.length) return null;
   const base = `inline-flex items-center justify-center gap-2 h-9 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 disabled:pointer-events-none ${btnDisabled} ${focusRing}`;
+  const social = providers.filter((p) => p !== "sso");
   return (
     <>
       <div className={`my-3.5 ${DIVIDER}`}>or continue with</div>
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" className={base} disabled={busy != null}>
-          {busy === "github" ? <Spinner size="sm" /> : <GithubMark size={16} />} GitHub
-        </button>
-        <button type="button" className={base} disabled={busy != null}>
-          {busy === "google" ? <Spinner size="sm" /> : <GoogleMark />} Google
-        </button>
-      </div>
-      <button type="button" className={`mt-2 w-full ${base}`} disabled={busy != null}>
-        {busy === "sso" ? <Spinner size="sm" /> : <KeyRound size={16} />} Single sign-on (SAML)
-      </button>
-      <p className="mt-1.5 text-center text-[11.5px] text-ink/65">
-        Workspace admins can require SSO for everyone on your domain.
-      </p>
+      {social.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {social.includes("github") && (
+            <button type="button" className={base}><GithubMark size={16} /> GitHub</button>
+          )}
+          {social.includes("google") && (
+            <button type="button" className={base}><GoogleMark /> Google</button>
+          )}
+        </div>
+      )}
+      {providers.includes("sso") && (
+        <>
+          <button type="button" className={`mt-2 w-full ${base}`}>
+            <KeyRound size={16} /> Single sign-on (SAML)
+          </button>
+          <p className="mt-1.5 text-center text-[11.5px] text-ink/65">
+            Workspace admins can require SSO for everyone on your domain.
+          </p>
+        </>
+      )}
     </>
   );
 }
 
-function ModeToggle({ register }: { register?: boolean }) {
+function ModeToggle({ register }: { register: boolean }) {
   return (
     <p className="mt-4 text-center text-[12.5px] text-ink/70">
       {register ? (
@@ -125,27 +161,31 @@ function ModeToggle({ register }: { register?: boolean }) {
   );
 }
 
-function CredForm({
-  register, error, busy,
-}: { register?: boolean; error?: boolean; busy?: boolean }) {
+function CredForm({ data, error }: { data: LoginData; error: string | null }) {
+  const { register, workspace } = data;
   return (
     <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
       {register && (
         <Field label="Name">
-          <Input className="w-full" autoComplete="name" placeholder="Maya Chen" defaultValue="Maya Chen" />
+          <Input className="w-full" autoComplete="name" placeholder="Maya Chen" defaultValue={data.name} />
         </Field>
       )}
       <Field label="Email">
-        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" defaultValue="maya@team.com" />
+        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" defaultValue={data.email} />
       </Field>
       <Field label="Password">
-        <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" defaultValue="••••••••••" />
+        <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" defaultValue={data.password} />
       </Field>
-      {error && <FieldError id="auth.invalid" />}
+      {workspace !== null && (
+        <Field label="Workspace">
+          <Input className="w-full" defaultValue={workspace} />
+        </Field>
+      )}
+      {error && <FieldError>{error}</FieldError>}
       {/* Primary bottom left, secondary to its right (§2). */}
       <div className={`mt-1 ${AUTH_ACTIONS}`}>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? "One moment…" : register ? "Create account" : "Sign in"}
+        <Button type="submit" variant="primary">
+          {register ? "Create account" : workspace !== null ? `Sign in to ${workspace}` : "Sign in"}
         </Button>
         {!register && (
           <button type="button" className={`text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}>
@@ -157,7 +197,7 @@ function CredForm({
   );
 }
 
-/* The centered "hand-off" card used by the OAuth / magic-link / done framings. */
+/* The centered "hand-off" card used by the OAuth / magic-link framings. */
 function NoticeCard({ icon, title, children, footer }: {
   icon: ReactNode; title: string; children: ReactNode; footer?: ReactNode;
 }) {
@@ -177,38 +217,35 @@ function NoticeCard({ icon, title, children, footer }: {
   );
 }
 
-function Body({ state }: { state: string }) {
-  switch (state) {
-    case "oauth-github":
+function Body({ data, error }: { data: LoginData; error: string | null }) {
+  switch (data.screen) {
+    case "oauth": {
+      const google = data.handoff === "google";
       return (
-        <NoticeCard icon={<GithubMark size={22} />} title="Redirecting to GitHub…"
+        <NoticeCard
+          icon={google ? <GoogleMark size={22} /> : <GithubMark size={22} />}
+          title={google ? "Redirecting to Google…" : "Redirecting to GitHub…"}
           footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/65"><Spinner size="sm" /> Waiting for authorization</span>}>
-          You’re being sent to GitHub to authorize Mari. This window will
-          return here once you approve access.
+          {google
+            ? "You’re being sent to Google to choose an account. This window will return here once you approve access."
+            : "You’re being sent to GitHub to authorize Mari. This window will return here once you approve access."}
         </NoticeCard>
       );
-    case "oauth-google":
-      return (
-        <NoticeCard icon={<GoogleMark size={22} />} title="Redirecting to Google…"
-          footer={<span className="inline-flex items-center gap-2 text-[12.5px] text-ink/65"><Spinner size="sm" /> Waiting for authorization</span>}>
-          You’re being sent to Google to choose an account. This window will
-          return here once you approve access.
-        </NoticeCard>
-      );
+    }
     case "magic-link":
       return (
         <NoticeCard icon={<Mail size={22} className="text-biscay-2" />} title="Check your inbox"
           footer={
             <div className={AUTH_ACTIONS}>
               <Button variant="primary"><ArrowLeft size={14} /> Back to sign in</Button>
-              <span className="text-[12px] text-ink/65">Didn’t get it? Resend in 0:42</span>
+              <span className="text-[12px] text-ink/65">Didn’t get it? Resend in {data.resendIn}</span>
             </div>
           }>
-          We emailed a one-time sign-in link to <b className="text-ink/80">maya@team.com</b>.
+          We emailed a one-time sign-in link to <b className="text-ink/80">{data.magicLinkTo}</b>.
           It expires in 10 minutes.
         </NoticeCard>
       );
-    case "2fa":
+    case "two-factor":
       return (
         <Card variant="plain">
           <div className="flex items-start gap-3 pb-3 pt-1">
@@ -219,7 +256,7 @@ function Body({ state }: { state: string }) {
             </div>
           </div>
           <div className="my-3 flex gap-2" aria-label="Verification code">
-            {["4", "1", "9", "", "", ""].map((d, i) => (
+            {data.codeDigits.map((d, i) => (
               <input key={i} inputMode="numeric" maxLength={1} defaultValue={d} aria-label={`Digit ${i + 1}`}
                 className={`h-11 w-9 rounded-[4px] border border-ink/20 bg-paper text-center font-term text-[16px] text-ink outline-none focus:border-biscay-2 ${focusRing}`} />
             ))}
@@ -232,85 +269,19 @@ function Body({ state }: { state: string }) {
           </div>
         </Card>
       );
-    case "overflow":
+    default:
       return (
         <Card variant="plain">
-          <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
-            <Field label="Name">
-              <Input className="w-full" defaultValue={LONG_NAME} />
-            </Field>
-            <Field label="Email">
-              <Input className="w-full" type="email" defaultValue={LONG_EMAIL} />
-            </Field>
-            <Field label="Workspace">
-              <Input className="w-full" defaultValue={LONG_TITLE} />
-            </Field>
-            <p role="alert" className="text-[12.5px] leading-relaxed text-espelette">{LONG_PARAGRAPH}</p>
-            <div className={`mt-1 ${AUTH_ACTIONS}`}>
-              <Button type="submit" variant="primary">Sign in to {LONG_TITLE}</Button>
-            </div>
-          </form>
-          <OAuthRow />
-          <ModeToggle />
+          <CredForm data={data} error={error} />
+          <OAuthRow providers={data.providers} />
+          {data.allowRegister && <ModeToggle register={data.register} />}
         </Card>
       );
-    case "stress":
-      return (
-        <Card variant="plain">
-          <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
-            <Field label="Email">
-              <Input className="w-full" defaultValue={`${UNBREAKABLE}@example.com`} />
-            </Field>
-            <Field label="Password">
-              <Input className="w-full" type="password" defaultValue={LONG_WORD} />
-            </Field>
-            <p role="alert" className="break-words text-[12.5px] leading-relaxed text-espelette">
-              {MIXED_SCRIPT}, {UNBREAKABLE}
-            </p>
-            <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
-              {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-            </Scrollable>
-            <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-            <p className="font-term text-[11px] text-ink/65">{HUGE_NUMBER_STR} sign-ins</p>
-            <div className={`mt-1 ${AUTH_ACTIONS}`}>
-              <Button type="submit" variant="primary">{LONG_WORD}</Button>
-            </div>
-          </form>
-        </Card>
-      );
-    default: {
-      const register = state === "register";
-      const busy = state === "loading";
-      const error = state === "error";
-      return (
-        <div className="relative">
-          <Card variant="plain">
-            <CredForm register={register} error={error} busy={busy} />
-            <OAuthRow />
-            <ModeToggle register={register} />
-          </Card>
-          {busy && (
-            <div className="absolute inset-0 grid place-items-center rounded-[8px] bg-paper/70 backdrop-blur-[1px]">
-              <Spinner size="md" label="Signing in" />
-            </div>
-          )}
-        </div>
-      );
-    }
   }
 }
 
-function heading(state: string): { title: string; sub: string } {
-  if (state === "register") return { title: "Create your account", sub: "Your product knowledge, curated." };
-  if (state === "2fa") return { title: "Verify it’s you", sub: "One more step to keep your workspace secure." };
-  if (state === "overflow") return { title: LONG_NAME, sub: LONG_PARAGRAPH };
-  if (state === "stress") return { title: MIXED_SCRIPT, sub: UNBREAKABLE };
-  return { title: "Mari", sub: "Your product knowledge, curated." };
-}
-
-function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
-  const { title, sub } = heading(state);
-  if (state === "loading") {
+function LoginPage({ data, loading = false, error = null, mobile = false }: PageProps<LoginData>) {
+  if (loading) {
     return (
       <div className={AUTH_SHELL}>
         <SkeletonPage variant="auth" />
@@ -321,14 +292,14 @@ function LoginPage({ state = "sign-in", mobile = false }: PageProps) {
     <div className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
-        <AuthHeader title={title} sub={sub} />
-        <Body state={state} />
+        <AuthHeader title={data.title} sub={data.sub} />
+        <Body data={data} error={error} />
       </div>
     </div>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<LoginData> = {
   id: "login",
   title: "Login",
   route: "/login",

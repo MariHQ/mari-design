@@ -11,7 +11,7 @@ import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList 
 import {
   LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow, groupParts, groupKindWord,
   LgAuthor, LgOwners, LgSourceChip, GROUP_PAGE_SIZE,
-  DEMO_EDGES, DEMO_NODES, nodeById, type LNode, type LEdge,
+  nodeById, type LNode, type LEdge,
 } from "./LineageDataModel";
 
 /** Rows shown before the list becomes its own bounded, scrolling region. */
@@ -35,11 +35,13 @@ const REF_PREVIEW = 4;
 
 export type LineageGroupDrawerProps = {
   /** The roll-up bucket id, e.g. "gh:MariHQ/web:commits". */
-  groupId?: string;
-  /** Total members in the bucket (may exceed what the demo lists). */
-  totalMembers?: number;
-  members?: LNode[];
-  edges?: LEdge[];
+  groupId: string;
+  /** Total members in the bucket (may exceed what is listed). */
+  totalMembers: number;
+  members: LNode[];
+  /** The whole graph, so member degree can be counted against it. */
+  nodes: LNode[];
+  edges: LEdge[];
   onSelectMember?: (id: string) => void;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
@@ -47,19 +49,9 @@ export type LineageGroupDrawerProps = {
   className?: string;
 };
 
-/** A baked-in set of commit members for the demo bucket. */
-const DEMO_MEMBERS: LNode[] = [
-  { id: "c1", source: "github", title: "fix: enforce free-tier cap per workspace", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Dev R", date: "2026-07-19", inbound: 4 },
-  { id: "c2", source: "github", title: "refactor billing plan resolver", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Dev R", date: "2026-07-18", inbound: 3 },
-  { id: "c3", source: "github", title: "add Q3 pricing constants", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Mia M", date: "2026-07-16", inbound: 2 },
-  { id: "c4", source: "github", title: "docs: sync FAQ with new tiers", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Sam L", date: "2026-07-14", inbound: 2 },
-  { id: "c5", source: "github", title: "test: billing edge cases", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Dev R", date: "2026-07-12", inbound: 1 },
-  { id: "c6", source: "github", title: "chore: bump stripe sdk", meta: "commit", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0, y: 0, owner: "Jo S", date: "2026-07-09", inbound: 0 },
-];
-
 export function LineageGroupDrawer({
-  groupId = "gh:MariHQ/web:commits", totalMembers = 42, members = DEMO_MEMBERS,
-  edges = DEMO_EDGES, onSelectMember, onClose, loading = false, className = "",
+  groupId, totalMembers, members, nodes, edges,
+  onSelectMember, onClose, loading = false, className = "",
 }: LineageGroupDrawerProps) {
   const { repo, kind } = groupParts(groupId);
   const [isOpen, setIsOpen] = useState(false);
@@ -81,7 +73,7 @@ export function LineageGroupDrawer({
   );
 
   /* Edges that leave the bucket: the group's References / Endpoints. */
-  const graphById = useMemo(() => nodeById(DEMO_NODES), []);
+  const graphById = useMemo(() => nodeById(nodes), [nodes]);
   const references = useMemo(
     () => edges.filter((e) => e.id.startsWith("ge:") || e.from.startsWith("grp:")),
     [edges],

@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Plug } from "lucide-react";
+import { EmptyState } from "../data-display/EmptyState";
 import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, ShieldCheck, ExternalLink } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Dialog } from "../layout/Dialog";
@@ -140,6 +142,17 @@ export function ConnectorWizard({
 
   const body = () => {
     if (step === 0) {
+      /* An empty catalog rendered as a blank gap between the stepper and the
+         Back/Next bar, which reads as a broken dialog. Every sibling panel
+         says why it is empty (§15); this one has to as well. */
+      if (!providers.length) {
+        return (
+          <EmptyState icon={<Plug size={24} />} title="No connectors available">
+            No source types are configured for this workspace. Check the server's
+            connector catalog, or add a source from the Sources page.
+          </EmptyState>
+        );
+      }
       return (
         <div>
           <div className="text-[13px] text-ink/70 mb-3">

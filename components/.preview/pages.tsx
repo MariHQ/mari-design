@@ -3,9 +3,14 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { Toaster } from "../feedback/Toast";
 import * as F from "../features";
+import { FEATURE_PROPS } from "./fixtures/features";
 
-/* One macro/page component per feature spec (mari-pages/features). Each is
-   self-contained with baked-in demo data. Grouped by product area. */
+/* One macro/page component per feature spec (mari-pages/features). The
+   features themselves are pure presenters and ship no demo data
+   (MIGRATION.md), so the gallery hands each one the same fixture the
+   corresponding page renders — see `.preview/fixtures/features.ts`. `props`
+   below only carries per-tile overrides on top of that. Grouped by product
+   area. */
 
 type Entry = { name: keyof typeof F; title: string; props?: Record<string, unknown> };
 type Group = { group: string; items: Entry[] };
@@ -109,6 +114,9 @@ function slug(s: string) {
 
 function FeatureBlock({ name, title, props }: Entry) {
   const Cmp = F[name] as React.ComponentType<Record<string, unknown>>;
+  /* Fixture first, tile override second: a tile that pins `defaultOpen` still
+     gets the shared data props underneath it. */
+  const resolved = { ...(FEATURE_PROPS[name] ?? {}), ...(props ?? {}) };
   return (
     // id = the feature's export name, so QA tooling can screenshot exactly one
     // feature (`node scripts/shot.mjs psec:<Name>`).
@@ -118,7 +126,7 @@ function FeatureBlock({ name, title, props }: Entry) {
         <span className="font-mono text-[10.5px] text-ink/35">{name}</span>
       </div>
       <div className="rounded-md border border-ink/12 bg-flysch/40 p-4 overflow-x-auto">
-        {Cmp ? <Cmp {...(props ?? {})} /> : <div className="text-[13px] text-espelette">Missing export: {name}</div>}
+        {Cmp ? <Cmp {...resolved} /> : <div className="text-[13px] text-espelette">Missing export: {name}</div>}
       </div>
     </div>
   );
@@ -136,7 +144,7 @@ function Pages() {
         <h1 className="text-2xl font-semibold text-ink mt-1">Page components</h1>
         <p className="text-[13px] text-ink/55 mt-1">
           {total} macro / page-level features distilled from the Mari console — each composes the primitives from the
-          <a href="./index.html" className="text-biscay-2 hover:underline"> component library</a>. Baked-in demo data; live and interactive.
+          <a href="./index.html" className="text-biscay-2 hover:underline"> component library</a>. Live and interactive, on the same canvas fixtures the pages render.
         </p>
         <nav className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">
           {GROUPS.map((g) => (

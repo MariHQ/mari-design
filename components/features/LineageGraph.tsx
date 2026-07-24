@@ -10,7 +10,7 @@ import { Truncate, TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
-  DEMO_NODES, DEMO_EDGES, nodeById,
+  nodeById,
   type LNode, type LEdge, type Lens, type LayoutMode,
 } from "./LineageDataModel";
 
@@ -38,8 +38,8 @@ const VB_W = 1000;
 const VB_H = 560;
 
 export type LineageGraphProps = {
-  nodes?: LNode[];
-  edges?: LEdge[];
+  nodes: LNode[];
+  edges: LEdge[];
   layout?: LayoutMode;
   lens?: Lens;
   /** Initially selected / focal node id. */
@@ -160,7 +160,7 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 }
 
 export function LineageGraph({
-  nodes = DEMO_NODES, edges = DEMO_EDGES, layout, lens, focalId = "n1",
+  nodes, edges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
   onSelectNode, onSelectEdge, loading = false, className = "",
 }: LineageGraphProps) {

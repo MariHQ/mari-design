@@ -133,22 +133,9 @@ function OutcomeChip({ outcome }: { outcome: string }) {
   return <Chip label={outcome} tone="neutral" className="max-w-[240px] truncate" />;
 }
 
-const DEMO_FLOW: WfFlow = {
-  name: "Docs guardrail",
-  status: "active",
-  nodes: [
-    { kind: "trigger", label: "When docs change" },
-    { kind: "refine", label: "Tighten" },
-    { kind: "condition", label: "No contradictions", state: "supported" },
-    { kind: "notify", label: "Post to Slack", state: "succeeded" },
-  ],
-};
-
-const DEMO_RUN: WfRun = { started: "2026-07-20T14:57:00", outcome: "Passed" };
-
 export type OverviewWorkflowStripProps = {
-  flow?: WfFlow | null;
-  run?: WfRun;
+  flow: WfFlow | null;
+  run: WfRun;
   loading?: boolean;
   offline?: boolean;
   runsLoading?: boolean;
@@ -161,7 +148,7 @@ export type OverviewWorkflowStripProps = {
 };
 
 export function OverviewWorkflowStrip({
-  flow = DEMO_FLOW, run = DEMO_RUN, loading = false, offline = false,
+  flow, run, loading = false, offline = false,
   runsLoading = false, onConfigure, onRetry, defaultConfiguring = false, className = "",
 }: OverviewWorkflowStripProps) {
   const [configuring, setConfiguring] = useState(defaultConfiguring);

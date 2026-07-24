@@ -6,6 +6,18 @@ import {
   TagPickerFeature, TokenRevealFeature, ImpactPanelFeature, DecisionCardFeature,
   GlobalIconsArt, ChatDockFeature,
 } from "../../features";
+import {
+  MEMBERS_ROWS, MEMBERS_WORKSPACE, MEMBERS_GITHUB_TEAM, API_KEYS,
+  AUDIT_EVENTS, AUDIT_EVENT_TOTAL, MODELS_CONFIG, BRANDING, MCP_SERVERS,
+  FACT_IMPACT, DECISIONS_ROWS,
+  EDITOR_SITE,
+
+  TAG_PICKER_DOCS, TOKEN_REVEAL_KEYS,
+
+  AUTH_IDENTITY,
+
+  CHAT_SESSIONS,
+} from "../fixtures/features";
 
 /* State matrix for the admin group. Author EVERY state worth reviewing:
    default, each variant, loading, empty, error, disabled, selected, and the
@@ -143,13 +155,13 @@ export const ADMIN: ComponentSpec[] = [
   {
     id: "SettingsMembersTable", title: "SettingsMembersTable", width: 980,
     states: [
-      { id: "default", label: "Default", node: <SettingsMembersTable /> },
-      { id: "loading", label: "Loading", node: <SettingsMembersTable loading /> },
-      { id: "empty", label: "No members", node: <SettingsMembersTable members={[]} /> },
+      { id: "default", label: "Default", node: <SettingsMembersTable members={MEMBERS_ROWS} workspaceName={MEMBERS_WORKSPACE} githubTeam={MEMBERS_GITHUB_TEAM} /> },
+      { id: "loading", label: "Loading", node: <SettingsMembersTable members={MEMBERS_ROWS} workspaceName={MEMBERS_WORKSPACE} githubTeam={MEMBERS_GITHUB_TEAM} loading /> },
+      { id: "empty", label: "No members", node: <SettingsMembersTable members={[]} workspaceName={MEMBERS_WORKSPACE} githubTeam={MEMBERS_GITHUB_TEAM} /> },
       { id: "disconnected", label: "GitHub team not connected", node: (
-        <SettingsMembersTable githubTeam={{ connected: false, team: "" }} />) },
+        <SettingsMembersTable members={MEMBERS_ROWS} workspaceName={MEMBERS_WORKSPACE} githubTeam={{ connected: false, team: "" }} />) },
       { id: "overflow", label: "Overflow: long names, unbreakable email, many rows", node: (
-        <SettingsMembersTable workspaceName={LONG} members={Array.from({ length: 18 }, (_, i) => ({
+        <SettingsMembersTable githubTeam={MEMBERS_GITHUB_TEAM} workspaceName={LONG} members={Array.from({ length: 18 }, (_, i) => ({
           id: i + 1,
           name: i % 4 === 0 ? "Aleksandra Konstantinopoulou-Whitfield" : `${LONG} ${i}`,
           initials: "AK",
@@ -158,15 +170,15 @@ export const ADMIN: ComponentSpec[] = [
           status: i % 5 === 0 ? "invited" : "active",
           joined: "2025-06-30",
         }))} />) },
-      { id: "stress", label: "Volume: 400 members", node: <SettingsMembersTable members={MANY_MEMBERS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsMembersTable /> },
+      { id: "stress", label: "Volume: 400 members", node: <SettingsMembersTable members={MANY_MEMBERS} workspaceName={MEMBERS_WORKSPACE} githubTeam={MEMBERS_GITHUB_TEAM} /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsMembersTable members={MEMBERS_ROWS} workspaceName={MEMBERS_WORKSPACE} githubTeam={MEMBERS_GITHUB_TEAM} /> },
     ],
   },
   {
     id: "SettingsApiKeys", title: "SettingsApiKeys", width: 980,
     states: [
-      { id: "default", label: "Default", node: <SettingsApiKeys /> },
-      { id: "loading", label: "Loading", node: <SettingsApiKeys loading /> },
+      { id: "default", label: "Default", node: <SettingsApiKeys keys={API_KEYS} /> },
+      { id: "loading", label: "Loading", node: <SettingsApiKeys keys={[]} loading /> },
       { id: "empty", label: "No keys", node: <SettingsApiKeys keys={[]} /> },
       { id: "revoked", label: "All revoked", node: (
         <SettingsApiKeys keys={[
@@ -180,14 +192,14 @@ export const ADMIN: ComponentSpec[] = [
           created: "2025-02-11", lastUsed: i % 4 === 0 ? null : "2026-07-18", revoked: i % 5 === 0,
         }))} />) },
       { id: "stress", label: "Volume: 240 keys, wide scope strings", node: <SettingsApiKeys keys={MANY_KEYS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsApiKeys /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsApiKeys keys={API_KEYS} /> },
     ],
   },
   {
     id: "SettingsAuditLog", title: "SettingsAuditLog", width: 980,
     states: [
-      { id: "default", label: "Default", node: <SettingsAuditLog /> },
-      { id: "loading", label: "Loading", node: <SettingsAuditLog loading /> },
+      { id: "default", label: "Default", node: <SettingsAuditLog events={AUDIT_EVENTS} total={AUDIT_EVENT_TOTAL} /> },
+      { id: "loading", label: "Loading", node: <SettingsAuditLog events={[]} total={0} loading /> },
       { id: "empty", label: "No events", node: <SettingsAuditLog events={[]} total={0} /> },
       { id: "overflow", label: "Overflow: long targets, many rows", node: (
         <SettingsAuditLog total={4210} events={Array.from({ length: 20 }, (_, i) => ({
@@ -197,74 +209,74 @@ export const ADMIN: ComponentSpec[] = [
           at: "2026-07-20T15:42:00",
         }))} />) },
       { id: "stress", label: "Volume: 1,200 events", node: <SettingsAuditLog events={MANY_EVENTS} total={MANY_EVENTS.length} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsAuditLog /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsAuditLog events={AUDIT_EVENTS} total={AUDIT_EVENT_TOTAL} /> },
     ],
   },
   {
     id: "SettingsModelsConfig", title: "SettingsModelsConfig", width: 980,
     states: [
-      { id: "default", label: "Default", node: <SettingsModelsConfig /> },
-      { id: "loading", label: "Loading", node: <SettingsModelsConfig loading /> },
-      { id: "empty", label: "No chunking rules", node: <SettingsModelsConfig chunking={[]} /> },
+      { id: "default", label: "Default", node: <SettingsModelsConfig {...MODELS_CONFIG} /> },
+      { id: "loading", label: "Loading", node: <SettingsModelsConfig {...MODELS_CONFIG} loading /> },
+      { id: "empty", label: "No chunking rules", node: <SettingsModelsConfig {...MODELS_CONFIG} chunking={[]} /> },
       { id: "unknown", label: "Unknown model + strategy (custom values)", node: (
-        <SettingsModelsConfig embedding="custom:in-house-embedder" llm="custom:in-house-llm" dims={4096}
+        <SettingsModelsConfig {...MODELS_CONFIG} embedding="custom:in-house-embedder" llm="custom:in-house-llm" dims={4096}
           chunking={[{ source: "Custom feed", strategy: "semantic", max_tokens: 2048, overlap: 256 }]} />) },
       { id: "overflow", label: "Overflow: long source names, many rows", node: (
-        <SettingsModelsConfig chunking={Array.from({ length: 12 }, (_, i) => ({
+        <SettingsModelsConfig {...MODELS_CONFIG} chunking={Array.from({ length: 12 }, (_, i) => ({
           source: i % 3 === 0 ? HUGE : `${LONG} ${i}`, strategy: "heading", max_tokens: 800, overlap: 80,
         }))} />) },
-      { id: "stress", label: "Volume: 60 chunking rules", node: <SettingsModelsConfig chunking={MANY_CHUNKING} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsModelsConfig /> },
+      { id: "stress", label: "Volume: 60 chunking rules", node: <SettingsModelsConfig {...MODELS_CONFIG} chunking={MANY_CHUNKING} /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SettingsModelsConfig {...MODELS_CONFIG} /> },
     ],
   },
   {
     id: "BrandingEditor", title: "BrandingEditor", width: 980,
     states: [
-      { id: "default", label: "Default (no branding set)", node: <BrandingEditor /> },
-      { id: "loading", label: "Loading", node: <BrandingEditor loading /> },
+      { id: "default", label: "Default (no branding set)", node: <BrandingEditor {...BRANDING} /> },
+      { id: "loading", label: "Loading", node: <BrandingEditor {...BRANDING} loading /> },
       { id: "branded", label: "Branding applied", node: (
-        <BrandingEditor branding={{ accent: "#0B5CAD", green: "#1F7A4C", blue: "#1E6FA8", gold: "#A05E1C",
+        <BrandingEditor {...BRANDING} branding={{ accent: "#0B5CAD", green: "#1F7A4C", blue: "#1E6FA8", gold: "#A05E1C",
           displayFont: "Sora", bodyFont: "Source Serif Pro", logoAlt: "Northwind Analytics" }} />) },
       { id: "overflow", label: "Overflow: unbreakable logo alt", node: (
-        <BrandingEditor branding={{ accent: "#7A2E1F", logoAlt: HUGE, displayFont: LONG }} />) },
+        <BrandingEditor {...BRANDING} branding={{ accent: "#7A2E1F", logoAlt: HUGE, displayFont: LONG }} />) },
       { id: "stress", label: "Volume: every field at maximum length", node: (
-        <BrandingEditor branding={{ accent: "#7A2E1F", green: "#1F7A4C", blue: "#1E6FA8", gold: "#A05E1C", logoAlt: `${LONG} ${HUGE}`, displayFont: LONG, bodyFont: HUGE }} />) },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <BrandingEditor /> },
+        <BrandingEditor {...BRANDING} branding={{ accent: "#7A2E1F", green: "#1F7A4C", blue: "#1E6FA8", gold: "#A05E1C", logoAlt: `${LONG} ${HUGE}`, displayFont: LONG, bodyFont: HUGE }} />) },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <BrandingEditor {...BRANDING} /> },
     ],
   },
   {
     id: "AuthSession", title: "AuthSession", width: 520,
     states: [
-      { id: "signin", label: "Sign in", node: <AuthSession /> },
+      { id: "signin", label: "Sign in", node: <AuthSession signedInAs={AUTH_IDENTITY} /> },
       { id: "session", label: "Signed in", node: (
-        <AuthSession initialUser={{ name: "Maya Chen", email: "maya@team.com", role: "admin", initials: "MC", provider: "password" }} />) },
-      { id: "loading", label: "Loading", node: <AuthSession loading /> },
-      { id: "no-oauth", label: "No OAuth, no bypass", node: <AuthSession bypassEnabled={false} oauth={{ github: false, google: false }} /> },
+        <AuthSession signedInAs={AUTH_IDENTITY} initialUser={{ name: "Maya Chen", email: "maya@team.com", role: "admin", initials: "MC", provider: "password" }} />) },
+      { id: "loading", label: "Loading", node: <AuthSession signedInAs={AUTH_IDENTITY} loading /> },
+      { id: "no-oauth", label: "No OAuth, no bypass", node: <AuthSession signedInAs={AUTH_IDENTITY} bypassEnabled={false} oauth={{ github: false, google: false }} /> },
       { id: "overflow", label: "Overflow: long name and email", node: (
-        <AuthSession initialUser={{ name: "Aleksandra Konstantinopoulou-Whitfield", email: `${HUGE}@team.com`, role: "workspace administrator", initials: "AK", provider: "github" }} />) },
+        <AuthSession signedInAs={AUTH_IDENTITY} initialUser={{ name: "Aleksandra Konstantinopoulou-Whitfield", email: `${HUGE}@team.com`, role: "workspace administrator", initials: "AK", provider: "github" }} />) },
       { id: "stress", label: "Volume: maximal identity strings", node: (
-        <AuthSession initialUser={{ name: `${person(4)} ${person(5)}`, email: `${HUGE}@team.com`, role: LONG, initials: "AK", provider: "github" }} />) },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <AuthSession /> },
+        <AuthSession signedInAs={AUTH_IDENTITY} initialUser={{ name: `${person(4)} ${person(5)}`, email: `${HUGE}@team.com`, role: LONG, initials: "AK", provider: "github" }} />) },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <AuthSession signedInAs={AUTH_IDENTITY} /> },
     ],
   },
   {
     id: "PublishSiteEditor", title: "PublishSiteEditor", width: 1100,
     states: [
-      { id: "default", label: "Default (theme tab)", node: <PublishSiteEditor /> },
-      { id: "loading", label: "Loading", node: <PublishSiteEditor loading /> },
-      { id: "content", label: "Variant: Content tab", node: <PublishSiteEditor defaultTab="content" /> },
-      { id: "deploy", label: "Variant: Deploy tab", node: <PublishSiteEditor defaultTab="deploy" /> },
+      { id: "default", label: "Default (theme tab)", node: <PublishSiteEditor site={EDITOR_SITE} /> },
+      { id: "loading", label: "Loading", node: <PublishSiteEditor site={EDITOR_SITE} loading /> },
+      { id: "content", label: "Variant: Content tab", node: <PublishSiteEditor site={EDITOR_SITE} defaultTab="content" /> },
+      { id: "deploy", label: "Variant: Deploy tab", node: <PublishSiteEditor site={EDITOR_SITE} defaultTab="deploy" /> },
       { id: "stress", label: "Volume: 300 releases (Deploy tab)", node: <PublishSiteEditor defaultTab="deploy" site={BIG_SITE} /> },
       { id: "stress-nav", label: "Volume: 120 nav entries (Nav tab)", node: <PublishSiteEditor defaultTab="nav" site={BIG_SITE} /> },
       { id: "stress-content", label: "Volume: 40 gates, 12 source tags (Content tab)", node: <PublishSiteEditor defaultTab="content" site={BIG_SITE} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <PublishSiteEditor /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <PublishSiteEditor site={EDITOR_SITE} /> },
     ],
   },
   {
     id: "PublishMcpServers", title: "PublishMcpServers", width: 980,
     states: [
-      { id: "default", label: "Default", node: <PublishMcpServers /> },
-      { id: "loading", label: "Loading", node: <PublishMcpServers loading /> },
+      { id: "default", label: "Default", node: <PublishMcpServers servers={MCP_SERVERS} /> },
+      { id: "loading", label: "Loading", node: <PublishMcpServers servers={[]} loading /> },
       { id: "empty", label: "No servers", node: <PublishMcpServers servers={[]} /> },
       { id: "overflow", label: "Overflow: long names, many servers", node: (
         <PublishMcpServers servers={Array.from({ length: 8 }, (_, i) => ({
@@ -275,13 +287,13 @@ export const ADMIN: ComponentSpec[] = [
           capabilities: i === 1 ? [] : ["search", "facts", "glossary", "chat", "lineage", "answers"],
         }))} />) },
       { id: "stress", label: "Volume: 60 servers", node: <PublishMcpServers servers={MANY_SERVERS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <PublishMcpServers /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <PublishMcpServers servers={MCP_SERVERS} /> },
     ],
   },
   {
     id: "TagPickerFeature", title: "TagPickerFeature", width: 760,
     states: [
-      { id: "default", label: "Default", node: <TagPickerFeature /> },
+      { id: "default", label: "Default", node: <TagPickerFeature docs={TAG_PICKER_DOCS} /> },
       { id: "empty", label: "No documents", node: <TagPickerFeature docs={[]} /> },
       { id: "untagged", label: "Untagged document", node: (
         <TagPickerFeature docs={[{ id: "d1", title: "Untitled draft", provider: "docs", source: "docs · scratch", updatedAt: "2026-07-20T10:00:00", tags: [] }]} />) },
@@ -292,13 +304,13 @@ export const ADMIN: ComponentSpec[] = [
           tags: ["canonical", "draft", "stale", "deprecated", "internal", "customer-facing", "needs-review"],
         }))} />) },
       { id: "stress", label: "Volume: 120 documents, every tag", node: <TagPickerFeature docs={MANY_DOCS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <TagPickerFeature /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <TagPickerFeature docs={TAG_PICKER_DOCS} /> },
     ],
   },
   {
     id: "TokenRevealFeature", title: "TokenRevealFeature", width: 720,
     states: [
-      { id: "default", label: "Default", node: <TokenRevealFeature /> },
+      { id: "default", label: "Default", node: <TokenRevealFeature keys={TOKEN_REVEAL_KEYS} /> },
       { id: "empty", label: "No keys", node: <TokenRevealFeature keys={[]} /> },
       { id: "overflow", label: "Overflow: long labels, many keys", node: (
         <TokenRevealFeature keys={Array.from({ length: 12 }, (_, i) => ({
@@ -306,33 +318,33 @@ export const ADMIN: ComponentSpec[] = [
           prefix: `mari_sk_live_${HUGE}`, createdAt: "2026-05-02", lastUsed: i % 2 ? null : "2026-07-20T10:00:00",
         }))} />) },
       { id: "stress", label: "Volume: 180 keys", node: <TokenRevealFeature keys={MANY_TOKENS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <TokenRevealFeature /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <TokenRevealFeature keys={TOKEN_REVEAL_KEYS} /> },
     ],
   },
   {
     id: "ImpactPanelFeature", title: "ImpactPanelFeature", width: 780,
     states: [
-      { id: "idle", label: "Idle (run affordance)", node: <ImpactPanelFeature /> },
-      { id: "analyzed", label: "Analyzed", node: <ImpactPanelFeature analyzed /> },
-      { id: "loading", label: "Loading", node: <ImpactPanelFeature loading /> },
-      { id: "empty", label: "No impacted documents", node: <ImpactPanelFeature analyzed docs={[]} summary="No documents reference this claim." /> },
+      { id: "idle", label: "Idle (run affordance)", node: <ImpactPanelFeature {...FACT_IMPACT} /> },
+      { id: "analyzed", label: "Analyzed", node: <ImpactPanelFeature {...FACT_IMPACT} analyzed /> },
+      { id: "loading", label: "Loading", node: <ImpactPanelFeature {...FACT_IMPACT} loading /> },
+      { id: "empty", label: "No impacted documents", node: <ImpactPanelFeature {...FACT_IMPACT} analyzed docs={[]} summary="No documents reference this claim." /> },
       { id: "overflow", label: "Overflow: long claim, many documents", node: (
-        <ImpactPanelFeature analyzed claim={`${LONG}. Identifier ${HUGE}.`} source={`github · ${HUGE}`}
+        <ImpactPanelFeature {...FACT_IMPACT} analyzed claim={`${LONG}. Identifier ${HUGE}.`} source={`github · ${HUGE}`}
           summary={LONG}
           docs={Array.from({ length: 12 }, (_, i) => ({
             title: i % 2 === 0 ? LONG : HUGE, source: `gdocs · ${HUGE}`,
             severity: (["update-required", "review", "minor"] as const)[i % 3], reason: LONG,
           }))} />) },
       { id: "stress", label: "Volume: 250 impacted documents", node: (
-        <ImpactPanelFeature analyzed claim={LONG} summary={LONG} docs={MANY_IMPACT} />) },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <ImpactPanelFeature analyzed /> },
+        <ImpactPanelFeature {...FACT_IMPACT} analyzed claim={LONG} summary={LONG} docs={MANY_IMPACT} />) },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <ImpactPanelFeature {...FACT_IMPACT} analyzed /> },
     ],
   },
   {
     id: "DecisionCardFeature", title: "DecisionCardFeature", width: 780,
     states: [
-      { id: "default", label: "Default ledger", node: <DecisionCardFeature /> },
-      { id: "loading", label: "Loading", node: <DecisionCardFeature loading /> },
+      { id: "default", label: "Default ledger", node: <DecisionCardFeature decisions={DECISIONS_ROWS} /> },
+      { id: "loading", label: "Loading", node: <DecisionCardFeature decisions={[]} loading /> },
       { id: "empty", label: "No decisions", node: <DecisionCardFeature decisions={[]} /> },
       { id: "overflow", label: "Overflow: long statements, many rows", node: (
         <DecisionCardFeature decisions={Array.from({ length: 8 }, (_, i) => ({
@@ -344,7 +356,7 @@ export const ADMIN: ComponentSpec[] = [
           impact: { open: false, loading: false, docs: null, tasksCreated: false, count: 5, summary: LONG },
         }))} />) },
       { id: "stress", label: "Volume: 120 decisions, 9 owners each", node: <DecisionCardFeature decisions={MANY_DECISIONS} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <DecisionCardFeature /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <DecisionCardFeature decisions={DECISIONS_ROWS} /> },
     ],
   },
   {
@@ -359,11 +371,11 @@ export const ADMIN: ComponentSpec[] = [
   {
     id: "ChatDockFeature", title: "ChatDockFeature", width: OVERLAY_W,
     states: [
-      { id: "open", label: "Dock open", node: <Stage><ChatDockFeature /></Stage> },
-      { id: "closed", label: "Dock closed", node: <Stage><ChatDockFeature defaultOpen={false} /></Stage> },
-      { id: "loading", label: "Loading", node: <Stage><ChatDockFeature loading /></Stage> },
-      { id: "stress", label: "Volume: full transcript in the dock", node: <Stage><ChatDockFeature /></Stage> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <ChatDockFeature defaultOpen={false} /> },
+      { id: "open", label: "Dock open", node: <Stage><ChatDockFeature sessions={CHAT_SESSIONS} /></Stage> },
+      { id: "closed", label: "Dock closed", node: <Stage><ChatDockFeature sessions={CHAT_SESSIONS} defaultOpen={false} /></Stage> },
+      { id: "loading", label: "Loading", node: <Stage><ChatDockFeature sessions={CHAT_SESSIONS} loading /></Stage> },
+      { id: "stress", label: "Volume: full transcript in the dock", node: <Stage><ChatDockFeature sessions={CHAT_SESSIONS} /></Stage> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <ChatDockFeature sessions={CHAT_SESSIONS} defaultOpen={false} /> },
     ],
   },
 ];

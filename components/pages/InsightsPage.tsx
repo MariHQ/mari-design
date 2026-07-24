@@ -1,29 +1,27 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
-import { Sparkles, BookOpen, FileCheck } from "lucide-react";
-import { InsightsWidgets } from "../features/InsightsWidgets";
+import { Sparkles } from "lucide-react";
+import {
+  InsightsWidgets, type InsightStat, type ReadRow, type GlossRow, type InsightsActivity,
+} from "../features/InsightsWidgets";
 import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFreshnessChart";
-import type { ActivityItem } from "../data-display/ActivityFeed";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 import { PageHeader } from "../layout/PageHeader";
 import { ErrorMessage } from "../feedback/ErrorMessage";
-import { fmtDateTime } from "../tokens/format";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, UNBREAKABLE, LONG_WORD, MIXED_SCRIPT,
-  HUGE_NUMBER, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
-} from "./stress";
 
 /* Insights (pages/insights.md). Read-mostly dashboard proving the knowledge
    cloud is working: the headline stat row + evidence panels (readability,
    glossary health, recent audit) from InsightsWidgets, with the freshness-by-
    source stacked-bar card composed alongside as the dashboard grid.
 
-   The `state` prop drives the full spread of visual states: the freshness card
-   present / unavailable / empty, the readability grade distribution, glossary
-   suggestions vs. "all clear", the audit feed active vs. empty, per-widget
-   loading skeletons, plus the whole-page loading / empty / error branches. */
+   This page is a pure presenter. It holds no demo content: every value it
+   renders arrives in `data`, and what it shows is derived from that data —
+   widgets still resolving are `widgets: null`, a freshness query that could
+   not answer is `freshness: null`, and a workspace with nothing measured yet
+   falls out of `isEmpty`. The canvas supplies the same shape from
+   `.preview/fixtures/insights.ts`. */
 
 const STATES = [
   { id: "default", label: "Default" },
@@ -42,97 +40,36 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* Overflow / stress content injected into the Insights widgets via data props:
-   long stat labels + huge numbers, long readability titles/notes, glossary
-   terms/definitions with many variants, and long audit-activity lines.
-   `overflow` = natural long text; `stress` = pathological tokens. */
-function stressStats(p: boolean) {
-  const TONE = ["ok", "info", "blocked", "attention"] as const;
-  const LABELS = p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, HUGE_NUMBER_STR] : [LONG_TITLE];
-  return repeat((i) => ({
-    key: `s${i}`,
-    value: HUGE_NUMBER + i,
-    label: LABELS[i % LABELS.length],
-    tone: TONE[i % TONE.length],
-    icon: <Sparkles size={16} />,
-  }), 4);
-}
+/** The four widgets that resolve together from the insights query. */
+export type InsightsWidgetData = {
+  stats: InsightStat[];
+  readability: ReadRow[];
+  glossary: GlossRow[];
+  activity: InsightsActivity[];
+  /** ISO date the counts are measured from. */
+  since: string;
+};
 
-function stressReadability(p: boolean) {
-  const TITLES = p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT] : [LONG_TITLE];
-  const GRADES = ["A", "B", "C", "D"];
-  return repeat((i) => ({
-    id: i + 1,
-    title: TITLES[i % TITLES.length],
-    source: "github",
-    grade: GRADES[i % GRADES.length],
-    note: p ? LONG_WORD : LONG_PARAGRAPH,
-  }), 4);
-}
+/** A supporting card beside the dashboard. Only the long-text states carry
+    one, which is why it is nullable rather than always present. */
+export type InsightsExtras = {
+  title: string;
+  crumbs: string[];
+  tags: string[];
+  people: string[];
+  avatarMax: number;
+};
 
-function stressGlossary(p: boolean) {
-  return repeat((i) => ({
-    id: i + 1,
-    term: p ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3] : LONG_TITLE,
-    variants: p ? MANY_TAGS : MANY_TAGS.slice(0, 8),
-    definition: p ? `${MIXED_SCRIPT} ${LONG_WORD}` : LONG_PARAGRAPH,
-  }), 3);
-}
-
-function stressActivity(p: boolean): ActivityItem[] {
-  return repeat((i) => ({
-    id: `a${i}`,
-    actor: p ? UNBREAKABLE : LONG_NAME,
-    action: p ? `${MIXED_SCRIPT} ${HUGE_NUMBER_STR}` : LONG_PARAGRAPH,
-    time: fmtDateTime("2026-05-11T16:12:00"),
-    icon: <Sparkles size={12} />,
-  }), 5);
-}
-
-function StressExtras({ pathological }: { pathological: boolean }) {
-  return (
-    <Card title={pathological ? MIXED_SCRIPT : LONG_TITLE}>
-      <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {(pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
-      </div>
-      <div className="mt-3">
-        <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={pathological ? 4 : 6} />
-      </div>
-    </Card>
-  );
-}
-
-/* ── content variants ─────────────────────────────────────────────────────── */
-
-const SPREAD_READABILITY = [
-  { id: 1, title: "API authentication", source: "github", grade: "A", note: "Clear, concise, well-structured." },
-  { id: 2, title: "Billing & invoices", source: "gdocs", grade: "B", note: "Two long paragraphs could be split." },
-  { id: 3, title: "Rate limits", source: "github", grade: "C", note: "Dense; heavy passive voice." },
-  { id: 4, title: "Legacy migration notes", source: "notion", grade: "D", note: "Unstructured; no headings." },
-  { id: 5, title: "Onboarding checklist", source: "notion", grade: "A", note: "" },
-  { id: 6, title: "Incident runbook", source: "slack", grade: "B", note: "Jargon without definitions." },
-  { id: 7, title: "Deprecated SDK guide", source: "docs", grade: "C", note: "Long sentences, buried steps." },
-];
-
-const REVIEW_GLOSSARY = [
-  { id: 1, term: "Flow", variants: ["workflow", "automation"], definition: "An automation that watches knowledge and does editorial work." },
-  { id: 2, term: "Drift", variants: ["staleness", "doc rot"], definition: "When a document falls out of sync with accepted facts." },
-  { id: 3, term: "Closure", variants: ["impact set"], definition: "Every document reachable from a node along its lineage edges." },
-  { id: 4, term: "Lens", variants: ["view mode"], definition: "A recoloring of the graph by source, staleness, owner, or health." },
-  { id: -5, term: "Canonical", variants: ["source of truth"], definition: "The version Mari treats as authoritative." },
-];
-
-const ACTIVE_ACTIVITY: ActivityItem[] = [
-  { id: "a1", actor: "Aki K.", action: "accepted glossary term “Drift”", time: fmtDateTime("2026-05-11T16:12:00"), icon: <BookOpen size={12} /> },
-  { id: "a2", actor: "Priya S.", action: "fixed 3 readability findings", time: fmtDateTime("2026-05-11T14:03:00"), icon: <FileCheck size={12} /> },
-  { id: "a3", actor: "Mari", action: "scored 42 documents", time: fmtDateTime("2026-05-11T09:20:00"), icon: <Sparkles size={12} /> },
-  { id: "a4", actor: "Dana R.", action: "dismissed a coverage finding", time: fmtDateTime("2026-05-10T17:41:00") },
-  { id: "a5", actor: "Mari", action: "harvested 6 candidate terms", time: fmtDateTime("2026-05-10T11:02:00"), icon: <BookOpen size={12} /> },
-  { id: "a6", actor: "Aki K.", action: "re-scored the API docs after edits", time: fmtDateTime("2026-05-09T15:30:00"), icon: <FileCheck size={12} /> },
-];
-
-const NO_FRESHNESS: Freshness[] = [];
+/** Everything the Insights dashboard renders. */
+export type InsightsData = {
+  /** `null` while the widget queries are still in flight: the widgets render
+      their own skeleton, holding their exact places, while freshness shows. */
+  widgets: InsightsWidgetData | null;
+  /** `null` when the freshness query is unavailable, so the card is not
+      rendered at all. `[]` is a real answer: no sources yet. */
+  freshness: Freshness[] | null;
+  extras: InsightsExtras | null;
+};
 
 /* <InsightsWidgets/> carries the page header (eyebrow, title, "counting
    since…"), so it must be the FIRST thing on the page and the freshness chart
@@ -148,6 +85,20 @@ function BareHeader() {
   );
 }
 
+function Extras({ extras }: { extras: InsightsExtras }) {
+  return (
+    <Card title={extras.title}>
+      <Breadcrumb items={extras.crumbs.map((label) => ({ label }))} />
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {extras.tags.map((t) => <Chip key={t} label={t} />)}
+      </div>
+      <div className="mt-3">
+        <AvatarGroup people={extras.people.map((initials) => ({ initials }))} max={extras.avatarMax} />
+      </div>
+    </Card>
+  );
+}
+
 /* §11 dashboard grid: one grid for the whole body so every tile shares the
    same left/right edges and the same vertical rhythm. Widgets span the columns
    they need, and the shared DASH3/SPAN pair drops the row from three-up to
@@ -156,18 +107,28 @@ function BareHeader() {
 const GRID = `${DASH3} items-start [&>*]:min-w-0`;
 const GRID_M = "flex flex-col gap-5 [&>*]:min-w-0";
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
+/** Nothing measured yet. Derived from the data, so it is true in the real app
+    for exactly the same reason it is true on the canvas. */
+function isEmpty(d: InsightsData): boolean {
+  const w = d.widgets;
+  return !d.extras && !d.freshness?.length
+    && (!w || (!w.stats.length && !w.readability.length && !w.glossary.length && !w.activity.length));
+}
+
+function Body({ data, error, mobile }: { data: InsightsData; error: string | null; mobile: boolean }) {
   const grid = mobile ? GRID_M : GRID;
   const full = mobile ? "" : SPAN[3];
-  if (state === "error") {
+
+  if (error) {
     return (
       <>
         <BareHeader />
+        {/* Error copy is catalogued, not composed per page (§8). */}
         <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>
       </>
     );
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <>
         <BareHeader />
@@ -180,67 +141,37 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     );
   }
 
-  if (state === "overflow" || state === "stress") {
-    const p = state === "stress";
-    return (
-      <div className={grid}>
-        <InsightsWidgets
-          className={full}
-          stats={stressStats(p)}
-          readability={stressReadability(p)}
-          glossary={stressGlossary(p)}
-          activity={stressActivity(p)}
-        />
-        <div className={mobile ? "" : SPAN[2]}><InsightsFreshnessChart /></div>
-        <div className={mobile ? "" : SPAN[1]}><StressExtras pathological={p} /></div>
-      </div>
-    );
-  }
-
-  // Per-widget loading: freshness resolved, the stat strip + evidence cards
-  // still resolving — the widgets' own skeleton holds their exact places.
-  if (state === "widgets-loading") {
-    return (
-      <div className={grid}>
-        <InsightsWidgets className={full} loading />
-        <div className={full}><InsightsFreshnessChart /></div>
-      </div>
-    );
-  }
-
-  const showFreshness = state !== "no-freshness";
-  const freshness = state === "freshness-empty" ? NO_FRESHNESS : undefined;
-
-  const widgetProps: Parameters<typeof InsightsWidgets>[0] = {};
-  if (state === "readability-spread") widgetProps.readability = SPREAD_READABILITY;
-  if (state === "glossary-review") widgetProps.glossary = REVIEW_GLOSSARY;
-  if (state === "glossary-clear") widgetProps.glossary = [];
-  if (state === "audit-active") widgetProps.activity = ACTIVE_ACTIVITY;
-  if (state === "audit-empty") widgetProps.activity = [];
-
+  const w = data.widgets;
   return (
     <div className={grid}>
-      <InsightsWidgets className={full} {...widgetProps} />
-      {showFreshness && <div className={full}><InsightsFreshnessChart freshness={freshness} /></div>}
+      {w
+        ? <InsightsWidgets className={full} {...w} />
+        : <InsightsWidgets className={full} loading stats={[]} readability={[]} glossary={[]} activity={[]} since="" />}
+      {data.freshness && (
+        <div className={mobile ? "" : data.extras ? SPAN[2] : SPAN[3]}>
+          <InsightsFreshnessChart freshness={data.freshness} />
+        </div>
+      )}
+      {data.extras && <div className={mobile ? "" : SPAN[1]}><Extras extras={data.extras} /></div>}
     </div>
   );
 }
 
-function InsightsPage({ state = "default", mobile = false }: PageProps) {
+function InsightsPage({ data, loading = false, error = null, mobile = false }: PageProps<InsightsData>) {
   return (
     <PageFrame active={navFor("insights")} title="Insights" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-          <Body state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       )}
     </PageFrame>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<InsightsData> = {
   id: "insights",
   title: "Insights",
   route: "/insights",

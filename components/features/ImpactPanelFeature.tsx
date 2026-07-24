@@ -12,15 +12,16 @@ import { fmtAgo } from "../tokens/format";
    A verified fact row, expanded, offering "Run impact analysis": Mari traces
    the documents that depend on the claim and lists them with severity chips.
    Composes the data-display <ImpactPanel> (aliased to ImpactPanelUI) inside
-   the fact card's chrome. Renders standalone with baked-in demo data.
+   the fact card's chrome.
    Source: web/src/pages/facts.tsx (expanded fact row → ImpactPanel). */
 
 export type ImpactPanelFeatureProps = {
-  claim?: string;
-  source?: string;
-  verifiedAt?: string;
-  summary?: string;
-  docs?: ImpactDoc[];
+  claim: string;
+  source: string;
+  /** ISO timestamp of the last verification, rendered as an age. */
+  verifiedAt: string;
+  summary: string;
+  docs: ImpactDoc[];
   /** Start with the impact strip already resolved (skip the run affordance). */
   analyzed?: boolean;
   /** Render a content-shaped skeleton while the fact context loads. */
@@ -28,21 +29,8 @@ export type ImpactPanelFeatureProps = {
   className?: string;
 };
 
-const DEMO_DOCS: ImpactDoc[] = [
-  { title: "Pricing & Plans", source: "gdocs · handbook", severity: "update-required", reason: "States the free tier caps at 3 seats; this claim raises it to 5." },
-  { title: "Onboarding checklist", source: "notion · CS", severity: "review", reason: "Mentions seat limits in step 4; may need a wording pass." },
-  { title: "Sales one-pager", source: "slack · #gtm", severity: "minor", reason: "References 'small teams' loosely; likely unaffected." },
-];
-
-const DEMO_SUMMARY =
-  "3 documents reference the free-tier seat limit. Raising it to 5 makes one of them stale and puts another up for review.";
-
 export function ImpactPanelFeature({
-  claim = "The free tier includes up to 5 seats per workspace.",
-  source = "github · billing/limits.ts",
-  verifiedAt = new Date(Date.now() - 26 * 3600_000).toISOString(),
-  summary = DEMO_SUMMARY,
-  docs = DEMO_DOCS,
+  claim, source, verifiedAt, summary, docs,
   analyzed = false,
   loading = false,
   className = "",

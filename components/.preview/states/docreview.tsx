@@ -1,5 +1,11 @@
 import type { ComponentSpec } from "./types";
 import {
+  DOC_EDITOR_BODY, DOC_EDITOR_FINDINGS, DOC_OUTLINE_BODY, DOC_REVISIONS,
+  DOC_CHANGES, DOC_CHANGE_BODY, DOC_FINDINGS, DOC_CLAIMS,
+
+  MARKDOWN_SOURCE, MARKDOWN_FINDINGS,
+} from "../fixtures/features";
+import {
   DocReviewMarkdown, DocReviewEditor, DocReviewFindingsPanel,
   DocReviewChangeQueue, DocReviewRefinePanel, DocReviewOutlinePanel,
 } from "../../features";
@@ -182,12 +188,12 @@ export const DOCREVIEW: ComponentSpec[] = [
   {
     id: "DocReviewMarkdown", title: "DocReviewMarkdown", width: 880,
     states: [
-      { id: "default", label: "Default (Parse tab)", node: <DocReviewMarkdown /> },
-      { id: "serialize", label: "Variant: Serialize tab", node: <DocReviewMarkdown defaultTab="roundtrip" /> },
-      { id: "decorate", label: "Variant: Decorate tab", node: <DocReviewMarkdown defaultTab="decorate" /> },
-      { id: "decorate-many", label: "Variant: Decorate tab, too many findings", node: <DocReviewMarkdown defaultTab="decorate" findings={MANY_FINDINGS} /> },
-      { id: "diff", label: "Variant: Word diff tab", node: <DocReviewMarkdown defaultTab="diff" /> },
-      { id: "loading", label: "Loading", node: <DocReviewMarkdown loading /> },
+      { id: "default", label: "Default (Parse tab)", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} findings={MARKDOWN_FINDINGS} /> },
+      { id: "serialize", label: "Variant: Serialize tab", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} findings={MARKDOWN_FINDINGS} defaultTab="roundtrip" /> },
+      { id: "decorate", label: "Variant: Decorate tab", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} findings={MARKDOWN_FINDINGS} defaultTab="decorate" /> },
+      { id: "decorate-many", label: "Variant: Decorate tab, too many findings", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} defaultTab="decorate" findings={MANY_FINDINGS} /> },
+      { id: "diff", label: "Variant: Word diff tab", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} findings={MARKDOWN_FINDINGS} defaultTab="diff" /> },
+      { id: "loading", label: "Loading", node: <DocReviewMarkdown markdown={MARKDOWN_SOURCE} findings={MARKDOWN_FINDINGS} loading /> },
       { id: "empty", label: "Empty document, no findings", node: <DocReviewMarkdown markdown="" findings={[]} /> },
       { id: "headings", label: "Heading-heavy doc", node: <DocReviewMarkdown markdown={MD_HEADINGS} findings={[]} /> },
       { id: "many", label: "Overflow: far too many findings", node: <DocReviewMarkdown markdown={MD} findings={MANY_FINDINGS} /> },
@@ -199,10 +205,10 @@ export const DOCREVIEW: ComponentSpec[] = [
   {
     id: "DocReviewFindingsPanel", title: "DocReviewFindingsPanel", width: 480,
     states: [
-      { id: "default", label: "Default (Fact check tab)", node: <DocReviewFindingsPanel /> },
-      { id: "claims", label: "Variant: All claims tab", node: <DocReviewFindingsPanel defaultTab="claims" /> },
-      { id: "claims-long", label: "Variant: All claims, long text", node: <DocReviewFindingsPanel defaultTab="claims" claims={LONG_CLAIMS} /> },
-      { id: "loading", label: "Loading", node: <DocReviewFindingsPanel loading /> },
+      { id: "default", label: "Default (Fact check tab)", node: <DocReviewFindingsPanel findings={DOC_FINDINGS} claims={DOC_CLAIMS} /> },
+      { id: "claims", label: "Variant: All claims tab", node: <DocReviewFindingsPanel findings={DOC_FINDINGS} claims={DOC_CLAIMS} defaultTab="claims" /> },
+      { id: "claims-long", label: "Variant: All claims, long text", node: <DocReviewFindingsPanel findings={DOC_FINDINGS} defaultTab="claims" claims={LONG_CLAIMS} /> },
+      { id: "loading", label: "Loading", node: <DocReviewFindingsPanel findings={[]} claims={[]} loading /> },
       { id: "empty", label: "Empty: no findings, no claims", node: <DocReviewFindingsPanel findings={[]} claims={[]} /> },
       { id: "clean", label: "No contradiction, claims all verified", node: <DocReviewFindingsPanel findings={FINDINGS.filter((f) => f.severity !== "error")} claims={CLAIMS.filter((c) => c.status === "Verified")} /> },
       { id: "many", label: "Overflow: too many findings and claims", node: <DocReviewFindingsPanel findings={MANY_FINDINGS} claims={LONG_CLAIMS} /> },
@@ -225,8 +231,8 @@ export const DOCREVIEW: ComponentSpec[] = [
   {
     id: "DocReviewOutlinePanel", title: "DocReviewOutlinePanel", width: 340,
     states: [
-      { id: "default", label: "Default", node: <DocReviewOutlinePanel /> },
-      { id: "loading", label: "Loading", node: <DocReviewOutlinePanel loading /> },
+      { id: "default", label: "Default", node: <DocReviewOutlinePanel body={DOC_OUTLINE_BODY} revisions={DOC_REVISIONS} /> },
+      { id: "loading", label: "Loading", node: <DocReviewOutlinePanel body={DOC_OUTLINE_BODY} revisions={[]} loading /> },
       { id: "empty", label: "Empty: no headings, no revisions", node: <DocReviewOutlinePanel body="Just a paragraph, no headings at all." revisions={[]} /> },
       { id: "deep", label: "Deep outline with own-numbered headings", node: <DocReviewOutlinePanel body={MD_HEADINGS} revisions={REVISIONS} /> },
       { id: "many", label: "Overflow: long headings, long revisions", node: <DocReviewOutlinePanel body={MD_LONG} revisions={LONG_REVISIONS} /> },
@@ -237,21 +243,21 @@ export const DOCREVIEW: ComponentSpec[] = [
   {
     id: "DocReviewChangeQueue", title: "DocReviewChangeQueue", width: 760,
     states: [
-      { id: "default", label: "Default (Review before apply)", node: <DocReviewChangeQueue /> },
-      { id: "all", label: "Variant: All changes tab", node: <DocReviewChangeQueue defaultTab="all" /> },
-      { id: "loading", label: "Loading", node: <DocReviewChangeQueue loading /> },
-      { id: "empty", label: "Empty: nothing proposed", node: <DocReviewChangeQueue changes={[]} /> },
-      { id: "resolved", label: "All changes already resolved", node: <DocReviewChangeQueue changes={CHANGES.filter((c) => c.state !== "pending")} /> },
-      { id: "long", label: "Overflow: long diff + unbreakable string", node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
-      { id: "stress", label: "Volume: 300 proposed changes", node: <DocReviewChangeQueue defaultTab="all" changes={HUGE_CHANGES} /> },
-      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewChangeQueue changes={LONG_CHANGES} /> },
+      { id: "default", label: "Default (Review before apply)", node: <DocReviewChangeQueue changes={DOC_CHANGES} body={DOC_CHANGE_BODY} /> },
+      { id: "all", label: "Variant: All changes tab", node: <DocReviewChangeQueue changes={DOC_CHANGES} body={DOC_CHANGE_BODY} defaultTab="all" /> },
+      { id: "loading", label: "Loading", node: <DocReviewChangeQueue changes={[]} body={DOC_CHANGE_BODY} loading /> },
+      { id: "empty", label: "Empty: nothing proposed", node: <DocReviewChangeQueue changes={[]} body={DOC_CHANGE_BODY} /> },
+      { id: "resolved", label: "All changes already resolved", node: <DocReviewChangeQueue changes={CHANGES.filter((c) => c.state !== "pending")} body={DOC_CHANGE_BODY} /> },
+      { id: "long", label: "Overflow: long diff + unbreakable string", node: <DocReviewChangeQueue changes={LONG_CHANGES} body={MD_LONG} /> },
+      { id: "stress", label: "Volume: 300 proposed changes", node: <DocReviewChangeQueue defaultTab="all" changes={HUGE_CHANGES} body={HUGE_MD} /> },
+      { id: "narrow", label: "Overflow: narrow 320px frame", width: 320, node: <DocReviewChangeQueue changes={LONG_CHANGES} body={MD_LONG} /> },
     ],
   },
   {
     id: "DocReviewEditor", title: "DocReviewEditor", width: 900,
     states: [
-      { id: "default", label: "Default", node: <DocReviewEditor /> },
-      { id: "loading", label: "Loading", node: <DocReviewEditor loading /> },
+      { id: "default", label: "Default", node: <DocReviewEditor body={DOC_EDITOR_BODY} findings={DOC_EDITOR_FINDINGS} /> },
+      { id: "loading", label: "Loading", node: <DocReviewEditor body={DOC_EDITOR_BODY} findings={[]} loading /> },
       { id: "empty", label: "Empty document, no findings", node: <DocReviewEditor body="" findings={[]} /> },
       { id: "many", label: "Overflow: far too many annotations", node: <DocReviewEditor body={MD} findings={MANY_FINDINGS} /> },
       { id: "long", label: "Overflow: long text + unbreakable string", node: <DocReviewEditor body={MD_LONG} findings={MANY_FINDINGS} /> },

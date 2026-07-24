@@ -36,12 +36,12 @@ export type WelcomeGuideStepProps = {
   saving?: boolean;
   loading?: boolean;
   onPick?: (id: string) => void;
-  packs?: GuidePack[];
+  packs: GuidePack[];
   className?: string;
 };
 
 export function WelcomeGuideStep({
-  guide, saving = false, loading = false, onPick, packs = GUIDE_PACKS, className = "",
+  guide, saving = false, loading = false, onPick, packs, className = "",
 }: WelcomeGuideStepProps) {
   const [selected, setSelected] = useState<string | null>(guide ?? "plain");
   const pick = (id: string) => { setSelected(id); onPick?.(id); };

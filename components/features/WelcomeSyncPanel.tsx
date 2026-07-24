@@ -25,29 +25,15 @@ import { fmtAgo } from "../tokens/format";
    2. A running sync can be stopped. Every live row carries Pause / Resume and
       a confirmed Cancel; a read-out you cannot halt is a trap.
 
-   Every number comes from the server sync registry in production; baked here
-   across the four terminal states (syncing / queued / synced / failed). */
+   Every number comes from the server sync registry: the panel ships none of
+   its own and takes the rows as a required prop. */
 
-type Row = SyncSource & { paused?: boolean; cancelled?: boolean };
-
-const DEMO: Row[] = [
-  {
-    id: "gh", name: "GitHub · acme/handbook", mark: <GithubMark size={20} />,
-    state: "syncing", phase: "Embedding", done: 340, total: 512, chunkCount: 8912, embeddedCount: 5780,
-  },
-  {
-    id: "slack", name: "Slack · #engineering", mark: <SourceMark provider="slack" size={20} />,
-    state: "done", docCount: 210, chunkCount: 1980, embeddedCount: 1980, lastSyncAt: "2026-07-21T13:20:00",
-  },
-  {
-    id: "notion", name: "Notion · Product wiki", mark: <SourceMark provider="notion" size={20} />,
-    state: "queued",
-  },
-  {
-    id: "conf", name: "Confluence · Ops", mark: <SourceMark provider="confluence" size={20} />,
-    state: "error", error: "GET /rest/api/content returned 401, the token expired.",
-  },
-];
+/** One sync row. `provider` names the brand mark: the row is plain JSON, so
+    it can come straight off the sync registry without constructing React. */
+export type SyncRow = Omit<SyncSource, "mark"> & {
+  provider: string; paused?: boolean; cancelled?: boolean;
+};
+type Row = SyncRow;
 
 const STATE_LABEL: Record<string, { label: string; tone: string }> = {
   queued: { label: "Queued", tone: "neutral" },
@@ -78,12 +64,12 @@ function counts(s: Row): string {
 }
 
 export type WelcomeSyncPanelProps = {
-  sources?: Row[];
+  sources: SyncRow[];
   loading?: boolean;
   className?: string;
 };
 
-export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = "" }: WelcomeSyncPanelProps) {
+export function WelcomeSyncPanel({ sources, loading = false, className = "" }: WelcomeSyncPanelProps) {
   const [items, setItems] = useState<Row[]>(sources);
 
   const { sort, onSort, sorted } = useSort(items, {
@@ -167,7 +153,9 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
                 <tr key={s.id} className="border-t border-ink/10 align-top">
                   <td className={tdPad}>
                     <span className="flex items-start gap-2">
-                      {s.mark && <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center overflow-hidden">{s.mark}</span>}
+                      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center overflow-hidden">
+                        {s.provider === "github" ? <GithubMark size={20} /> : <SourceMark provider={s.provider} size={20} />}
+                      </span>
                       <Truncate className="flex-1 text-[13px] font-medium text-ink">{s.name}</Truncate>
                     </span>
                     {s.state === "error" && (

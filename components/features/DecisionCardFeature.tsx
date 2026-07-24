@@ -15,7 +15,8 @@ import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
    (ratify, run impact, collapse, create tasks) run against baked-in demo
    state — no network. Source: web/src/pages/decisions/DecisionCard.tsx. */
 
-type ImpactState = {
+/** The impact readout carried on a ledger entry. */
+export type ImpactState = {
   open: boolean;
   loading: boolean;
   docs: ImpactDoc[] | null;
@@ -25,7 +26,9 @@ type ImpactState = {
   summary: string;
 };
 
-type Decision = {
+/** One ledger entry. Exported so pages and fixtures compose this shape
+    rather than redeclaring it. */
+export type Decision = {
   id: number;
   statement: string;
   context?: string;
@@ -52,7 +55,8 @@ const FACETS: { value: Facet; label: string }[] = [
   { value: "ignored", label: "Ignored" },
 ];
 
-const NO_IMPACT: ImpactState = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
+/** A decision with no impact run against it yet. Zero values, not content. */
+export const NO_IMPACT: ImpactState = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
 
 const IMPACT_DOCS: ImpactDoc[] = [
   { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; it must move to short-lived JWTs." },
@@ -60,61 +64,14 @@ const IMPACT_DOCS: ImpactDoc[] = [
   { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
 ];
 
-const DEMO: Decision[] = [
-  {
-    id: 1,
-    statement: "Adopt short-lived JWTs for service-to-service auth",
-    context: "Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window.",
-    status: "proposed",
-    fresh: true,
-    source: "Mari scan · #eng-security",
-    provider: "slack",
-    owners: ["Dana Ito", "Reza Okafor"],
-    impact: { ...NO_IMPACT },
-  },
-  {
-    id: 2,
-    statement: "Standardize on Postgres 16 across all environments",
-    context: "Two services still run 13. Aligning removes three migration branches and unlocks logical replication.",
-    status: "ratified",
-    source: "Architecture sync",
-    provider: "gdocs",
-    owners: ["Priya Nair"],
-    decidedOn: "2026-07-09",
-    impact: { ...NO_IMPACT, count: 5, summary: "5 documents reference database version constraints." },
-  },
-  {
-    id: 3,
-    statement: "Ship the console as a single-page app, not per-page routes",
-    context: "The agent dock and command palette need to survive navigation; an SPA keeps them mounted once.",
-    status: "ratified",
-    source: "Design review",
-    provider: "notion",
-    owners: ["Alex Chen", "Wei Zhang"],
-    decidedOn: "2026-06-28",
-    impact: { ...NO_IMPACT },
-  },
-  {
-    id: 4,
-    statement: "Use REST for the public API surface",
-    status: "ignored",
-    source: "Founders memo",
-    provider: "docs",
-    owners: ["Sam Rowe"],
-    decidedOn: "2025-11-14",
-    ignoredFor: "Expose a typed GraphQL gateway in front of the internal services",
-    impact: { ...NO_IMPACT },
-  },
-];
-
 export type DecisionCardFeatureProps = {
-  decisions?: Decision[];
+  decisions: Decision[];
   /** Render a content-shaped skeleton timeline while the ledger loads. */
   loading?: boolean;
   className?: string;
 };
 
-export function DecisionCardFeature({ decisions = DEMO, loading = false, className = "" }: DecisionCardFeatureProps) {
+export function DecisionCardFeature({ decisions, loading = false, className = "" }: DecisionCardFeatureProps) {
   const [items, setItems] = useState<Decision[]>(decisions);
   const [ratifying, setRatifying] = useState<number | null>(null);
   const [filter, setFilter] = useState<Facet>("all");

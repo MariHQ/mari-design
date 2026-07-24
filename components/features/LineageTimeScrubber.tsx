@@ -4,7 +4,6 @@ import { Scrubber as ScrubberControl } from "../data-display/Scrubber";
 import { fmtDate } from "../tokens/format";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
-import { DEMO_DATES, DEMO_ACTIVITY } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage time scrubber (feature: lineage-time-scrubber)
@@ -23,8 +22,9 @@ import { DEMO_DATES, DEMO_ACTIVITY } from "./LineageDataModel";
 
 export type LineageTimeScrubberProps = {
   /** Sorted ISO event dates (snap targets). */
-  dates?: string[];
-  activity?: { date: string; count: number }[];
+  dates: string[];
+  /** Events per date, for the density track. */
+  activity: { date: string; count: number }[];
   /** Initial selected index, or null = all time / live. */
   value?: number | null;
   /** Render a content-shaped skeleton silhouette instead of the scrubber. */
@@ -33,7 +33,7 @@ export type LineageTimeScrubberProps = {
 };
 
 export function LineageTimeScrubber({
-  dates = DEMO_DATES, activity = DEMO_ACTIVITY, value = null, loading = false, className = "",
+  dates, activity, value = null, loading = false, className = "",
 }: LineageTimeScrubberProps) {
   const [idx, setIdx] = useState<number | null>(value);
   const lastIdx = Math.max(0, dates.length - 1);

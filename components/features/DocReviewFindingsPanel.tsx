@@ -20,28 +20,13 @@ import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { ResultCount } from "../data-display/Pagination";
 
-type Finding = { id: number; kind: string; severity: string; text: string; note: string };
-type Claim = { claim: string; source: string; status: string; verified: string };
+/** One fact-check finding. */
+export type DocFinding = { id: number; kind: string; severity: string; text: string; note: string };
+/** One extracted claim and its verification status. */
+export type DocClaim = { claim: string; source: string; status: string; verified: string };
 type FactTab = "check" | "claims";
 
 /* ————— demo data ————— */
-
-const DEMO_FINDINGS: Finding[] = [
-  { id: 1, kind: "fact", severity: "error", text: "reduces login latency by roughly 40%", note: "Contradicts verified fact: measured reduction was 22% in staging." },
-  { id: 2, kind: "fact", severity: "warn", text: "tokens rotate every 24 hours", note: "No verified source for rotation cadence." },
-  { id: 3, kind: "freshness", severity: "warn", text: "JWKS endpoint published Q1", note: "Endpoint doc last updated 8 months ago." },
-];
-
-/* "Not verified" / "No source" rather than a bare dash: CONVENTIONS.md §5
-   bans em/en dashes in user-visible copy. */
-const NONE = "Not verified";
-const DEMO_CLAIMS: Claim[] = [
-  { claim: "Tokens are signed with RS256.", source: "Auth RFC v1.2", status: "Verified", verified: "May 1, 2024" },
-  { claim: "Login latency drops by 40%.", source: "Migration brief", status: "Contradicted", verified: NONE },
-  { claim: "All downstream services validate against JWKS.", source: "Platform wiki", status: "Verified", verified: "Apr 12, 2024" },
-  { claim: "Tokens rotate every 24 hours.", source: "No source", status: "Unsupported", verified: NONE },
-  { claim: "Rollback drains every active token.", source: "Runbook", status: "Verified", verified: "Mar 3, 2024" },
-];
 
 const daysFromNow = (days: number) => fmtDate(new Date(Date.now() + days * 86400000));
 /* Owner picker is a searchable Combobox (CONVENTIONS.md §7), so the roster can
@@ -63,15 +48,14 @@ const TASK_PRIS: [string, string][] = [
   ["Low", "#2C6E49"],
 ];
 
-
 export function DocReviewFindingsPanel({
-  findings = DEMO_FINDINGS,
-  claims = DEMO_CLAIMS,
+  findings,
+  claims,
   defaultTab = "check",
   loading = false,
 }: {
-  findings?: Finding[];
-  claims?: Claim[];
+  findings: DocFinding[];
+  claims: DocClaim[];
   /** Which tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: FactTab;
   loading?: boolean;

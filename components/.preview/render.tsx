@@ -4,6 +4,7 @@ import "./index.css";
 import { Toaster } from "../feedback/Toast";
 import { PAGES } from "../pages";
 import { setStaticFrame } from "../pages/PageFrame";
+import { FIXTURES, fixtureFor } from "./fixtures";
 
 /* Single-page renderer. URL params:
      ?page=<id>&state=<id>&view=desktop|mobile   → a fixed-device-size static
@@ -90,6 +91,19 @@ function Frame() {
   }
   const Cmp = mod.component;
 
+  // Pages hold no demo data (MIGRATION.md): the canvas is just another caller,
+  // and it supplies content from the fixture registry. A page+state with no
+  // fixture is a real authoring gap, so say so rather than rendering blank.
+  const fx = fixtureFor(FIXTURES, mod.id, stateId);
+  if (!fx) {
+    return (
+      <div style={{ padding: 24, fontFamily: "monospace" }}>
+        No fixture for {mod.id}/{stateId} — add it to .preview/fixtures/{mod.id}.ts
+      </div>
+    );
+  }
+  const props = { data: fx.data, loading: fx.loading, error: fx.error };
+
   // Live full-screen view: fill the viewport (desktop responsive; mobile shown
   // as a centered 390px device column on a dark backdrop).
   if (isFull) {
@@ -97,7 +111,7 @@ function Frame() {
       return (
         <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center", background: "#0e2032" }}>
           <div style={{ width: 390, height: "min(880px, 100vh)", overflow: "hidden", borderRadius: 22, border: "8px solid #0a1826", boxShadow: "0 30px 80px -20px #000" }} className="bg-paper text-ink">
-            <Cmp state={stateId} mobile />
+            <Cmp {...props} mobile />
           </div>
           <BackToCanvas />
         </div>
@@ -105,7 +119,7 @@ function Frame() {
     }
     return (
       <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }} className="bg-paper text-ink">
-        <Cmp state={stateId} mobile={false} />
+        <Cmp {...props} mobile={false} />
         <BackToCanvas />
       </div>
     );
@@ -119,7 +133,7 @@ function Frame() {
   // vertical scroll container, so the full-height capture still works.)
   return (
     <div style={{ width: w, minHeight: h, overflowX: "clip" }} className="bg-paper text-ink">
-      <Cmp state={stateId} mobile={view === "mobile"} />
+      <Cmp {...props} mobile={view === "mobile"} />
     </div>
   );
 }

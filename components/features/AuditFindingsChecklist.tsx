@@ -47,36 +47,25 @@ const FIX_LABEL: Record<FixAction, string> = {
   ingest: "Index it", hygiene_task: "Create task",
 };
 
-const DEMO_MEMBERS = [{ id: 1, name: "Aki K." }, { id: 2, name: "Dana R." }, { id: 3, name: "Priya S." }];
-
-const DEMO_FINDINGS: AuditFinding[] = [
-  { id: 1, kind: "Localization", title: "onboarding.fr.md has no source translation link", detail: "French doc exists but isn't linked to its English source.", fixAction: "link_translation", status: "open" },
-  { id: 2, kind: "Localization", title: "pricing.md changed, translations stale", detail: "3 locale copies are older than the source.", fixAction: "translation_task", status: "open" },
-  { id: 3, kind: "Tags", title: "api-auth.md is untagged", detail: "No tags, so it won't surface in filtered search.", fixAction: "apply_tag", fixPayload: { tag: "reference" }, status: "open" },
-  { id: 4, kind: "Tags", title: "billing.md missing 'customer-facing'", detail: "Suggested by content classifier.", fixAction: "apply_tag", fixPayload: { suggest: "customer-facing" }, status: "open" },
-  { id: 5, kind: "Authorship", title: "Unknown author 'jsmith' on 6 docs", detail: "Git author not mapped to a team member.", fixAction: "invite_member", status: "open" },
-  { id: 6, kind: "Coverage", title: "webhooks.md referenced but not indexed", detail: "Linked from 4 docs; never ingested.", fixAction: "ingest", status: "open" },
-  { id: 7, kind: "Hygiene", title: "README.md has a broken anchor", detail: "#setup no longer exists.", fixAction: "hygiene_task", status: "fixed" },
-  { id: 8, kind: "Hygiene", title: "changelog.md trailing whitespace", detail: "Cosmetic; safe to auto-fix.", fixAction: "hygiene_task", status: "dismissed" },
-];
-
 type Override = { status: "fixed"; summary: string } | { status: "dismissed" };
 
 export type AuditFindingsChecklistProps = {
-  findings?: AuditFinding[];
-  members?: { id: number; name: string }[];
-  provider?: string;
-  repo?: string;
-  ranAt?: string;
+  findings: AuditFinding[];
+  /** The people an unmapped git author can be mapped to. */
+  members: { id: number; name: string }[];
+  /** Where the audited repository lives, e.g. "github". */
+  provider: string;
+  /** The audited repository, e.g. "acme/product-docs". */
+  repo: string;
+  /** When this run happened, already formatted. */
+  ranAt: string;
   /** Render a content-shaped skeleton while the scan runs. */
   loading?: boolean;
   className?: string;
 };
 
 export function AuditFindingsChecklist({
-  findings = DEMO_FINDINGS, members = DEMO_MEMBERS,
-  provider = "github", repo = "acme/product-docs", ranAt = "Jul 21, 9:04 AM",
-  loading = false, className = "",
+  findings, members, provider, repo, ranAt, loading = false, className = "",
 }: AuditFindingsChecklistProps) {
   const [overrides, setOverrides] = useState<Record<number, Override>>({});
   const [hideHandled, setHideHandled] = useState(false);

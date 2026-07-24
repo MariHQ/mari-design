@@ -29,18 +29,18 @@ import { Tabs } from "../navigation/Tabs";
 import { GlobalIconsArt } from "../features/GlobalIconsArt";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { Sparkles, BookOpen, ShieldCheck, Inbox } from "lucide-react";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER_STR, HUGE_PERCENT, MIXED_SCRIPT,
-  MANY_TAGS, MANY_INITIALS,
-} from "./stress";
 
 /* Lookbook (pages/lookbook.md). A live design-system showcase — the one
    auth/onboarding-adjacent page that renders INSIDE the console frame. Each
    state is a section of the gallery (foundations, buttons, inputs & forms,
    data display, feedback, icons & art) plus an "all" overview. Every exhibit
    pairs a usage rule + import path with a live demo, built only from the
-   catalog primitives it documents. */
+   catalog primitives it documents.
+
+   The catalog exhibits are the page's subject, so their copy is part of the
+   documentation rather than content. The two long-text sections are not: the
+   strings they push through the primitives are sample content, and they
+   arrive in `data.samples` like every other page's data. */
 
 const STATES = [
   { id: "all", label: "All components" },
@@ -54,6 +54,36 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** Which slice of the gallery is on screen. An app drives it from its own
+    route; `all` shows every section. */
+export type LookbookSection =
+  | "all" | "foundations" | "buttons" | "inputs" | "data-display" | "feedback"
+  | "icons" | "overflow" | "stress";
+
+/** Sample strings the two long-text sections push through the primitives, to
+    prove they truncate, wrap, and scroll rather than widening the page. */
+export type LookbookSamples = {
+  title: string;
+  paragraph: string;
+  name: string;
+  docTitle: string;
+  importPath: string;
+  url: string;
+  token: string;
+  word: string;
+  mixedScript: string;
+  bigNumber: string;
+  percent: string;
+  tags: string[];
+  initials: string[];
+};
+
+/** Everything the Lookbook renders that is not the catalog itself. */
+export type LookbookData = {
+  section: LookbookSection;
+  samples: LookbookSamples;
+};
 
 function Exhibit({ title, rule, imp, children }: {
   title: string; rule: string; imp: string; children: ReactNode;
@@ -301,35 +331,31 @@ function IconsArt() {
 /* `overflow` — the gallery stuffed with very long NATURAL text: long titles,
    paragraphs, names, and huge stat values. Catches wrapping, truncation,
    line-clamp, and vertical-overflow failures. */
-function OverflowSection() {
+function OverflowSection({ s }: { s: LookbookSamples }) {
   return (
     <>
-      <Exhibit
-        title={LONG_TITLE}
-        rule={LONG_PARAGRAPH}
-        imp={`import { Everything } from "${LONG_SOURCE}"`}
-      >
-        <Button variant="primary">{LONG_TITLE}</Button>
-        <Chip label={LONG_DOC_TITLE} tone="neutral" />
-        <Badge label={LONG_NAME} tone="info" />
+      <Exhibit title={s.title} rule={s.paragraph} imp={s.importPath}>
+        <Button variant="primary">{s.title}</Button>
+        <Chip label={s.docTitle} tone="neutral" />
+        <Badge label={s.name} tone="info" />
         <StatusChip status="canonical" />
       </Exhibit>
 
-      <Card title={LONG_TITLE}>
-        <p className="text-[13px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
+      <Card title={s.title}>
+        <p className="text-[13px] leading-relaxed text-ink/65">{s.paragraph}</p>
         <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-          <Stat value={HUGE_NUMBER_STR} label={LONG_TITLE} sub={LONG_PARAGRAPH} tone="ok" icon={<BookOpen size={18} />} />
-          <Stat value={HUGE_PERCENT} label="Facts passing across every service, region, and team" sub="3 need review" tone="attention" icon={<ShieldCheck size={18} />} />
-          <Stat value={HUGE_NUMBER_STR} label={LONG_NAME} sub="live" tone="info" icon={<Sparkles size={18} />} />
+          <Stat value={s.bigNumber} label={s.title} sub={s.paragraph} tone="ok" icon={<BookOpen size={18} />} />
+          <Stat value={s.percent} label="Facts passing across every service, region, and team" sub="3 need review" tone="attention" icon={<ShieldCheck size={18} />} />
+          <Stat value={s.bigNumber} label={s.name} sub="live" tone="info" icon={<Sparkles size={18} />} />
         </div>
         <div className="mt-4 space-y-3">
           {/* Progress renders `label` as a bare span with no ellipsis of its
               own, so the truncation is applied from the caller (§12). */}
           <div className="[&_span]:truncate">
-            <Progress value={68} label={`Embedding · ${LONG_TITLE}`} tone="info" />
+            <Progress value={68} label={`Embedding · ${s.title}`} tone="info" />
           </div>
-          <Alert tone="attention" title={<Truncate>{LONG_TITLE}</Truncate>}>
-            <Truncate lines={3}>{LONG_PARAGRAPH}</Truncate>
+          <Alert tone="attention" title={<Truncate>{s.title}</Truncate>}>
+            <Truncate lines={3}>{s.paragraph}</Truncate>
           </Alert>
         </div>
       </Card>
@@ -341,36 +367,36 @@ function OverflowSection() {
    huge numbers, a 20+ chip row that will not wrap, a long avatar stack, and
    mixed scripts + emoji. Catches horizontal overflow, missing
    min-w-0 / break-words / truncate, and flex blowouts. */
-function StressSection() {
+function StressSection({ s }: { s: LookbookSamples }) {
   return (
     <>
       <Exhibit
         title="Chip-row overflow: 20+ tags, no wrap"
         rule="A single non-wrapping row of every tag: it must scroll inside its own container, never push the page body sideways."
-        imp={LONG_URL}
+        imp={s.url}
       >
         <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
-          {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
+          {s.tags.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
         </Scrollable>
-        <CountChip count={MANY_TAGS.length} />
+        <CountChip count={s.tags.length} />
       </Exhibit>
 
       <Card title="Unbreakable tokens, mixed scripts & huge numbers">
-        <code className="mt-1 block break-all font-term text-[11.5px] text-biscay-2">{UNBREAKABLE}</code>
-        <p className="mt-3 break-words text-[13px] text-ink/70">{MIXED_SCRIPT}</p>
-        <p className="mt-2 break-words text-[13px] text-ink/70">{LONG_WORD}</p>
+        <code className="mt-1 block break-all font-term text-[11.5px] text-biscay-2">{s.token}</code>
+        <p className="mt-3 break-words text-[13px] text-ink/70">{s.mixedScript}</p>
+        <p className="mt-2 break-words text-[13px] text-ink/70">{s.word}</p>
         <div className="mt-4">
-          <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
+          <AvatarGroup people={s.initials.map((i) => ({ initials: i }))} max={s.initials.length} />
         </div>
         <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-          <Stat value={HUGE_NUMBER_STR} label={LONG_WORD} tone="ok" icon={<BookOpen size={18} />} />
-          <Stat value={HUGE_PERCENT} label={UNBREAKABLE} tone="info" icon={<Sparkles size={18} />} />
-          <Stat value={HUGE_NUMBER_STR} label={MIXED_SCRIPT} tone="attention" icon={<ShieldCheck size={18} />} />
+          <Stat value={s.bigNumber} label={s.word} tone="ok" icon={<BookOpen size={18} />} />
+          <Stat value={s.percent} label={s.token} tone="info" icon={<Sparkles size={18} />} />
+          <Stat value={s.bigNumber} label={s.mixedScript} tone="attention" icon={<ShieldCheck size={18} />} />
         </div>
-        <div className="mt-4 [&_span]:truncate"><Progress value={99} label={UNBREAKABLE} tone="info" /></div>
+        <div className="mt-4 [&_span]:truncate"><Progress value={99} label={s.token} tone="info" /></div>
         <div className="mt-4">
-          <Alert tone="blocked" title={<Truncate>{UNBREAKABLE}</Truncate>}>
-            <Truncate>{LONG_URL}</Truncate>
+          <Alert tone="blocked" title={<Truncate>{s.token}</Truncate>}>
+            <Truncate>{s.url}</Truncate>
           </Alert>
         </div>
       </Card>
@@ -383,16 +409,16 @@ function StressSection() {
 /* Sections that render exactly one exhibit: no point splitting them in two. */
 const SINGLE_EXHIBIT = new Set(["buttons", "inputs", "icons"]);
 
-function Sections({ state }: { state: string }) {
-  switch (state) {
+function Sections({ data }: { data: LookbookData }) {
+  switch (data.section) {
     case "foundations": return <Foundations />;
     case "buttons": return <Buttons />;
     case "inputs": return <FormsExhibit />;
     case "data-display": return <DataDisplay />;
     case "feedback": return <Feedback />;
     case "icons": return <IconsArt />;
-    case "overflow": return <OverflowSection />;
-    case "stress": return <StressSection />;
+    case "overflow": return <OverflowSection s={data.samples} />;
+    case "stress": return <StressSection s={data.samples} />;
     default:
       return (
         <>
@@ -407,8 +433,8 @@ function Sections({ state }: { state: string }) {
   }
 }
 
-function LookbookPage({ state = "all", mobile = false }: PageProps) {
-  if (state === "loading") {
+function LookbookPage({ data, loading = false, mobile = false }: PageProps<LookbookData>) {
+  if (loading) {
     return (
       <PageFrame active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
         <SkeletonPage variant="gallery" />
@@ -432,15 +458,15 @@ function LookbookPage({ state = "all", mobile = false }: PageProps) {
             same left and right edge (§11). Single-exhibit sections run one
             full-width column rather than leaving a dead right half. Mobile
             always collapses to one column. */}
-        <div className={mobile || SINGLE_EXHIBIT.has(state) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
-          <Sections state={state} />
+        <div className={mobile || SINGLE_EXHIBIT.has(data.section) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
+          <Sections data={data} />
         </div>
       </div>
     </PageFrame>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<LookbookData> = {
   id: "lookbook",
   title: "Lookbook",
   route: "/lookbook",

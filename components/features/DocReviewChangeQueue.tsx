@@ -35,35 +35,23 @@ function diffChange(orig: string, repl: string) {
   };
 }
 
-type ChangeState = "pending" | "accepted" | "rejected";
-type Change = { id: number; original: string; proposed: string; rule: string; state: ChangeState };
+export type ChangeState = "pending" | "accepted" | "rejected";
+/** One proposed edit in the review-before-apply queue. */
+export type DocChange = { id: number; original: string; proposed: string; rule: string; state: ChangeState };
 type ChangeTab = "review" | "all";
 
 /* ————— demo data ————— */
 
-const DEMO_BODY =
-  "The new authentication service replaces the legacy session store with stateless JWT tokens. " +
-  "It is expected to reduce login latency by roughly 40% and remove the shared-session bottleneck. " +
-  "Tokens are signed with RS256 and rotated every 24 hours. " +
-  "We will roll out the change in three phases across the fleet.";
-
-const DEMO_CHANGES: Change[] = [
-  { id: 1, original: "It is expected to reduce login latency by roughly 40%", proposed: "It reduces measured login latency by 22%", rule: "Fact check, align with staging measurement", state: "pending" },
-  { id: 2, original: "roll out the change in three phases across the fleet", proposed: "roll out the change in three phases", rule: "Tighten, cut vague scope", state: "pending" },
-  { id: 3, original: "replaces the legacy session store", proposed: "supersedes the legacy session store", rule: "Sharpen, stronger verb", state: "pending" },
-  { id: 4, original: "remove the shared-session bottleneck", proposed: "eliminate the shared-session bottleneck", rule: "Sharpen, stronger verb", state: "accepted" },
-  { id: 5, original: "signed with RS256 and rotated every 24 hours", proposed: "signed with RS256, rotated daily", rule: "Deslop, reduce wordiness", state: "rejected" },
-];
 
 export function DocReviewChangeQueue({
-  changes: initialChanges = DEMO_CHANGES,
-  body = DEMO_BODY,
+  changes: initialChanges,
+  body,
   defaultTab = "review",
   loading = false,
   compact = false,
 }: {
-  changes?: Change[];
-  body?: string;
+  changes: DocChange[];
+  body: string;
   /** Which tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: ChangeTab;
   loading?: boolean;
@@ -73,7 +61,7 @@ export function DocReviewChangeQueue({
   compact?: boolean;
 }) {
   const [tab, setTab] = useState<ChangeTab>(defaultTab);
-  const [changes, setChanges] = useState<Change[]>(initialChanges);
+  const [changes, setChanges] = useState<DocChange[]>(initialChanges);
   const [bodyText, setBodyText] = useState(body);
 
   const pending = changes.filter((c) => c.state === "pending");
@@ -83,7 +71,7 @@ export function DocReviewChangeQueue({
      diffs (CONVENTIONS §13, §17). */
   const pager = usePaged(visible, 15);
 
-  const isApplied = (c: Change) => c.state === "pending" && !bodyText.includes(cleanText(c.original));
+  const isApplied = (c: DocChange) => c.state === "pending" && !bodyText.includes(cleanText(c.original));
 
   const applyLocal = (orig: string, repl: string) => {
     const o = cleanText(orig);
@@ -91,11 +79,11 @@ export function DocReviewChangeQueue({
     setBodyText((t) => t.split(o).join(cleanText(repl)));
   };
 
-  const accept = (c: Change) => {
+  const accept = (c: DocChange) => {
     setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state: "accepted" } : x)));
     applyLocal(c.original, c.proposed);
   };
-  const reject = (c: Change) =>
+  const reject = (c: DocChange) =>
     setChanges((cs) => cs.map((x) => (x.id === c.id ? { ...x, state: "rejected" } : x)));
   const acceptAll = () => {
     pending.forEach((c) => applyLocal(c.original, c.proposed));

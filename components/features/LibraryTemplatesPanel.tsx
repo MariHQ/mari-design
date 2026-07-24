@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Search, Plus, MoreVertical, Eye, FilePlus2, Trash2, Clipboard, GitFork, ShieldCheck, FileText, Sprout, BookOpen, Megaphone, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -26,6 +25,13 @@ import { Menu, MenuItem } from "../navigation/Menu";
    after it, which is a conditional-hook bug that crashes the panel the moment
    it flips from loading to loaded. */
 
+/** Which glyph a template shows. A plain string, not a component: a template
+    comes back from an API, and an API cannot return React. The panel owns the
+    mapping to an actual icon. */
+export type TemplateIcon =
+  | "clipboard" | "git-fork" | "shield-check" | "file-text"
+  | "sprout" | "book-open" | "megaphone";
+
 export type Template = {
   id: string;
   name: string;
@@ -33,25 +39,19 @@ export type Template = {
   description: string;
   sections: string[];
   standard: boolean;
-  icon: LucideIcon;
+  icon: TemplateIcon;
 };
 
-const TEMPLATES: Template[] = [
-  { id: "runbook", name: "Runbook", category: "Operations", icon: Clipboard, standard: true, description: "Service overview, alarms, diagnosis, rollback, escalation.", sections: ["Service overview", "Architecture and dependencies", "Alarms and thresholds", "Dashboards", "Diagnosis steps", "Mitigation", "Rollback procedure", "Escalation contacts"] },
-  { id: "adr", name: "Architecture decision", category: "Engineering", icon: GitFork, standard: true, description: "Context, decision, alternatives, and consequences.", sections: ["Context", "Decision", "Alternatives considered", "Consequences", "Rollout", "References"] },
-  { id: "postmortem", name: "Postmortem", category: "Operations", icon: ShieldCheck, standard: true, description: "Impact, timeline, root cause, response, and follow-ups.", sections: ["Summary", "Customer impact", "Timeline", "Root cause", "Detection", "Response", "Recovery", "Lessons learned", "Follow-up actions"] },
-  { id: "rfc", name: "RFC", category: "Engineering", icon: FileText, standard: true, description: "Problem, goals, proposal, risks, and rollout plan.", sections: ["Problem statement", "Goals", "Non-goals", "Proposal", "Risks and mitigations", "Rollout plan", "Open questions"] },
-  { id: "onboarding", name: "Onboarding guide", category: "Team", icon: Sprout, standard: true, description: "Context, first-week checklist, people, tools, and milestones.", sections: ["Welcome and context", "First-week checklist", "People to meet", "Tools and access", "Codebase tour", "First tasks", "30/60/90 milestones"] },
-  { id: "api", name: "API reference page", category: "Product", icon: BookOpen, standard: true, description: "Endpoint purpose, request, response, errors, and examples.", sections: ["Endpoint purpose", "Authentication", "Request", "Response", "Errors", "Examples"] },
-  { id: "release", name: "Release notes", category: "Product", icon: Megaphone, standard: true, description: "What changed, who it helps, migration notes, and links.", sections: ["Highlights", "What changed", "Who it helps", "Migration notes", "Links"] },
-  { id: "security", name: "Security policy", category: "Governance", icon: ShieldCheck, standard: true, description: "Supported versions, reporting, disclosure, and response.", sections: ["Supported versions", "Reporting a vulnerability", "Disclosure policy", "Response targets", "Scope", "Safe harbor"] },
-];
+const TEMPLATE_ICONS = {
+  clipboard: Clipboard, "git-fork": GitFork, "shield-check": ShieldCheck,
+  "file-text": FileText, sprout: Sprout, "book-open": BookOpen, megaphone: Megaphone,
+} as const;
 
 const GENERIC_SECTIONS = ["Overview", "Context", "Details", "Process", "Risks", "Review", "References", "Appendix", "Next steps", "Owners", "Changelog", "Links"];
 const CATEGORIES = ["All", "Engineering", "Operations", "Product", "Team", "Governance"] as const;
 
 export type LibraryTemplatesPanelProps = {
-  templates?: Template[];
+  templates: Template[];
   loading?: boolean;
   /** Narrow-column composition: the find field moves out of the card header
       onto its own row (CONVENTIONS.md §10 — the page owns mobile). */
@@ -59,7 +59,7 @@ export type LibraryTemplatesPanelProps = {
   className?: string;
 };
 
-export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, compact = false, className = "" }: LibraryTemplatesPanelProps) {
+export function LibraryTemplatesPanel({ templates, loading = false, compact = false, className = "" }: LibraryTemplatesPanelProps) {
   // Every hook runs on every render: these used to sit AFTER the `loading`
   // early return, so a panel that started life loading and then resolved
   // mounted a different number of hooks and React threw.
@@ -108,7 +108,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
     const n = Math.max(1, Math.min(Number(count) || 5, GENERIC_SECTIONS.length));
     setRows((prev) => [
       ...prev,
-      { id: `custom-${Date.now().toString(36)}`, name: name.trim(), category: cat, description: desc.trim() || "Custom scaffold.", sections: GENERIC_SECTIONS.slice(0, n), standard: false, icon: FileText },
+      { id: `custom-${Date.now().toString(36)}`, name: name.trim(), category: cat, description: desc.trim() || "Custom scaffold.", sections: GENERIC_SECTIONS.slice(0, n), standard: false, icon: "file-text" },
     ]);
     setName(""); setDesc(""); setCount("5"); setComposerOpen(false);
   };
@@ -195,7 +195,7 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
           />
           <div className="flex flex-wrap gap-3 p-4">
             {(showAll ? visible : visible.slice(0, PAGE)).map((t) => {
-              const Icon = t.icon;
+              const Icon = TEMPLATE_ICONS[t.icon] ?? FileText;
               const open = previewId === t.id;
               const used = usedId === t.id;
               return (

@@ -215,9 +215,19 @@ async function main() {
         deviceScaleFactor: 1,
       });
       const p = await ctx.newPage();
+      // A page that throws during render screenshots as a blank white frame,
+      // which is indistinguishable from a page that legitimately renders
+      // nothing. Surface the error instead of tiling an empty rectangle.
+      const pageErrors = [];
+      p.on("pageerror", (e) => pageErrors.push(String(e.message || e)));
+      p.on("console", (m) => { if (m.type() === "error") pageErrors.push(m.text()); });
       await p.goto(`${BASE}/render.html?page=${encodeURIComponent(pageId)}&state=${encodeURIComponent(state)}&view=${isM ? "mobile" : "desktop"}`, { waitUntil: "load" });
       await p.waitForSelector("body[data-ready]", { timeout: 20000 }).catch(() => {});
       await p.waitForTimeout(250);
+      if (pageErrors.length) {
+        console.error(`\n!! ${target} threw while rendering:`);
+        for (const e of [...new Set(pageErrors)].slice(0, 4)) console.error(`   ${e}`);
+      }
       await p.screenshot({ path: file, fullPage: true });
       const dims = await p.evaluate(() => [
         document.documentElement.clientWidth,

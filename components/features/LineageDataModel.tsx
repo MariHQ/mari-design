@@ -25,7 +25,7 @@ import { Scrollable } from "../data-display/Scrollable";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
-export type RelKey = "references" | "discussed" | "derived" | "translates" | "contradicts";
+export type RelKey = "references" | "discussed" | "derived" | "translates" | "contradicts" | "similar";
 export type Lens = "source" | "stale" | "owner" | "health";
 export type LayoutMode = "flow" | "timeline";
 export type DocKind = "page" | "commit" | "pr" | "issue" | "answer" | "decision" | "seed";
@@ -112,9 +112,14 @@ export const REL: Record<RelKey, RelStyle> = {
   derived: { color: "#43663c", dash: "9 4", width: 2.4, code: "DERIV", pattern: "Long dash", label: "Derived from", out: "Derived from", in: "Source of" },
   translates: { color: "#6a5a9c", dash: "5 3 1 3", width: 2, code: "TRANS", pattern: "Dash dot", label: "Translates", out: "Translates", in: "Translated by" },
   contradicts: { color: "#c8502e", dash: "3 3", width: 3.4, code: "CONTRA", pattern: "Short dash, heavy", label: "Contradicts", out: "Contradicts", in: "Contradicted by" },
+  /* Machine-inferred, not authored: pgvector cosine similarity over document
+     embeddings. Drawn thin and finely dotted so an inferred edge never reads
+     as heavily as a stated one, and symmetric in both directions because
+     "is similar to" has no source and no target. */
+  similar: { color: "#7a7f88", dash: "2 3", width: 1.4, code: "SIM", pattern: "Fine dotted", label: "Similar to", out: "Similar to", in: "Similar to" },
 };
 
-export const REL_ORDER: RelKey[] = ["references", "discussed", "derived", "translates", "contradicts"];
+export const REL_ORDER: RelKey[] = ["references", "discussed", "derived", "translates", "contradicts", "similar"];
 
 export const edgeKey = (from: string, to: string, rel: RelKey) => `${from}→${to}:${rel}`;
 
@@ -512,53 +517,15 @@ export function LgResultPanel({ title, children }: { title: ReactNode; children?
     were not enough of a change indicator for toggles like Watch / Pin. */
 export const lgToggleOn = "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2 hover:border-biscay-2 hover:text-biscay-2";
 
-/* ── Baked-in demo graph ────────────────────────────────────────────────── */
+/** Sorted unique event dates across nodes + edges (the scrubber's snap
+    targets). A pure function of the graph, so it is derived, never authored. */
+export const eventDates = (nodes: LNode[], edges: LEdge[]): string[] =>
+  Array.from(new Set([
+    ...nodes.flatMap((n) => [n.date, n.createdDate].filter(Boolean) as string[]),
+    ...edges.map((e) => e.date).filter(Boolean) as string[],
+  ])).sort();
 
-export const DEMO_NODES: LNode[] = [
-  { id: "n1", docId: 101, source: "docs", title: "Pricing policy", meta: "Decision · owner Ana K · 4d ago", icon: "doc", docKind: "decision", group: "", x: 0.06, y: 0.5, date: "2026-07-17", createdDate: "2026-03-02", owner: "Ana K", staleDays: 4, tags: ["customer-facing"], inbound: 6, outbound: 3 },
-  { id: "n2", docId: 102, source: "docs", title: "Free-tier limits", meta: "Page · owner Ana K · 9d ago", icon: "doc", docKind: "page", group: "", x: 0.24, y: 0.26, date: "2026-07-12", createdDate: "2026-04-10", owner: "Ana K", staleDays: 9, tags: ["customer-facing"], inbound: 4, outbound: 2 },
-  { id: "n3", docId: 103, source: "docsite", title: "Billing FAQ", meta: "Page · owner Sam L · 52d ago", icon: "book", docKind: "page", group: "", x: 0.24, y: 0.74, date: "2026-05-30", createdDate: "2026-01-14", owner: "Sam L", staleDays: 52, warn: true, tags: ["customer-facing"], inbound: 3, outbound: 1 },
-  { id: "n4", docId: 104, source: "github", title: "PR #482 · billing revamp", meta: "PR · merged · 2d ago", icon: "github", docKind: "pr", group: "gh:MariHQ/web:prs", x: 0.45, y: 0.16, date: "2026-07-19", createdDate: "2026-07-10", owner: "Dev R", staleDays: 2, inbound: 2, outbound: 4 },
-  { id: "n5", docId: 105, source: "slack", title: "#pricing thread", meta: "Answer · owner Mia M · 15d ago", icon: "slack", docKind: "answer", group: "", x: 0.45, y: 0.5, date: "2026-07-06", createdDate: "2026-06-28", owner: "Mia M", staleDays: 15, inbound: 5, outbound: 2 },
-  { id: "n6", docId: 106, source: "notion", title: "Onboarding guide", meta: "Page · owner Jo S · 33d ago", icon: "notion", docKind: "page", group: "", x: 0.45, y: 0.84, date: "2026-06-18", createdDate: "2026-02-20", owner: "Jo S", staleDays: 33, inbound: 2, outbound: 1 },
-  { id: "n7", docId: 107, source: "github", title: "Issue #91 · stale FAQ", meta: "Issue · open · 61d ago", icon: "github", docKind: "issue", group: "gh:MariHQ/web:issues", x: 0.66, y: 0.28, date: "2026-05-21", createdDate: "2026-05-10", owner: "Sam L", staleDays: 61, warn: true, inbound: 1, outbound: 1 },
-  { id: "n8", docId: 108, source: "gdocs", title: "Pricing deck Q3", meta: "Page · owner Mia M · 21d ago", icon: "gdocs", docKind: "page", group: "", x: 0.66, y: 0.62, date: "2026-06-30", createdDate: "2026-06-01", owner: "Mia M", staleDays: 21, inbound: 3, outbound: 2 },
-  { id: "n9", docId: 109, source: "granola", title: "Sept launch brief", meta: "Decision · owner Ana K · 1d ago", icon: "granola", docKind: "decision", group: "", x: 0.88, y: 0.46, date: "2026-07-20", createdDate: "2026-07-15", owner: "Ana K", staleDays: 1, inbound: 1, outbound: 0 },
-  { id: "grp:gh:MariHQ/web:commits", macro: true, count: 42, repo: "MariHQ/web", source: "github", title: "42 commits", meta: "MariHQ/web", icon: "github", docKind: "commit", group: "gh:MariHQ/web:commits", x: 0.66, y: 0.92, inbound: 0, outbound: 8 },
-];
-
-export const DEMO_EDGES: LEdge[] = [
-  { id: "e1", from: "n1", to: "n2", rel: "derived", date: "2026-07-12", meta: { note: "Free-tier section derives from the pricing decision." } },
-  { id: "e2", from: "n1", to: "n3", rel: "derived", date: "2026-05-30" },
-  { id: "e3", from: "n2", to: "n4", rel: "references", date: "2026-07-19", meta: { evidence: "MariHQ/web#482", status: "confirmed" } },
-  { id: "e4", from: "n2", to: "n5", rel: "discussed", date: "2026-07-06", meta: { note: "Thread debating the new free-tier cap." } },
-  { id: "e5", from: "n3", to: "n7", rel: "contradicts", date: "2026-05-21", dashed: true, meta: { note: "FAQ still quotes the old $0 tier." } },
-  { id: "e6", from: "n5", to: "n8", rel: "discussed", date: "2026-06-30" },
-  { id: "e7", from: "n4", to: "n7", rel: "references", date: "2026-07-15", meta: { evidence: "closes #91" } },
-  { id: "e8", from: "n8", to: "n9", rel: "references", date: "2026-07-20" },
-  { id: "e9", from: "n6", to: "n5", rel: "references", date: "2026-06-18" },
-  { id: "e10", from: "n2", to: "n6", rel: "references", date: "2026-06-18" },
-  { id: "e11", from: "n8", to: "n3", rel: "translates", date: "2026-06-10", dashed: true, llm: true, meta: { derived: "llm" } },
-  { id: "ge:grp:gh:MariHQ/web:commits→n8:references", from: "grp:gh:MariHQ/web:commits", to: "n8", rel: "references", count: 42 },
-];
-
-/** Sorted unique event dates across nodes + edges (snap targets). */
-export const DEMO_DATES: string[] = Array.from(
-  new Set([
-    ...DEMO_NODES.flatMap((n) => [n.date, n.createdDate].filter(Boolean) as string[]),
-    ...DEMO_EDGES.map((e) => e.date).filter(Boolean) as string[],
-  ]),
-).sort();
-
-export const DEMO_ACTIVITY: { date: string; count: number }[] = [
-  { date: "2026-01-14", count: 1 }, { date: "2026-02-20", count: 1 }, { date: "2026-03-02", count: 2 },
-  { date: "2026-04-10", count: 3 }, { date: "2026-05-21", count: 2 }, { date: "2026-05-30", count: 4 },
-  { date: "2026-06-18", count: 5 }, { date: "2026-06-30", count: 6 }, { date: "2026-07-06", count: 4 },
-  { date: "2026-07-12", count: 7 }, { date: "2026-07-17", count: 5 }, { date: "2026-07-19", count: 8 },
-  { date: "2026-07-20", count: 6 },
-];
-
-export const nodeById = (nodes: LNode[] = DEMO_NODES) =>
+export const nodeById = (nodes: LNode[]) =>
   Object.fromEntries(nodes.map((n) => [n.id, n])) as Record<string, LNode>;
 
 /* ── LineageDataModel — visual legend (so the model spec has a gallery view) */
@@ -577,6 +544,12 @@ function Dot({ color }: { color: string }) {
 }
 
 export type LineageDataModelProps = {
+  /** The graph the footer line counts. The legend itself is pure palette, but
+      it reports the size of the model it is describing, so the graph is a
+      required input rather than a baked-in demo (MIGRATION.md). */
+  nodes: LNode[];
+  edges: LEdge[];
+  dates: string[];
   /** Render a content-shaped skeleton silhouette instead of the legend. */
   loading?: boolean;
   className?: string;
@@ -584,7 +557,7 @@ export type LineageDataModelProps = {
 
 /** Legend / palette reference for the lineage model: relation types, source
     identities, staleness + health lenses, and impact severities. */
-export function LineageDataModel({ loading = false, className = "" }: LineageDataModelProps) {
+export function LineageDataModel({ nodes, edges, dates, loading = false, className = "" }: LineageDataModelProps) {
   if (loading) {
     return (
       <div className={`${card} w-[640px] min-w-[640px] p-5 ${className}`.trim()} aria-hidden="true">
@@ -683,7 +656,7 @@ export function LineageDataModel({ loading = false, className = "" }: LineageDat
       </div>
 
       <div className="mt-5 border-t border-ink/10 pt-3 font-term text-[11px] text-ink/65">
-        {DEMO_NODES.filter((n) => !n.macro).length} document nodes · {DEMO_EDGES.length} edges · {DEMO_DATES.length} event dates · virtual space 1600×900
+        {nodes.filter((n) => !n.macro).length} document nodes · {edges.length} edges · {dates.length} event dates · virtual space 1600×900
       </div>
     </div>
   );

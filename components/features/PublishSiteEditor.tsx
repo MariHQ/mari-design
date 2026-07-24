@@ -52,44 +52,19 @@ export type Site = {
   releases: Release[];
 };
 
-const DEMO_SITE: Site = {
-  id: 7,
-  name: "Acme Docs",
-  domain: "docs.acme.com",
-  status: "live",
-  docs: 148,
-  warnings: 2,
-  sources: ["customer-facing", "canonical"],
-  gates: [
-    { name: "All facts verified", ok: true, note: "148/148 verified" },
-    { name: "No broken links", ok: true, note: "checked at build" },
-    { name: "Glossary coverage", ok: false, note: "3 terms undefined" },
-  ],
-  nav: [
-    { label: "Getting started", active: true, children: ["Install", "Quickstart"] },
-    { label: "Guides", children: ["Ingestion", "Search", "Publishing"] },
-    { label: "Reference", children: ["API", "CLI"] },
-  ],
-  releases: [
-    { id: 14, version: "v14", status: "live", deployed: "2025-07-19T09:55:00", notes: "Deployed to S3 · acme-docs-prod" },
-    { id: 13, version: "v13", status: "superseded", deployed: "2025-07-12T14:02:00" },
-    { id: 12, version: "v12", status: "superseded", deployed: "2025-07-05T11:40:00", notes: "Docusaurus generator" },
-  ],
-};
-
 const TABS: { id: EditorTab; label: string }[] = [
   { id: "content", label: "Content" }, { id: "nav", label: "Nav" }, { id: "theme", label: "Theme" }, { id: "deploy", label: "Deploy" },
 ];
 
 export type PublishSiteEditorProps = {
-  site?: Site;
+  site: Site;
   /** Which config tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: EditorTab;
   loading?: boolean;
   className?: string;
 };
 
-export function PublishSiteEditor({ site = DEMO_SITE, defaultTab = "theme", loading = false, className = "" }: PublishSiteEditorProps) {
+export function PublishSiteEditor({ site, defaultTab = "theme", loading = false, className = "" }: PublishSiteEditorProps) {
   const [tab, setTab] = useState<EditorTab>(defaultTab);
   const [theme, setTheme] = useState(THEMES[0]);
   const [accent, setAccent] = useState(THEMES[0].accent);
@@ -350,7 +325,10 @@ function MockPreview({ accent, bg, name, nav, dark, radius }: { accent: string; 
         </div>
         <div className="flex min-h-[280px]">
           <aside className="w-1/3 border-r border-ink/10 p-3" style={{ borderColor: dark ? "rgba(255,255,255,0.08)" : undefined }}>
-            <div className="text-[13px] font-bold mb-2.5" style={{ color: accent }}>{name}</div>
+            {/* The preview sidebar is a third of a thumbnail. A real site name
+                wrapped one word per line here and grew the panel to 351px
+                (§12: clamp, never let a long value drive the layout). */}
+            <div className="mb-2.5" style={{ color: accent }}><Truncate lines={2} className="text-[13px] font-bold">{name}</Truncate></div>
             {/* The preview is a thumbnail: it shows the first few nav entries
                 and says how many more there are, never all 300. */}
             <ul className="flex min-w-0 flex-col gap-1.5">

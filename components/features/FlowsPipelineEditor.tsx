@@ -86,23 +86,8 @@ const PICKER_SECTIONS: { section: Section; tagline: string; kinds: StepKind[] }[
   { section: "then", tagline: "deliver where the team works", kinds: ["create_task", "notify", "deploy_site"] },
 ];
 
-const DEMO_MEMBERS = ["Aki K.", "Dana R.", "Priya S."];
-const DEMO_SITES = [{ id: 1, name: "Docs, production" }, { id: 2, name: "Docs, staging" }];
-const DEMO_TAGS = ["needs-review", "customer-facing", "internal", "stale"];
-
-const DEMO_STEPS: EditorStep[] = [
-  { kind: "trigger", label: "GitHub PR merged", config: { label: "GitHub PR merged", query: "docs/**" } },
-  { kind: "fetch_docs", label: "Fetch changed docs", config: { query: "docs/**", k: 5 } },
-  { kind: "fact_check", label: "Verify facts", config: {} },
-  { kind: "condition", label: "Contradictions?", config: { field: "contradictions", greater_than: 0 } },
-  { kind: "create_task", label: "Open review task", config: { title: "Resolve contradiction", kind: "factcheck", kind_label: "Fact check" }, only_if_branch: true },
-];
-
-const DEMO_RUNS: WorkflowRun[] = [
-  { id: "r145", number: 145, workflowName: "Docs guardrail", status: "passed", started: "2026-07-20T14:12:00", duration: "00:00:41", headline: "No contradictions found across 5 docs" },
-  { id: "r143", number: 143, workflowName: "Docs guardrail", status: "failed", started: "2026-07-19T10:02:00", duration: "00:01:12", headline: "2 contradictions, review task opened" },
-  { id: "r140", number: 140, workflowName: "Docs guardrail", status: "passed", started: "2026-07-18T16:44:00", duration: "00:00:38", dry: true, headline: "Dry run, 1 task previewed" },
-];
+/** A published site a deploy step can target. */
+export type SiteRef = { id: number; name: string };
 
 /** Steps rendered in the spine before "Show all". */
 const STEP_PAGE = 25;
@@ -111,20 +96,23 @@ const asNum = (v: unknown, f = 0) => { const n = Number(v); return Number.isNaN(
 const asStr = (v: unknown) => (v == null ? "" : String(v));
 
 export type FlowsPipelineEditorProps = {
-  name?: string;
-  description?: string;
-  steps?: EditorStep[];
-  runs?: WorkflowRun[];
+  name: string;
+  description: string;
+  steps: EditorStep[];
+  runs: WorkflowRun[];
+  /** Assignees a task/notify step can be pointed at. */
+  members: string[];
+  /** Sites a deploy step can publish to. */
+  sites: SiteRef[];
+  /** Tags a fetch/tag step can filter or apply. */
+  tags: string[];
   /** Render a content-shaped skeleton silhouette instead of the editor. */
   loading?: boolean;
   className?: string;
 };
 
 export function FlowsPipelineEditor({
-  name = "Docs guardrail",
-  description = "Fact-checks every changed doc before it can ship.",
-  steps: initialSteps = DEMO_STEPS,
-  runs = DEMO_RUNS,
+  name, description, steps: initialSteps, runs, members, sites, tags,
   loading = false,
   className = "",
 }: FlowsPipelineEditorProps) {
@@ -308,6 +296,9 @@ export function FlowsPipelineEditor({
             key={`${selIdx}-${selStep?.kind}`}
             step={selStep}
             idx={selIdx}
+            members={members}
+            sites={sites}
+            tags={tags}
             onLabel={(v) => patch(selIdx, { label: v })}
             onConfig={(k, v) => setConfig(selIdx, k, v)}
             onBranch={(v) => patch(selIdx, { only_if_branch: v })}
@@ -415,9 +406,10 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
 
 /* ── config panel ──────────────────────────────────────────────────────── */
 function ConfigPanel({
-  step, idx, onLabel, onConfig, onBranch, onSave,
+  step, idx, members, sites, tags, onLabel, onConfig, onBranch, onSave,
 }: {
   step: EditorStep | undefined; idx: number;
+  members: string[]; sites: SiteRef[]; tags: string[];
   onLabel: (v: string) => void; onConfig: (key: string, value: unknown) => void; onBranch: (v: boolean) => void;
   onSave: () => void;
 }) {
@@ -460,7 +452,7 @@ function ConfigPanel({
             <Field label="Tag filter">
               <Select value={asStr(c.tag)} onChange={(e) => onConfig("tag", e.target.value)} className="w-full">
                 <option value="">Any tag</option>
-                {DEMO_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+                {tags.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
             </Field>
             <Field label="Max documents (k)">
@@ -481,7 +473,7 @@ function ConfigPanel({
         {step.kind === "tag" && (
           <Field label="Tag to apply">
             <Select value={asStr(c.tag)} onChange={(e) => onConfig("tag", e.target.value)} className="w-full">
-              {DEMO_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {tags.map((t) => <option key={t} value={t}>{t}</option>)}
             </Select>
           </Field>
         )}
@@ -505,7 +497,7 @@ function ConfigPanel({
             <Field label="Assignee">
               <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
                 <option value="">Anyone, unassigned</option>
-                {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
+                {members.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
             </Field>
             <Field label="Kind">
@@ -523,7 +515,7 @@ function ConfigPanel({
           <Field label="Approver">
             <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
               <option value="">Choose an approver</option>
-              {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
+              {members.map((m) => <option key={m} value={m}>{m}</option>)}
             </Select>
           </Field>
         )}
@@ -533,7 +525,7 @@ function ConfigPanel({
             <Field label="Notify">
               <Select value={asStr(c.assignee)} onChange={(e) => onConfig("assignee", e.target.value)} className="w-full">
                 <option value="">Optional</option>
-                {DEMO_MEMBERS.map((m) => <option key={m} value={m}>{m}</option>)}
+                {members.map((m) => <option key={m} value={m}>{m}</option>)}
               </Select>
             </Field>
             <Field label="Message"><Input value={asStr(c.text)} onChange={(e) => onConfig("text", e.target.value)} className="w-full" /></Field>
@@ -544,7 +536,7 @@ function ConfigPanel({
         {step.kind === "deploy_site" && (
           <Field label="Site">
             <Select value={asNum(c.site_id, 1)} onChange={(e) => onConfig("site_id", asNum(e.target.value, 1))} className="w-full">
-              {DEMO_SITES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
           </Field>
         )}

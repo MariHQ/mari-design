@@ -20,26 +20,15 @@ import { fmtDateTime } from "../tokens/format";
 
 export type AuditEvent = { id: number; actor: string; verb: string; target: string; at: string };
 
-const DEMO_EVENTS: AuditEvent[] = [
-  { id: 1, actor: "Maya Chen", verb: "invited member", target: "sam@team.com", at: "2025-07-20T15:42:00" },
-  { id: 2, actor: "Devon Park", verb: "revoked API key", target: "Old bot (rotated)", at: "2025-07-20T11:08:00" },
-  { id: 3, actor: "Priya Nair", verb: "changed role", target: "devon@team.com to Manager", at: "2025-07-19T18:20:00" },
-  { id: 4, actor: "Maya Chen", verb: "deployed site", target: "docs.acme.com v14", at: "2025-07-19T09:55:00" },
-  { id: 5, actor: "System", verb: "synced source", target: "GitHub · acme/handbook", at: "2025-07-18T22:03:00" },
-  { id: 6, actor: "Devon Park", verb: "updated setting", target: "llm set to anthropic:claude-3.5", at: "2025-07-18T14:17:00" },
-  { id: 7, actor: "Priya Nair", verb: "created MCP server", target: "support-kb", at: "2025-07-17T10:44:00" },
-  { id: 8, actor: "Maya Chen", verb: "verified fact", target: "SLA response time", at: "2025-07-16T16:30:00" },
-];
-
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
 export type SettingsAuditLogProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
-  embedded?: boolean; events?: AuditEvent[]; total?: number; loading?: boolean; className?: string };
+  embedded?: boolean; events: AuditEvent[]; total: number; loading?: boolean; className?: string };
 
-export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.length, loading = false, embedded = false, className = "" }: SettingsAuditLogProps) {
+export function SettingsAuditLog({ events, total, loading = false, embedded = false, className = "" }: SettingsAuditLogProps) {
   const [filter, setFilter] = useState("");
   const [nonce, setNonce] = useState(0);
 

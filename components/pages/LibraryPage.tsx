@@ -1,42 +1,60 @@
 import { useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { BookOpen, FileText } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
-import { Chip, AvatarGroup, Breadcrumb } from "../index";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_URL, UNBREAKABLE, LONG_WORD,
-  HUGE_NUMBER, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB, repeat,
-} from "./stress";
 import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { LibraryTagsPanel } from "../features/LibraryTagsPanel";
-import { LibraryRulesPanel } from "../features/LibraryRulesPanel";
-import { LibraryGlossaryPanel } from "../features/LibraryGlossaryPanel";
-import { LibraryGuidesPanel } from "../features/LibraryGuidesPanel";
-import { LibraryTemplatesPanel } from "../features/LibraryTemplatesPanel";
+import { LibraryTagsPanel, type TagDef } from "../features/LibraryTagsPanel";
+import { LibraryRulesPanel, type CheckerDoc } from "../features/LibraryRulesPanel";
+import { LibraryGlossaryPanel, type Term } from "../features/LibraryGlossaryPanel";
+import { LibraryGuidesPanel, type Guide, type VoiceLayer } from "../features/LibraryGuidesPanel";
+import { LibraryTemplatesPanel, type Template } from "../features/LibraryTemplatesPanel";
 
 /* Library (pages/library.md). The project-wide editorial system: one tabbed
    page over the tag vocabulary, deterministic rule registry, style guides,
    glossary, and document templates. A top-level underline Tabs strip drives
-   which Library* panel renders below. Every tab is a state, plus per-tab empty
-   variants (new workspace with that section unpopulated) and the shared
-   loading / error / empty variants. Each panel carries its own within-tab
+   which Library* panel renders below. Each panel carries its own within-tab
    richness — rules by severity + a live document checker, a tag edit row,
    glossary add/edit, a template gallery with an opened template, a guides pack
-   selected — so a screenshot of each tab reads the whole surface. */
+   selected — so a screenshot of each tab reads the whole surface.
 
-type Tab = "tags" | "rules" | "glossary" | "guides" | "templates";
+   Pure presenter: every collection the five panels render arrives in `data`,
+   and the "nothing here yet" state is derived from all of them being empty. */
 
-const TAB_OPTIONS: TabOption<Tab>[] = [
-  { id: "tags", label: "Tags", count: 12 },
-  { id: "rules", label: "Rules", count: 170 },
-  { id: "glossary", label: "Glossary", count: 34 },
-  { id: "guides", label: "Style guides", count: 5 },
-  { id: "templates", label: "Templates", count: 9 },
+export type LibraryTab = "tags" | "rules" | "glossary" | "guides" | "templates";
+
+/** Everything the Library renders, one collection per tab. */
+export type LibraryData = {
+  /** Which tab the page opens on. */
+  tab: LibraryTab;
+  tags: TagDef[];
+  /** Documents in the corpus, for the tag coverage line. */
+  totalDocs: number;
+  /** Sample documents the rules checker can run over. */
+  checkerDocs: CheckerDoc[];
+  /** Workspace name, shown on the rules and guides panels. */
+  workspace: string;
+  terms: Term[];
+  guides: Guide[];
+  /** Which style pack this project has adopted. */
+  defaultPack: string;
+  /** The workspace's own voice layer, stacked on the pack. */
+  voice: VoiceLayer;
+  templates: Template[];
+  /** Counts on the tab strip. */
+  counts: Record<LibraryTab, number>;
+};
+
+const TAB_LABELS: { id: LibraryTab; label: string }[] = [
+  { id: "tags", label: "Tags" },
+  { id: "rules", label: "Rules" },
+  { id: "glossary", label: "Glossary" },
+  { id: "guides", label: "Style guides" },
+  { id: "templates", label: "Templates" },
 ];
 
 const STATES = [
@@ -56,89 +74,42 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* ── Overflow / stress fixtures (see pages/stress.ts) ───────────────────────
-   `overflow` = long but natural text; `stress` = pathological content. Fed to
-   the Library panels via their data props so the real composed features render
-   under stress, catching wrapping / truncation / flex-blowout bugs. */
-const OVERFLOW_TAGS = [
-  { id: "canonical", name: "Canonical: consolidated across every service, region, and on-call team", tone: "ok" as const, evidence: "Preferred evidence, superseding all prior evidence policies across the org", weight: 1.6, usage: 142, behaviors: ["Ranks first in every search surface and published documentation site", "Trusted for facts extracted during the quarterly reliability review"], standard: true, description: LONG_PARAGRAPH },
-  { id: "incident-response", name: "Incident-response and on-call escalation runbook", tone: "attention" as const, evidence: "Flagged for a human reviewer, never used as silent evidence", weight: 0.6, usage: 27, behaviors: ["Routed to the reliability guild for a judgment call", "Re-reviewed every quarter or immediately after any Sev-1 incident"], standard: true, description: LONG_TITLE },
-  { id: "runbook", name: LONG_TITLE, tone: "info" as const, evidence: "Operational runbooks and on-call documentation for every service tier", weight: 1.1, usage: 34, behaviors: ["Operational workflows", "On-call escalation ladder"], standard: false, description: LONG_PARAGRAPH },
-];
-const STRESS_TAGS = [
-  { id: "s1", name: UNBREAKABLE, tone: "blocked" as const, evidence: UNBREAKABLE, weight: HUGE_NUMBER, usage: HUGE_NUMBER, behaviors: MANY_TAGS, standard: false, description: LONG_URL },
-  { id: "s2", name: LONG_WORD, tone: "info" as const, evidence: LONG_URL, weight: 1, usage: 12847392, behaviors: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT], standard: false, description: MIXED_SCRIPT },
-];
-
-const OVERFLOW_TERMS = [
-  { id: "t1", term: "Escalation ladder and paging policy: the consolidated runbook definition", definition: LONG_PARAGRAPH, owner: LONG_NAME, updated: "2026-07-14" },
-  { id: "t2", term: LONG_TITLE, definition: LONG_PARAGRAPH, owner: LONG_NAME, updated: "2026-07-09" },
-];
-const STRESS_TERMS = [
-  { id: "s1", term: UNBREAKABLE, definition: LONG_URL, owner: LONG_WORD, updated: "2026-07-14" },
-  { id: "s2", term: LONG_WORD, definition: `${MIXED_SCRIPT} ${UNBREAKABLE}`, owner: MIXED_SCRIPT, updated: "2026-07-01" },
-];
-
-const OVERFLOW_TEMPLATES = [
-  { id: "o1", name: LONG_TITLE, category: "Operations", description: LONG_PARAGRAPH, sections: repeat((i) => `${i + 1}. Escalation ladder, paging policy, severity rubric, and communication templates for responders`, 10), standard: true, icon: FileText },
-  { id: "o2", name: "Consolidated platform reliability and incident-response scaffold", category: "Governance", description: LONG_TITLE, sections: repeat((i) => `Reviewed section ${i + 1}: reconciled against the last four quarters of incident retrospectives`, 8), standard: false, icon: FileText },
-];
-const STRESS_TEMPLATES = [
-  { id: "s1", name: UNBREAKABLE, category: "Governance", description: LONG_URL, sections: [UNBREAKABLE, LONG_URL, LONG_WORD, MIXED_SCRIPT], standard: false, icon: FileText },
-  { id: "s2", name: LONG_WORD, category: "Engineering", description: MIXED_SCRIPT, sections: MANY_TAGS, standard: false, icon: FileText },
-];
-
-function StressBody({ variant, mobile }: { variant: "overflow" | "stress"; mobile: boolean }) {
-  const stress = variant === "stress";
-  return (
-    <div className="mt-6 flex flex-col gap-5">
-      <Card variant="plain" title="Contributors & labels">
-        <div className="space-y-3">
-          <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
-          <div className="flex flex-wrap gap-1.5">
-            {(stress ? [...MANY_TAGS, MIXED_SCRIPT] : MANY_TAGS.slice(0, 6)).map((t, i) => (
-              <Chip key={i} label={t} tone="info" />
-            ))}
-          </div>
-          <AvatarGroup
-            people={(stress ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((initials) => ({ initials }))}
-            max={stress ? 5 : 6}
-          />
-        </div>
-      </Card>
-      <LibraryTagsPanel compact={mobile} tags={stress ? STRESS_TAGS : OVERFLOW_TAGS} />
-      <LibraryGlossaryPanel terms={stress ? STRESS_TERMS : OVERFLOW_TERMS} />
-      <LibraryTemplatesPanel compact={mobile} templates={stress ? STRESS_TEMPLATES : OVERFLOW_TEMPLATES} />
-    </div>
-  );
-}
-
-/** Which tab a given state opens on. */
-function tabForState(state: string): Tab {
-  if (state.startsWith("rules")) return "rules";
-  if (state.startsWith("glossary")) return "glossary";
-  if (state.startsWith("guides")) return "guides";
-  if (state.startsWith("templates")) return "templates";
-  return "tags";
-}
-
-/** Render the active tab; `state` may request the empty (unpopulated) variant. */
-function Panel({ tab, state, mobile }: { tab: Tab; state: string; mobile: boolean }) {
-  const emptyTab = state.endsWith("-empty");
+/** Render the active tab from the data it was given. A tab with nothing in it
+    renders its panel's own empty state, because the collection is empty. */
+function Panel({ tab, data, mobile }: { tab: LibraryTab; data: LibraryData; mobile: boolean }) {
   switch (tab) {
-    case "rules": return <LibraryRulesPanel />;
-    case "glossary": return emptyTab ? <LibraryGlossaryPanel terms={[]} /> : <LibraryGlossaryPanel />;
-    case "guides": return emptyTab ? <LibraryGuidesPanel guides={[]} /> : <LibraryGuidesPanel />;
-    case "templates": return emptyTab ? <LibraryTemplatesPanel compact={mobile} templates={[]} /> : <LibraryTemplatesPanel compact={mobile} />;
+    case "rules":
+      return <LibraryRulesPanel workspace={data.workspace} docs={data.checkerDocs} />;
+    case "glossary":
+      return <LibraryGlossaryPanel terms={data.terms} />;
+    case "guides":
+      return (
+        <LibraryGuidesPanel
+          guides={data.guides}
+          workspace={data.workspace}
+          defaultPack={data.defaultPack}
+          layer={data.voice}
+        />
+      );
+    case "templates":
+      return <LibraryTemplatesPanel compact={mobile} templates={data.templates} />;
     case "tags":
-    default: return emptyTab ? <LibraryTagsPanel compact={mobile} tags={[]} /> : <LibraryTagsPanel compact={mobile} />;
+    default:
+      return <LibraryTagsPanel compact={mobile} tags={data.tags} totalDocs={data.totalDocs} />;
   }
 }
 
-function LibraryPage({ state = "default", mobile = false }: PageProps) {
-  const [tab, setTab] = useState<Tab>(tabForState(state));
+/** A workspace with no editorial system at all. Derived from the data, so it
+    is true in the real app for exactly the same reason it is true here. */
+function isEmpty(d: LibraryData): boolean {
+  return !d.tags.length && !d.terms.length && !d.guides.length
+    && !d.templates.length && !d.checkerDocs.length;
+}
 
-  if (state === "loading") {
+function LibraryPage({ data, loading = false, error = null, mobile = false }: PageProps<LibraryData>) {
+  const [tab, setTab] = useState<LibraryTab>(data.tab);
+
+  if (loading) {
     return (
       <PageFrame active={navFor("library")} title="Library" mobile={mobile}>
         <SkeletonPage variant="list" />
@@ -146,16 +117,19 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
     );
   }
 
+  const tabOptions: TabOption<LibraryTab>[] =
+    TAB_LABELS.map((t) => ({ ...t, count: data.counts[t.id] }));
+
   let body;
-  if (state === "error") {
+  if (error) {
     body = (
       <div className="mt-6">
         <Card>
-          <EmptyState title="API offline">The library is temporarily unavailable. Retrying…</EmptyState>
+          <EmptyState title="API offline">{error}</EmptyState>
         </Card>
       </div>
     );
-  } else if (state === "empty") {
+  } else if (isEmpty(data)) {
     body = (
       <div className="mt-6">
         <Card>
@@ -163,13 +137,11 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
         </Card>
       </div>
     );
-  } else if (state === "overflow" || state === "stress") {
-    body = <StressBody variant={state} mobile={mobile} />;
   } else {
     body = (
       <div className="mt-6 flex flex-col gap-5">
-        <Tabs<Tab> ariaLabel="Library sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={setTab} />
-        <Panel tab={tab} state={state} mobile={mobile} />
+        <Tabs<LibraryTab> ariaLabel="Library sections" variant="underline" options={tabOptions} value={tab} onChange={setTab} />
+        <Panel tab={tab} data={data} mobile={mobile} />
       </div>
     );
   }
@@ -193,7 +165,7 @@ function LibraryPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<LibraryData> = {
   id: "library",
   title: "Library",
   route: "/library",

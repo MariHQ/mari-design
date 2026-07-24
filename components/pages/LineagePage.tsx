@@ -10,7 +10,8 @@ import { LineageEdgeDrawer } from "../features/LineageEdgeDrawer";
 import { LineageGroupDrawer } from "../features/LineageGroupDrawer";
 import { LineageAssertDrawer } from "../features/LineageAssertDrawer";
 import {
-  DEMO_NODES, DEMO_EDGES, NodeGlyph, SOURCE_LABELS, type Lens, type LayoutMode, type LNode,
+  NodeGlyph, SOURCE_LABELS,
+  type DocHistoryRow, type ImpactResult, type LEdge, type LNode, type LayoutMode, type Lens,
 } from "../features/LineageDataModel";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
@@ -18,20 +19,17 @@ import { card } from "../tokens/card";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
-import {
-  LONG_TITLE, LONG_NAME, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT, LONG_SOURCE,
-  HUGE_NUMBER, HUGE_NUMBER_STR, HUGE_PERCENT, MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
-} from "./stress";
 
 /* Product lineage (pages/lineage.md). The full-height graph "instrument":
    toolbar on top, the lineage canvas in the middle, the as-of time scrubber at
    the bottom, and the mutually-exclusive right drawers.
 
-   The `state` prop drives every reasonable view of the instrument: the four
-   recoloring lenses (source / staleness / owner / health), the two layouts,
-   the time-scrubber parked in the past vs. live, impact- and provenance-trace
-   closures, each of the four drawers (node / edge / roll-up / assert), the
-   search-active dropdown, plus loading / offline / empty. */
+   This page is a pure presenter. It holds no demo content: the graph, the
+   scrubber's event dates, the open drawer and its payload all arrive in
+   `data`, so the view the user sees is a function of the data, not of a magic
+   state string. `LNode`/`LEdge` are plain JSON end to end (no React elements
+   in the data) because mari-cloud serves them from a real GraphQL query. The
+   canvas supplies the same shape from `.preview/fixtures/lineage.ts`. */
 
 const STATES = [
   { id: "default", label: "Default" },
@@ -54,37 +52,61 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/* Overflow / stress node sets: the graph node cards are fixed-width with
-   truncate, so long labels are the key overflow case here. `overflow` uses
-   natural long titles; `stress` uses pathological unbreakable tokens. */
-function stressNodes(pathological: boolean): LNode[] {
-  const titles = pathological
-    ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, `${HUGE_NUMBER_STR} unresolved contradictions`]
-    : [LONG_TITLE];
-  return DEMO_NODES.map((n, i) => {
-    if (n.macro) {
-      return {
-        ...n,
-        title: pathological ? `${HUGE_NUMBER_STR} commits` : "Every commit across the entire platform monorepo this quarter",
-        repo: pathological ? UNBREAKABLE : LONG_SOURCE,
-        count: pathological ? HUGE_NUMBER : n.count,
-      };
-    }
-    return { ...n, title: titles[i % titles.length], owner: pathological ? LONG_WORD : LONG_NAME };
-  });
-}
+/** Which drawer is open, and everything that drawer needs. Exactly one at a
+    time, which is why this is a tagged union rather than four nullable slots. */
+export type LineageDrawer =
+  | { kind: "node"; nodeId: string; history: DocHistoryRow[] }
+  | { kind: "edge"; edgeId: string }
+  | { kind: "group"; groupId: string; totalMembers: number; members: LNode[] }
+  | {
+      kind: "assert";
+      result: ImpactResult;
+      analyzed: boolean;
+      claim: string;
+      owners: { name: string; role: string }[];
+      people: string[];
+    };
 
-const LENS_OF: Record<string, Lens> = {
-  "lens-owner": "owner",
-  "lens-stale": "stale",
-  "lens-health": "health",
+/** A supporting card in the rail, carrying long text. Only the long-text
+    states have one, which is why it is nullable. */
+export type LineageExtras = {
+  title: string;
+  hint: string;
+  body: string;
+  tags: string[];
+  people: string[];
+  avatarMax: number;
+};
+
+/** Everything the lineage instrument renders. */
+export type LineageData = {
+  nodes: LNode[];
+  edges: LEdge[];
+  /** Sorted ISO event dates the scrubber snaps to. */
+  dates: string[];
+  /** Events per date, for the scrubber's density track. */
+  activity: { date: string; count: number }[];
+  lens: Lens;
+  layout: LayoutMode;
+  focalId: string | null;
+  trace: { originId: string; direction: "down" | "up" } | null;
+  /** Scrubber position (index into `dates`); null = live / all time. */
+  asOf: number | null;
+  /** The toolbar typeahead, open on a query. null = closed. */
+  search: { query: string } | null;
+  drawer: LineageDrawer | null;
+  /** Trail above the instrument. null = none. */
+  crumbs: string[] | null;
+  extras: LineageExtras | null;
+  /** The header's secondary action, e.g. the document being traced. */
+  action: string;
 };
 
 /** A self-contained search-results dropdown, shown as if the toolbar typeahead
     is active. Composes the shared node glyph + source labels. */
-function SearchResults() {
-  const q = "pricing";
-  const hits = DEMO_NODES.filter(
+function SearchResults({ nodes, query }: { nodes: LNode[]; query: string }) {
+  const q = query.toLowerCase();
+  const hits = nodes.filter(
     (n) => !n.macro &&
       (n.title.toLowerCase().includes(q) ||
         (n.tags ?? []).some((t) => t.includes("customer")) ||
@@ -92,7 +114,7 @@ function SearchResults() {
   ).slice(0, 6);
   return (
     <div className={`${card} absolute left-2 top-[52px] z-30 w-[320px] p-1 shadow-lg`}>
-      <div className="px-2.5 py-1.5 font-term text-[11px] text-ink/65">{hits.length} results for “{q}”</div>
+      <div className="px-2.5 py-1.5 font-term text-[11px] text-ink/65">{hits.length} results for “{query}”</div>
       {hits.map((n) => (
         <div key={n.id} className="flex items-center gap-2.5 rounded-[3px] px-2 py-1.5 hover:bg-flysch">
           <span className="shrink-0 text-ink/70"><NodeGlyph node={n} size={16} /></span>
@@ -111,20 +133,57 @@ function SearchResults() {
 
 /* Which §11 rail width the open drawer takes: standard lineage drawer 420px,
    impact analysis 460px. `null` = no drawer, canvas runs the full container. */
-function railFor(state: string): number | null {
-  if (state === "inspect" || state === "edge" || state === "group") return 420;
-  if (state === "assert") return 460;
-  return null;
+function railFor(data: LineageData): number | null {
+  if (data.extras) return 420;
+  if (!data.drawer) return null;
+  return data.drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ state }: { state: string }) {
+function Drawer({ data }: { data: LineageData }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
-  if (state === "inspect") return <LineageNodeDrawer nodeId="n4" />;
-  if (state === "edge") return <LineageEdgeDrawer edgeId="e3" />;
-  if (state === "group") return <LineageGroupDrawer />;
-  if (state === "assert") return <LineageAssertDrawer />;
-  return null;
+  const d = data.drawer;
+  if (!d) return null;
+  if (d.kind === "node") {
+    return <LineageNodeDrawer nodes={data.nodes} edges={data.edges} nodeId={d.nodeId} history={d.history} />;
+  }
+  if (d.kind === "edge") {
+    return <LineageEdgeDrawer nodes={data.nodes} edges={data.edges} edgeId={d.edgeId} />;
+  }
+  if (d.kind === "group") {
+    return (
+      <LineageGroupDrawer
+        groupId={d.groupId}
+        totalMembers={d.totalMembers}
+        members={d.members}
+        nodes={data.nodes}
+        edges={data.edges}
+      />
+    );
+  }
+  return (
+    <LineageAssertDrawer
+      result={d.result}
+      analyzed={d.analyzed}
+      claim={d.claim}
+      owners={d.owners}
+      people={d.people}
+    />
+  );
+}
+
+function Extras({ extras }: { extras: LineageExtras }) {
+  return (
+    <Card title={extras.title} hint={extras.hint}>
+      <p className="text-[12.5px] leading-snug text-ink/70 break-words">{extras.body}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {extras.tags.map((t) => <Chip key={t} label={t} />)}
+      </div>
+      <div className="mt-3">
+        <AvatarGroup people={extras.people.map((initials) => ({ initials }))} max={extras.avatarMax} />
+      </div>
+    </Card>
+  );
 }
 
 /* §11 two-column split. The rail keeps its declared width and always sits
@@ -161,19 +220,21 @@ function Rig({ rail, canvas, drawer }: {
   );
 }
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  if (state === "error") {
+/** No graph at all. Derived from the data, so it is true in the real app for
+    exactly the same reason it is true on the canvas. */
+const isEmpty = (d: LineageData) => !d.nodes.length && !d.edges.length && !d.drawer && !d.extras;
+
+function Body({ data, error, mobile }: { data: LineageData; error: string | null; mobile: boolean }) {
+  if (error) {
     return (
       <div className="mt-6">
         <Card>
-          <EmptyState icon={<Network size={22} />} title="API offline">
-            The lineage graph is temporarily unavailable. Retrying…
-          </EmptyState>
+          <EmptyState icon={<Network size={22} />} title="API offline">{error}</EmptyState>
         </Card>
       </div>
     );
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <div className="mt-6">
         <Card>
@@ -185,77 +246,46 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     );
   }
 
-  if (state === "overflow" || state === "stress") {
-    const p = state === "stress";
-    const nodes = stressNodes(p);
-    const sideCard = (
-      <Card title={p ? MIXED_SCRIPT : LONG_TITLE} hint={p ? HUGE_PERCENT : `${HUGE_NUMBER_STR} refs`}>
-        <p className="text-[12.5px] leading-snug text-ink/70 break-words">{p ? UNBREAKABLE : LONG_NAME}</p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {(p ? MANY_TAGS : MANY_TAGS.slice(0, 10)).map((t) => <Chip key={t} label={t} />)}
-        </div>
-        <div className="mt-3">
-          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={p ? 4 : 6} />
-        </div>
-      </Card>
-    );
-    return (
-      <div className="mt-6 flex flex-col gap-5">
-        <Breadcrumb items={LONG_BREADCRUMB.map((label) => ({ label }))} />
-        <Rig
-          rail={mobile ? null : 420}
-          canvas={(
-            <>
-              <LineageToolbar />
-              <LineageGraph key={state} nodes={nodes} edges={DEMO_EDGES} lens="source" layout="flow" trace={null} focalId="n1" />
-              <LineageTimeScrubber value={null} />
-            </>
-          )}
-          drawer={sideCard}
-        />
-        {mobile && <Scrollable className="pb-1">{sideCard}</Scrollable>}
-      </div>
-    );
-  }
+  // Mobile collapses to one column (§11): the rail drops below the canvas.
+  const rail = mobile ? null : railFor(data);
+  const railBody = data.extras ? <Extras extras={data.extras} /> : <Drawer data={data} />;
 
-  const lens: Lens = LENS_OF[state] ?? "source";
-  const layout: LayoutMode = state === "layout-timeline" ? "timeline" : "flow";
-  const trace =
-    state === "trace-impact" ? { originId: "n1", direction: "down" as const } :
-    state === "trace-provenance" ? { originId: "n9", direction: "up" as const } :
-    null;
-  const focalId = trace ? trace.originId : "n1";
-  const scrubberValue = state === "as-of" ? 6 : null;
-
-  // Mobile collapses to one column (§11): the drawer drops below the canvas.
-  const rail = mobile ? null : railFor(state);
   return (
     <div className="mt-6 flex flex-col gap-5">
+      {data.crumbs && <Breadcrumb items={data.crumbs.map((label) => ({ label }))} />}
       <Rig
         rail={rail}
         canvas={(
           <>
-            <LineageToolbar />
-            {state === "search" && <SearchResults />}
-            <LineageGraph key={`${lens}-${layout}-${state}`} lens={lens} layout={layout} trace={trace} focalId={focalId} />
-            <LineageTimeScrubber value={scrubberValue} />
+            <LineageToolbar nodes={data.nodes} />
+            {data.search && <SearchResults nodes={data.nodes} query={data.search.query} />}
+            <LineageGraph
+              key={`${data.lens}-${data.layout}-${data.focalId}-${data.trace?.direction ?? "none"}`}
+              nodes={data.nodes}
+              edges={data.edges}
+              lens={data.lens}
+              layout={data.layout}
+              trace={data.trace}
+              focalId={data.focalId}
+            />
+            <LineageTimeScrubber dates={data.dates} activity={data.activity} value={data.asOf} />
           </>
         )}
-        drawer={<Drawer state={state} />}
+        drawer={railBody}
       />
       {/* The lineage drawers are desktop-fixed (420/460px, §10). Below the
           canvas on a phone they scroll sideways inside their own row rather
           than spilling past the page gutter. */}
-      {mobile && <Scrollable className="pb-1"><Drawer state={state} /></Scrollable>}
+      {mobile && <Scrollable className="pb-1">{railBody}</Scrollable>}
     </div>
   );
 }
 
-function LineagePage({ state = "default", mobile = false }: PageProps) {
-  const actions = <Button variant="default">Authentication API ↗</Button>;
+function LineagePage({ data, loading = false, error = null, mobile = false }: PageProps<LineageData>) {
+  const actions = <Button variant="default">{data.action}</Button>;
   return (
     <PageFrame active={navFor("lineage")} title="Lineage" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="graph" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
@@ -266,14 +296,14 @@ function LineagePage({ state = "default", mobile = false }: PageProps) {
             actions={mobile ? undefined : actions}
           />
           {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
-          <Body state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       )}
     </PageFrame>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<LineageData> = {
   id: "lineage",
   title: "Lineage",
   route: "/lineage",

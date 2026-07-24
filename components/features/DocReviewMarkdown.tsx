@@ -24,7 +24,7 @@ import { Scrollable } from "../data-display/Scrollable";
 
 /* ————— ported doc-specific helpers (not in the shared lib module) ————— */
 
-type Finding = { id: number; kind: string; severity: string; text: string; note: string };
+export type Finding = { id: number; kind: string; severity: string; text: string; note: string };
 
 /** Plain text of a block's html. */
 export function blockText(html: string): string {
@@ -135,30 +135,6 @@ export function diffChange(orig: string, repl: string) {
 
 /* ————— demo data ————— */
 
-const DEMO_MD = `# Authentication Service Migration
-
-##1. Overview
-The new authentication service replaces the legacy session store with stateless **JWT** tokens. It is expected to reduce login latency by roughly 40% and remove the shared-session bottleneck.
-
-Tokens are signed with \`RS256\` and rotated every 24 hours.
-
-## 2. Rollout phases
-- Canary at *5%* of traffic for 48 hours
-- Ramp to 50% once the canary is stable
-- Full cutover after a clean week
-
-\`\`\`bash
-POST /auth/token
-Authorization: Basic <credentials>
-\`\`\`
-`;
-
-const DEMO_FINDINGS: Finding[] = [
-  { id: 1, kind: "fact", severity: "error", text: "reduce login latency by roughly 40%", note: "Contradicts verified fact: measured reduction was 22%." },
-  { id: -2, kind: "prose", severity: "warn", text: "expected to", note: "hedge" },
-  { id: 3, kind: "freshness", severity: "warn", text: "every 24 hours", note: "rotation cadence unverified" },
-];
-
 /* The diff sample is a whole paragraph so both sides can be rendered as real
    prose (parallel MarkdownView renders), not as two clipped fragments. */
 const DIFF_SAMPLE = {
@@ -198,13 +174,13 @@ const MARKED =
   "[&_.fmark--red]:decoration-espelette [&_.fmark--red]:text-espelette [&_.fmark--gold]:decoration-clay [&_.fmark--gold]:text-clay";
 
 export function DocReviewMarkdown({
-  markdown = DEMO_MD,
-  findings = DEMO_FINDINGS,
+  markdown,
+  findings,
   defaultTab = "blocks",
   loading = false,
 }: {
-  markdown?: string;
-  findings?: Finding[];
+  markdown: string;
+  findings: Finding[];
   /** Which engine tab opens first, so each tab can be reviewed on its own. */
   defaultTab?: EngineTab;
   loading?: boolean;

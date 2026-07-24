@@ -24,22 +24,6 @@ import { fmtDate } from "../tokens/format";
    Selecting a row swaps RunInspector into the detail slot, the same inspector
    the run panel uses. FlowsPipelineEditor reuses FlowRunsTable. Standalone. */
 
-const DEMO_RUNS: WorkflowRun[] = [
-  { id: "r209", number: 209, workflowName: "Translation sync", status: "running", dry: true, started: "2026-07-21T08:30:00", duration: "00:00:22", triggeredBy: "Triggered by: handbook/pricing.md changed", headline: "Summarizing 3 documents",
-    rows: [{ step: "Doc changed", status: "passed", detail: "handbook/pricing.md", duration: "0.2s" }, { step: "Fetch docs", status: "passed", detail: "3 matched", duration: "0.8s" }, { step: "Summarize", status: "running", detail: "Drafting a summary" }] },
-  { id: "r205", number: 205, workflowName: "Translation sync", status: "passed", started: "2026-07-20T08:30:00", duration: "00:01:11", triggeredBy: "Triggered by: handbook/faq.md changed", headline: "Draft approved and deployed",
-    stats: [{ label: "Edits", value: 4 }, { label: "Facts", value: 8 }] },
-  { id: "r145", number: 145, workflowName: "Docs guardrail", status: "passed", started: "2026-07-20T14:12:00", duration: "00:00:41", triggeredBy: "Triggered by: docs/api.md merged", headline: "No contradictions across 5 docs",
-    rows: [{ step: "Fact check", status: "passed", detail: "No contradictions found", duration: "38s" }] },
-  { id: "r143", number: 143, workflowName: "Docs guardrail", status: "failed", dry: true, started: "2026-07-19T10:02:00", duration: "00:01:12", triggeredBy: "Triggered by: docs/limits.md merged", headline: "2 contradictions, review task previewed",
-    stats: [{ label: "Contradictions", value: 2, bad: true }, { label: "Facts", value: 9 }] },
-  { id: "r97", number: 97, workflowName: "Slack digest", status: "passed", started: "2026-07-20T09:00:00", duration: "00:00:55", triggeredBy: "Triggered by: weekly schedule", headline: "Monday digest sent to #support" },
-  { id: "r57", number: 57, workflowName: "Stale sweeper", status: "waiting", started: "2026-07-19T06:00:00", duration: "00:00:31", triggeredBy: "Triggered by: daily schedule", headline: "12 stale docs, waiting on approval",
-    rows: [{ step: "Tag docs", status: "passed", detail: "12 docs tagged stale", duration: "1.1s" }, { step: "Approval", status: "waiting", detail: "Waiting on Dana R." }] },
-  { id: "r51", number: 51, workflowName: "Stale sweeper", status: "passed", started: "2026-07-18T06:00:00", duration: "00:00:29", triggeredBy: "Triggered by: daily schedule", headline: "8 stale docs assigned" },
-  { id: "r40", number: 40, workflowName: "Onboarding checker", status: "skipped", started: "2026-07-17T11:20:00", duration: "00:00:03", headline: "No matching docs, nothing to do" },
-];
-
 /** Legend: the engine's status words, shown in the chip each one maps to. */
 const CHIP_LEGEND: { status: RunStatus; label: string }[] = [
   { status: "passed", label: "Passed" },
@@ -165,7 +149,8 @@ export function FlowRunsTable({
 }
 
 export type FlowsRunHistoryProps = {
-  runs?: WorkflowRun[];
+  /** The runs to table. Required: the page never invents run history. */
+  runs: WorkflowRun[];
   /** Cap on rows, newest first. */
   limit?: number;
   /** Render a content-shaped skeleton silhouette instead of the history. */
@@ -173,7 +158,7 @@ export type FlowsRunHistoryProps = {
   className?: string;
 };
 
-export function FlowsRunHistory({ runs = DEMO_RUNS, limit = 12, loading = false, className = "" }: FlowsRunHistoryProps) {
+export function FlowsRunHistory({ runs, limit = 12, loading = false, className = "" }: FlowsRunHistoryProps) {
   const [selId, setSelId] = useState<string | null>(runs[0]?.id ?? null);
   const selected = selId ? runs.find((r) => r.id === selId) ?? null : null;
 

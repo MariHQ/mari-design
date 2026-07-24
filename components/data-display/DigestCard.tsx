@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Shuffle } from "lucide-react";
 import { Card } from "../layout/Card";
+import { SourceMark } from "../icons/marks";
 import { Chip } from "./Chip";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
@@ -17,7 +18,9 @@ import { Button } from "../actions/Button";
    text-ink/65 is the meta-text contrast floor (CONVENTIONS.md §6). */
 const LABEL = "font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/65";
 
-export type DigestWhere = { source: string; label: string; icon?: ReactNode };
+/* No `icon` field: the provider mark is derived from `source`. Data that
+   carries React elements cannot come from an API. */
+export type DigestWhere = { source: string; label: string };
 export type DigestImpact = { name: string; tone?: string };
 export type DigestTopic = {
   title: string;
@@ -80,7 +83,7 @@ export function DigestCard({
               {t.where.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <span className={LABEL}>{t.where.length === 1 ? "Source" : "Sources"}</span>
-                  {t.where.map((w) => <Chip key={w.label} label={w.label} icon={w.icon} />)}
+                  {t.where.map((w) => <Chip key={w.label} label={w.label} icon={<SourceMark provider={w.source} size={13} />} />)}
                 </div>
               )}
               <p className="mt-2 text-[13px] leading-[1.5] text-ink/70 break-words">{t.summary}</p>

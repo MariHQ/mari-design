@@ -33,12 +33,6 @@ export type ApiKey = {
   revoked: boolean;
 };
 
-const DEMO_KEYS: ApiKey[] = [
-  { id: 1, name: "CI pipeline", prefix: "mk_live_a91f…", scopes: "search:read ingest:write", created: "2025-02-11", lastUsed: "2025-07-18", revoked: false },
-  { id: 2, name: "MCP gateway", prefix: "mk_live_7c02…", scopes: "search:read facts:read", created: "2025-04-02", lastUsed: "2025-07-20", revoked: false },
-  { id: 3, name: "Old bot (rotated)", prefix: "mk_live_3de8…", scopes: "search:read", created: "2024-12-01", lastUsed: "2025-03-30", revoked: true },
-];
-
 function randomSecret(): string {
   const hex = Array.from({ length: 32 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
   return `mk_live_${hex}`;
@@ -46,9 +40,9 @@ function randomSecret(): string {
 
 export type SettingsApiKeysProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
-  embedded?: boolean; keys?: ApiKey[]; loading?: boolean; className?: string };
+  embedded?: boolean; keys: ApiKey[]; loading?: boolean; className?: string };
 
-export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false, embedded = false, className = "" }: SettingsApiKeysProps) {
+export function SettingsApiKeys({ keys: initialKeys, loading = false, embedded = false, className = "" }: SettingsApiKeysProps) {
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");

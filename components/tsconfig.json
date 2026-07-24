@@ -10,6 +10,10 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  // `.preview` must be listed explicitly: TypeScript's `**/*` glob skips
+  // dot-directories, so the entire canvas layer — the state matrix, the
+  // fixtures, the renderer — was never typechecked. Breakage there was
+  // invisible to `tsc --noEmit` and only showed up as a blank page at runtime.
+  "include": ["**/*.ts", "**/*.tsx", ".preview/**/*.ts", ".preview/**/*.tsx"],
   "exclude": ["node_modules", "dist", "vite.config.ts"]
 }

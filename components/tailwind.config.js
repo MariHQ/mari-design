@@ -23,7 +23,19 @@ export default {
         clay: "#A05E1C",
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+        /* `term` and `display` are the names the components actually use:
+           133 files reference `font-term` and 38 `font-display`. Neither was
+           defined here, and nothing in the CSS covered for them, so every mono
+           chrome label, table header, badge, count and page heading has been
+           silently falling back to body sans — the utility simply did not
+           exist, which fails invisibly rather than loudly.
+
+           Per BRAND-STYLE-GUIDE.md §2: Inter for headings and body, JetBrains
+           Mono for chrome and code, and no serif anywhere. `mono` stays as an
+           alias so `font-mono` keeps working. */
+        display: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        term: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       keyframes: {
         shimmer: { "100%": { transform: "translateX(100%)" } },

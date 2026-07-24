@@ -1,4 +1,3 @@
-import { Clipboard, FileText } from "lucide-react";
 import type { ComponentSpec } from "./types";
 import {
   FlowsList, FlowsPipelineEditor, FlowsRunPanel, FlowsRunHistory,
@@ -18,6 +17,13 @@ import type { Term } from "../../features/LibraryGlossaryPanel";
 import type { Guide } from "../../features/LibraryGuidesPanel";
 import type { TagDef } from "../../features/LibraryTagsPanel";
 import type { Template } from "../../features/LibraryTemplatesPanel";
+import {
+  FLOWS_SOURCES, FLOWS_EDITOR, FLOWS_PANEL_RUNS, FLOWS_HISTORY_RUNS,
+  INSIGHTS_STATS, INSIGHTS_READABILITY, INSIGHTS_GLOSSARY, INSIGHTS_ACTIVITY, INSIGHTS_SINCE,
+  INSIGHTS_FRESHNESS, AUDIT_MEMBERS, AUDIT_PROVIDER, AUDIT_REPO, AUDIT_RAN_AT,
+  FACTS_AUDIT_ROWS, LIBRARY_WORKSPACE, LIBRARY_DEFAULT_PACK, LIBRARY_VOICE,
+  LIBRARY_CHECKER_DOCS, LIBRARY_TOTAL_DOCS, LIBRARY_TERMS, LIBRARY_TEMPLATES,
+} from "../fixtures/features";
 
 /* State matrix for the flows group. Author EVERY state worth reviewing:
    default, each variant, loading, empty, error, disabled, selected, and the
@@ -104,14 +110,14 @@ const STRESS_FLOWS: Flow[] = Array.from({ length: 200 }, (_, i) => {
 const FLOWS_LIST: ComponentSpec = {
   id: "FlowsList", title: "FlowsList", width: 1180,
   states: [
-    { id: "default", label: "Default", node: <FlowsList flows={FLOW_ROWS} /> },
-    { id: "loading", label: "Loading", node: <FlowsList loading /> },
-    { id: "empty", label: "Empty (no flows)", node: <FlowsList flows={[]} /> },
-    { id: "single", label: "One flow, never run", node: <FlowsList flows={[FLOW_ROWS[3]]} /> },
-    { id: "overflow-text", label: "Overflow: long names, unbreakable strings, many run dots", node: <FlowsList flows={FLOW_OVERFLOW} /> },
-    { id: "overflow-rows", label: "Overflow: too many rows", node: <FlowsList flows={[...FLOW_ROWS, ...FLOW_ROWS, ...FLOW_ROWS].map((f, i) => ({ ...f, id: i + 1 }))} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsList flows={FLOW_ROWS.slice(0, 2)} /> },
-    { id: "stress", label: "Volume: 200 flows, up to 12 run dots each", node: <FlowsList flows={STRESS_FLOWS} /> },
+    { id: "default", label: "Default", node: <FlowsList flows={FLOW_ROWS} sources={FLOWS_SOURCES} /> },
+    { id: "loading", label: "Loading", node: <FlowsList flows={[]} sources={[]} loading /> },
+    { id: "empty", label: "Empty (no flows)", node: <FlowsList flows={[]} sources={FLOWS_SOURCES} /> },
+    { id: "single", label: "One flow, never run", node: <FlowsList flows={[FLOW_ROWS[3]]} sources={FLOWS_SOURCES} /> },
+    { id: "overflow-text", label: "Overflow: long names, unbreakable strings, many run dots", node: <FlowsList flows={FLOW_OVERFLOW} sources={FLOWS_SOURCES} /> },
+    { id: "overflow-rows", label: "Overflow: too many rows", node: <FlowsList flows={[...FLOW_ROWS, ...FLOW_ROWS, ...FLOW_ROWS].map((f, i) => ({ ...f, id: i + 1 }))} sources={FLOWS_SOURCES} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsList flows={FLOW_ROWS.slice(0, 2)} sources={FLOWS_SOURCES} /> },
+    { id: "stress", label: "Volume: 200 flows, up to 12 run dots each", node: <FlowsList flows={STRESS_FLOWS} sources={FLOWS_SOURCES} /> },
   ],
 };
 
@@ -173,13 +179,13 @@ const STRESS_RUNS: WorkflowRun[] = Array.from({ length: 200 }, (_, i) => ({
 const PIPELINE_EDITOR: ComponentSpec = {
   id: "FlowsPipelineEditor", title: "FlowsPipelineEditor", width: 1100,
   states: [
-    { id: "default", label: "Default (trigger step selected)", node: <FlowsPipelineEditor /> },
-    { id: "loading", label: "Loading", node: <FlowsPipelineEditor loading /> },
-    { id: "trigger-only", label: "Trigger only, no runs yet", node: <FlowsPipelineEditor steps={[EDITOR_STEPS[0]]} runs={[]} /> },
-    { id: "runs", label: "With run history", node: <FlowsPipelineEditor steps={EDITOR_STEPS} runs={EDITOR_RUNS} /> },
-    { id: "overflow-text", label: "Overflow: long labels and unbreakable config", node: <FlowsPipelineEditor name={LONG} description={HUGE} steps={EDITOR_OVERFLOW} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsPipelineEditor steps={EDITOR_STEPS.slice(0, 3)} runs={EDITOR_RUNS.slice(0, 1)} /> },
-    { id: "stress", label: "Volume: 60-step flow, 200 runs", node: <FlowsPipelineEditor steps={STRESS_STEPS} runs={STRESS_RUNS} /> },
+    { id: "default", label: "Default (trigger step selected)", node: <FlowsPipelineEditor {...FLOWS_EDITOR} /> },
+    { id: "loading", label: "Loading", node: <FlowsPipelineEditor {...FLOWS_EDITOR} steps={[]} runs={[]} loading /> },
+    { id: "trigger-only", label: "Trigger only, no runs yet", node: <FlowsPipelineEditor {...FLOWS_EDITOR} steps={[EDITOR_STEPS[0]]} runs={[]} /> },
+    { id: "runs", label: "With run history", node: <FlowsPipelineEditor {...FLOWS_EDITOR} steps={EDITOR_STEPS} runs={EDITOR_RUNS} /> },
+    { id: "overflow-text", label: "Overflow: long labels and unbreakable config", node: <FlowsPipelineEditor {...FLOWS_EDITOR} name={LONG} description={HUGE} steps={EDITOR_OVERFLOW} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsPipelineEditor {...FLOWS_EDITOR} steps={EDITOR_STEPS.slice(0, 3)} runs={EDITOR_RUNS.slice(0, 1)} /> },
+    { id: "stress", label: "Volume: 60-step flow, 200 runs", node: <FlowsPipelineEditor {...FLOWS_EDITOR} steps={STRESS_STEPS} runs={STRESS_RUNS} /> },
   ],
 };
 
@@ -232,7 +238,7 @@ const RUN_PANEL: ComponentSpec = {
     { id: "default", label: "Default (waiting run selected)", node: <FlowsRunPanel runs={PANEL_RUNS} /> },
     { id: "selected-passed", label: "Selected: a passed run", node: <FlowsRunPanel runs={PANEL_RUNS} openNumber={145} /> },
     { id: "selected-failed", label: "Selected: a failed dry run", node: <FlowsRunPanel runs={PANEL_RUNS} openNumber={143} /> },
-    { id: "loading", label: "Loading", node: <FlowsRunPanel loading /> },
+    { id: "loading", label: "Loading", node: <FlowsRunPanel runs={[]} loading /> },
     { id: "empty", label: "Empty (nothing to inspect)", node: <FlowsRunPanel runs={[]} /> },
     { id: "overflow-text", label: "Overflow: long headlines, many steps, huge numbers", node: <FlowsRunPanel runs={PANEL_OVERFLOW} /> },
     { id: "narrow", label: "Narrow frame", width: NARROW, node: <FlowsRunPanel runs={PANEL_RUNS} /> },
@@ -262,7 +268,7 @@ const RUN_HISTORY: ComponentSpec = {
   id: "FlowsRunHistory", title: "FlowsRunHistory", width: 1280,
   states: [
     { id: "default", label: "Default (first run selected)", node: <FlowsRunHistory runs={HISTORY_RUNS} /> },
-    { id: "loading", label: "Loading", node: <FlowsRunHistory loading /> },
+    { id: "loading", label: "Loading", node: <FlowsRunHistory runs={[]} loading /> },
     { id: "empty", label: "Empty (no runs)", node: <FlowsRunHistory runs={[]} /> },
     { id: "single", label: "One run", node: <FlowsRunHistory runs={[HISTORY_RUNS[3]]} /> },
     { id: "overflow-rows", label: "Overflow: many rows, every status, long text", node: <FlowsRunHistory runs={HISTORY_OVERFLOW} limit={16} /> },
@@ -311,13 +317,13 @@ const STRESS_GLOSS: GlossRow[] = Array.from({ length: 200 }, (_, i) => ({
 const INSIGHTS_WIDGETS: ComponentSpec = {
   id: "InsightsWidgets", title: "InsightsWidgets", width: 1180,
   states: [
-    { id: "default", label: "Default", node: <InsightsWidgets readability={READ_ROWS} glossary={GLOSS_ROWS} /> },
-    { id: "loading", label: "Loading", node: <InsightsWidgets loading /> },
-    { id: "empty", label: "Empty (no readability, glossary, activity)", node: <InsightsWidgets readability={[]} glossary={[]} activity={[]} /> },
-    { id: "overflow-text", label: "Overflow: long titles, notes, terms", node: <InsightsWidgets readability={READ_OVERFLOW} glossary={GLOSS_OVERFLOW} /> },
-    { id: "overflow-rows", label: "Overflow: many readability rows", node: <InsightsWidgets readability={Array.from({ length: 14 }, (_, i) => ({ ...READ_ROWS[i % 4], id: i }))} glossary={GLOSS_ROWS} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <InsightsWidgets readability={READ_ROWS.slice(0, 2)} glossary={GLOSS_ROWS.slice(0, 1)} /> },
-    { id: "stress", label: "Volume: 300 readability rows, 200 glossary rows", node: <InsightsWidgets readability={STRESS_READ} glossary={STRESS_GLOSS} /> },
+    { id: "default", label: "Default", node: <InsightsWidgets stats={INSIGHTS_STATS} activity={INSIGHTS_ACTIVITY} since={INSIGHTS_SINCE} readability={READ_ROWS} glossary={GLOSS_ROWS} /> },
+    { id: "loading", label: "Loading", node: <InsightsWidgets stats={[]} readability={[]} glossary={[]} activity={[]} since={INSIGHTS_SINCE} loading /> },
+    { id: "empty", label: "Empty (no readability, glossary, activity)", node: <InsightsWidgets stats={INSIGHTS_STATS} since={INSIGHTS_SINCE} readability={[]} glossary={[]} activity={[]} /> },
+    { id: "overflow-text", label: "Overflow: long titles, notes, terms", node: <InsightsWidgets stats={INSIGHTS_STATS} activity={INSIGHTS_ACTIVITY} since={INSIGHTS_SINCE} readability={READ_OVERFLOW} glossary={GLOSS_OVERFLOW} /> },
+    { id: "overflow-rows", label: "Overflow: many readability rows", node: <InsightsWidgets stats={INSIGHTS_STATS} activity={INSIGHTS_ACTIVITY} since={INSIGHTS_SINCE} readability={Array.from({ length: 14 }, (_, i) => ({ ...READ_ROWS[i % 4], id: i }))} glossary={GLOSS_ROWS} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <InsightsWidgets stats={INSIGHTS_STATS} activity={INSIGHTS_ACTIVITY} since={INSIGHTS_SINCE} readability={READ_ROWS.slice(0, 2)} glossary={GLOSS_ROWS.slice(0, 1)} /> },
+    { id: "stress", label: "Volume: 300 readability rows, 200 glossary rows", node: <InsightsWidgets stats={INSIGHTS_STATS} activity={INSIGHTS_ACTIVITY} since={INSIGHTS_SINCE} readability={STRESS_READ} glossary={STRESS_GLOSS} /> },
   ],
 };
 
@@ -341,7 +347,7 @@ const FRESHNESS_CHART: ComponentSpec = {
   id: "InsightsFreshnessChart", title: "InsightsFreshnessChart", width: 720,
   states: [
     { id: "default", label: "Default", node: <InsightsFreshnessChart freshness={FRESHNESS} /> },
-    { id: "loading", label: "Loading", node: <InsightsFreshnessChart loading /> },
+    { id: "loading", label: "Loading", node: <InsightsFreshnessChart freshness={[]} loading /> },
     { id: "empty", label: "Empty (no sources)", node: <InsightsFreshnessChart freshness={[]} /> },
     { id: "single-tone", label: "Single-segment rows (colour-blind check)", node: <InsightsFreshnessChart freshness={[{ source: "github", fresh: 40, aging: 0, stale: 0 }, { source: "slack", fresh: 0, aging: 40, stale: 0 }, { source: "notion", fresh: 0, aging: 0, stale: 40 }, { source: "gdocs", fresh: 20, aging: 20, stale: 20 }]} /> },
     { id: "overflow-rows", label: "Overflow: long source names, many rows", node: <InsightsFreshnessChart freshness={[...FRESHNESS, { source: LONG, fresh: 3, aging: 900, stale: 1 }, { source: HUGE, fresh: 1, aging: 1, stale: 900000 }]} /> },
@@ -378,14 +384,14 @@ const STRESS_FINDINGS: AuditFinding[] = Array.from({ length: 200 }, (_, i) => ({
 const AUDIT_CHECKLIST: ComponentSpec = {
   id: "AuditFindingsChecklist", title: "AuditFindingsChecklist", width: 960,
   states: [
-    { id: "default", label: "Default", node: <AuditFindingsChecklist findings={FINDINGS} /> },
-    { id: "loading", label: "Loading", node: <AuditFindingsChecklist loading /> },
-    { id: "empty", label: "Empty (no audit yet)", node: <AuditFindingsChecklist findings={[]} /> },
-    { id: "all-handled", label: "All handled", node: <AuditFindingsChecklist findings={FINDINGS.map((f) => ({ ...f, status: "fixed" as const }))} /> },
-    { id: "many-members", label: "Many members in the mapping picker", node: <AuditFindingsChecklist findings={FINDINGS.filter((f) => f.fixAction === "invite_member")} members={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, name: `Member ${i + 1} Lastname` }))} /> },
-    { id: "overflow-text", label: "Overflow: long titles and details", node: <AuditFindingsChecklist findings={FINDINGS_OVERFLOW} repo={HUGE} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <AuditFindingsChecklist findings={FINDINGS.slice(0, 3)} /> },
-    { id: "stress", label: "Volume: 200 findings", node: <AuditFindingsChecklist findings={STRESS_FINDINGS} /> },
+    { id: "default", label: "Default", node: <AuditFindingsChecklist findings={FINDINGS} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "loading", label: "Loading", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} loading /> },
+    { id: "empty", label: "Empty (no audit yet)", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "all-handled", label: "All handled", node: <AuditFindingsChecklist findings={FINDINGS.map((f) => ({ ...f, status: "fixed" as const }))} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "many-members", label: "Many members in the mapping picker", node: <AuditFindingsChecklist findings={FINDINGS.filter((f) => f.fixAction === "invite_member")} members={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, name: `Member ${i + 1} Lastname` }))} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "overflow-text", label: "Overflow: long titles and details", node: <AuditFindingsChecklist findings={FINDINGS_OVERFLOW} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} ranAt={AUDIT_RAN_AT} repo={HUGE} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <AuditFindingsChecklist findings={FINDINGS.slice(0, 3)} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "stress", label: "Volume: 200 findings", node: <AuditFindingsChecklist findings={STRESS_FINDINGS} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
   ],
 };
 
@@ -418,7 +424,7 @@ const FACTS_AUDIT: ComponentSpec = {
   states: [
     { id: "default", label: "Default", node: <FactsVerificationAudit facts={FACTS} /> },
     { id: "closeable", label: "With close affordance", node: <FactsVerificationAudit facts={FACTS} onClose={() => {}} /> },
-    { id: "loading", label: "Loading", node: <FactsVerificationAudit loading /> },
+    { id: "loading", label: "Loading", node: <FactsVerificationAudit facts={FACTS_AUDIT_ROWS} loading /> },
     { id: "empty", label: "Empty (nothing verified)", node: <FactsVerificationAudit facts={FACTS.filter((f) => f.status !== "Verified")} /> },
     { id: "all-fresh", label: "All fresh (no stale candidates)", node: <FactsVerificationAudit facts={FACTS.slice(0, 2)} /> },
     { id: "overflow-text", label: "Overflow: long claims and owners", node: <FactsVerificationAudit facts={FACTS_OVERFLOW} /> },
@@ -452,7 +458,7 @@ const GLOSSARY_PANEL: ComponentSpec = {
   id: "LibraryGlossaryPanel", title: "LibraryGlossaryPanel", width: 940,
   states: [
     { id: "default", label: "Default", node: <LibraryGlossaryPanel terms={TERMS} /> },
-    { id: "loading", label: "Loading", node: <LibraryGlossaryPanel loading /> },
+    { id: "loading", label: "Loading", node: <LibraryGlossaryPanel terms={LIBRARY_TERMS} loading /> },
     { id: "empty", label: "Empty (no terms)", node: <LibraryGlossaryPanel terms={[]} /> },
     { id: "overflow-rows", label: "Overflow: many terms", node: <LibraryGlossaryPanel terms={Array.from({ length: 12 }, (_, i) => ({ ...TERMS[i % 3], id: `t${i}` }))} /> },
     { id: "overflow-text", label: "Overflow: long terms and definitions", node: <LibraryGlossaryPanel terms={TERMS_OVERFLOW} /> },
@@ -486,13 +492,13 @@ const STRESS_GUIDES: Guide[] = Array.from({ length: 40 }, (_, i) => ({
 const GUIDES_PANEL: ComponentSpec = {
   id: "LibraryGuidesPanel", title: "LibraryGuidesPanel", width: 1080,
   states: [
-    { id: "default", label: "Default", node: <LibraryGuidesPanel guides={GUIDES} /> },
-    { id: "loading", label: "Loading", node: <LibraryGuidesPanel loading /> },
-    { id: "empty", label: "Empty (no packs)", node: <LibraryGuidesPanel guides={[]} /> },
-    { id: "other-default", label: "Non-first pack is the project default", node: <LibraryGuidesPanel guides={GUIDES} defaultPack="ap" /> },
-    { id: "overflow-text", label: "Overflow: long pack names, rules, workspace", node: <LibraryGuidesPanel guides={GUIDES_OVERFLOW} workspace={LONG} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryGuidesPanel guides={GUIDES.slice(0, 2)} /> },
-    { id: "stress", label: "Volume: 40 packs, 12 preview rules each", node: <LibraryGuidesPanel guides={STRESS_GUIDES} /> },
+    { id: "default", label: "Default", node: <LibraryGuidesPanel guides={GUIDES} workspace={LIBRARY_WORKSPACE} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} /> },
+    { id: "loading", label: "Loading", node: <LibraryGuidesPanel guides={[]} workspace={LIBRARY_WORKSPACE} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} loading /> },
+    { id: "empty", label: "Empty (no packs)", node: <LibraryGuidesPanel guides={[]} workspace={LIBRARY_WORKSPACE} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} /> },
+    { id: "other-default", label: "Non-first pack is the project default", node: <LibraryGuidesPanel guides={GUIDES} workspace={LIBRARY_WORKSPACE} layer={LIBRARY_VOICE} defaultPack="ap" /> },
+    { id: "overflow-text", label: "Overflow: long pack names, rules, workspace", node: <LibraryGuidesPanel guides={GUIDES_OVERFLOW} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} workspace={LONG} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryGuidesPanel guides={GUIDES.slice(0, 2)} workspace={LIBRARY_WORKSPACE} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} /> },
+    { id: "stress", label: "Volume: 40 packs, 12 preview rules each", node: <LibraryGuidesPanel guides={STRESS_GUIDES} workspace={LIBRARY_WORKSPACE} defaultPack={LIBRARY_DEFAULT_PACK} layer={LIBRARY_VOICE} /> },
   ],
 };
 
@@ -501,11 +507,11 @@ const GUIDES_PANEL: ComponentSpec = {
 const RULES_PANEL: ComponentSpec = {
   id: "LibraryRulesPanel", title: "LibraryRulesPanel", width: 1080,
   states: [
-    { id: "default", label: "Default", node: <LibraryRulesPanel /> },
-    { id: "loading", label: "Loading", node: <LibraryRulesPanel loading /> },
-    { id: "overflow-text", label: "Overflow: very long workspace name", node: <LibraryRulesPanel workspace={HUGE} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryRulesPanel /> },
-    { id: "stress", label: "Volume: full catalog, long workspace name", node: <LibraryRulesPanel workspace={LONG} /> },
+    { id: "default", label: "Default", node: <LibraryRulesPanel workspace={LIBRARY_WORKSPACE} docs={LIBRARY_CHECKER_DOCS} /> },
+    { id: "loading", label: "Loading", node: <LibraryRulesPanel workspace={LIBRARY_WORKSPACE} docs={[]} loading /> },
+    { id: "overflow-text", label: "Overflow: very long workspace name", node: <LibraryRulesPanel workspace={HUGE} docs={LIBRARY_CHECKER_DOCS} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryRulesPanel workspace={LIBRARY_WORKSPACE} docs={LIBRARY_CHECKER_DOCS} /> },
+    { id: "stress", label: "Volume: full catalog, long workspace name", node: <LibraryRulesPanel workspace={LONG} docs={LIBRARY_CHECKER_DOCS} /> },
   ],
 };
 
@@ -536,27 +542,27 @@ const STRESS_TAGS: TagDef[] = Array.from({ length: 120 }, (_, i) => ({
 const TAGS_PANEL: ComponentSpec = {
   id: "LibraryTagsPanel", title: "LibraryTagsPanel", width: 1080,
   states: [
-    { id: "default", label: "Default", node: <LibraryTagsPanel tags={TAGS} /> },
-    { id: "loading", label: "Loading", node: <LibraryTagsPanel loading /> },
-    { id: "empty", label: "Empty (no tags)", node: <LibraryTagsPanel tags={[]} /> },
-    { id: "overflow-rows", label: "Overflow: many tags", node: <LibraryTagsPanel tags={Array.from({ length: 14 }, (_, i) => ({ ...TAGS[i % 5], id: `tag-${i}`, name: `${TAGS[i % 5].name} ${i}` }))} /> },
-    { id: "overflow-text", label: "Overflow: long names, many behaviours", node: <LibraryTagsPanel tags={TAGS_OVERFLOW} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryTagsPanel tags={TAGS.slice(0, 3)} /> },
-    { id: "stress", label: "Volume: 120 tags", node: <LibraryTagsPanel tags={STRESS_TAGS} /> },
+    { id: "default", label: "Default", node: <LibraryTagsPanel tags={TAGS} totalDocs={LIBRARY_TOTAL_DOCS} /> },
+    { id: "loading", label: "Loading", node: <LibraryTagsPanel tags={[]} totalDocs={LIBRARY_TOTAL_DOCS} loading /> },
+    { id: "empty", label: "Empty (no tags)", node: <LibraryTagsPanel tags={[]} totalDocs={LIBRARY_TOTAL_DOCS} /> },
+    { id: "overflow-rows", label: "Overflow: many tags", node: <LibraryTagsPanel tags={Array.from({ length: 14 }, (_, i) => ({ ...TAGS[i % 5], id: `tag-${i}`, name: `${TAGS[i % 5].name} ${i}` }))} totalDocs={LIBRARY_TOTAL_DOCS} /> },
+    { id: "overflow-text", label: "Overflow: long names, many behaviours", node: <LibraryTagsPanel tags={TAGS_OVERFLOW} totalDocs={LIBRARY_TOTAL_DOCS} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <LibraryTagsPanel tags={TAGS.slice(0, 3)} totalDocs={LIBRARY_TOTAL_DOCS} /> },
+    { id: "stress", label: "Volume: 120 tags", node: <LibraryTagsPanel tags={STRESS_TAGS} totalDocs={LIBRARY_TOTAL_DOCS} /> },
   ],
 };
 
 /* ── LibraryTemplatesPanel ────────────────────────────────────────────── */
 
 const TEMPLATES: Template[] = [
-  { id: "runbook", name: "Runbook", category: "Operations", icon: Clipboard, standard: true, description: "Service overview, alarms, diagnosis, rollback, escalation.", sections: ["Service overview", "Alarms and thresholds", "Diagnosis steps", "Rollback procedure"] },
-  { id: "adr", name: "Architecture decision", category: "Engineering", icon: FileText, standard: true, description: "Context, decision, alternatives, and consequences.", sections: ["Context", "Decision", "Alternatives considered", "Consequences"] },
-  { id: "custom", name: "Design doc", category: "Engineering", icon: FileText, standard: false, description: "Custom scaffold.", sections: ["Overview", "Details", "Risks"] },
+  { id: "runbook", name: "Runbook", category: "Operations", icon: "clipboard", standard: true, description: "Service overview, alarms, diagnosis, rollback, escalation.", sections: ["Service overview", "Alarms and thresholds", "Diagnosis steps", "Rollback procedure"] },
+  { id: "adr", name: "Architecture decision", category: "Engineering", icon: "file-text", standard: true, description: "Context, decision, alternatives, and consequences.", sections: ["Context", "Decision", "Alternatives considered", "Consequences"] },
+  { id: "custom", name: "Design doc", category: "Engineering", icon: "file-text", standard: false, description: "Custom scaffold.", sections: ["Overview", "Details", "Risks"] },
 ];
 
 const TEMPLATES_OVERFLOW: Template[] = [
-  { id: "long", name: LONG, category: "Engineering", icon: FileText, standard: false, description: `${LONG} ${LONG}`, sections: [LONG, HUGE, LONG] },
-  { id: "huge", name: HUGE, category: "Operations", icon: Clipboard, standard: true, description: HUGE, sections: [HUGE] },
+  { id: "long", name: LONG, category: "Engineering", icon: "file-text", standard: false, description: `${LONG} ${LONG}`, sections: [LONG, HUGE, LONG] },
+  { id: "huge", name: HUGE, category: "Operations", icon: "clipboard", standard: true, description: HUGE, sections: [HUGE] },
 ];
 
 /* Volume fixture: production-sized data for the "stress" state. */
@@ -571,7 +577,7 @@ const TEMPLATES_PANEL: ComponentSpec = {
   id: "LibraryTemplatesPanel", title: "LibraryTemplatesPanel", width: 1080,
   states: [
     { id: "default", label: "Default", node: <LibraryTemplatesPanel templates={TEMPLATES} /> },
-    { id: "loading", label: "Loading", node: <LibraryTemplatesPanel loading /> },
+    { id: "loading", label: "Loading", node: <LibraryTemplatesPanel templates={LIBRARY_TEMPLATES} loading /> },
     { id: "empty", label: "Empty (no templates)", node: <LibraryTemplatesPanel templates={[]} /> },
     { id: "overflow-rows", label: "Overflow: many templates", node: <LibraryTemplatesPanel templates={Array.from({ length: 12 }, (_, i) => ({ ...TEMPLATES[i % 3], id: `t-${i}`, name: `${TEMPLATES[i % 3].name} ${i}` }))} /> },
     { id: "overflow-text", label: "Overflow: long names, sections, descriptions", node: <LibraryTemplatesPanel templates={TEMPLATES_OVERFLOW} /> },

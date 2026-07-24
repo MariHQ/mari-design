@@ -42,20 +42,19 @@ function seedTranscript(): ChatMessageData[] {
   ];
 }
 
-const DEMO_SESSIONS = [
-  { id: "s_current", title: "Free-tier seat audit", meta: "current" },
-  { id: "s_2", title: "Sync GitHub docs", meta: "6 msgs" },
-  { id: "s_3", title: "Draft release notes", meta: "14 msgs" },
-];
+
+export type ChatSession = { id: string; title: string; meta: string };
 
 export type ChatDockFeatureProps = {
+  /** Recent chat sessions listed in the dock's session switcher. */
+  sessions: ChatSession[];
   /** Start with the dock open (default true so it renders visibly standalone). */
   defaultOpen?: boolean;
   loading?: boolean;
   className?: string;
 };
 
-export function ChatDockFeature({ defaultOpen = true, loading = false, className = "" }: ChatDockFeatureProps) {
+export function ChatDockFeature({ sessions, defaultOpen = true, loading = false, className = "" }: ChatDockFeatureProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [messages, setMessages] = useState<ChatMessageData[]>(seedTranscript);
   const [streaming, setStreaming] = useState(false);
@@ -139,10 +138,10 @@ export function ChatDockFeature({ defaultOpen = true, loading = false, className
         }
       >
         <MenuLabel>Past conversations</MenuLabel>
-        {DEMO_SESSIONS.length === 0 ? (
+        {sessions.length === 0 ? (
           <MenuLabel>No past conversations.</MenuLabel>
         ) : (
-          DEMO_SESSIONS.map((s) => (
+          sessions.map((s) => (
             <MenuItem key={s.id} end={<span className="font-term text-[10.5px]">{s.meta}</span>} onSelect={() => resume(s.id, s.title)}>
               {s.title}
             </MenuItem>

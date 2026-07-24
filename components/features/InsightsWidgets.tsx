@@ -22,41 +22,40 @@ import { fmtDate } from "../tokens/format";
    so it can use the wider grid column), Card + Button, and ActivityFeed.
    Standalone. */
 
-type StatTone = "ok" | "attention" | "blocked" | "info";
+export type StatTone = "ok" | "attention" | "blocked" | "info";
 
-const DEMO_STATS: { key: string; value: number; label: string; tone: StatTone; icon: ReactNode }[] = [
-  { key: "searches", value: 4820, label: "Searches", tone: "ok", icon: <Search size={16} /> },
-  { key: "answers", value: 1394, label: "Answers served", tone: "info", icon: <MessageSquare size={16} /> },
-  { key: "drift", value: 37, label: "Drift caught", tone: "blocked", icon: <Sparkles size={16} /> },
-  { key: "fixed", value: 212, label: "Docs fixed", tone: "attention", icon: <Wrench size={16} /> },
-];
+/* Icons are named, not carried. A data prop has to survive a round trip
+   through an API, and no API returns a React element (MIGRATION.md), so the
+   row names its glyph and the widget draws it. */
+export type StatIcon = "search" | "answers" | "drift" | "fixed";
+const STAT_GLYPH: Record<StatIcon, ReactNode> = {
+  search: <Search size={16} />,
+  answers: <MessageSquare size={16} />,
+  drift: <Sparkles size={16} />,
+  fixed: <Wrench size={16} />,
+};
+
+/** One headline stat tile. */
+export type InsightStat = { key: string; value: number; label: string; tone: StatTone; icon: StatIcon };
 
 const RING_OF: Record<StatTone, "ok" | "attention" | "blocked" | "info"> = {
   ok: "ok", attention: "attention", blocked: "blocked", info: "info",
 };
 
 export type ReadRow = { id: number; title: string; source: string; grade: string; note: string };
-const DEMO_READABILITY: ReadRow[] = [
-  { id: 1, title: "API authentication", source: "github", grade: "A", note: "Clear, concise, well-structured." },
-  { id: 2, title: "Billing & invoices", source: "gdocs", grade: "B", note: "Two long paragraphs could be split." },
-  { id: 3, title: "Rate limits", source: "github", grade: "C", note: "Dense; heavy passive voice." },
-  { id: 4, title: "Onboarding checklist", source: "notion", grade: "A", note: "" },
-  { id: 5, title: "Incident runbook", source: "slack", grade: "B", note: "Jargon without definitions." },
-];
 
 export type GlossRow = { id: number; term: string; variants: string[]; definition: string };
-const DEMO_GLOSSARY: GlossRow[] = [
-  { id: 1, term: "Flow", variants: ["workflow", "automation"], definition: "An automation that watches knowledge and does editorial work." },
-  { id: 2, term: "Drift", variants: ["staleness", "doc rot"], definition: "When a document falls out of sync with accepted facts." },
-  { id: -3, term: "Canonical", variants: ["source of truth"], definition: "The version Mari treats as authoritative." },
-];
-
-const DEMO_ACTIVITY: ActivityItem[] = [
-  { id: "a1", actor: "Aki K.", action: "accepted glossary term “Drift”", time: "May 11, 4:12 PM", icon: <BookOpen size={12} /> },
-  { id: "a2", actor: "Priya S.", action: "fixed 3 readability findings", time: "May 11, 2:03 PM", icon: <FileCheck size={12} /> },
-  { id: "a3", actor: "Mari", action: "scored 42 documents", time: "May 11, 9:20 AM", icon: <Sparkles size={12} /> },
-  { id: "a4", actor: "Dana R.", action: "dismissed a coverage finding", time: "May 10, 5:41 PM" },
-];
+/** One audit-activity line. Same rule as the stat tiles: the glyph is named,
+    not carried, so the row is plain JSON. */
+export type ActivityIcon = "glossary" | "readability" | "scored";
+const ACTIVITY_GLYPH: Record<ActivityIcon, ReactNode> = {
+  glossary: <BookOpen size={12} />,
+  readability: <FileCheck size={12} />,
+  scored: <Sparkles size={12} />,
+};
+export type InsightsActivity = {
+  id: string; actor: string; action: string; time: string; icon?: ActivityIcon;
+};
 
 const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-middle`;
 
@@ -64,19 +63,19 @@ const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-mi
 const PAGE = 25;
 
 export type InsightsWidgetsProps = {
-  stats?: typeof DEMO_STATS;
-  readability?: ReadRow[];
-  glossary?: GlossRow[];
-  activity?: ActivityItem[];
-  since?: string;
+  stats: InsightStat[];
+  readability: ReadRow[];
+  glossary: GlossRow[];
+  activity: InsightsActivity[];
+  /** ISO date the counts are measured from. Shown in the page header. */
+  since: string;
   /** Render a content-shaped skeleton silhouette instead of the widgets. */
   loading?: boolean;
   className?: string;
 };
 
 export function InsightsWidgets({
-  stats = DEMO_STATS, readability = DEMO_READABILITY, glossary = DEMO_GLOSSARY,
-  activity = DEMO_ACTIVITY, since = "2026-01-01", loading = false, className = "",
+  stats, readability, glossary, activity, since, loading = false, className = "",
 }: InsightsWidgetsProps) {
   const [scoring, setScoring] = useState(false);
   const [harvesting, setHarvesting] = useState(false);
@@ -101,7 +100,9 @@ export function InsightsWidgets({
   const [glossShown, setGlossShown] = useState(PAGE);
   const readRows = readSort.sorted.slice(0, readShown);
   const glossRows = candidates.slice(0, glossShown);
-  const shownActivity = activity.filter((a) => !String(a.action).startsWith("__"));
+  const shownActivity: ActivityItem[] = activity
+    .filter((a) => !String(a.action).startsWith("__"))
+    .map((a) => ({ ...a, icon: a.icon ? ACTIVITY_GLYPH[a.icon] : undefined }));
 
   if (loading) {
     return (
@@ -137,7 +138,7 @@ export function InsightsWidgets({
             value={s.value.toLocaleString("en-US")}
             label={s.label}
             tone={s.tone}
-            icon={<IconRing tone={RING_OF[s.tone]}>{s.icon}</IconRing>}
+            icon={<IconRing tone={RING_OF[s.tone]}>{STAT_GLYPH[s.icon]}</IconRing>}
           />
         ))}
       </div>

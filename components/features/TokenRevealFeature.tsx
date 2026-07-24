@@ -12,13 +12,7 @@ import { fmtAgo } from "../tokens/format";
    top, and adds a masked row to the key list once dismissed. Standalone with
    baked-in demo keys. Source: web/src/pages/settings/ApiKeys + TokenReveal. */
 
-type KeyRow = { id: string; label: string; prefix: string; createdAt: string; lastUsed: string | null };
-
-const DEMO_KEYS: KeyRow[] = [
-  { id: "k_prod", label: "Production", prefix: "mari_sk_live_9f2a", createdAt: "2026-05-02", lastUsed: new Date(Date.now() - 40 * 60_000).toISOString() },
-  { id: "k_ci", label: "CI pipeline", prefix: "mari_sk_live_7c81", createdAt: "2026-06-19", lastUsed: new Date(Date.now() - 3 * 3600_000).toISOString() },
-  { id: "k_local", label: "Local dev", prefix: "mari_sk_test_1b40", createdAt: "2026-07-11", lastUsed: null },
-];
+export type KeyRow = { id: string; label: string; prefix: string; createdAt: string; lastUsed: string | null };
 
 function mintToken(): string {
   const rand = (n: number) => Array.from({ length: n }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join("");
@@ -26,11 +20,11 @@ function mintToken(): string {
 }
 
 export type TokenRevealFeatureProps = {
-  keys?: KeyRow[];
+  keys: KeyRow[];
   className?: string;
 };
 
-export function TokenRevealFeature({ keys = DEMO_KEYS, className = "" }: TokenRevealFeatureProps) {
+export function TokenRevealFeature({ keys, className = "" }: TokenRevealFeatureProps) {
   const [rows, setRows] = useState<KeyRow[]>(keys);
   const [fresh, setFresh] = useState<string | null>(null);
 

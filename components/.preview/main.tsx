@@ -733,6 +733,7 @@ function Gallery() {
           <Combobox
             value={combo}
             onChange={setCombo}
+            ariaLabel="Region"
             options={[{ value: "us-east", label: "US East" }, { value: "us-west", label: "US West" }, { value: "eu-west", label: "EU West" }]}
           />
         </Row>

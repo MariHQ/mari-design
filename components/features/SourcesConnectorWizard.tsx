@@ -13,82 +13,22 @@ import { SourceMark } from "../icons/marks";
 
 /* SourcesConnectorWizard — the Sources page "Add source" flow: choose a
    provider → enter credentials → watch the first sync. Composes the catalog
-   <ConnectorWizard> and feeds it the console's connector catalog (server truth
-   in production; baked here). Test-connection is advisory and never gates
+   <ConnectorWizard> and feeds it the connector catalog it is handed. Test-connection is advisory and never gates
    Connect; once Connect fires, a live <SyncPanel> step is driven by a simulated
    sync-status. Standalone: opens by default and via a visible trigger. */
 
-const CATALOG: WizardProvider[] = [
-  {
-    key: "github", name: "GitHub", blurb: "Sync Markdown docs from a repository, read-only.",
-    mark: <SourceMark provider="github" size={22} />, connected: false,
-    docsUrl: "https://docs.github.com/authentication",
-    fields: [
-      { key: "repo", label: "Repository", placeholder: "acme/handbook", help: "owner/name of a repo your token can read." },
-      { key: "paths", label: "Paths filter (glob)", placeholder: "**/*.md" },
-    ],
-  },
-  {
-    key: "slack", name: "Slack", blurb: "Import channel history into your knowledge library.",
-    mark: <SourceMark provider="slack" size={22} />,
-    fields: [
-      { key: "bot_token", label: "Bot token", secret: true, placeholder: "xoxb-…", help: "Needs channels:history + channels:read." },
-      { key: "channel", label: "Channel", placeholder: "#engineering" },
-    ],
-  },
-  {
-    key: "gdrive", name: "Google Drive", blurb: "Index docs from a shared Drive folder.",
-    mark: <SourceMark provider="gdrive" size={22} />,
-    fields: [
-      { key: "service_account_json", label: "Service account JSON", secret: true, multiline: true, placeholder: '{ "type": "service_account", … }' },
-      { key: "folder_id", label: "Folder ID", placeholder: "1a2B3c…" },
-    ],
-  },
-  {
-    key: "notion", name: "Notion", blurb: "Sync pages from a Notion database.",
-    mark: <SourceMark provider="notion" size={22} />,
-    fields: [
-      { key: "token", label: "Internal integration token", secret: true, placeholder: "secret_…" },
-      { key: "database_id", label: "Database ID", placeholder: "8a5f…" },
-    ],
-  },
-  {
-    key: "granola", name: "Granola", blurb: "Bring in meeting notes and transcripts.",
-    mark: <SourceMark provider="granola" size={22} />,
-    fields: [{ key: "api_key", label: "API key", secret: true, placeholder: "gr-…" }],
-  },
-  {
-    key: "confluence", name: "Confluence", blurb: "Index spaces and pages from Confluence Cloud.",
-    mark: <SourceMark provider="confluence" size={22} />,
-    fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://acme.atlassian.net/wiki" },
-      { key: "email", label: "Email", placeholder: "you@acme.com" },
-      { key: "api_token", label: "API token", secret: true, placeholder: "ATATT…" },
-    ],
-  },
-  {
-    key: "jira", name: "Jira", blurb: "Sync issues and comments from a Jira project.",
-    mark: <SourceMark provider="jira" size={22} />,
-    fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://acme.atlassian.net" },
-      { key: "email", label: "Email", placeholder: "you@acme.com" },
-      { key: "api_token", label: "API token", secret: true },
-    ],
-  },
-  {
-    key: "linear", name: "Linear", blurb: "Index issues and docs from Linear.",
-    mark: <SourceMark provider="linear" size={22} />,
-    fields: [{ key: "api_key", label: "API key", secret: true, placeholder: "lin_api_…" }],
-  },
-];
+/** A provider the wizard can offer, in plain JSON: `key` names the brand
+    mark, so nothing here is a React element and the catalog can come straight
+    off an API. */
+export type WizardProviderSpec = Omit<WizardProvider, "mark">;
 
 function demoTest(_provider: string, _config: Record<string, string>): ConnectTestResult {
   return { ok: true };
 }
 
 export type SourcesConnectorWizardProps = {
-  /** Override the baked-in provider catalog. */
-  providers?: WizardProvider[];
+  /** The connector catalog this workspace can add from. */
+  providers: WizardProviderSpec[];
   /** Open the wizard on mount so it shows in a static gallery. */
   defaultOpen?: boolean;
   loading?: boolean;
@@ -96,8 +36,13 @@ export type SourcesConnectorWizardProps = {
 };
 
 export function SourcesConnectorWizard({
-  providers = CATALOG, defaultOpen = true, loading = false, className = "",
+  providers: providerSpecs, defaultOpen = true, loading = false, className = "",
 }: SourcesConnectorWizardProps) {
+  /* The brand mark is derived from the provider key, never carried in the
+     data: an API returns strings, not React elements. */
+  const providers: WizardProvider[] = providerSpecs.map((p) => ({
+    ...p, provider: p.key,
+  }));
   const [open, setOpen] = useState(defaultOpen);
   const [sync, setSync] = useState<SyncSource | null>(null);
   /* Where the connected source LANDED. Connecting used to end on "Done" with
@@ -111,7 +56,7 @@ export function SourcesConnectorWizard({
     const running: SyncSource = {
       id: provider,
       name: `${p?.name ?? provider} · ${detail}`,
-      mark: <SourceMark provider={provider} size={24} />,
+      provider,
       state: "syncing", phase: "Embedding", done: 120, total: 460,
       chunkCount: 3120, embeddedCount: 1180,
     };

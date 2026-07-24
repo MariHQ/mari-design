@@ -26,7 +26,8 @@ type Revision = { at: string; actor: string; verb: string };
 /** One lineage edge off this document, drawn with the shared lineage styling. */
 type Link = { rel: RelKey; dir: "out" | "in"; title: string; source: string };
 
-type Doc = {
+/** The inspected document. Exported so pages and fixtures compose it. */
+export type KnowledgeDoc = {
   id: string;
   title: string;
   source: string;
@@ -46,41 +47,6 @@ type Doc = {
 };
 
 const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
-
-const DEMO: Doc = {
-  id: "doc_8f21",
-  title: "Payments incident runbook",
-  source: "notion",
-  kind: "Page",
-  owner: "Priya Nair",
-  updated: "2026-07-16",
-  summary: "The canonical procedure for payment-processing incidents: how to detect a stalled settlement queue, drain it safely, restart workers, and escalate to on-call when depth exceeds the alarm threshold.",
-  tags: ["canonical", "customer-facing"],
-  facts: [
-    { text: "Settlement alarm fires when queue depth exceeds 10,000." },
-    { text: "Workers must be drained before restart to avoid duplicate captures." },
-    { text: "On-call escalation target is the #payments-oncall rotation." },
-    { text: "Rollback window is the end of the business day of the change." },
-  ],
-  related: [
-    { source: "github", title: "feat: retry settlement on transient errors" },
-    { source: "slack", title: "Decision: move webhooks to the gateway" },
-    { source: "docs", title: "Sign-in and session model" },
-  ],
-  timeline: [
-    { at: "Jul 16, 2026, 4:12 PM", actor: "Priya Nair", verb: "verified the runbook" },
-    { at: "Jul 11, 2026, 9:38 AM", actor: "Marcus Vale", verb: "added the rollback window" },
-    { at: "Jun 28, 2026, 2:05 PM", actor: "Dana Osei", verb: "created the page" },
-    { at: "Jun 20, 2026, 11:02 AM", actor: "Priya Nair", verb: "linked the settlement dashboard" },
-    { at: "Jun 14, 2026, 3:47 PM", actor: "Marcus Vale", verb: "split the escalation section" },
-    { at: "Jun 02, 2026, 8:15 AM", actor: "Dana Osei", verb: "imported the page from Notion" },
-  ],
-  lineage: [
-    { rel: "derived", dir: "in", title: "Settlement queue postmortem", source: "docs" },
-    { rel: "references", dir: "out", title: "feat: retry settlement on transient errors", source: "github" },
-    { rel: "discussed", dir: "out", title: "#payments-oncall escalation thread", source: "slack" },
-  ],
-};
 
 type InsTab = "document" | "inspector";
 
@@ -116,12 +82,12 @@ function BoundedList({ bounded, children }: { bounded: boolean; children: React.
 }
 
 export type KnowledgeInspectorProps = {
-  doc?: Doc;
+  doc: KnowledgeDoc;
   loading?: boolean;
   className?: string;
 };
 
-export function KnowledgeInspector({ doc = DEMO, loading = false, className = "" }: KnowledgeInspectorProps) {
+export function KnowledgeInspector({ doc, loading = false, className = "" }: KnowledgeInspectorProps) {
   const [insTab, setInsTab] = useState<InsTab>("document");
   const [tags, setTags] = useState<string[]>(doc.tags);
   // Both rail links used to be inert. They now drive real state: the history

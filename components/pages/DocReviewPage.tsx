@@ -1,26 +1,25 @@
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 import { Save, Eye, Share2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { DocReviewEditor } from "../features/DocReviewEditor";
-import { DocReviewOutlinePanel } from "../features/DocReviewOutlinePanel";
+import { DocReviewEditor, type EditorFinding } from "../features/DocReviewEditor";
+import { DocReviewOutlinePanel, type DocRevision } from "../features/DocReviewOutlinePanel";
 import { DocReviewRefinePanel } from "../features/DocReviewRefinePanel";
-import { DocReviewChangeQueue } from "../features/DocReviewChangeQueue";
-import { DocReviewFindingsPanel } from "../features/DocReviewFindingsPanel";
+import { DocReviewChangeQueue, type DocChange } from "../features/DocReviewChangeQueue";
+import { DocReviewFindingsPanel, type DocClaim, type DocFinding } from "../features/DocReviewFindingsPanel";
 import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { fmtDate } from "../tokens/format";
 import { Truncate } from "../data-display/Truncate";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT,
-} from "./stress";
 
 /* Doc Review workspace (pages/doc-review.md). A multi-pane editor: outline +
    revisions on the left, the block editor in the centre, refine on the right,
-   and a change-queue / findings tab strip below. States isolate each panel as
-   its own view, walk the save lifecycle (saved → dirty → saving → applied), and
-   cover the standalone loading / offline / offline-dirty / empty edges. */
+   and a change-queue / findings tab strip below.
+
+   This page is a pure presenter: it holds no demo content. The document, its
+   revisions, the proposed changes, and the fact-check findings all arrive in
+   `data`, so a document with nothing in it renders the empty state rather than
+   someone's invented draft. The design canvas supplies the same shape from
+   `.preview/fixtures/docReview.ts`. */
 
 const STATES = [
   { id: "default", label: "Default" },
@@ -42,121 +41,57 @@ const STATES = [
 
 type BottomTab = "changes" | "findings";
 
-/* ── overflow / stress datasets, injected into the composed panels ─────────
-   Types are borrowed from each feature's own props so the data stays in lock-
-   step with the components. */
-type Rev = NonNullable<ComponentProps<typeof DocReviewOutlinePanel>["revisions"]>[number];
-type EditorFinding = NonNullable<ComponentProps<typeof DocReviewEditor>["findings"]>[number];
-type Change = NonNullable<ComponentProps<typeof DocReviewChangeQueue>["changes"]>[number];
-type Finding = NonNullable<ComponentProps<typeof DocReviewFindingsPanel>["findings"]>[number];
-type Claim = NonNullable<ComponentProps<typeof DocReviewFindingsPanel>["claims"]>[number];
-
-type DocData = {
+/** The document itself, as the five review panels render it. Every field is
+    something a document API returns; nothing is a rendering flag. */
+export type ReviewDoc = {
+  /** Markdown the outline is derived from. */
   outlineBody: string;
-  revisions: Rev[];
+  revisions: DocRevision[];
+  /** Markdown the block editor renders. */
   editorBody: string;
   editorFindings: EditorFinding[];
+  /** The refine panel's findings tally. */
   refine: { errorN: number; warnN: number; advisoryN: number };
-  changes: Change[];
+  changes: DocChange[];
+  /** Prose the change queue diffs against. */
   changeBody: string;
-  findings: Finding[];
-  claims: Claim[];
+  findings: DocFinding[];
+  claims: DocClaim[];
 };
 
-const OVERFLOW_DATA: DocData = {
-  outlineBody: `# ${LONG_TITLE}
+/** Where the document stands against the server. An app drives this from its
+    own mutation state; it is not a canvas concept. */
+export type SaveState = "saved" | "dirty" | "saving" | "applied" | "offline-dirty";
 
-## Overview and scope of this consolidated operating guidance
-${LONG_PARAGRAPH}
+/** Which review surface is open. The workspace shows all three panes at once;
+    the others are the deep-link views of a single pane. */
+export type ReviewPane = "workspace" | "outline" | "editor" | "changes" | "findings" | "refine";
 
-## ${LONG_TITLE}
-${LONG_PARAGRAPH}
-
-### ${LONG_DOC_TITLE}
-${LONG_PARAGRAPH}`,
-  revisions: [
-    { id: 1, actor: LONG_NAME, verb: "reconciled the runbook against four quarters of incident retrospectives", at: "2h ago" },
-    { id: 2, actor: LONG_NAME, verb: "ran Tighten across every section of the consolidated document", at: "Yesterday, 4:12 PM" },
-    { id: 3, actor: "Maya Chen", verb: "accepted 3 changes", at: "Jul 18, 11:03 AM" },
-  ],
-  editorBody: `# ${LONG_TITLE}
-
-## Overview
-${LONG_PARAGRAPH}
-
-## Rollout
-${LONG_PARAGRAPH}`,
-  editorFindings: [
-    { id: 1, kind: "fact", severity: "error", text: "re-reviewed every quarter or after any Sev-1", note: LONG_PARAGRAPH },
-    { id: 2, kind: "prose", severity: "warn", text: "in exhaustive detail", note: "hedge: consider trimming this qualifier for concision across the section" },
-  ],
-  refine: { errorN: 12, warnN: 34, advisoryN: 21 },
-  changes: [
-    { id: 1, original: LONG_PARAGRAPH, proposed: "This document consolidates the operating guidance for the entire platform organization and describes the escalation ladder, the paging policy, and the post-incident review process.", rule: "Tighten: cut redundant scope-setting across the opening paragraph so responders reach the escalation ladder faster", state: "pending" },
-    { id: 2, original: "It will be re-reviewed every quarter or after any Sev-1.", proposed: "It is re-reviewed each quarter and after every Sev-1 incident.", rule: "Sharpen: commit to the cadence instead of hedging with a future tense", state: "pending" },
-  ],
-  changeBody: LONG_PARAGRAPH,
-  findings: [
-    { id: 1, kind: "fact", severity: "error", text: "reconciled against the last four quarters of incident retrospectives", note: LONG_PARAGRAPH },
-    { id: 2, kind: "freshness", severity: "warn", text: "reviewed by the reliability guild", note: "The reliability-guild sign-off referenced here is more than eight months old and predates the current escalation ladder." },
-  ],
-  claims: [
-    { claim: LONG_PARAGRAPH, source: LONG_DOC_TITLE, status: "Contradicted", verified: "" },
-    { claim: "Every section has been reviewed by the reliability guild and reconciled against retrospectives.", source: LONG_TITLE, status: "Verified", verified: "May 1, 2024" },
-  ],
+/** Everything the Doc Review page renders. */
+export type DocReviewData = {
+  title: string;
+  /** The owner / last-verified line under the title. A value, not prose. */
+  subtitle: string;
+  save: SaveState;
+  pane: ReviewPane;
+  doc: ReviewDoc;
 };
 
-const STRESS_DATA: DocData = {
-  outlineBody: `# ${UNBREAKABLE}
-
-## ${MIXED_SCRIPT}
-${LONG_URL}
-
-## ${LONG_WORD}
-${UNBREAKABLE}
-
-### ${LONG_URL}
-${MIXED_SCRIPT}`,
-  revisions: [
-    { id: 1, actor: LONG_WORD, verb: MIXED_SCRIPT, at: HUGE_NUMBER_STR },
-    { id: 2, actor: MIXED_SCRIPT, verb: `edited ${UNBREAKABLE}`, at: HUGE_NUMBER_STR },
-  ],
-  editorBody: `# ${UNBREAKABLE}
-
-## ${MIXED_SCRIPT}
-${LONG_URL}
-
-${UNBREAKABLE}`,
-  editorFindings: [
-    { id: 1, kind: "fact", severity: "error", text: UNBREAKABLE, note: `${MIXED_SCRIPT} ${LONG_URL}` },
-  ],
-  refine: { errorN: HUGE_NUMBER, warnN: HUGE_NUMBER, advisoryN: HUGE_NUMBER },
-  changes: [
-    { id: 1, original: UNBREAKABLE, proposed: LONG_WORD, rule: MIXED_SCRIPT, state: "pending" },
-    { id: 2, original: LONG_URL, proposed: UNBREAKABLE, rule: HUGE_NUMBER_STR, state: "pending" },
-  ],
-  changeBody: `${UNBREAKABLE} ${LONG_URL} ${MIXED_SCRIPT}`,
-  findings: [
-    { id: 1, kind: "fact", severity: "error", text: UNBREAKABLE, note: `${MIXED_SCRIPT}, ${LONG_URL}` },
-    { id: 2, kind: "freshness", severity: "warn", text: LONG_WORD, note: MIXED_SCRIPT },
-  ],
-  claims: [
-    { claim: UNBREAKABLE, source: LONG_URL, status: "Contradicted", verified: HUGE_NUMBER_STR },
-    { claim: MIXED_SCRIPT, source: LONG_WORD, status: "Unsupported", verified: "" },
-  ],
-};
-
-function dataFor(state: string): DocData | undefined {
-  if (state === "overflow") return OVERFLOW_DATA;
-  if (state === "stress") return STRESS_DATA;
-  return undefined;
+/** A document with no body and nothing said about it yet. Derived from the
+    data, not from a state flag, so it is true in the real app for exactly the
+    same reason it is true on the canvas. */
+function isEmpty(d: DocReviewData): boolean {
+  const doc = d.doc;
+  return !doc.editorBody && !doc.outlineBody && !doc.changeBody
+    && !doc.revisions.length && !doc.editorFindings.length
+    && !doc.changes.length && !doc.findings.length && !doc.claims.length;
 }
 
-function HeaderActions({ state }: { state: string }) {
-  const offlineDirty = state === "offline-dirty";
-  const dirty = state === "dirty";
-  const saving = state === "saving";
-  const applied = state === "applied";
+function HeaderActions({ save }: { save: SaveState }) {
+  const offlineDirty = save === "offline-dirty";
+  const dirty = save === "dirty";
+  const saving = save === "saving";
+  const applied = save === "applied";
 
   const statusChip = offlineDirty ? (
     <span className="text-[12px] font-medium text-espelette">API offline: can't save</span>
@@ -191,7 +126,7 @@ function HeaderActions({ state }: { state: string }) {
   );
 }
 
-function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: BottomTab; data?: DocData }) {
+function Workspace({ mobile, initialTab, doc }: { mobile: boolean; initialTab: BottomTab; doc: ReviewDoc }) {
   const [tab, setTab] = useState<BottomTab>(initialTab);
   return (
     <>
@@ -208,13 +143,13 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
           always the second thing a screen reader reaches. */}
       <div className={mobile ? "flex flex-col gap-5" : "grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[320px_minmax(0,1fr)_320px]"}>
         <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-1 2xl:col-start-1">
-          <DocReviewOutlinePanel {...(data ? { body: data.outlineBody, revisions: data.revisions } : {})} />
+          <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
         </div>
         <div className="min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
-          <DocReviewEditor compact={mobile} {...(data ? { body: data.editorBody, findings: data.editorFindings } : {})} />
+          <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} />
         </div>
         <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
-          <DocReviewRefinePanel {...(data ? data.refine : {})} />
+          <DocReviewRefinePanel {...doc.refine} />
         </div>
       </div>
       <div className="flex flex-col gap-5">
@@ -229,8 +164,8 @@ function Workspace({ mobile, initialTab, data }: { mobile: boolean; initialTab: 
           ]}
         />
         {tab === "changes"
-          ? <DocReviewChangeQueue compact={mobile} {...(data ? { changes: data.changes, body: data.changeBody } : {})} />
-          : <DocReviewFindingsPanel {...(data ? { findings: data.findings, claims: data.claims } : {})} />}
+          ? <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} />
+          : <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} />}
       </div>
     </>
   );
@@ -248,17 +183,16 @@ function PanelFrame({ title, description, children }: { title: string; descripti
   );
 }
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  if (state === "error") {
+function Body({ data, error, mobile }: { data: DocReviewData; error: string | null; mobile: boolean }) {
+  const doc = data.doc;
+  if (error) {
     return (
       <Card>
-        <EmptyState title="API offline">
-          This document can't be loaded right now.
-        </EmptyState>
+        <EmptyState title="API offline">{error}</EmptyState>
       </Card>
     );
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <Card>
         <EmptyState title="Empty document">
@@ -268,39 +202,39 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
     );
   }
 
-  // Panel-isolation states — show a single pane full-width.
-  if (state === "outline") {
+  // Panel-isolation views — show a single pane full-width.
+  if (data.pane === "outline") {
     return (
       <PanelFrame title="Document outline" description="Live section outline derived from headings, plus revision history.">
-        <DocReviewOutlinePanel />
+        <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
       </PanelFrame>
     );
   }
-  if (state === "editor") {
+  if (data.pane === "editor") {
     return (
       <PanelFrame title="Block editor" description="Content-editable blocks with inline finding underlines and margin annotations.">
-        <DocReviewEditor compact={mobile} />
+        <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} />
       </PanelFrame>
     );
   }
-  if (state === "change-queue") {
+  if (data.pane === "changes") {
     return (
       <PanelFrame title="Change queue" description="Proposed edits as a word-level diff: accept to rewrite the body, reject to dismiss.">
-        <DocReviewChangeQueue compact={mobile} />
+        <DocReviewChangeQueue compact={mobile} changes={doc.changes} body={doc.changeBody} />
       </PanelFrame>
     );
   }
-  if (state === "findings") {
+  if (data.pane === "findings") {
     return (
       <PanelFrame title="Fact check" description="Claim tallies, the top contradiction against verified facts, and a create-review-task row.">
-        <DocReviewFindingsPanel />
+        <DocReviewFindingsPanel findings={doc.findings} claims={doc.claims} />
       </PanelFrame>
     );
   }
-  if (state === "refine") {
+  if (data.pane === "refine") {
     return (
       <PanelFrame title="Refine" description="AI editing skills that propose edits into the review-before-apply queue.">
-        <DocReviewRefinePanel />
+        <DocReviewRefinePanel {...doc.refine} />
       </PanelFrame>
     );
   }
@@ -308,26 +242,26 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   const initialTab: BottomTab = "changes";
   return (
     <>
-      {state === "offline-dirty" && (
+      {data.save === "offline-dirty" && (
         <Alert tone="attention" title="You're offline">
           Changes are kept locally and will save once the connection returns.
         </Alert>
       )}
-      {state === "applied" && (
+      {data.save === "applied" && (
         <Alert tone="ok" title="Changes saved">
           The document was saved and revisions were refreshed.
         </Alert>
       )}
-      <Workspace mobile={mobile} initialTab={initialTab} data={dataFor(state)} />
+      <Workspace mobile={mobile} initialTab={initialTab} doc={doc} />
     </>
   );
 }
 
-function DocReviewPage({ state = "default", mobile = false }: PageProps) {
-  const actions = <HeaderActions state={state} />;
+function DocReviewPage({ data, loading = false, error = null, mobile = false }: PageProps<DocReviewData>) {
+  const actions = <HeaderActions save={data.save} />;
   return (
     <PageFrame active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="editor" />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
@@ -336,20 +270,14 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
             (CONVENTIONS.md §12). PageHeader's own `description` slot wraps
             instead, which is what pushed the stress URL past the header. */}
         <PageHeader
-          title={state === "overflow" ? LONG_TITLE : state === "stress" ? `${UNBREAKABLE} ${MIXED_SCRIPT}` : "Billing proration runbook"}
+          title={data.title}
           backLink={{ href: "/knowledge", label: "Library" }}
           actions={mobile ? undefined : actions}
         />
-        <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">
-          {state === "overflow"
-            ? `Owner: ${LONG_NAME} · Last verified across every service, region, and team`
-            : state === "stress"
-              ? `${MIXED_SCRIPT} · ${LONG_URL}`
-              : `Owner: Maya M. · Last verified ${fmtDate("2024-05-13")}`}
-        </Truncate>
+        <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">{data.subtitle}</Truncate>
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <div className="mt-6 flex flex-col gap-5">
-          <Body state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       </div>
       )}
@@ -357,7 +285,7 @@ function DocReviewPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<DocReviewData> = {
   id: "doc-review",
   title: "Doc Review",
   route: "/knowledge/doc",

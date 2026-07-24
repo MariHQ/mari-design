@@ -14,19 +14,19 @@ import { Pagination } from "../data-display/Pagination";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { fmtDateTime } from "../tokens/format";
-import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SettingsAuditLog, type AuditEvent } from "../features/SettingsAuditLog";
-import {
-  LONG_NAME, LONG_SOURCE, LONG_PARAGRAPH, LONG_URL, LONG_WORD, UNBREAKABLE,
-  MIXED_SCRIPT, HUGE_NUMBER_STR, MANY_TAGS, MANY_INITIALS, repeat,
-} from "./stress";
+import type { PropertyItem } from "../data-display/PropertyList";
 
 /* Settings → Audit log (pages/settings-audit-log.md). Read-only record of the
    last 50 workspace changes with a client-side filter and manual refresh. The
    default / empty variants render the SettingsAuditLog feature; the filtered,
    expanded, and paginated variants render inline so an applied filter, an open
    detail row, and the pager can all be captured. Under the shared settings tab
-   strip. */
+   strip.
+
+   Pure presenter: the events, the applied filter, the expanded row and the
+   rail summary all arrive in `data`. "No events yet" is derived from the log
+   being empty. */
 
 const STATES = [
   { id: "default", label: "Event log" },
@@ -42,6 +42,30 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** A filter the user has applied to the log. `matches` is what the server
+    returned for it, so an empty array genuinely means "no matches". */
+export type AuditFilter = { label: string; matches: AuditEvent[] };
+
+/** Extra detail the log shows when a row is expanded. */
+export type AuditDetail = { label: string; value: string };
+
+/** Everything Settings → Audit log renders. */
+export type SettingsAuditLogData = {
+  events: AuditEvent[];
+  /** Events in the window, which may exceed the page of `events` shown. */
+  total: number;
+  /** The applied filter, or `null` for the unfiltered log. */
+  filter: AuditFilter | null;
+  /** The row whose detail panel is open. */
+  expandedId: number | null;
+  /** Detail rows for the expanded event. */
+  detail: AuditDetail[];
+  /** Pager: `null` when the whole window fits on one page. */
+  pager: { page: number; pageCount: number; label: string } | null;
+  /** Read-only facts in the rail. */
+  summary: PropertyItem[];
+};
 
 type SettingsTab =
   | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
@@ -83,39 +107,18 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
   );
 }
 
-const EVENTS: AuditEvent[] = [
-  { id: 1, actor: "Maya Chen", verb: "invited member", target: "sam@team.com", at: "2025-07-20T15:42:00" },
-  { id: 2, actor: "Devon Park", verb: "revoked API key", target: "Old bot (rotated)", at: "2025-07-20T11:08:00" },
-  { id: 3, actor: "Priya Nair", verb: "changed role", target: "devon@team.com → manager", at: "2025-07-19T18:20:00" },
-  { id: 4, actor: "Maya Chen", verb: "deployed site", target: "docs.acme.com v14", at: "2025-07-19T09:55:00" },
-  { id: 5, actor: "System", verb: "synced source", target: "GitHub · acme/handbook", at: "2025-07-18T22:03:00" },
-  { id: 6, actor: "Devon Park", verb: "updated setting", target: "llm → anthropic:claude-3.5", at: "2025-07-18T14:17:00" },
-  { id: 7, actor: "Priya Nair", verb: "created MCP server", target: "support-kb", at: "2025-07-17T10:44:00" },
-  { id: 8, actor: "Maya Chen", verb: "verified fact", target: "SLA response time", at: "2025-07-16T16:30:00" },
-];
-
 const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
 const initialsOf = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
-type AuditVariant = "filtered-actor" | "filtered-action" | "filtered-date" | "no-match" | "expanded" | "many";
-
-function AuditInline({ variant }: { variant: AuditVariant }) {
-  const filter =
-    variant === "filtered-actor" ? { label: "actor: Maya Chen", rows: EVENTS.filter((e) => e.actor === "Maya Chen") }
-    : variant === "filtered-action" ? { label: "action: changed role", rows: EVENTS.filter((e) => e.verb.includes("role")) }
-    : variant === "filtered-date" ? { label: "date: 2025-07-20", rows: EVENTS.filter((e) => e.at.startsWith("2025-07-20")) }
-    : variant === "no-match" ? { label: "actor: nobody", rows: [] as AuditEvent[] }
-    : null;
-
-  const rows = filter ? filter.rows : EVENTS;
-  const total = variant === "many" ? 214 : EVENTS.length;
-  const expandedId = variant === "expanded" ? 3 : -1;
+function AuditInline({ data }: { data: SettingsAuditLogData }) {
+  const { filter, expandedId, detail, pager } = data;
+  const rows = filter ? filter.matches : data.events;
 
   return (
     <Card
       variant="flush"
       title="Events"
-      hint={`${rows.length} of ${total} events${variant === "many" ? "" : " (last 50)"}`}
+      hint={`${rows.length} of ${data.total} events${pager ? "" : " (last 50)"}`}
       actions={
         <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper">
           <Search size={13} className="text-ink/65" />
@@ -149,8 +152,8 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
                     <tr className="border-b border-ink/10 bg-flysch/30">
                       <td colSpan={5} className="px-4 py-3">
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-term text-[12px] sm:grid-cols-4">
-                          {[["Event ID", `evt_${e.id}f8a20c`], ["Actor IP", "203.0.113.24"], ["Before", "role=user"], ["After", "role=manager"], ["Source", "web · console"], ["Request", "req_9c1e…"]].map(([k, v]) => (
-                            <div key={k}><dt className="text-ink/65">{k}</dt><dd className="text-ink/80">{v}</dd></div>
+                          {detail.map((d) => (
+                            <div key={d.label}><dt className="text-ink/65">{d.label}</dt><dd className="text-ink/80">{d.value}</dd></div>
                           ))}
                         </dl>
                       </td>
@@ -162,62 +165,21 @@ function AuditInline({ variant }: { variant: AuditVariant }) {
           </table>
         </Scrollable>
       )}
-      {variant === "many" && (
+      {pager && (
         <div className="px-4 py-3 border-t border-ink/10">
-          <Pagination page={0} pageCount={27} onChange={() => {}} itemLabel="Showing 1 to 8 of 214" />
+          <Pagination page={pager.page} pageCount={pager.pageCount} onChange={() => {}} itemLabel={pager.label} />
         </div>
       )}
     </Card>
   );
 }
 
-const INLINE: AuditVariant[] = ["filtered-actor", "filtered-action", "filtered-date", "no-match", "expanded", "many"];
-
-function StressAudit({ extreme }: { extreme: boolean }) {
-  const events: AuditEvent[] = extreme
-    ? repeat((i) => ({
-        id: i + 1,
-        actor: [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3],
-        verb: UNBREAKABLE,
-        target: `${LONG_WORD} → ${MIXED_SCRIPT} ${HUGE_NUMBER_STR}`,
-        at: "2025-07-20T15:42:00",
-      }), 6)
-    : repeat((i) => ({
-        id: i + 1,
-        actor: LONG_NAME,
-        verb: "updated a very long-named workspace setting and reconciled it across regions",
-        target: `${LONG_SOURCE} → ${LONG_URL}`,
-        at: "2025-07-20T15:42:00",
-      }), 6);
-  return (
-    <>
-      <SettingsAuditLog embedded events={events} total={extreme ? 987654321 : 214} />
-      <Card title={extreme ? UNBREAKABLE : "Everyone who touched the workspace this quarter"} hint={extreme ? MIXED_SCRIPT : LONG_PARAGRAPH}>
-        <div className="flex items-center gap-3">
-          <AvatarGroup people={MANY_INITIALS.map((initials) => ({ initials }))} max={5} />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink/60">{extreme ? `${HUGE_NUMBER_STR} ${UNBREAKABLE}` : `${HUGE_NUMBER_STR} events recorded across all sources`}</span>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {(extreme ? [UNBREAKABLE, LONG_WORD, ...MANY_TAGS] : MANY_TAGS).map((t, i) => <Chip key={i} label={t} tone="info" caps />)}
-        </div>
-      </Card>
-    </>
-  );
-}
-
 /* Supporting rail (§11, 320px) — matches the other four Settings rails. */
-function AuditRail() {
+function AuditRail({ summary }: { summary: PropertyItem[] }) {
   return (
     <>
       <Card title="At a glance" hint="Read only">
-        <PropertyList
-          items={[
-            { label: "Events, 30 days", value: "214" },
-            { label: "Retention", value: "90 days" },
-            { label: "Actors", value: "6 people, 1 system" },
-            { label: "Last event", value: "Jul 20, 2025" },
-          ]}
-        />
+        <PropertyList items={summary} />
       </Card>
       <Card title="Reading the log">
         <p className="text-[12.5px] leading-relaxed text-ink/70">
@@ -229,32 +191,34 @@ function AuditRail() {
   );
 }
 
-function Body({ state }: { state: string }) {
-  if (state === "overflow" || state === "stress") return <StressAudit extreme={state === "stress"} />;
-  if (state === "error") {
-    return (
-      <EmptyState icon={<ScrollText size={22} />} title="API offline">
-        The audit log is temporarily unavailable. Retrying…
-      </EmptyState>
-    );
+/** No workspace activity recorded at all. Derived from the data. */
+function isEmpty(d: SettingsAuditLogData): boolean {
+  return d.events.length === 0 && d.filter === null;
+}
+
+function Body({ data, error }: { data: SettingsAuditLogData; error: string | null }) {
+  if (error) {
+    return <EmptyState icon={<ScrollText size={22} />} title="API offline">{error}</EmptyState>;
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <EmptyState icon={<ScrollText size={22} />} title="No events yet">
         Workspace changes will show up here as they happen.
       </EmptyState>
     );
   }
-  if ((INLINE as string[]).includes(state)) {
-    return <AuditInline variant={state as AuditVariant} />;
+  /* An applied filter, an open detail row, or a pager all need the inline
+     table; the plain log is the feature's own. */
+  if (data.filter || data.expandedId !== null || data.pager) {
+    return <AuditInline data={data} />;
   }
-  return <SettingsAuditLog embedded />;
+  return <SettingsAuditLog embedded events={data.events} total={data.total} />;
 }
 
-function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) {
+function SettingsAuditLogPage({ data, loading = false, error = null, mobile = false }: PageProps<SettingsAuditLogData>) {
   return (
     <PageFrame active={navFor("settings")} title="Settings" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="settings" />
       ) : (
         <div className={PAGE}>
@@ -265,8 +229,8 @@ function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) 
             actions={<Button variant="default"><RefreshCw size={15} /> Refresh</Button>}
           />
           <div className="mt-5"><SettingsTabs active="audit" /></div>
-          <SettingsBody mobile={mobile} rail={<AuditRail />}>
-            <Body state={state} />
+          <SettingsBody mobile={mobile} rail={<AuditRail summary={data.summary} />}>
+            <Body data={data} error={error} />
           </SettingsBody>
         </div>
       )}
@@ -274,7 +238,7 @@ function SettingsAuditLogPage({ state = "default", mobile = false }: PageProps) 
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<SettingsAuditLogData> = {
   id: "settings-audit-log",
   title: "Settings · Access log",
   route: "/settings/audit",

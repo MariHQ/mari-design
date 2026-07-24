@@ -73,58 +73,6 @@ const TEMPLATE_OUTCOME: Record<string, string> = {
   "Translation sync": "Customer-facing edits ship with review-ready drafts",
 };
 
-const DEMO_SOURCES: SourceRef[] = [
-  { id: 1, name: "GitHub · product-docs" },
-  { id: 2, name: "Slack · #support" },
-  { id: 3, name: "Google Drive · Handbook" },
-];
-
-const DEMO_FLOWS: Flow[] = [
-  {
-    id: 1, name: "Docs guardrail", color: "#B23A1E", status: "active",
-    description: "Fact-checks every changed doc before it can ship.",
-    whenLabel: "GitHub PR merged", trigger: { on: "document_changed", source_id: 1, path_glob: "docs/**" },
-    nodes: [{ label: "GitHub PR merged" }, { label: "Fetch docs" }, { label: "Fact check" }, { label: "Contradictions?" }, { label: "Create task" }],
-    lastRun: { status: "passed", started: "2026-07-20T14:12:00", dry: false },
-    recentRuns: [
-      { number: 141, status: "passed" }, { number: 142, status: "passed" },
-      { number: 143, status: "failed" }, { number: 144, status: "passed" }, { number: 145, status: "passed" },
-    ],
-  },
-  {
-    id: 2, name: "Slack digest", color: "#1E6FA8", status: "active",
-    description: "Summarizes a week of #support into a Monday digest.",
-    whenLabel: "Every week", trigger: { on: "schedule", every_minutes: 10080 },
-    nodes: [{ label: "Weekly scan" }, { label: "Fetch docs" }, { label: "Summarize" }, { label: "Notify" }],
-    lastRun: { status: "passed", started: "2026-07-20T09:00:00" },
-    recentRuns: [{ number: 88, status: "passed" }, { number: 92, status: "passed" }, { number: 97, status: "passed" }],
-  },
-  {
-    id: 3, name: "Stale sweeper", color: "#A05E1C", status: "paused",
-    description: "Flags docs that have gone quiet and assigns an owner.",
-    whenLabel: "Every day", trigger: { on: "schedule", every_minutes: 1440 },
-    nodes: [{ label: "Daily scan" }, { label: "Fetch docs" }, { label: "Tag docs" }, { label: "Create task" }],
-    lastRun: { status: "waiting", started: "2026-07-19T06:00:00" },
-    recentRuns: [{ number: 51, status: "passed" }, { number: 57, status: "waiting" }],
-  },
-  {
-    id: 4, name: "Translation sync", color: "#2C6E49", status: "active",
-    description: "Turns customer-facing edits into review-ready drafts.",
-    whenLabel: "Document changed", trigger: { on: "document_changed", tag: "customer-facing" },
-    nodes: [{ label: "Doc changed" }, { label: "Fetch docs" }, { label: "Summarize" }, { label: "Approval" }, { label: "Deploy site" }],
-    lastRun: { status: "running", started: "2026-07-21T08:30:00", dry: true },
-    recentRuns: [{ number: 201, status: "passed" }, { number: 205, status: "passed" }, { number: 209, status: "running", dry: true }],
-  },
-  {
-    id: 5, name: "Onboarding checker", color: "#1C3F60", status: "active",
-    description: "Verifies new hire docs stay consistent with the handbook.",
-    whenLabel: "Manual only", trigger: {},
-    nodes: [{ label: "Manual" }, { label: "Fetch docs" }, { label: "Fact check" }],
-    lastRun: null,
-    recentRuns: [],
-  },
-];
-
 const hasTrigger = (t: FlowTrigger | null) => Boolean(t && t.on);
 
 function fmtEvery(mins: number): string {
@@ -204,8 +152,9 @@ function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void })
 }
 
 export type FlowsListProps = {
-  flows?: Flow[];
-  sources?: SourceRef[];
+  flows: Flow[];
+  /** Sources a document trigger can be scoped to. */
+  sources: SourceRef[];
   /** Render a content-shaped skeleton silhouette instead of the list. */
   loading?: boolean;
   className?: string;
@@ -216,7 +165,7 @@ const td = `${tdPad} align-middle border-b border-ink/[0.06]`;
 /** Flow rows rendered before "Show all". */
 const PAGE = 25;
 
-export function FlowsList({ flows = DEMO_FLOWS, sources = DEMO_SOURCES, loading = false, className = "" }: FlowsListProps) {
+export function FlowsList({ flows, sources, loading = false, className = "" }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(null);
   const [draft, setDraft] = useState<{ from: Flow | null } | null>(null);

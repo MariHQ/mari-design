@@ -21,14 +21,6 @@ import { Truncate } from "../data-display/Truncate";
 
 export type Guide = { id: string; name: string; description: string; rules: number; tone: IconRingTone; preview: string[] };
 
-const GUIDES: Guide[] = [
-  { id: "plain", name: "Plain language", tone: "ok", rules: 42, description: "Direct, concise, and accessible. Prefer familiar words and active voice.", preview: ["Prefer one- or two-syllable words when they carry the meaning", "Keep sentences under 25 words", "Address the reader as “you”", "Use active voice unless the actor is unknown"] },
-  { id: "microsoft", name: "Microsoft", tone: "info", rules: 38, description: "Warm, clear product writing with task-oriented language.", preview: ["Use contractions for a natural tone", "Drop “please” from direct instructions", "Use sentence case everywhere, including titles", "Bold UI labels exactly as they appear"] },
-  { id: "google", name: "Google developer", tone: "attention", rules: 35, description: "Scannable technical guidance with precise, consistent terminology.", preview: ["Write in second person, present tense", "Put conditions before instructions", "Number sequences, bullet options", "Define an initialism at first mention"] },
-  { id: "ap", name: "AP style", tone: "blocked", rules: 31, description: "Newsroom conventions for capitalization, numerals, names, and dates.", preview: ["Spell out one through nine, numerals for 10+", "Abbreviate months with specific dates", "Use last names on second reference", "No serial comma in a simple series"] },
-  { id: "chicago", name: "Chicago", tone: "info", rules: 29, description: "Long-form editorial conventions for careful, polished prose.", preview: ["Use the serial comma", "Spell out numbers up to one hundred", "Italicize titles of standalone works", "Lowercase job titles unless they precede a name"] },
-];
-
 type Layer = {
   voice: string;
   terms: string;
@@ -38,34 +30,31 @@ type Layer = {
   sentenceCase: boolean;
 };
 
-const DEFAULT_LAYER: Layer = {
-  voice: "Confident and plain. We explain the why before the how, and we never hype. Short sentences. Address the reader directly.",
-  terms: "sign in → not login\nMari → not the assistant\nknowledge base → not KB",
-  banned: "leverage, synergy, best-in-class, seamless, revolutionary",
-  inclusive: true,
-  jargon: true,
-  sentenceCase: true,
-};
+/** The workspace's own voice layer, stacked on top of the chosen pack. */
+export type VoiceLayer = Layer;
 
 export type LibraryGuidesPanelProps = {
-  guides?: Guide[];
-  workspace?: string;
-  defaultPack?: string;
+  guides: Guide[];
+  workspace: string;
+  defaultPack: string;
+  /** The workspace's own voice layer, stacked on the chosen pack. */
+  layer: VoiceLayer;
   loading?: boolean;
   className?: string;
 };
 
 export function LibraryGuidesPanel({
-  guides = GUIDES,
-  workspace = "Northwind",
-  defaultPack = "plain",
+  guides,
+  workspace,
+  defaultPack,
+  layer: initialLayer,
   loading = false,
   className = "",
 }: LibraryGuidesPanelProps) {
   const [active, setActive] = useState(defaultPack);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [custom, setCustom] = useState(false);
-  const [layer, setLayer] = useState<Layer>(DEFAULT_LAYER);
+  const [layer, setLayer] = useState<Layer>(initialLayer);
   const [saved, setSaved] = useState(false);
 
   const setField = <K extends keyof Layer>(k: K, v: Layer[K]) => { setLayer((l) => ({ ...l, [k]: v })); setSaved(false); };

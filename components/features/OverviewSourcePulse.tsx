@@ -80,17 +80,8 @@ function PulseTile({ tile }: { tile: PulseTileData }) {
   );
 }
 
-const DEMO_TILES: PulseTileData[] = [
-  { key: "github", name: "GitHub", stat: "128", unit: "commits", status: "active", bars: [4, 7, 5, 9, 6, 11, 8] },
-  { key: "slack", name: "Slack", stat: "412", unit: "messages", status: "active", bars: [30, 22, 41, 18, 35, 27, 44] },
-  { key: "notion", name: "Notion", stat: "19", unit: "edits", status: "moderate", bars: [3, 1, 4, 2, 0, 5, 4] },
-  { key: "gdocs", name: "Google Drive", stat: "34", unit: "files", status: "active", bars: [6, 4, 8, 5, 7, 9, 6] },
-  { key: "granola", name: "Granola", stat: "7", unit: "meetings", status: "moderate", bars: [1, 2, 0, 1, 3, 1, 2] },
-  { key: "linear", name: "Linear", stat: "56", unit: "issues", status: "active", bars: [8, 5, 11, 7, 9, 6, 12] },
-];
-
 export type OverviewSourcePulseProps = {
-  tiles?: PulseTileData[];
+  tiles: PulseTileData[];
   loading?: boolean;
   offline?: boolean;
   onViewAll?: () => void;
@@ -106,7 +97,7 @@ const PREVIEW_TILES = 4;
 const EXPANDED_TILES = 24;
 
 export function OverviewSourcePulse({
-  tiles = DEMO_TILES, loading = false, offline = false, onViewAll, onRetry,
+  tiles, loading = false, offline = false, onViewAll, onRetry,
   defaultExpanded = false, className = "",
 }: OverviewSourcePulseProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);

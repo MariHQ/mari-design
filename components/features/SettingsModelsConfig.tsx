@@ -20,7 +20,7 @@ import { Truncate } from "../data-display/Truncate";
    embedding model, the LLM provider+model, provider API keys (with reveal
    toggles), a live-ish connection test, and per-source chunking parameters.
    Source: web/src/pages/settings/Models.tsx. Standalone — Save flashes a
-   note, Test connection returns a baked-in healthy result (no network). */
+   note, Test connection validates locally and returns no network result. */
 
 const EMB_OPTIONS = ["openai:text-embedding-3-small", "openai:text-embedding-3-large", "local:bge-base-en"];
 const LLM_OPTIONS = ["anthropic:claude-3-5-sonnet", "openai:gpt-4o", "openai:gpt-4o-mini", "ollama:llama3.1"];
@@ -44,12 +44,11 @@ function optionLabel(opt: string): string {
   return `${PROVIDER_LABEL[prov] ?? prov}: ${rest.join(":")}`;
 }
 
-type ChunkRow = { source: string; strategy: string; max_tokens: number; overlap: number };
-const DEMO_CHUNKING: ChunkRow[] = [
-  { source: "GitHub", strategy: "heading", max_tokens: 800, overlap: 80 },
-  { source: "Slack", strategy: "thread", max_tokens: 512, overlap: 0 },
-  { source: "Google Drive", strategy: "fixed", max_tokens: 1024, overlap: 128 },
-];
+/** How one connected source is split before embedding. */
+export type ChunkRow = { source: string; strategy: string; max_tokens: number; overlap: number };
+
+/** Provider API keys, as the server hands them back. */
+export type ProviderKeys = { openai: string; anthropic: string };
 
 function SavedNote({ show }: { show: boolean }) {
   return show ? <span className="font-term text-[11.5px] text-moss">✓ Saved</span> : null;
@@ -58,19 +57,24 @@ function SavedNote({ show }: { show: boolean }) {
 export type SettingsModelsConfigProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
   embedded?: boolean;
-  embedding?: string;
-  llm?: string;
-  dims?: number;
-  chunking?: ChunkRow[];
+  embedding: string;
+  llm: string;
+  dims: number;
+  chunking: ChunkRow[];
+  keys: ProviderKeys;
+  /** Corpus line appended to a healthy connection test. */
+  indexSummary: string;
   loading?: boolean;
   className?: string;
 };
 
 export function SettingsModelsConfig({
-  embedding = EMB_OPTIONS[0],
-  llm = LLM_OPTIONS[0],
-  dims = 1536,
-  chunking: initialChunking = DEMO_CHUNKING,
+  embedding,
+  llm,
+  dims,
+  chunking: initialChunking,
+  keys,
+  indexSummary,
   loading = false,
   embedded = false,
   className = "",
@@ -78,8 +82,8 @@ export function SettingsModelsConfig({
   const [emb, setEmb] = useState(embedding);
   const [embSaved, setEmbSaved] = useState(false);
   const [llmSel, setLlmSel] = useState(llm);
-  const [openaiKey, setOpenaiKey] = useState("sk-proj-9f2ac0d18b7e4a3c");
-  const [anthropicKey, setAnthropicKey] = useState("sk-ant-api03-77de10bc2f");
+  const [openaiKey, setOpenaiKey] = useState(keys.openai);
+  const [anthropicKey, setAnthropicKey] = useState(keys.anthropic);
   const [showOpenai, setShowOpenai] = useState(false);
   const [showAnthropic, setShowAnthropic] = useState(false);
   const [llmSaved, setLlmSaved] = useState(false);
@@ -103,7 +107,7 @@ export function SettingsModelsConfig({
   const testConnection = () => {
     const ok = endpoint.trim().length > 0 && activeKey.trim().length > 0;
     setHealth(ok
-      ? { ok: true, text: `${endpoint.trim()} · 12,480 documents · 12,201 embedded` }
+      ? { ok: true, text: `${endpoint.trim()} · ${indexSummary}` }
       : { ok: false, text: endpoint.trim().length === 0 ? "No endpoint is set." : "No API key is set." });
   };
 
@@ -217,7 +221,11 @@ export function SettingsModelsConfig({
                         (CONVENTIONS §12). */}
                     <td className={tdPad}><Truncate className="text-[13px] font-medium text-ink">{r.source}</Truncate></td>
                     <td className={`${tdPad} text-center`}>
-                      <Select value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8">
+                      {/* max-w: a <select> sizes itself to its WIDEST option, so
+                          a strategy name from a stored config (user data) drove
+                          the cell 696px past the table. The control is bounded;
+                          the option text ellipsises inside it. */}
+                      <Select value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
                         {opts.map((v) => <option key={v} value={v}>{strategyLabel(v)}</option>)}
                       </Select>
                     </td>

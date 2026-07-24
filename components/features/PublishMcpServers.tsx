@@ -50,14 +50,8 @@ const SCOPE_LABEL: Record<string, string> = Object.fromEntries(MCP_SCOPES.map((s
 /** Legacy rows still say "project". */
 const normalizeScope = (s: string): McpScope => (s === "project" ? "workspace" : (s as McpScope));
 
-type McpServer = { id: number; name: string; url: string; scope: McpScope | "project"; status: "connected" | "idle"; capabilities: string[] };
+export type McpServer = { id: number; name: string; url: string; scope: McpScope | "project"; status: "connected" | "idle"; capabilities: string[] };
 type McpTest = { ok: boolean; latency_ms: number; checks: Record<string, number> } | "error" | null;
-
-const DEMO_SERVERS: McpServer[] = [
-  { id: 1, name: "support-kb", url: "https://mcp.acme.com/s/support-kb", scope: "product", status: "connected", capabilities: ["search", "facts", "answers"] },
-  { id: 2, name: "eng-lineage", url: "https://mcp.acme.com/s/eng-lineage", scope: "org", status: "idle", capabilities: ["search", "lineage"] },
-  { id: 3, name: "legacy-bot", url: "https://mcp.acme.com/s/legacy-bot", scope: "workspace", status: "idle", capabilities: [] },
-];
 
 function connectSnippet(name: string, url: string, token?: string) {
   return `claude mcp add ${name} --transport http ${url || "<url>"} \\\n  --header "Authorization: Bearer ${token ?? "YOUR_TOKEN"}"`;
@@ -87,9 +81,9 @@ function CapPicker({ selected, onToggle }: { selected: string[]; onToggle: (k: s
   );
 }
 
-export type PublishMcpServersProps = { servers?: McpServer[]; loading?: boolean; className?: string };
+export type PublishMcpServersProps = { servers: McpServer[]; loading?: boolean; className?: string };
 
-export function PublishMcpServers({ servers: initialServers = DEMO_SERVERS, loading = false, className = "" }: PublishMcpServersProps) {
+export function PublishMcpServers({ servers: initialServers, loading = false, className = "" }: PublishMcpServersProps) {
   const [servers, setServers] = useState<McpServer[]>(initialServers);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");

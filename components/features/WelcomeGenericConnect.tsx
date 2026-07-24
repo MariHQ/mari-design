@@ -53,7 +53,7 @@ export function WelcomeGenericConnect({
   const connect = (values: Record<string, string>) => {
     const detail = values.channel || providerName;
     const running: SyncSource = {
-      id: providerKey, name: `${providerName} · ${detail}`, mark: <SourceMark provider={providerKey} size={24} />,
+      id: providerKey, name: `${providerName} · ${detail}`, provider: providerKey,
       state: "syncing", phase: "Chunking", done: 40, total: 210, chunkCount: 640, embeddedCount: 210,
     };
     setSync(running);

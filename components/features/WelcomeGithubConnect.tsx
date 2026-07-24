@@ -132,7 +132,7 @@ export function WelcomeGithubConnect({ repos = REPOS, defaultOpen = true, loadin
   const connect = () => {
     if (!repo) return;
     const running: SyncSource = {
-      id: "github", name: `GitHub · ${repo}`, mark: <GithubMark size={24} />,
+      id: "github", name: `GitHub · ${repo}`, provider: "github",
       state: "syncing", phase: "Fetching", done: 30, total: 240, chunkCount: 410, embeddedCount: 90,
     };
     setSync(running);

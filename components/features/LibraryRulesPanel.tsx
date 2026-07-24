@@ -61,26 +61,16 @@ const PACKS = [
   { id: "chicago", label: "Chicago" },
 ];
 
-const DOCS = [
-  {
-    id: "runbook",
-    label: "Payments runbook",
-    source: "github · docs/runbooks/payments.md",
-    text: "# Handling Payment Incidents\n\nIt's worth noting that our payments flow is seamless in order to reduce friction. When an alarm fires, you guys should delve into the dashboards very carefully. The transaction is processed and the record is written before the customer is notified. Please login to the console to whitelist the affected merchant.",
-  },
-  {
-    id: "release",
-    label: "Release notes",
-    source: "notion · Product / Release notes",
-    text: "# What Changed This Week\n\nWe shipped a seamless new onboarding flow. The migration is handled automatically and no action is required. Run a sanity check on your integrations before you sign in.",
-  },
-  {
-    id: "clean",
-    label: "Clean sample",
-    source: "docs · style/example.md",
-    text: "# Sign in to the console\n\nOpen the console and sign in. The service writes the record, then notifies the customer. If an alarm fires, open the dashboards and check the failed transaction.",
-  },
-];
+/** A sample document the checker can run over. Supplied by the caller: the
+    panel ships no documents of its own. */
+/** How many prose rules this build of the checker ships.
+    The registry is product logic (it holds live RegExps), so it stays in the
+    component — but the Library tab strip has to badge a count, and asking the
+    consuming app for a number only this module knows guaranteed a wrong one.
+    It rendered 0 beside a panel listing every rule. */
+export const RULE_COUNT = RULES.length;
+
+export type CheckerDoc = { id: string; label: string; source: string; text: string };
 
 const SEV_WEIGHT: Record<RuleSeverity, number> = { error: 9, warn: 6, advisory: 3 };
 
@@ -130,12 +120,14 @@ function mk(rule: Rule, text: string, start: number, end: number): Finding {
 const SEV_TONE: Record<RuleSeverity, string> = { error: "blocked", warn: "attention", advisory: "neutral" };
 
 export type LibraryRulesPanelProps = {
-  workspace?: string;
+  workspace: string;
+  /** Documents the live checker can be pointed at. */
+  docs: CheckerDoc[];
   loading?: boolean;
   className?: string;
 };
 
-export function LibraryRulesPanel({ workspace = "Northwind", loading = false, className = "" }: LibraryRulesPanelProps) {
+export function LibraryRulesPanel({ workspace, docs, loading = false, className = "" }: LibraryRulesPanelProps) {
   const [pack, setPack] = useState("plain");
   const [grammar, setGrammar] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -144,9 +136,9 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
   const [ignore, setIgnore] = useState<Set<string>>(new Set());
   const [zero, setZero] = useState<Set<string>>(new Set(["inclusive.guys", "inclusive.whitelist"]));
 
-  const [docId, setDocId] = useState(DOCS[0].id);
-  const doc = DOCS.find((d) => d.id === docId) ?? DOCS[0];
-  const [text, setText] = useState(doc.text);
+  const [docId, setDocId] = useState(docs.length ? docs[0].id : "");
+  const doc = docs.find((d) => d.id === docId) ?? docs[0];
+  const [text, setText] = useState(doc ? doc.text : "");
   const [checked, setChecked] = useState(false);
   const [findings, setFindings] = useState<Finding[]>([]);
 
@@ -168,7 +160,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
     return c;
   }, []);
 
-  const selectDoc = (id: string) => { const d = DOCS.find((x) => x.id === id) ?? DOCS[0]; setDocId(id); setText(d.text); setChecked(false); setFindings([]); };
+  const selectDoc = (id: string) => { const d = docs.find((x) => x.id === id) ?? docs[0]; setDocId(id); setText(d ? d.text : ""); setChecked(false); setFindings([]); };
   const check = () => { setFindings(runDetector(text, ignore, zero)); setChecked(true); };
   const save = () => { setDirty(false); setSaved(true); window.setTimeout(() => setSaved(false), 1800); };
 
@@ -243,7 +235,7 @@ export function LibraryRulesPanel({ workspace = "Northwind", loading = false, cl
             <div>
               <SectionLabel>Document</SectionLabel>
               <Select className="mt-1 block" value={docId} onChange={(e) => selectDoc(e.target.value)}>
-                {DOCS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                {docs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
               </Select>
             </div>
             <div className="font-term text-[11px] text-ink/65 pb-2">{doc.source}</div>

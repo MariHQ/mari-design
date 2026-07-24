@@ -27,7 +27,8 @@ import { Scrollable } from "../data-display/Scrollable";
 
 /* ————— ported local helpers (browser-only; use the DOM) ————— */
 
-type Finding = { id: number; kind: string; severity: string; text: string; note: string };
+/** One inline finding underlined in the prose. */
+export type EditorFinding = { id: number; kind: string; severity: string; text: string; note: string };
 
 let blockSeq = 1_000_000;
 const nid = () => blockSeq++;
@@ -53,7 +54,7 @@ const stripMarks = (html: string): string => {
 
 const cleanText = (s: string) => s.replace(/^[…\s]+/, "").replace(/[…\s]+$/, "").trim();
 
-const decorateBlock = (html: string, findings: Finding[], done: Set<number>): string => {
+const decorateBlock = (html: string, findings: EditorFinding[], done: Set<number>): string => {
   let out = html;
   for (const f of findings) {
     if (done.has(f.id)) continue;
@@ -115,34 +116,6 @@ const MARKED =
 
 /* ————— demo document + findings ————— */
 
-const DEMO_MD = `# Authentication Service Migration
-
-## 1. Overview
-The new authentication service replaces the legacy session store with stateless JWT tokens. It is expected to reduce login latency by roughly 40% and remove the shared-session bottleneck.
-
-Tokens are signed with RS256 and rotated every 24 hours. Downstream services validate signatures against the published JWKS endpoint.
-
-## 2. Rollout phases
-We will roll out the change in three phases across the fleet.
-
-### 2.1 Canary
-Route 5% of traffic through the new service and watch error rates for 48 hours.
-
-### 2.2 Ramp
-Increase to 50% once the canary is stable, tracking p99 latency closely.
-
-## 3. Risks
-- Token replay if clock skew exceeds the allowed window
-- JWKS downtime blocks all signature validation
-- Rollback requires draining every active token`;
-
-const DEMO_FINDINGS: Finding[] = [
-  { id: 1, kind: "fact", severity: "error", text: "reduce login latency by roughly 40%", note: "Contradicts verified fact: measured reduction was 22% in staging." },
-  { id: -2, kind: "prose", severity: "warn", text: "expected to", note: "hedge" },
-  { id: 3, kind: "freshness", severity: "warn", text: "rotated every 24 hours", note: "rotation cadence unverified" },
-  { id: -4, kind: "prose", severity: "warn", text: "across the fleet", note: "vague scope" },
-];
-
 type Annot = { fid: number; rule: string; tone: string; red: boolean; quote: string; top: number };
 
 /* Each annotation kind gets its own chip tone so "fact check" never reads the
@@ -157,13 +130,13 @@ const ANNOT_TONE: Record<string, string> = {
 /* ————— component ————— */
 
 export function DocReviewEditor({
-  body = DEMO_MD,
-  findings = DEMO_FINDINGS,
+  body,
+  findings,
   loading = false,
   compact = false,
 }: {
-  body?: string;
-  findings?: Finding[];
+  body: string;
+  findings: EditorFinding[];
   loading?: boolean;
   /** Narrow-column composition: the margin annotations drop below the prose
       instead of holding a 190px gutter. The page owns this decision

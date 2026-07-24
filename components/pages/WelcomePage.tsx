@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ErrorMessage } from "../feedback/ErrorMessage";
 import {
   CheckCircle2, ArrowRight, ChevronRight, GitFork, Lock, ExternalLink,
   Send, FileText, BookOpen, GitBranch, Bot, Sparkles,
@@ -16,16 +17,10 @@ import { Chip } from "../data-display/Chip";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark, GithubMark } from "../icons/marks";
 import { WelcomeGuideStep, type GuidePack } from "../features/WelcomeGuideStep";
-import { WelcomeGlossaryStep } from "../features/WelcomeGlossaryStep";
-import { WelcomeSyncPanel } from "../features/WelcomeSyncPanel";
+import { WelcomeGlossaryStep, type Candidate } from "../features/WelcomeGlossaryStep";
+import { WelcomeSyncPanel, type SyncRow } from "../features/WelcomeSyncPanel";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { AvatarGroup } from "../data-display/AvatarGroup";
-import { Truncate } from "../data-display/Truncate";
 import { focusRing } from "../tokens/focusRing";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_SOURCE, LONG_URL, UNBREAKABLE,
-  LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
-} from "./stress";
 
 /* Welcome — onboarding wizard (pages/welcome.md). Post-auth, renders OUTSIDE
    the console shell: a single-column wizard with a five-step Stepper
@@ -33,27 +28,13 @@ import {
    active step; the Connect step expands into per-connector onboarding flows
    rendered INLINE (provider header + credential fields + live sync progress),
    not portalled drawers, so the static canvas captures every connector's setup
-   surface. Style-guide, glossary and finish compose the Welcome* features. */
+   surface. Style-guide, glossary and finish compose the Welcome* features.
+
+   Pure presenter: the connector tiles, the repositories, every credential
+   field, the style packs, the glossary candidates and the sync rows arrive in
+   `data`. Brand marks are derived from a provider key, never carried. */
 
 const LABELS = ["Welcome", "Connect", "Style guide", "Glossary", "Finish"] as const;
-
-/* state id → active step index (0–4) */
-const STEP: Record<string, number> = {
-  default: 0,
-  connect: 1,
-  "connect-github": 1,
-  "connect-slack": 1,
-  "connect-notion": 1,
-  "connect-gdrive": 1,
-  "connect-upload": 1,
-  "connect-syncing": 1,
-  guide: 2,
-  glossary: 3,
-  syncing: 4,
-  done: 4,
-  overflow: 1,
-  stress: 1,
-};
 
 const STATES = [
   { id: "default", label: "Welcome" },
@@ -71,6 +52,64 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** Which onboarding step is on screen. An app drives it from its own route. */
+export type WelcomeStep =
+  | "hero" | "connect" | "connect-github" | "connect-slack" | "connect-notion"
+  | "connect-gdrive" | "connect-upload" | "connect-syncing"
+  | "guide" | "glossary" | "finish" | "done";
+
+/** Which of the five Stepper positions a step sits at. */
+const STEP_INDEX: Record<WelcomeStep, number> = {
+  hero: 0,
+  connect: 1, "connect-github": 1, "connect-slack": 1, "connect-notion": 1,
+  "connect-gdrive": 1, "connect-upload": 1, "connect-syncing": 1,
+  guide: 2, glossary: 3, finish: 4, done: 4,
+};
+
+/** One connector tile on the Connect step. `key` selects the brand mark. */
+export type Tile = { key: string; name: string; blurb: string; connected?: boolean; active?: boolean };
+
+/** One credential field on a connector's setup form. */
+export type CField = { key: string; label: string; secret?: boolean; multiline?: boolean; placeholder?: string; help?: string; value?: string };
+
+/** A repository the GitHub token can reach. */
+export type Repo = { name: string; desc: string; priv: boolean; branch: string };
+
+/** One file already ingested by the Upload connector. */
+export type UploadedFile = { name: string; detail: string };
+
+/** What the onboarding run actually achieved, for the Done step. */
+export type WelcomeSummary = { sourcesSynced: number; guide: string; glossaryTerms: number };
+
+/** Everything the onboarding wizard renders. */
+export type WelcomeData = {
+  step: WelcomeStep;
+  /** Connect step: the tiles offered, and how many connectors exist in total. */
+  tiles: Tile[];
+  connectorCount: number;
+  /** GitHub step. */
+  repos: Repo[];
+  selectedRepo: string;
+  pathsGlob: string;
+  /** Credential forms for the other providers. */
+  slackFields: CField[];
+  notionFields: CField[];
+  gdriveFields: CField[];
+  /** Upload step. */
+  uploadSummary: string;
+  uploadFiles: UploadedFile[];
+  /** connect-syncing step: the one source being watched. */
+  connectSync: SyncRow;
+  /** Style-guide step. */
+  packs: GuidePack[];
+  /** Glossary step. */
+  glossaryCandidates: Candidate[];
+  /** Finish step: every source's sync state. */
+  syncRows: SyncRow[];
+  /** Done step: what the run actually achieved. */
+  doneSummary: WelcomeSummary;
+};
 
 /* ── Shared unauthenticated framing ────────────────────────────────────────
    Kept identical to LoginPage / SetupPage: one backdrop, one 672px column, one
@@ -136,19 +175,7 @@ function Hero() {
 
 /* ── Step 1: connector grid ───────────────────────────────────────────── */
 
-type Tile = { key: string; name: string; blurb: string; connected?: boolean; active?: boolean };
-const TILES: Tile[] = [
-  { key: "github", name: "GitHub", blurb: "Markdown docs from repos in your token’s scope.", active: true },
-  { key: "slack", name: "Slack", blurb: "Import channel history into the library." },
-  { key: "notion", name: "Notion", blurb: "Pages and databases from a shared integration." },
-  { key: "gdrive", name: "Google Drive", blurb: "Docs & folders via a service account." },
-  { key: "upload", name: "Upload", blurb: "Drag in .md / .txt files directly." },
-  { key: "website", name: "Website", blurb: "Crawl a docs site by sitemap." },
-  { key: "confluence", name: "Confluence", blurb: "Spaces and pages from Cloud or Server.", connected: true },
-  { key: "jira", name: "Jira", blurb: "Issues and project docs." },
-];
-
-function ConnectGrid({ tiles = TILES }: { tiles?: Tile[] }) {
+function ConnectGrid({ tiles, connectorCount }: { tiles: Tile[]; connectorCount: number }) {
   return (
     <div className="space-y-5">
       <div>
@@ -175,7 +202,7 @@ function ConnectGrid({ tiles = TILES }: { tiles?: Tile[] }) {
         ))}
       </div>
       <button type="button" className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
-        <ChevronRight size={13} /> Show all 14 connectors
+        <ChevronRight size={13} /> Show all {connectorCount} connectors
       </button>
     </div>
   );
@@ -222,8 +249,6 @@ function ConnectFooterHint({ children }: { children: ReactNode }) {
   );
 }
 
-type CField = { key: string; label: string; secret?: boolean; multiline?: boolean; placeholder?: string; help?: string; value?: string };
-
 function CredFields({ fields }: { fields: CField[] }) {
   return (
     <div className="space-y-3">
@@ -242,21 +267,14 @@ function CredFields({ fields }: { fields: CField[] }) {
   );
 }
 
-const REPOS = [
-  { name: "acme/handbook", desc: "Company handbook & policies", priv: true, branch: "main" },
-  { name: "acme/api-docs", desc: "Public API reference", priv: false, branch: "main" },
-  { name: "acme/runbooks", desc: "On-call runbooks", priv: true, branch: "master" },
-  { name: "acme/blog", desc: "Engineering blog (Markdown)", priv: false, branch: "main" },
-];
-
-function GithubConnect() {
-  const selected = "acme/handbook";
+function GithubConnect({ data }: { data: WelcomeData }) {
+  const selected = data.selectedRepo;
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="github" name="GitHub" blurb="Pick a repository from your token’s scope, then narrow to a paths glob." />
       <BackToConnectors />
       <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5">
-        {REPOS.map((r) => {
+        {data.repos.map((r) => {
           const active = r.name === selected;
           return (
             <label key={r.name}
@@ -276,23 +294,19 @@ function GithubConnect() {
         })}
       </div>
       <Field label="Paths filter (glob)">
-        <Input className="w-full font-term" defaultValue="**/*.md" />
+        <Input className="w-full font-term" defaultValue={data.pathsGlob} />
       </Field>
       <ConnectFooterHint>Mari Cloud syncs Markdown docs read-only.</ConnectFooterHint>
     </div>
   );
 }
 
-function SlackConnect() {
+function SlackConnect({ fields }: { fields: CField[] }) {
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="slack" name="Slack" blurb="Import channel history into your shared knowledge library." docs />
       <BackToConnectors />
-      <CredFields fields={[
-        { key: "bot_token", label: "Bot token", secret: true, placeholder: "xoxb-…", value: "xoxb-2117-••••••••", help: "Needs channels:history and channels:read." },
-        { key: "app_token", label: "App-level token", secret: true, placeholder: "xapp-…", value: "xapp-1-A05••••" },
-        { key: "channel", label: "Channel", placeholder: "#engineering", value: "#engineering" },
-      ]} />
+      <CredFields fields={fields} />
       <div className="flex items-start gap-2 rounded-[4px] border border-ink/12 bg-flysch px-3 py-2 text-[12px] text-ink/70">
         <Bot size={13} className="mt-0.5 shrink-0" />
         Importing channel history is separate from the answering bot — set that up under Settings → Sources → Bots.
@@ -302,35 +316,29 @@ function SlackConnect() {
   );
 }
 
-function NotionConnect() {
+function NotionConnect({ fields }: { fields: CField[] }) {
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="notion" name="Notion" blurb="Sync pages and databases shared with an internal integration." docs />
       <BackToConnectors />
-      <CredFields fields={[
-        { key: "token", label: "Internal integration token", secret: true, placeholder: "secret_…", value: "secret_9Fh2••••", help: "Share the pages you want with the integration first." },
-        { key: "root", label: "Page or database ID", placeholder: "8f3c2b1a-…", value: "8f3c2b1a-004d-42e7-9b11" },
-      ]} />
+      <CredFields fields={fields} />
       <ConnectFooterHint>Only pages shared with the integration are visible.</ConnectFooterHint>
     </div>
   );
 }
 
-function GdriveConnect() {
+function GdriveConnect({ fields }: { fields: CField[] }) {
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="gdrive" name="Google Drive" blurb="Sync Docs and folders through a service account." docs />
       <BackToConnectors />
-      <CredFields fields={[
-        { key: "service_account_json", label: "Service-account JSON", secret: false, multiline: true, value: '{\n  "type": "service_account",\n  "project_id": "acme-docs",\n  "client_email": "mari@acme-docs.iam…"\n}', help: "Paste the downloaded key file; grant it viewer access to the folder." },
-        { key: "folder_id", label: "Folder ID", placeholder: "1A2b3C…", value: "1A2b3C4d5E6f7G8h" },
-      ]} />
+      <CredFields fields={fields} />
       <ConnectFooterHint>Google Docs are exported to Markdown on sync.</ConnectFooterHint>
     </div>
   );
 }
 
-function UploadConnect() {
+function UploadConnect({ data }: { data: WelcomeData }) {
   return (
     <div className="space-y-4">
       <ConnectorHeader provider="upload" name="files" blurb="Drag in .md / .txt files — they run the same chunk → embed pipeline as sync." />
@@ -341,17 +349,13 @@ function UploadConnect() {
         <Button compact>Browse files</Button>
       </div>
       <div>
-        <p className="text-[12.5px] text-ink/70">3 files ingested · 214 chunks · 189 embedded <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
+        <p className="text-[12.5px] text-ink/70">{data.uploadSummary} <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
         <div className="mt-2 grid grid-cols-1 gap-1.5">
-          {[
-            { name: "pricing.md", n: "88 chunks · 88 embedded" },
-            { name: "onboarding.md", n: "71 chunks · 71 embedded" },
-            { name: "faq.md", n: "55 chunks · 30 embedded" },
-          ].map((f) => (
+          {data.uploadFiles.map((f) => (
             <div key={f.name} className="flex items-center gap-2 rounded-md border border-ink/12 p-2">
               <FileText size={14} className="shrink-0 text-ink/65" />
               <span className="flex-1 truncate text-[13px] text-ink">{f.name}</span>
-              <span className="shrink-0 font-term text-[11px] text-ink/65">{f.n}</span>
+              <span className="shrink-0 font-term text-[11px] text-ink/65">{f.detail}</span>
             </div>
           ))}
         </div>
@@ -364,10 +368,12 @@ function UploadConnect() {
   );
 }
 
-function ConnectSyncing() {
+function ConnectSyncing({ row }: { row: SyncRow }) {
+  /* The brand mark is built from the provider key, so the row itself stays
+     plain JSON. */
   const source: SyncSource = {
-    id: "gh", name: "GitHub · acme/handbook", mark: <GithubMark size={24} />,
-    state: "syncing", phase: "Embedding", done: 340, total: 512, chunkCount: 8912, embeddedCount: 5780,
+    ...row,
+    provider: row.provider,
   };
   return (
     <div className="space-y-4">
@@ -383,39 +389,39 @@ function ConnectSyncing() {
 
 /* ── Steps 2–4 ────────────────────────────────────────────────────────── */
 
-function GuideStep() {
+function GuideStep({ packs }: { packs: GuidePack[] }) {
   return (
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Choose a style guide</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default: you can change it any time.</p>
       </div>
-      <WelcomeGuideStep />
+      <WelcomeGuideStep packs={packs} />
       <Button variant="link">Manage guides in the Library →</Button>
     </div>
   );
 }
 
-function GlossaryStep() {
+function GlossaryStep({ candidates }: { candidates: Candidate[] }) {
   return (
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Seed your glossary</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Harvest candidate terms from the documents you just connected.</p>
       </div>
-      <WelcomeGlossaryStep />
+      <WelcomeGlossaryStep candidates={candidates} />
     </div>
   );
 }
 
-function FinishStep() {
+function FinishStep({ rows }: { rows: SyncRow[] }) {
   return (
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Finish setup</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened: live sync state from your sources.</p>
       </div>
-      <WelcomeSyncPanel />
+      <WelcomeSyncPanel sources={rows} />
       <div className={AUTH_ACTIONS}>
         <Button variant="primary">Finish setup</Button>
       </div>
@@ -429,7 +435,7 @@ const NEXT = [
   { icon: <Bot size={18} />, title: "Set up bots", sub: "Answer questions in Slack." },
 ];
 
-function DoneStep() {
+function DoneStep({ summary }: { summary: WelcomeSummary }) {
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-md border border-moss/30 bg-moss/[0.06] p-4">
@@ -437,7 +443,7 @@ function DoneStep() {
         <div>
           <h2 className="text-[16px] font-semibold text-ink">Your workspace is ready</h2>
           <p className="mt-0.5 text-[13px] text-ink/65">
-            2 sources synced · style guide set to <b className="text-ink/80">Plain language</b> · 5 glossary terms added.
+            {summary.sourcesSynced} sources synced · style guide set to <b className="text-ink/80">{summary.guide}</b> · {summary.glossaryTerms} glossary terms added.
           </p>
         </div>
       </div>
@@ -456,139 +462,36 @@ function DoneStep() {
   );
 }
 
-/* ── Overflow / stress stress-test steps ──────────────────────────────── */
-
-/* A small glossary preview list (long terms/definitions/evidence) so the
-   glossary surface is exercised without driving the feature's internal scan. */
-function GlossaryPreview({ items }: { items: { term: string; def: string; ev: string }[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-1.5">
-      {items.map((c) => (
-        <div key={c.term} className="flex min-w-0 items-start gap-2.5 rounded-md border border-ink/12 p-2.5">
-          <BookOpen size={14} className="mt-0.5 shrink-0 text-ink/65" />
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 flex-wrap items-center gap-2">
-              {/* A term is an arbitrary-length value: ellipsis, not wrap (§12). */}
-              <Truncate as="b" className="min-w-0 flex-1 basis-[8rem] text-[13px] font-semibold text-ink">{c.term}</Truncate>
-              <Chip label={c.ev} tone="neutral" icon={<FileText size={10} />} />
-            </span>
-            {/* The definition is prose, so it wraps, clamped to three lines. */}
-            <Truncate lines={3} className="mt-0.5 text-[12.5px] text-ink/65">{c.def}</Truncate>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* `overflow` — the Connect/guide/glossary/sync surfaces stuffed with very long
-   NATURAL text. Catches wrapping, truncation, line-clamp, and vertical
-   overflow. */
-function OverflowStep() {
-  const tiles: Tile[] = [
-    { key: "github", name: LONG_TITLE, blurb: LONG_PARAGRAPH, active: true },
-    { key: "confluence", name: LONG_NAME, blurb: LONG_PARAGRAPH, connected: true },
-    { key: "slack", name: "Slack workspace with an extraordinarily long organization name", blurb: LONG_PARAGRAPH },
-    { key: "gdrive", name: LONG_SOURCE, blurb: LONG_PARAGRAPH },
-  ];
-  const packs: GuidePack[] = [
-    { id: "plain", name: LONG_TITLE, description: LONG_PARAGRAPH, rules: 42 },
-    { id: "microsoft", name: LONG_NAME, description: LONG_PARAGRAPH, rules: 38 },
-  ];
-  const sources: SyncSource[] = [
-    { id: "gh", name: LONG_SOURCE, mark: <GithubMark size={24} />, state: "syncing", phase: LONG_TITLE, done: 340, total: 512, chunkCount: 8912, embeddedCount: 5780 },
-    { id: "conf", name: LONG_NAME, mark: <SourceMark provider="confluence" size={24} />, state: "error", error: LONG_PARAGRAPH },
-  ];
-  const glossary = [
-    { term: LONG_NAME, def: LONG_PARAGRAPH, ev: LONG_SOURCE },
-    { term: LONG_TITLE, def: LONG_PARAGRAPH, ev: LONG_SOURCE },
-  ];
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="font-display text-[20px] font-semibold text-ink">{LONG_TITLE}</h2>
-        <p className="mt-1 text-[13.5px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
-      </div>
-      <ConnectGrid tiles={tiles} />
-      <WelcomeGuideStep packs={packs} />
-      <GlossaryPreview items={glossary} />
-      <WelcomeSyncPanel sources={sources} />
-    </div>
-  );
-}
-
-/* `stress` — PATHOLOGICAL content: unbreakable tokens/URLs, a single long word,
-   huge numbers, a 20+ chip row, a long avatar stack, and mixed scripts + emoji.
-   Catches horizontal overflow, missing min-w-0/break-words/truncate, and flex
-   blowouts. */
-function StressStep() {
-  const tiles: Tile[] = [
-    { key: "github", name: UNBREAKABLE, blurb: LONG_URL, active: true },
-    { key: "slack", name: MIXED_SCRIPT, blurb: LONG_WORD },
-    { key: "notion", name: LONG_WORD, blurb: UNBREAKABLE, connected: true },
-  ];
-  const sources: SyncSource[] = [
-    { id: "gh", name: UNBREAKABLE, mark: <GithubMark size={24} />, state: "syncing", phase: LONG_WORD, done: HUGE_NUMBER, total: 99999999, chunkCount: HUGE_NUMBER, embeddedCount: 5780 },
-    { id: "x", name: MIXED_SCRIPT, mark: <SourceMark provider="slack" size={24} />, state: "error", error: LONG_URL },
-  ];
-  const glossary = [
-    { term: LONG_WORD, def: UNBREAKABLE, ev: LONG_URL },
-    { term: MIXED_SCRIPT, def: LONG_URL, ev: UNBREAKABLE },
-  ];
-  return (
-    <div className="space-y-6">
-      <div>
-        {/* Title, token and URL are all values, so all three truncate (§12). */}
-        <Truncate as="h2" className="font-display text-[20px] font-semibold text-ink">{MIXED_SCRIPT}</Truncate>
-        <Truncate as="code" className="mt-1 font-term text-[12px] text-biscay-2">{UNBREAKABLE}</Truncate>
-        <Truncate className="mt-2 text-[13.5px] text-ink/65">{LONG_URL}</Truncate>
-      </div>
-      <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
-        {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-      </Scrollable>
-      <div className="flex min-w-0 flex-wrap items-center gap-4">
-        <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-        <Truncate className="min-w-0 flex-1 basis-[8rem] font-term text-[12px] text-ink/65">{`${HUGE_NUMBER_STR} members`}</Truncate>
-      </div>
-      <ConnectGrid tiles={tiles} />
-      <GlossaryPreview items={glossary} />
-      <WelcomeSyncPanel sources={sources} />
-    </div>
-  );
-}
-
 /* ── Body dispatch ────────────────────────────────────────────────────── */
 
-function StepBody({ state }: { state: string }) {
-  switch (state) {
-    case "overflow": return <OverflowStep />;
-    case "stress": return <StressStep />;
-    case "connect": return <ConnectGrid />;
-    case "connect-github": return <GithubConnect />;
-    case "connect-slack": return <SlackConnect />;
-    case "connect-notion": return <NotionConnect />;
-    case "connect-gdrive": return <GdriveConnect />;
-    case "connect-upload": return <UploadConnect />;
-    case "connect-syncing": return <ConnectSyncing />;
-    case "guide": return <GuideStep />;
-    case "glossary": return <GlossaryStep />;
-    case "syncing": return <FinishStep />;
-    case "done": return <DoneStep />;
+function StepBody({ data }: { data: WelcomeData }) {
+  switch (data.step) {
+    case "connect": return <ConnectGrid tiles={data.tiles} connectorCount={data.connectorCount} />;
+    case "connect-github": return <GithubConnect data={data} />;
+    case "connect-slack": return <SlackConnect fields={data.slackFields} />;
+    case "connect-notion": return <NotionConnect fields={data.notionFields} />;
+    case "connect-gdrive": return <GdriveConnect fields={data.gdriveFields} />;
+    case "connect-upload": return <UploadConnect data={data} />;
+    case "connect-syncing": return <ConnectSyncing row={data.connectSync} />;
+    case "guide": return <GuideStep packs={data.packs} />;
+    case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} />;
+    case "finish": return <FinishStep rows={data.syncRows} />;
+    case "done": return <DoneStep summary={data.doneSummary} />;
     default: return <Hero />;
   }
 }
 
-function WelcomePage({ state = "default", mobile = false }: PageProps) {
-  if (state === "syncing") {
+function WelcomePage({ data, loading = false, error = null, mobile = false }: PageProps<WelcomeData>) {
+  if (loading) {
     return (
       <div className={AUTH_SHELL}>
         <SkeletonPage variant="auth" />
       </div>
     );
   }
-  const step = STEP[state] ?? 0;
+  const step = STEP_INDEX[data.step];
   const last = LABELS.length - 1;
-  const done = state === "done";
+  const done = data.step === "done";
   const nextLabel =
     done ? "Go to Overview" : step === 0 ? "Set up my workspace" : step === last ? "Finish setup" : "Continue";
 
@@ -603,7 +506,17 @@ function WelcomePage({ state = "default", mobile = false }: PageProps) {
             <Stepper labels={[...LABELS]} current={step} ariaLabel="Onboarding steps" />
           </div>
 
-          <StepBody state={state} />
+          {/* A failed onboarding query used to render as a normal, empty
+              wizard: the user saw "no repositories found" when the truth was
+              that the request failed. Catalog copy carries the explanation and
+              the recovery action (§8); `error` carries the real detail. */}
+          {error && (
+            <div className="mb-4">
+              <ErrorMessage id="server.unavailable">{error}</ErrorMessage>
+            </div>
+          )}
+
+          <StepBody data={data} />
 
           {/* Primary bottom LEFT, secondary to its right (§2). */}
           <div className={`mt-7 border-t border-ink/10 pt-4 ${AUTH_ACTIONS}`}>
@@ -620,7 +533,7 @@ function WelcomePage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<WelcomeData> = {
   id: "welcome",
   title: "Welcome",
   route: "/welcome",

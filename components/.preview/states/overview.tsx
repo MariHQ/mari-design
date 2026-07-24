@@ -9,7 +9,10 @@ import type { FeedItem } from "../../features/OverviewLiveActivity";
 import type { RecentDoc } from "../../features/OverviewRecentDocs";
 import type { WfFlow } from "../../features/OverviewWorkflowStrip";
 import type { DigestTopic } from "../../data-display/DigestCard";
-import { SourceMark } from "../../icons/marks";
+import {
+  OVERVIEW_STATS, OVERVIEW_TASKS, OVERVIEW_TOPICS, OVERVIEW_TILES,
+  OVERVIEW_FEED, OVERVIEW_DOCS, OVERVIEW_FLOW, OVERVIEW_RUN,
+} from "../fixtures/features";
 
 /* State matrix for the overview group. Author EVERY state worth reviewing:
    default, each variant, loading, empty, error, disabled, selected, and the
@@ -23,19 +26,17 @@ const HUGE = "Supercalifragilistic_configuration_parameter_value_that_never_wrap
 const LONG_SUMMARY =
   "Mari re-read every page touched this week and found that the pricing FAQ, the billing runbook, and the partner agreement template all describe proration differently, which means support, sales, and finance have each been quoting a different number to customers since the Growth tier rename shipped.";
 
-const mark = (p: string) => <SourceMark provider={p} size={13} />;
-
 /* ── Digest fixtures ─────────────────────────────────────────────────── */
 const LONG_TOPICS: DigestTopic[] = [
   {
     title: LONG,
     summary: LONG_SUMMARY,
     where: [
-      { source: "notion", label: "Pricing FAQ, Growth tier proration and credits", icon: mark("notion") },
-      { source: "gdocs", label: HUGE, icon: mark("gdocs") },
-      { source: "github", label: "auth/README", icon: mark("github") },
-      { source: "slack", label: "#eng-identity", icon: mark("slack") },
-      { source: "linear", label: "Billing platform backlog", icon: mark("linear") },
+      { source: "notion", label: "Pricing FAQ, Growth tier proration and credits" },
+      { source: "gdocs", label: HUGE },
+      { source: "github", label: "auth/README" },
+      { source: "slack", label: "#eng-identity" },
+      { source: "linear", label: "Billing platform backlog" },
     ],
     impact: [
       { name: "Support", tone: "info" }, { name: "Sales", tone: "ok" },
@@ -47,7 +48,7 @@ const LONG_TOPICS: DigestTopic[] = [
   {
     title: HUGE,
     summary: "One source, one line.",
-    where: [{ source: "granola", label: "Postmortem sync", icon: mark("granola") }],
+    where: [{ source: "granola", label: "Postmortem sync" }],
     impact: [],
   },
 ];
@@ -143,7 +144,6 @@ const STRESS_TOPICS: DigestTopic[] = Array.from({ length: 40 }, (_, i) => ({
   where: Array.from({ length: (i % 6) + 2 }, (_, j) => ({
     source: ["notion", "gdocs", "github", "slack", "granola", "linear"][j % 6],
     label: j === 3 ? HUGE : `Source document ${j + 1}`,
-    icon: mark(["notion", "gdocs", "github", "slack", "granola", "linear"][j % 6]),
   })),
   impact: Array.from({ length: (i % 5) + 2 }, (_, j) => ({
     name: ["Support", "Sales", "Finance operations and revenue recognition", "SRE", "On-call"][j % 5],
@@ -199,15 +199,15 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewStatTiles", title: "Overview / Headline stat tiles", width: 900,
     states: [
-      { id: "default", label: "Default", node: <OverviewStatTiles /> },
+      { id: "default", label: "Default", node: <OverviewStatTiles stats={OVERVIEW_STATS} /> },
       { id: "zeroes", label: "All zero (idle workspace)", node: (
         <OverviewStatTiles stats={{ changes: 0, factsReview: 0, flowsRunning: 0 }} />) },
-      { id: "loading", label: "Loading", node: <OverviewStatTiles loading /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewStatTiles offline /> },
-      { id: "noswatch", label: "Accent line off", node: <OverviewStatTiles swatch={false} /> },
+      { id: "loading", label: "Loading", node: <OverviewStatTiles stats={OVERVIEW_STATS} loading /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewStatTiles stats={null} offline /> },
+      { id: "noswatch", label: "Accent line off", node: <OverviewStatTiles stats={OVERVIEW_STATS} swatch={false} /> },
       { id: "bignumbers", label: "Overflow: huge numbers", node: (
         <OverviewStatTiles stats={{ changes: 1284905, factsReview: 998877, flowsRunning: 1234567 }} />) },
-      { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: <OverviewStatTiles /> },
+      { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: <OverviewStatTiles stats={OVERVIEW_STATS} /> },
       { id: "stress", label: "Volume: nine-figure counts", node: (
         <OverviewStatTiles stats={{ changes: 128490512, factsReview: 99887766, flowsRunning: 412345678 }} />) },
     ],
@@ -215,15 +215,15 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewDigestCard", title: "Overview / This week's digest", width: 680,
     states: [
-      { id: "default", label: "Default", node: <OverviewDigestCard /> },
-      { id: "loading", label: "Loading", node: <OverviewDigestCard loading /> },
+      { id: "default", label: "Default", node: <OverviewDigestCard topics={OVERVIEW_TOPICS} /> },
+      { id: "loading", label: "Loading", node: <OverviewDigestCard topics={[]} loading /> },
       { id: "empty", label: "Empty (no topics)", node: <OverviewDigestCard topics={[]} /> },
-      { id: "error", label: "Error / API offline", node: <OverviewDigestCard error /> },
+      { id: "error", label: "Error / API offline", node: <OverviewDigestCard topics={[]} error /> },
       { id: "single", label: "One topic, one source (singular label)", node: (
         <OverviewDigestCard topics={[{
           title: "Incident retro synthesized into a runbook update",
           summary: "The Jul 14, 2026 latency incident's action items landed as a new escalation ladder.",
-          where: [{ source: "granola", label: "Postmortem sync", icon: mark("granola") }],
+          where: [{ source: "granola", label: "Postmortem sync" }],
           impact: [{ name: "SRE", tone: "blocked" }],
         }]} />) },
       { id: "overflow", label: "Overflow: long title, summary, unbreakable chip, many chips", node: (
@@ -237,11 +237,11 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewTodayReview", title: "Overview / Today's review", width: 680,
     states: [
-      { id: "default", label: "Default (collapsed)", node: <OverviewTodayReview /> },
-      { id: "expanded", label: "Expanded (view all)", node: <OverviewTodayReview defaultExpanded /> },
-      { id: "loading", label: "Loading", node: <OverviewTodayReview loading /> },
+      { id: "default", label: "Default (collapsed)", node: <OverviewTodayReview tasks={OVERVIEW_TASKS} /> },
+      { id: "expanded", label: "Expanded (view all)", node: <OverviewTodayReview tasks={OVERVIEW_TASKS} defaultExpanded /> },
+      { id: "loading", label: "Loading", node: <OverviewTodayReview tasks={[]} loading /> },
       { id: "empty", label: "Empty (nothing to review)", node: <OverviewTodayReview tasks={[]} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewTodayReview offline /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewTodayReview tasks={null} offline /> },
       { id: "alldone", label: "All done (clear enabled)", node: (
         <OverviewTodayReview tasks={MANY_TASKS.slice(0, 3).map((t) => ({ ...t, done: true }))} />) },
       { id: "manyrows", label: "Overflow: 14 rows, expanded", node: (
@@ -257,11 +257,11 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewSourcePulse", title: "Overview / Source pulse", width: 680,
     states: [
-      { id: "default", label: "Default (collapsed)", node: <OverviewSourcePulse /> },
-      { id: "expanded", label: "Expanded (all sources)", node: <OverviewSourcePulse defaultExpanded /> },
-      { id: "loading", label: "Loading", node: <OverviewSourcePulse loading /> },
+      { id: "default", label: "Default (collapsed)", node: <OverviewSourcePulse tiles={OVERVIEW_TILES} /> },
+      { id: "expanded", label: "Expanded (all sources)", node: <OverviewSourcePulse tiles={OVERVIEW_TILES} defaultExpanded /> },
+      { id: "loading", label: "Loading", node: <OverviewSourcePulse tiles={[]} loading /> },
       { id: "empty", label: "Empty (no sources connected)", node: <OverviewSourcePulse tiles={[]} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewSourcePulse offline /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewSourcePulse tiles={[]} offline /> },
       { id: "manytiles", label: "Overflow: 10 sources, expanded", node: (
         <OverviewSourcePulse tiles={MANY_TILES} defaultExpanded />) },
       { id: "longnames", label: "Overflow: long + unbreakable source names", node: (
@@ -275,11 +275,11 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewLiveActivity", title: "Overview / Live activity", width: 680,
     states: [
-      { id: "default", label: "Default", node: <OverviewLiveActivity pollMs={0} /> },
-      { id: "loading", label: "Loading", node: <OverviewLiveActivity loading pollMs={0} /> },
+      { id: "default", label: "Default", node: <OverviewLiveActivity items={OVERVIEW_FEED} pollMs={0} /> },
+      { id: "loading", label: "Loading", node: <OverviewLiveActivity items={[]} loading pollMs={0} /> },
       { id: "empty", label: "Empty (quiet feed, paused chip)", node: (
         <OverviewLiveActivity items={[]} pollMs={0} />) },
-      { id: "offline", label: "Offline (no API)", node: <OverviewLiveActivity offline pollMs={0} /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewLiveActivity items={[]} offline pollMs={0} /> },
       { id: "manyrows", label: "Overflow: 16 items (caps at 8)", node: (
         <OverviewLiveActivity items={MANY_FEED} pollMs={0} />) },
       { id: "longtext", label: "Overflow: long actor + unbreakable target", node: (
@@ -293,8 +293,8 @@ export const OVERVIEW: ComponentSpec[] = [
   {
     id: "OverviewWorkflowStrip", title: "Overview / Workflow strip", width: 680,
     states: [
-      { id: "default", label: "Default", node: <OverviewWorkflowStrip /> },
-      { id: "configuring", label: "Configure panel open", node: <OverviewWorkflowStrip defaultConfiguring /> },
+      { id: "default", label: "Default", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={OVERVIEW_RUN} /> },
+      { id: "configuring", label: "Configure panel open", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={OVERVIEW_RUN} defaultConfiguring /> },
       { id: "paused", label: "Paused flow, failed last run", node: (
         <OverviewWorkflowStrip
           flow={{ name: "Nightly stale sweep", status: "paused", nodes: [
@@ -305,28 +305,28 @@ export const OVERVIEW: ComponentSpec[] = [
           ] }}
           run={{ started: "2026-07-19T02:14:00", outcome: "Failed" }} />) },
       { id: "unknownoutcome", label: "Unmapped run outcome (free text)", node: (
-        <OverviewWorkflowStrip run={{ started: "2026-07-20T14:57:00", outcome: "Partially applied with warnings" }} />) },
-      { id: "neverrun", label: "Never run", node: <OverviewWorkflowStrip run={null} /> },
-      { id: "runsloading", label: "Runs still loading", node: <OverviewWorkflowStrip run={null} runsLoading /> },
-      { id: "loading", label: "Loading", node: <OverviewWorkflowStrip loading /> },
-      { id: "empty", label: "Empty (no flows)", node: <OverviewWorkflowStrip flow={null} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewWorkflowStrip offline /> },
+        <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={{ started: "2026-07-20T14:57:00", outcome: "Partially applied with warnings" }} />) },
+      { id: "neverrun", label: "Never run", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={null} /> },
+      { id: "runsloading", label: "Runs still loading", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={null} runsLoading /> },
+      { id: "loading", label: "Loading", node: <OverviewWorkflowStrip flow={null} run={null} loading /> },
+      { id: "empty", label: "Empty (no flows)", node: <OverviewWorkflowStrip flow={null} run={null} /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewWorkflowStrip flow={null} run={null} offline /> },
       { id: "manysteps", label: "Overflow: 8 steps, long + unbreakable labels", node: (
-        <OverviewWorkflowStrip flow={LONG_FLOW} defaultConfiguring />) },
+        <OverviewWorkflowStrip flow={LONG_FLOW} run={OVERVIEW_RUN} defaultConfiguring />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
-        <OverviewWorkflowStrip flow={LONG_FLOW} />) },
+        <OverviewWorkflowStrip flow={LONG_FLOW} run={OVERVIEW_RUN} />) },
       { id: "stress", label: "Volume: 60-step flow, every step checked", node: (
-        <OverviewWorkflowStrip flow={STRESS_FLOW} defaultConfiguring />) },
+        <OverviewWorkflowStrip flow={STRESS_FLOW} run={OVERVIEW_RUN} defaultConfiguring />) },
     ],
   },
   {
     id: "OverviewRecentDocs", title: "Overview / Recent docs", width: 680,
     states: [
-      { id: "default", label: "Default (collapsed)", node: <OverviewRecentDocs /> },
-      { id: "expanded", label: "Expanded (browse all)", node: <OverviewRecentDocs defaultExpanded /> },
-      { id: "loading", label: "Loading", node: <OverviewRecentDocs loading /> },
+      { id: "default", label: "Default (collapsed)", node: <OverviewRecentDocs docs={OVERVIEW_DOCS} /> },
+      { id: "expanded", label: "Expanded (browse all)", node: <OverviewRecentDocs docs={OVERVIEW_DOCS} defaultExpanded /> },
+      { id: "loading", label: "Loading", node: <OverviewRecentDocs docs={[]} loading /> },
       { id: "empty", label: "Empty (no docs)", node: <OverviewRecentDocs docs={[]} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewRecentDocs offline /> },
+      { id: "offline", label: "Offline (no API)", node: <OverviewRecentDocs docs={[]} offline /> },
       { id: "manyrows", label: "Overflow: 12 rows, expanded", node: (
         <OverviewRecentDocs docs={MANY_DOCS} defaultExpanded />) },
       { id: "longtitles", label: "Overflow: long + unbreakable titles, unknown source", node: (

@@ -35,21 +35,12 @@ const SOURCE_NAME: Record<string, string> = {
   linear: "Linear",
 };
 
-const DEMO_DOCS: RecentDoc[] = [
-  { id: 101, source: "notion", title: "Pricing FAQ: Growth tier proration", date: "2026-07-20" },
-  { id: 102, source: "github", title: "auth/README: Okta SAML walkthrough", date: "2026-07-19" },
-  { id: 103, source: "granola", title: "Incident retro: Jul 14, 2026 latency", date: "2026-07-15" },
-  { id: 104, source: "gdocs", title: "Billing runbook: proration and credits", date: "2026-07-14" },
-  { id: 105, source: "notion", title: "Onboarding space: self-serve SSO", date: "2026-07-11" },
-  { id: 106, source: "linear", title: "On-call guide: escalation ladder", date: "2026-07-08" },
-];
-
 /** Collapsed height of the table, in rows, and the expanded page size. */
 const PREVIEW_ROWS = 3;
 const EXPANDED_ROWS = 25;
 
 export type OverviewRecentDocsProps = {
-  docs?: RecentDoc[];
+  docs: RecentDoc[];
   loading?: boolean;
   offline?: boolean;
   onOpen?: (id: number) => void;
@@ -62,7 +53,7 @@ export type OverviewRecentDocsProps = {
 };
 
 export function OverviewRecentDocs({
-  docs = DEMO_DOCS, loading = false, offline = false, onOpen, onBrowse, onRetry,
+  docs, loading = false, offline = false, onOpen, onBrowse, onRetry,
   defaultExpanded = false, className = "",
 }: OverviewRecentDocsProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);

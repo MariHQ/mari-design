@@ -125,17 +125,17 @@ export function SourcesSyncStatus({ animate = true, stuck = false, loading = fal
 
   const source: SyncSource = run === "cancelled"
     ? {
-        id: "gh", name: "GitHub · acme/handbook", mark: <SourceMark provider="github" size={24} />,
+        id: "gh", name: "GitHub · acme/handbook", provider: "github",
         state: "queued",
       }
     : done
     ? {
-        id: "gh", name: "GitHub · acme/handbook", mark: <SourceMark provider="github" size={24} />,
+        id: "gh", name: "GitHub · acme/handbook", provider: "github",
         state: "done", docCount: 500, chunkCount: 8912, embeddedCount: 8912,
         lastSyncAt: new Date().toISOString(),
       }
     : {
-        id: "gh", name: "GitHub · acme/handbook", mark: <SourceMark provider="github" size={24} />,
+        id: "gh", name: "GitHub · acme/handbook", provider: "github",
         state: "syncing", phase: PHASE_LABEL[PHASES[Math.min(idx, PHASES.length - 1)]],
         done: doneCount, total, chunkCount: 8912, embeddedCount: doneCount * 17,
       };

@@ -18,17 +18,21 @@ import { fmtDateTime } from "../tokens/format";
      • actionless — a live-kind source with no id yet → "sync status unavailable"
 
    Every sync line is rendered from the source's own state, never invented.
-   Standalone: baked demo sources, local busy/running/paused state, no network. */
+   Pure presenter: sources arrive as a required prop; busy/running/paused is
+   local state, and nothing hits the network. */
 
-type Tier = "live" | "legacy" | "actionless";
-type SyncState = "healthy" | "running" | "failed" | "paused";
+/* Exported: an adapter mapping an API response onto `Source` needs to name
+   these, and reaching them through `Source["tier"]` is a workaround for them
+   being private, not a preference. */
+export type Tier = "live" | "legacy" | "actionless";
+export type SyncState = "healthy" | "running" | "failed" | "paused";
 
 const PHASE_LABEL: Record<string, string> = {
   listing: "Listing", fetching: "Fetching", chunking: "Chunking",
   embedding: "Embedding", indexing: "Indexing",
 };
 
-type Source = {
+export type Source = {
   id: string;
   provider: string;
   name: string;
@@ -48,38 +52,6 @@ type Source = {
   bars?: number[];
 };
 
-const DEMO: Source[] = [
-  {
-    id: "gh", provider: "github", name: "acme/handbook", tier: "live", state: "running",
-    phase: "embedding", done: 340, total: 512,
-    docCount: 1284, chunkCount: 8912, embeddedCount: 8340,
-    lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11],
-  },
-  {
-    id: "slack", provider: "slack", name: "Slack · #engineering", tier: "live", state: "healthy",
-    docCount: 4210, chunkCount: 15330, embeddedCount: 15330,
-    lastSyncAt: "2026-07-21T09:41:00", bars: [6, 4, 7, 5, 8, 6, 9, 7],
-  },
-  {
-    id: "notion", provider: "notion", name: "Notion · Product wiki", tier: "legacy", state: "healthy",
-    docsCount: 620, lastSyncAt: null,
-  },
-  {
-    id: "gdrive", provider: "gdrive", name: "Google Drive · Design", tier: "actionless", state: "healthy",
-    docsCount: 88, lastSyncAt: null,
-  },
-  {
-    id: "web", provider: "website", name: "docs.acme.com", tier: "legacy", state: "paused",
-    docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3],
-  },
-  {
-    id: "conf", provider: "confluence", name: "Confluence · Ops", tier: "live", state: "failed",
-    docCount: 512, chunkCount: 3100, embeddedCount: 2870,
-    lastSyncAt: "2026-07-20T22:15:00",
-    lastError: "GET /rest/api/content returned 401, the token expired.",
-  },
-];
-
 const HEALTH: Record<SyncState, ConnectorHealth> = {
   healthy: "Healthy", running: "Syncing", failed: "Error", paused: "Paused",
 };
@@ -94,12 +66,12 @@ function counts(s: Source): ReactNode {
 
 export type SourcesConnectorCardProps = {
   /** Override the baked-in demo sources. */
-  sources?: Source[];
+  sources: Source[];
   loading?: boolean;
   className?: string;
 };
 
-export function SourcesConnectorCard({ sources = DEMO, loading = false, className = "" }: SourcesConnectorCardProps) {
+export function SourcesConnectorCard({ sources, loading = false, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 

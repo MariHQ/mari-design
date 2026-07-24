@@ -29,23 +29,15 @@ export type Term = {
   updated: string;
 };
 
-const DEMO_TERMS: Term[] = [
-  { id: "t1", term: "Canonical", definition: "The current source of truth for a topic; evidence is preferred from it and conflicting docs defer to it.", owner: "Priya Nair", updated: "2026-07-14" },
-  { id: "t2", term: "Decision chunk", definition: "A thread-sized slice of a Slack conversation that captures a single decision, participants, and outcome.", owner: "Marcus Vale", updated: "2026-07-09" },
-  { id: "t3", term: "Evidence policy", definition: "The rule that governs whether facts extracted from a document are trusted, flagged, or ignored.", owner: "Priya Nair", updated: "2026-06-28" },
-  { id: "t4", term: "Freshness", definition: "How recently a source was verified against reality; drives the fresh-% corpus stat and stale flags.", owner: "Dana Osei", updated: "2026-07-02" },
-  { id: "t5", term: "Zero tolerance", definition: "A rule behavior that treats any match as a hard block rather than an advisory finding.", owner: "Marcus Vale", updated: "2026-05-31" },
-];
-
 export type LibraryGlossaryPanelProps = {
-  terms?: Term[];
+  terms: Term[];
   loading?: boolean;
   className?: string;
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function LibraryGlossaryPanel({ terms = DEMO_TERMS, loading = false, className }: LibraryGlossaryPanelProps) {
+export function LibraryGlossaryPanel({ terms, loading = false, className }: LibraryGlossaryPanelProps) {
   const [rows, setRows] = useState<Term[]>(terms);
   const [editId, setEditId] = useState<string | null>(null);
   const [editTerm, setEditTerm] = useState("");

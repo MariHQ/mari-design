@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, forwardRef, type ButtonHTMLAttributes } from "react";
 import type { ReactNode } from "react";
 import { Search, Minus, Plus, Maximize2, Sparkles, GitFork, Bookmark, ChevronDown, X } from "lucide-react";
 import { card } from "../tokens/card";
@@ -12,7 +12,7 @@ import { TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
   useLineageControls, clamp,
-  DEMO_NODES, type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
+  type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -36,18 +36,29 @@ type SearchResult = { id: string; node: LNode };
 const SOURCE_MENU_ROWS = 9;
 
 export type LineageToolbarProps = {
-  nodes?: LNode[];
+  /** The graph the source/owner filters are built from. */
+  nodes: LNode[];
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
   className?: string;
 };
 
-/** One filter/view control: accent bar, "Label:", then the live selection. */
-function ControlTrigger({ accent, label, value }: { accent: string; label: string; value: string }) {
+/** One filter/view control: accent bar, "Label:", then the live selection.
+
+    forwardRef is required, not stylistic: this is used as a Radix menu
+    trigger, and Radix passes a ref to position the popup and to return focus
+    on close. A plain function component drops that ref with a console warning
+    and the menu loses its anchor. */
+const ControlTrigger = forwardRef<
+  HTMLButtonElement,
+  { accent: string; label: string; value: string } & ButtonHTMLAttributes<HTMLButtonElement>
+>(function ControlTrigger({ accent, label, value, className = "", ...rest }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
-      className={`inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85 transition-colors hover:border-ink/45 active:bg-ink/[0.05] data-[state=open]:border-ink/45 data-[state=open]:bg-flysch ${focusRing}`}
+      {...rest}
+      className={`inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85 transition-colors hover:border-ink/45 active:bg-ink/[0.05] data-[state=open]:border-ink/45 data-[state=open]:bg-flysch ${focusRing} ${className}`.trim()}
     >
       <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: accent }} aria-hidden />
       <span className="pl-0.5 shrink-0 text-ink/70">{label}:</span>
@@ -55,7 +66,7 @@ function ControlTrigger({ accent, label, value }: { accent: string; label: strin
       <ChevronDown size={13} className="text-ink/65" />
     </button>
   );
-}
+});
 
 /* One labelled band. The rows are separated by a hairline so the three
    groups (filters / view / actions) read as three decisions, not one wall. */
@@ -68,7 +79,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
   );
 }
 
-export function LineageToolbar({ nodes = DEMO_NODES, loading = false, className = "" }: LineageToolbarProps) {
+export function LineageToolbar({ nodes, loading = false, className = "" }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
 

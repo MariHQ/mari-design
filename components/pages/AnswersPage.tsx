@@ -2,149 +2,19 @@ import { useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { AnswerCard } from "../features/AnswerCard";
+import { AnswerCard, type Answer } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
-  UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, repeat,
-} from "./stress";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
-   rail (coverage + how-serving-works). States walk every status tab, single /
-   empty / filtered content, an isolated coverage rail, and the harvest wizard's
-   four steps (select → scan → review → import) rendered inline so a static
-   capture shows each. */
+   rail (coverage + how-serving-works).
 
-type Answer = NonNullable<ComponentProps<typeof AnswerCard>["answer"]>;
-
-const APPROVED: Answer = {
-  id: 1,
-  question: "How long do sessions last before they expire?",
-  answer: "Sessions are 30-day rolling tokens: each request within the window extends them. Signing in on a new device revokes the oldest session once you pass the five-device cap, and signing out revokes the current session immediately. Admins can force-revoke every session for a member from the members table.",
-  status: "approved",
-  owner: "Priya Nair",
-  channels: ["slack-bot", "docs-site"],
-  sources: [{ source: "docs", title: "Sign-in and session model" }, { source: "notion", title: "Auth overview" }],
-  served: 1284,
-  spark: [4, 6, 5, 9, 8, 12, 11, 15, 14, 18],
-  updated: "2026-07-16",
-};
-
-const APPROVED_2: Answer = {
-  id: 2,
-  question: "What's the SLA for enterprise customers?",
-  answer: "Enterprise plans carry a 99.9% monthly uptime SLA with a 1-hour first-response target for Sev1 incidents. Credits are issued automatically when monthly uptime drops below target.",
-  status: "approved",
-  owner: "Dana Osei",
-  channels: ["slack-bot", "support-widget", "docs-site"],
-  sources: [{ source: "notion", title: "Enterprise SLA policy" }],
-  served: 642,
-  spark: [2, 3, 3, 5, 4, 6, 7, 8, 9, 11],
-  updated: "2026-07-13",
-};
-
-const DRAFT: Answer = {
-  id: 3,
-  question: "How do webhook retries work now?",
-  answer: "Delivery retries use exponential backoff on 5xx responses from the gateway, capped at 5 attempts with a metric emitted per retry.",
-  status: "draft",
-  owner: "Marcus Vale",
-  channels: [],
-  sources: [{ source: "github", title: "feat: retry settlement on transient errors" }],
-  served: 0,
-  spark: [],
-  updated: "2026-07-15",
-};
-
-const DRAFT_2: Answer = {
-  id: 4,
-  question: "Is the v1 export API still supported?",
-  answer: "v1 export is deprecated in favor of the streaming endpoint. It stays read-only for one quarter, then is removed.",
-  status: "draft",
-  owner: "Dana Osei",
-  channels: [],
-  sources: [{ source: "slack", title: "Decision chunk: deprecate the v1 export API" }],
-  served: 0,
-  spark: [],
-  updated: "2026-07-08",
-};
-
-const RETIRED: Answer = {
-  id: 5,
-  question: "How do I export data with the legacy v1 API?",
-  answer: "The v1 export API has been removed. Use the streaming export endpoint instead: see the migration guide.",
-  status: "retired",
-  owner: "Priya Nair",
-  channels: [],
-  sources: [{ source: "docs", title: "Export migration guide" }],
-  served: 0,
-  spark: [],
-  updated: "2026-06-30",
-};
-
-/* ── overflow / stress answers ─────────────────────────────────────────── */
-
-const OVERFLOW_ANSWER: Answer = {
-  id: 101,
-  question: LONG_TITLE,
-  answer: LONG_PARAGRAPH,
-  status: "approved",
-  owner: LONG_NAME,
-  channels: ["slack-bot", "support-widget", "docs-site"],
-  sources: [
-    { source: "docs", title: LONG_DOC_TITLE },
-    { source: "github", title: LONG_SOURCE },
-    { source: "notion", title: LONG_TITLE },
-  ],
-  served: 482913,
-  spark: [4, 6, 5, 9, 8, 12, 11, 15, 14, 18],
-  updated: "2026-07-16",
-};
-
-const OVERFLOW_ANSWER_2: Answer = {
-  id: 102,
-  question: "What is the full end-to-end escalation, paging, and post-incident-review procedure for a Sev-1 during a multi-region outage?",
-  answer: LONG_PARAGRAPH,
-  status: "draft",
-  owner: LONG_NAME,
-  channels: [],
-  sources: [{ source: "slack", title: LONG_TITLE }],
-  served: 0,
-  spark: [],
-  updated: "2026-07-08",
-};
-
-const STRESS_ANSWER: Answer = {
-  id: 111,
-  question: UNBREAKABLE,
-  answer: `${UNBREAKABLE} ${MIXED_SCRIPT} ${LONG_URL}`,
-  status: "approved",
-  owner: LONG_WORD,
-  channels: ["slack-bot", "support-widget", "docs-site"],
-  sources: [
-    { source: "slack", title: LONG_URL },
-    { source: "github", title: UNBREAKABLE },
-    { source: "docs", title: MIXED_SCRIPT },
-  ],
-  served: HUGE_NUMBER,
-  spark: repeat((i) => (i % 5) + 1, 24),
-  updated: HUGE_NUMBER_STR,
-};
-
-const STRESS_ANSWER_2: Answer = {
-  id: 112,
-  question: `${MIXED_SCRIPT} ${LONG_WORD}`,
-  answer: LONG_URL,
-  status: "draft",
-  owner: MIXED_SCRIPT,
-  channels: [],
-  sources: [{ source: "notion", title: LONG_WORD }],
-  served: 0,
-  spark: [],
-  updated: "2026-07-01",
-};
+   This page is a pure presenter: it holds no demo content. Answers, coverage
+   gaps, and the harvest wizard's state all arrive in `data`, so a workspace
+   with nothing approved renders the empty state rather than someone's invented
+   library. The design canvas supplies the same shape from
+   `.preview/fixtures/answers.ts`. */
 
 const STATES = [
   { id: "default", label: "Default · all" },
@@ -166,36 +36,76 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-type Filter = "all" | "approved" | "drafts" | "retired";
+export type AnswersFilter = "all" | "approved" | "drafts" | "retired";
 
-function filterFor(state: string): Filter {
-  if (state === "approved") return "approved";
-  if (state === "drafts" || state === "filtered") return "drafts";
-  if (state === "retired") return "retired";
-  return "all";
+/** One tile of the headline strip. */
+export type AnswerStat = {
+  value: string;
+  label: string;
+  tone: ComponentProps<typeof Stat>["tone"];
+  sub: string;
+};
+
+/** A source the harvest wizard can scan. `key` picks the icon, so the shape
+    stays plain JSON: an API can return it, and no React element is carried. */
+export type HarvestSource = { key: "slack" | "docs" | "history"; label: string; desc: string; on: boolean };
+
+/** One question/answer pair the scan proposed. */
+export type HarvestCandidate = { question: string; draft: string; source: string; confidence: number };
+
+/** The harvest wizard, as a static rendition of one step of the drawer. */
+export type Harvest = {
+  phase: "select" | "scan" | "review" | "importing" | "done";
+  sources: HarvestSource[];
+  /** What the scan is doing right now, shown under the spinner. */
+  scanning: string;
+  candidates: HarvestCandidate[];
+};
+
+/** What the main column shows. The rail is the same in every case, except that
+    the coverage pane moves coverage out of the rail and into the column. */
+export type AnswersPane =
+  | { kind: "answers" }
+  | { kind: "coverage" }
+  | { kind: "harvest"; harvest: Harvest };
+
+/** Everything the Answers page renders. */
+export type AnswersData = {
+  stats: AnswerStat[];
+  /** Which status tab opens selected. */
+  filter: AnswersFilter;
+  answers: Answer[];
+  /** Questions people ask that no approved answer covers yet. */
+  coverage: string[];
+  pane: AnswersPane;
+};
+
+/** No answers and no coverage gaps: nothing has been curated at all. Derived
+    from the data, not from a state flag, so it is true in the real app for
+    exactly the same reason it is true on the canvas. */
+function isEmpty(d: AnswersData): boolean {
+  return !d.answers.length && !d.coverage.length;
 }
 
-function cardsFor(state: string): Answer[] {
-  switch (state) {
-    case "approved": return [APPROVED, APPROVED_2];
-    case "drafts": return [DRAFT, DRAFT_2];
-    case "retired": return [RETIRED];
-    case "single-answer": return [APPROVED];
-    case "overflow": return [OVERFLOW_ANSWER, OVERFLOW_ANSWER_2];
-    case "stress": return [STRESS_ANSWER, STRESS_ANSWER_2];
-    default: return [APPROVED, DRAFT, APPROVED_2];
-  }
-}
+const HARVEST_STEP: Record<Harvest["phase"], number> = {
+  select: 0, scan: 1, review: 2, importing: 3, done: 3,
+};
 
-function AnswersList({ state, filter }: { state: string; filter: Filter }) {
-  if (state === "error") {
+const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
+  slack: <MessagesSquare size={18} />,
+  docs: <FileText size={18} />,
+  history: <Sparkles size={18} />,
+};
+
+function AnswersList({ data, error }: { data: AnswersData; error: string | null }) {
+  if (error) {
     return (
       <Card>
-        <EmptyState title="API offline">Answers unavailable.</EmptyState>
+        <EmptyState title="API offline">{error}</EmptyState>
       </Card>
     );
   }
-  if (state === "empty") {
+  if (isEmpty(data)) {
     return (
       <Card>
         <EmptyState title="No answers yet" action={<Button variant="primary" compact><Plus size={14} /> New answer</Button>}>
@@ -204,8 +114,8 @@ function AnswersList({ state, filter }: { state: string; filter: Filter }) {
       </Card>
     );
   }
-  if (state === "filtered") {
-    const copy: Record<Filter, string> = {
+  if (!data.answers.length) {
+    const copy: Record<AnswersFilter, string> = {
       all: "No answers yet.",
       approved: "No approved answers yet.",
       drafts: "No drafts yet.",
@@ -214,33 +124,28 @@ function AnswersList({ state, filter }: { state: string; filter: Filter }) {
     return (
       <Card>
         <EmptyState title="Nothing here" action={<Button variant="primary" compact><Plus size={14} /> New answer</Button>}>
-          {copy[filter]}
+          {copy[data.filter]}
         </EmptyState>
       </Card>
     );
   }
   return (
     <div className="flex flex-col gap-5">
-      {cardsFor(state).map((a) => <AnswerCard key={a.id} answer={a} />)}
+      {data.answers.map((a) => <AnswerCard key={a.id} answer={a} />)}
     </div>
   );
 }
 
-const COVERAGE_QS = [
-  "How do I rotate my API key?",
-  "What's the SLA for enterprise?",
-  "Can I export data as CSV?",
-  "How do I invite a teammate as read-only?",
-];
-
-function CoverageCard({ state, extended = false }: { state: string; extended?: boolean }) {
-  const qs = extended ? COVERAGE_QS : COVERAGE_QS.slice(0, 2);
+function CoverageCard({
+  questions, error, extended = false,
+}: { questions: string[]; error: string | null; extended?: boolean }) {
+  const qs = extended ? questions : questions.slice(0, 2);
   return (
     <Card>
       <div className="mb-2 text-[14px] font-semibold text-ink">Coverage</div>
-      {state === "error" ? (
+      {error ? (
         <EmptyState title="API offline">Coverage unavailable.</EmptyState>
-      ) : state === "empty" ? (
+      ) : questions.length === 0 ? (
         <EmptyState title="All covered">No uncovered questions yet.</EmptyState>
       ) : (
         <div className="space-y-3">
@@ -274,10 +179,12 @@ function HowServingWorks() {
 
 /* The rail. Every card in it shares the rail's left and right edge (§11), so
    no card carries its own max-width. */
-function CoverageRail({ state, withCoverage = true }: { state: string; withCoverage?: boolean }) {
+function CoverageRail({
+  questions, error, withCoverage,
+}: { questions: string[]; error: string | null; withCoverage: boolean }) {
   return (
     <div className="flex flex-col gap-5">
-      {withCoverage && <CoverageCard state={state} />}
+      {withCoverage && <CoverageCard questions={questions} error={error} />}
       <HowServingWorks />
     </div>
   );
@@ -285,27 +192,15 @@ function CoverageRail({ state, withCoverage = true }: { state: string; withCover
 
 /* ── inline harvest-wizard step previews (static renditions of the drawer) ── */
 
-const HARVEST_STEP: Record<string, number> = {
-  "harvest-select": 0,
-  "harvest-scan": 1,
-  "harvest-review": 2,
-  "harvest-importing": 3,
-  "harvest-done": 3,
-};
-
-const CANDIDATES = [
-  { q: "How long do sessions last before they expire?", draft: "Sessions are 30-day rolling tokens. Signing in on a new device revokes the oldest session once you pass the device cap.", src: "Google Docs", conf: 88 },
-  { q: "What happens when the settlement queue backs up?", draft: "Drain the queue before restarting workers, and escalate to #payments-oncall if depth exceeds 10,000.", src: "Notion", conf: 79 },
-  { q: "Is the v1 export API still supported?", draft: "v1 export is deprecated in favor of the streaming endpoint. It stays read-only for one quarter, then is removed.", src: "Slack", conf: 62 },
-];
-
 function confTone(c: number): ComponentProps<typeof Chip>["tone"] {
   return c >= 75 ? "ok" : c >= 45 ? "attention" : "neutral";
 }
 
-function HarvestPreview({ state }: { state: string }) {
-  const step = HARVEST_STEP[state] ?? 0;
-  const importing = state === "harvest-importing";
+function HarvestPreview({ harvest }: { harvest: Harvest }) {
+  const { phase, candidates } = harvest;
+  const step = HARVEST_STEP[phase];
+  const importing = phase === "importing";
+  const selected = harvest.sources.filter((s) => s.on).length;
   return (
     <Card>
       <div className="mb-5 flex items-center gap-2 text-[15px] font-semibold text-ink">
@@ -313,46 +208,42 @@ function HarvestPreview({ state }: { state: string }) {
       </div>
       <Stepper labels={["Sources", "Scan", "Review", "Import"]} current={step} />
 
-      {state === "harvest-select" && (
+      {phase === "select" && (
         <div className="mt-5 flex flex-col gap-3">
           <p className="text-[13px] text-ink/70">Pick the sources Mari should scan for question and answer candidates. Nothing is saved until you import.</p>
-          {[
-            { label: "Slack", desc: "Threads and decision chunks across connected channels.", icon: <MessagesSquare size={18} />, on: true },
-            { label: "Docs & repos", desc: "Google Docs, Notion pages, and GitHub READMEs.", icon: <FileText size={18} />, on: true },
-            { label: "Ask-Mari history", desc: "Questions people already asked the assistant.", icon: <Sparkles size={18} />, on: false },
-          ].map((s) => (
+          {harvest.sources.map((s) => (
             <label key={s.label} className={`flex items-start gap-3 rounded-[5px] border px-3.5 py-3 ${s.on ? "border-biscay-2/60 bg-biscay-2/[0.04] ring-1 ring-biscay-2/40" : "border-ink/15"}`}>
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{s.icon}</span>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{SOURCE_ICON[s.key]}</span>
               <span className="min-w-0">
                 <b className="block text-[13.5px] font-semibold text-ink">{s.label}</b>
                 <span className="text-[12.5px] text-ink/65">{s.desc}</span>
               </span>
             </label>
           ))}
-          <div className="flex items-center gap-2"><Button variant="primary">Scan 2 sources</Button><Button variant="default">Cancel</Button></div>
+          <div className="flex items-center gap-2"><Button variant="primary">{`Scan ${selected} sources`}</Button><Button variant="default">Cancel</Button></div>
         </div>
       )}
 
-      {state === "harvest-scan" && (
+      {phase === "scan" && (
         <div className="mt-6 flex flex-col items-center gap-3 py-8 text-center">
           <Spinner size="md" label="Scanning" />
-          <div className="text-[13px] text-ink/70">Scanning slack, docs…</div>
+          <div className="text-[13px] text-ink/70">{harvest.scanning}</div>
           <div className="font-term text-[11.5px] text-ink/65">Clustering threads · extracting question/answer pairs</div>
         </div>
       )}
 
-      {state === "harvest-review" && (
+      {phase === "review" && (
         <div className="mt-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="font-term text-[12px] text-ink/65">3 of 3 accepted</span>
+            <span className="font-term text-[12px] text-ink/65">{`${candidates.length} of ${candidates.length} accepted`}</span>
             <Button compact>Accept all high confidence</Button>
           </div>
-          {CANDIDATES.map((c) => (
-            <Card key={c.q}>
-              <h3 className="text-[13.5px] font-semibold text-ink">{c.q}</h3>
+          {candidates.map((c) => (
+            <Card key={c.question}>
+              <h3 className="text-[13.5px] font-semibold text-ink">{c.question}</h3>
               <div className="mt-1.5 flex items-center gap-2">
-                <Chip label={c.src} tone="neutral" />
-                <Chip label={`${c.conf}% confident`} tone={confTone(c.conf)} dot />
+                <Chip label={c.source} tone="neutral" />
+                <Chip label={`${c.confidence}% confident`} tone={confTone(c.confidence)} dot />
               </div>
               <Textarea short className="mt-2.5" defaultValue={c.draft} />
               <div className="mt-2.5 flex items-center gap-2">
@@ -362,27 +253,27 @@ function HarvestPreview({ state }: { state: string }) {
               </div>
             </Card>
           ))}
-          <div className="flex items-center gap-2"><Button variant="primary">Import 3 drafts</Button><Button variant="default">Cancel</Button></div>
+          <div className="flex items-center gap-2"><Button variant="primary">{`Import ${candidates.length} drafts`}</Button><Button variant="default">Cancel</Button></div>
         </div>
       )}
 
-      {(state === "harvest-importing" || state === "harvest-done") && (
+      {(phase === "importing" || phase === "done") && (
         <div className="mt-5 flex flex-col gap-4">
           <p className="text-[13px] text-ink/70">
             {importing
-              ? "Saving 3 draft answers…"
-              : "Imported 3 draft answers. They're queued in the Drafts filter for approval."}
+              ? `Saving ${candidates.length} draft answers…`
+              : `Imported ${candidates.length} draft answers. They're queued in the Drafts filter for approval.`}
           </p>
           <ul className="flex flex-col gap-2">
-            {CANDIDATES.map((c, i) => {
-              const doneRow = !importing || i < 2;
-              const savingRow = importing && i === 2;
+            {candidates.map((c, i) => {
+              const doneRow = !importing || i < candidates.length - 1;
+              const savingRow = importing && i === candidates.length - 1;
               return (
-                <li key={c.q} className="flex items-center gap-2.5 text-[13px] text-ink/80">
+                <li key={c.question} className="flex items-center gap-2.5 text-[13px] text-ink/80">
                   {doneRow ? <CheckCircle2 size={16} className="shrink-0 text-moss" />
                     : savingRow ? <Spinner size="sm" />
                     : <Circle size={14} className="shrink-0 text-ink/30" />}
-                  <span className="min-w-0 flex-1 truncate">{c.q}</span>
+                  <span className="min-w-0 flex-1 truncate">{c.question}</span>
                   <span className="font-term text-[11px] shrink-0 text-ink/65">
                     {doneRow ? "draft saved" : savingRow ? "saving…" : "queued"}
                   </span>
@@ -399,18 +290,17 @@ function HarvestPreview({ state }: { state: string }) {
   );
 }
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  const [filter, setFilter] = useState<Filter>(filterFor(state));
+function Body({ data, error, mobile }: { data: AnswersData; error: string | null; mobile: boolean }) {
+  const [filter, setFilter] = useState<AnswersFilter>(data.filter);
 
-  const isHarvest = state.startsWith("harvest-");
-  const isCoverage = state === "coverage";
+  const isCoverage = data.pane.kind === "coverage";
 
   /* One main column + the standard 320px rail (§11) for every state, so the
      outer edges and the rail plumb line never move between states. */
-  const main = isHarvest ? (
-    <HarvestPreview state={state} />
+  const main = data.pane.kind === "harvest" ? (
+    <HarvestPreview harvest={data.pane.harvest} />
   ) : isCoverage ? (
-    <CoverageCard state={state} extended />
+    <CoverageCard questions={data.coverage} error={error} extended />
   ) : (
     <div className="flex flex-col gap-5">
       <Tabs
@@ -427,7 +317,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           { id: "retired", label: "Retired" },
         ]}
       />
-      <AnswersList state={state} filter={filter} />
+      <AnswersList data={{ ...data, filter }} error={error} />
     </div>
   );
 
@@ -438,22 +328,20 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           tile wants, and a grid would leave a dead cell instead of letting the
           short last row stretch. */}
       <div className={mobile ? "grid grid-cols-1 gap-5" : "flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[220px]"}>
-        <Stat value="128" label="Approved" tone="ok" sub="serving verbatim" />
-        <Stat value="6" label="Drafts" tone="attention" sub="awaiting review" />
-        <Stat value="2,410" label="Served this week" tone="info" sub="+12% vs last week" />
+        {data.stats.map((s) => <Stat key={s.label} value={s.value} label={s.label} tone={s.tone} sub={s.sub} />)}
       </div>
 
       <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
         <div className="min-w-0">{main}</div>
         <div className="min-w-0">
-          <CoverageRail state={state} withCoverage={!isCoverage} />
+          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} />
         </div>
       </div>
     </div>
   );
 }
 
-function AnswersPage({ state = "default", mobile = false }: PageProps) {
+function AnswersPage({ data, loading = false, error = null, mobile = false }: PageProps<AnswersData>) {
   const actions = (
     <>
       <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
@@ -462,7 +350,7 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
   );
   return (
     <PageFrame active={navFor("answers")} title="Answers" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="list" />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
@@ -474,7 +362,7 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
         <div className="mt-6">
-          <Body key={state} state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       </div>
       )}
@@ -482,7 +370,7 @@ function AnswersPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<AnswersData> = {
   id: "answers",
   title: "Answers",
   route: "/answers",

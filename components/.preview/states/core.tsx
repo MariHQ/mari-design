@@ -196,7 +196,7 @@ export const CORE: ComponentSpec[] = [
     states: [
       { id: "row", label: "Row of stats (equal widths?)", node: (
         <div className="flex gap-3">
-          <Stat label="Requests" value="1,284" delta="+12%" />
+          <Stat label="Requests" value="1,284" sub="+12% this week" tone="ok" />
           <Stat label="Incidents" value="3" tone="attention" />
           <Stat label="Uptime" value="99.98%" />
         </div>) },

@@ -23,7 +23,8 @@ import { Scrollable } from "../data-display/Scrollable";
 
 type Kind = "page" | "thread" | "pr";
 
-type Result = {
+/** One search hit. Exported so pages and fixtures compose it. */
+export type KnowledgeResult = {
   id: string;
   kind: Kind;
   source: string;
@@ -37,16 +38,6 @@ type Result = {
   participantCount?: number;
 };
 
-const DEMO: Result[] = [
-  { id: "r1", kind: "page", source: "notion", title: "Payments incident runbook", snippet: "When the settlement queue backs up, drain it before restarting workers. Escalate to on-call if depth exceeds 10k.", author: "Priya Nair", date: "2026-07-16", tags: ["canonical"], status: "canonical" },
-  { id: "r2", kind: "thread", source: "slack", title: "Decision: move webhooks to the new gateway", snippet: "We agreed to cut over webhook delivery to the gateway on the 24th, with a rollback window through EOD.", author: "#eng-platform", date: "2026-07-15", tags: [], status: "verified", messageCount: 22, participantCount: 6 },
-  { id: "r3", kind: "pr", source: "github", title: "feat: retry settlement on transient gateway errors", snippet: "Adds exponential backoff for 5xx from the settlement gateway; caps at 5 attempts, emits a metric per retry.", author: "Marcus Vale", date: "2026-07-14", tags: ["needs-review"], status: "needs-review" },
-  { id: "r4", kind: "page", source: "docs", title: "Sign-in and session model", snippet: "Sessions are 30-day rolling tokens. Signing in from a new device revokes the oldest session past the cap.", author: "Dana Osei", date: "2026-07-11", tags: ["customer-facing"], status: "verified" },
-  { id: "r5", kind: "thread", source: "slack", title: "Decision excerpt: deprecate the v1 export API", snippet: "v1 export is superseded by the streaming endpoint; we'll keep it read-only for one quarter, then remove it.", author: "#product", date: "2026-07-08", tags: [], status: "stale", messageCount: 14, participantCount: 4 },
-  { id: "r6", kind: "pr", source: "github", title: "fix: correct freshness rollup for archived sources", snippet: "Archived sources were dragging the fresh-% down; exclude them from the denominator in the rollup job.", author: "Priya Nair", date: "2026-06-30", tags: [], status: "stale" },
-  { id: "r7", kind: "page", source: "notion", title: "Evidence policy, how tags drive ranking", snippet: "Canonical outranks verified; needs-review is excluded from evidence entirely until a person clears it.", author: "Dana Osei", date: "2026-07-02", tags: ["canonical"], status: "canonical" },
-];
-
 const SORTS = [
   { id: "best", label: "Best match" },
   { id: "newest", label: "Newest" },
@@ -55,7 +46,7 @@ const SORTS = [
 
 const KNOWN_OWNERS = ["Priya Nair", "Marcus Vale", "Dana Osei"];
 
-/** Result cards rendered per page. */
+/** KnowledgeResult cards rendered per page. */
 const PAGE = 25;
 
 /* ── local sub-components ─────────────────────────────────────────────── */
@@ -120,7 +111,7 @@ const SOURCE_LABELS: { key: string; label: string }[] = [
   { key: "notion", label: "Notion" },
   { key: "docs", label: "Google Docs" },
 ];
-const TYPE_ROWS: { label: string; match: (r: Result) => boolean }[] = [
+const TYPE_ROWS: { label: string; match: (r: KnowledgeResult) => boolean }[] = [
   { label: "Documents", match: (r) => r.kind === "page" },
   { label: "Conversations", match: (r) => r.kind === "thread" },
   { label: "Pull requests", match: (r) => r.kind === "pr" },
@@ -135,7 +126,7 @@ const STATUS_ROWS: { key: string; label: string }[] = [
 ];
 
 export type KnowledgeBrowserProps = {
-  results?: Result[];
+  results: KnowledgeResult[];
   loading?: boolean;
   /** Stack the facet rail above the results instead of beside them. Pages own
       this (CONVENTIONS.md §10) — the component never breakpoints itself. */
@@ -185,7 +176,7 @@ function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked
   );
 }
 
-export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = false, className = "" }: KnowledgeBrowserProps) {
+export function KnowledgeBrowser({ results, loading = false, stacked = false, className = "" }: KnowledgeBrowserProps) {
   const [q, setQ] = useState("");
   const [srcSel, setSrcSel] = useState<Set<string>>(new Set());
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
@@ -202,7 +193,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
     const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n);
   };
 
-  const count = (pred: (r: Result) => boolean) => results.filter(pred).length;
+  const count = (pred: (r: KnowledgeResult) => boolean) => results.filter(pred).length;
 
   const baseFiltered = useMemo(() => results.filter((r) => {
     if (q && !`${r.title} ${r.snippet} ${r.author}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -219,7 +210,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
     return true;
   }), [results, q, srcSel, typeSel, ownerSel, statusSel]);
 
-  const tabMatch = (r: Result) => tab === "all"
+  const tabMatch = (r: KnowledgeResult) => tab === "all"
     || (tab === "docs" && r.kind === "page")
     || (tab === "conv" && r.kind === "thread")
     || (tab === "pages" && (r.source === "docs" || r.source === "notion"))
@@ -268,7 +259,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
               past the card edge on a narrow viewport. */}
           <Scrollable className="flex-1">
           <Tabs
-            ariaLabel="Result type"
+            ariaLabel="KnowledgeResult type"
             variant="underline"
             value={tab}
             onChange={setTab}
@@ -313,7 +304,7 @@ export function KnowledgeBrowser({ results = DEMO, loading = false, stacked = fa
           </div>
         </Card>
 
-        {/* Result count above the list (§13). A real corpus returns hundreds of
+        {/* KnowledgeResult count above the list (§13). A real corpus returns hundreds of
             documents, so the feed renders one page at a time and says how many
             of how many it is showing rather than laying out 400 cards. */}
         <div className="flex flex-wrap items-center gap-2">

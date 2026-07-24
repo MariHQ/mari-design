@@ -7,25 +7,17 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
 import { CodeBlock } from "../data-display/CodeBlock";
-import { Scrollable } from "../data-display/Scrollable";
 import { Alert } from "../feedback/Alert";
-import { Chip } from "../data-display/Chip";
-import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SkeletonPage } from "../data-display/Skeletons";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_URL, UNBREAKABLE, LONG_WORD,
-  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
-} from "./stress";
-
-const LONG_EMAIL =
-  "alexandra.wilhelmina.featherstonehaugh-montgomery@platform-reliability-and-incident-response.enterprise-workspace.example.com";
 
 /* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
    has no admin yet; renders OUTSIDE the console shell on the same full-bleed
    auth backdrop as Login, in a WIDER centered card. Two-step tracker:
-   1 Token → 2 Admin account. States walk the whole claim: paste-token,
-   admin-details, the Finish submit in flight, a rejected-token validation
-   error, and the completed workspace hand-off. */
+   1 Token → 2 Admin account.
+
+   Pure presenter: the step, the server-log excerpt carrying the one-time
+   token, and the admin details all arrive in `data`. The canvas supplies them
+   from `.preview/fixtures/setup.ts`. */
 
 const STATES = [
   { id: "default", label: "Token step" },
@@ -36,6 +28,23 @@ const STATES = [
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
+
+/** Which of the two claim steps is on screen, or the hand-off after both. */
+export type SetupStep = "token" | "admin" | "done";
+
+/** Everything the Setup screen renders. */
+export type SetupData = {
+  step: SetupStep;
+  /** The server-log excerpt that carries the one-time token. */
+  logSample: string;
+  /** Prefilled admin-token input. Empty string leaves it blank. */
+  token: string;
+  /** The admin account being created, and the workspace it will own. */
+  name: string;
+  email: string;
+  password: string;
+  workspace: string;
+};
 
 /* ── Shared unauthenticated framing ────────────────────────────────────────
    Kept identical to LoginPage / WelcomePage: one backdrop, one 672px column,
@@ -67,21 +76,21 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-const LOG_SAMPLE = `mari-cloud  ┃ workspace has no admin: one-time setup required
-mari-cloud  ┃ admin token:  3f9c-7b21-e04d-a41b   ← yours will differ
-mari-cloud  ┃ open http://localhost:8787/setup to claim this workspace`;
-
-function TokenStep() {
+function TokenStep({ data, error }: { data: SetupData; error: string | null }) {
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
         This workspace has no admin yet. Paste the one-time token printed in the
         server logs to claim it.
       </p>
-      <CodeBlock code={LOG_SAMPLE} language="log" title="server logs" copy={false} />
+      <CodeBlock code={data.logSample} language="log" title="server logs" copy={false} />
       <Field label="Admin token">
-        <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false} />
+        <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false} defaultValue={data.token} />
       </Field>
+      {/* The token step is exactly where a rejected token has to be reported;
+          this branch used to drop `error`, so "Invalid token" — a state this
+          page declares — rendered as a silently unchanged form. */}
+      {error && <Alert tone="blocked" title="Token rejected">{error}</Alert>}
       {/* Next-step action bottom LEFT (§2). */}
       <div className={AUTH_ACTIONS}>
         <Button variant="primary">Continue <ArrowRight size={14} /></Button>
@@ -91,49 +100,44 @@ function TokenStep() {
   );
 }
 
-function AdminStep({ saving = false, error = false }: { saving?: boolean; error?: boolean }) {
+function AdminStep({ data, error }: { data: SetupData; error: string | null }) {
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
         Create the admin account and name your workspace.
       </p>
-      {saving && (
-        <Alert tone="info" title="Setting up your workspace">
-          Creating the admin account and opening your session…
-        </Alert>
-      )}
+      {/* The server's own rejection is the alert title; the recovery step under
+          it is ours, so it reads the same however the server phrases it (§8). */}
       {error && (
-        <Alert tone="blocked" title="Invalid token: check the server logs">
-          The server rejected that token. It may be mistyped or already used: 
+        <Alert tone="blocked" title={error}>
+          The server rejected that token. It may be mistyped or already used:
           copy it fresh from the <code className="font-term">admin token:</code> log line.
         </Alert>
       )}
       <div className={FORM_GRID}>
         <Field label="Your name">
-          <Input className="w-full" placeholder="Maya Chen" autoComplete="name" defaultValue="Maya Chen" />
+          <Input className="w-full" placeholder="Maya Chen" autoComplete="name" defaultValue={data.name} />
         </Field>
         <Field label="Email">
-          <Input className="w-full" type="email" placeholder="maya@team.com" autoComplete="email" defaultValue="maya@team.com" />
+          <Input className="w-full" type="email" placeholder="maya@team.com" autoComplete="email" defaultValue={data.email} />
         </Field>
         <Field label="Password">
-          <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" defaultValue="••••••••••" />
+          <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" defaultValue={data.password} />
         </Field>
         <Field label="Workspace name">
-          <Input className="w-full" placeholder="Acme Product" defaultValue="Acme Product" />
+          <Input className="w-full" placeholder="Acme Product" defaultValue={data.workspace} />
         </Field>
       </div>
       <p className="-mt-2 text-[12px] text-ink/65">Shown in the sidebar and on published pages.</p>
       <div className={`pt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary" disabled={saving}>
-          {saving ? "Setting up…" : "Finish setup"}
-        </Button>
-        <Button variant="link" disabled={saving}>← Back to token</Button>
+        <Button variant="primary">Finish setup</Button>
+        <Button variant="link">← Back to token</Button>
       </div>
     </div>
   );
 }
 
-function SuccessStep() {
+function SuccessStep({ workspace }: { workspace: string }) {
   return (
     <div className="flex flex-col gap-3 py-2">
       <div className="flex items-start gap-3">
@@ -141,7 +145,7 @@ function SuccessStep() {
         <div className="min-w-0">
           <h3 className="text-[16px] font-semibold text-ink">Your workspace is ready</h3>
           <p className="mt-1 text-[13px] leading-relaxed text-ink/70">
-            <b className="text-ink/80">Acme Product</b> is claimed and you’re signed in as its admin.
+            <b className="text-ink/80">{workspace}</b> is claimed and you’re signed in as its admin.
             Next, connect a source to start building your knowledge base.
           </p>
         </div>
@@ -155,74 +159,8 @@ function SuccessStep() {
   );
 }
 
-/* `overflow` — the admin step stuffed with very long NATURAL text: long name,
-   long workspace name, long email, and a long validation message. Catches
-   wrapping, truncation, and vertical overflow. */
-function OverflowStep() {
-  return (
-    <div className="space-y-4">
-      <p className="text-[13.5px] leading-relaxed text-ink/70">{LONG_PARAGRAPH}</p>
-      <Alert tone="blocked" title={LONG_TITLE}>{LONG_PARAGRAPH}</Alert>
-      <div className={FORM_GRID}>
-        <Field label="Your name">
-          <Input className="w-full" defaultValue={LONG_NAME} autoComplete="name" />
-        </Field>
-        <Field label="Email">
-          <Input className="w-full" type="email" defaultValue={LONG_EMAIL} autoComplete="email" />
-        </Field>
-        <Field label="Workspace name">
-          <Input className="w-full" defaultValue={LONG_TITLE} />
-        </Field>
-      </div>
-      <p className="-mt-2 text-[12px] leading-relaxed text-ink/65">{LONG_PARAGRAPH}</p>
-      <div className={`pt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary">Finish setting up {LONG_TITLE}</Button>
-        <Button variant="link">← Back to token</Button>
-      </div>
-    </div>
-  );
-}
-
-/* `stress` — PATHOLOGICAL content: an unbreakable token, a huge URL, a single
-   long word, huge numbers, a 20+ chip row, a long avatar stack, and mixed
-   scripts + emoji. Catches horizontal overflow, missing break-words/truncate,
-   and flex blowouts. */
-function StressStep() {
-  return (
-    <div className="space-y-4">
-      <CodeBlock code={UNBREAKABLE} language="log" title="admin token" copy={false} />
-      <Alert tone="blocked" title={UNBREAKABLE}>{MIXED_SCRIPT}, {LONG_URL}</Alert>
-      <div className={FORM_GRID}>
-        <Field label="Admin token">
-          <Input className="w-full" defaultValue={UNBREAKABLE} spellCheck={false} />
-        </Field>
-        <Field label="Workspace name">
-          <Input className="w-full" defaultValue={LONG_WORD} />
-        </Field>
-      </div>
-      <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
-        {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-      </Scrollable>
-      <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
-      <p className="break-words font-term text-[12px] text-ink/65">{HUGE_NUMBER_STR} workspaces · {MIXED_SCRIPT}</p>
-      <div className={`pt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary">{LONG_WORD}</Button>
-        <Button variant="link">← Back to token</Button>
-      </div>
-    </div>
-  );
-}
-
-function SetupPage({ state = "default", mobile = false }: PageProps) {
-  const saving = state === "saving";
-  const error = state === "error";
-  const success = state === "success";
-  const overflow = state === "overflow";
-  const stress = state === "stress";
-  const onAdmin = state === "admin" || saving || error || overflow || stress;
-  const step = success ? 2 : onAdmin ? 1 : 0;
-
-  if (saving) {
+function SetupPage({ data, loading = false, error = null, mobile = false }: PageProps<SetupData>) {
+  if (loading) {
     return (
       <div className={AUTH_SHELL}>
         <SkeletonPage variant="auth" />
@@ -230,26 +168,29 @@ function SetupPage({ state = "default", mobile = false }: PageProps) {
     );
   }
 
+  const done = data.step === "done";
   return (
     <div className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader
-          title={success ? "Workspace claimed" : "Welcome to Mari"}
-          sub={success ? "Your workspace is claimed and ready." : "Claim this workspace and create the admin account."}
+          title={done ? "Workspace claimed" : "Welcome to Mari"}
+          sub={done ? "Your workspace is claimed and ready." : "Claim this workspace and create the admin account."}
         />
         <Card variant="plain">
           <div className="mb-5">
-            <Stepper labels={["Token", "Admin account"]} current={Math.min(step, 1)} ariaLabel="Setup steps" />
+            <Stepper labels={["Token", "Admin account"]} current={data.step === "token" ? 0 : 1} ariaLabel="Setup steps" />
           </div>
-          {success ? <SuccessStep /> : overflow ? <OverflowStep /> : stress ? <StressStep /> : step === 0 ? <TokenStep /> : <AdminStep saving={saving} error={error} />}
+          {done ? <SuccessStep workspace={data.workspace} />
+            : data.step === "token" ? <TokenStep data={data} error={error} />
+            : <AdminStep data={data} error={error} />}
         </Card>
       </div>
     </div>
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<SetupData> = {
   id: "setup",
   title: "Setup",
   route: "/setup",

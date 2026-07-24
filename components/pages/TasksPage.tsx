@@ -6,18 +6,15 @@ import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, Ico
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { ErrorMessage } from "../feedback/ErrorMessage";
-import { fmtDate } from "../tokens/format";
-import {
-  LONG_TITLE, LONG_PARAGRAPH, LONG_DOC_TITLE, LONG_URL, UNBREAKABLE, LONG_WORD,
-  HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS,
-} from "./stress";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
-   task rows (check toggle + strikethrough title + assignee + kind pill). States
-   walk content variants (mixed / open-only / all-done / single / many),
-   overdue and assigned-to-me filters, the composer-open and saving lifecycle,
-   and the loading / offline / empty edges. */
+   task rows (check toggle + strikethrough title + assignee + kind pill).
+
+   This page is a pure presenter: it holds no demo content. The board arrives in
+   `data`, so an inbox with nothing in it renders the empty columns rather than
+   someone's invented backlog. The design canvas supplies the same shape from
+   `.preview/fixtures/tasks.ts`. */
 
 const STATES = [
   { id: "default", label: "Default · mixed" },
@@ -36,7 +33,8 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-type Task = {
+/** One row of the inbox. Dates arrive pre-formatted (§5: always with a year). */
+export type Task = {
   id: number;
   title: string;
   who: string;
@@ -47,69 +45,30 @@ type Task = {
   overdue?: boolean;
 };
 
-const SEED: Task[] = [
-  { id: 1, title: "Verify the new proration rule in the billing runbook", who: "DR", kind: "factcheck", kindLabel: "Fact check", done: false },
-  { id: 2, title: "Approve the SSO onboarding guide for publish", who: "MG", kind: "approval", kindLabel: "Approval", done: false },
-  { id: 3, title: "Review the incident escalation ladder", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false },
-  { id: 4, title: "Retire two stale screenshots in auth/README", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
-  { id: 5, title: "Tag the pricing FAQ as canonical", who: "DR", kind: "canonical", kindLabel: "Canonical", done: true },
-];
+/** The chip-row / avatar-stack / headline-number strip above the columns. Only
+    some boards carry one, so it is nullable rather than a flag plus content. */
+export type TaskStrip = {
+  title: string;
+  tags: string[];
+  /** Initials of everyone on the task. */
+  people: string[];
+  statValue: string;
+  statLabel: string;
+};
 
-/* Due dates always carry a year and go through fmtDate (§5): "Yesterday" and
-   "Fri" are ambiguous the moment a board spans two years. */
-const OVERDUE: Task[] = [
-  { id: 11, title: "Re-verify the SLA uptime fact: source expired", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false, due: fmtDate("2026-07-18"), overdue: true },
-  { id: 12, title: "Approve the refund policy update", who: "MG", kind: "approval", kindLabel: "Approval", done: false, due: fmtDate("2026-07-20"), overdue: true },
-  { id: 13, title: "Review the on-call rotation doc", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false, due: fmtDate("2026-07-21") },
-  { id: 14, title: "Retire the deprecated v1 export guide", who: "PK", kind: "stale", kindLabel: "Stale", done: true, due: fmtDate("2026-07-12") },
-];
+/** Everything the Tasks page renders. */
+export type TasksData = {
+  tasks: Task[];
+  /** Text already in the composer. Non-empty means someone is drafting. */
+  draft: string;
+  /** The composer is mid-submit: the add button locks and reads "Adding…". */
+  saving: boolean;
+  strip: TaskStrip | null;
+};
 
-const MINE: Task[] = [
-  { id: 21, title: "Fact-check the new webhook retry cadence", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false, due: fmtDate("2026-07-22") },
-  { id: 22, title: "Draft an answer for 'How do I rotate my API key?'", who: "MM", kind: "needs-review", kindLabel: "Needs review", done: false, due: fmtDate("2026-07-24") },
-  { id: 23, title: "Approve the billing proration runbook", who: "MM", kind: "approval", kindLabel: "Approval", done: true },
-];
-
-const MANY: Task[] = [
-  ...SEED,
-  { id: 31, title: "Reconcile the pricing table against Stripe", who: "MM", kind: "factcheck", kindLabel: "Fact check", done: false },
-  { id: 32, title: "Publish the SSO enforcement announcement", who: "MG", kind: "approval", kindLabel: "Approval", done: false },
-  { id: 33, title: "Prune 6 stale onboarding screenshots", who: "PK", kind: "stale", kindLabel: "Stale", done: false },
-  { id: 34, title: "Verify JWKS rotation cadence in the auth doc", who: "AK", kind: "factcheck", kindLabel: "Fact check", done: false },
-  { id: 35, title: "Review the data-retention policy update", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false },
-  { id: 36, title: "Tag the incident postmortem as canonical", who: "DR", kind: "canonical", kindLabel: "Canonical", done: true },
-  { id: 37, title: "Retire the legacy billing FAQ", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
-  { id: 38, title: "Approve the support macros refresh", who: "MG", kind: "approval", kindLabel: "Approval", done: true },
-];
-
-const OVERFLOW_TASKS: Task[] = [
-  { id: 41, title: LONG_TITLE, who: "AW", kind: "factcheck", kindLabel: "Fact check: reconcile against the last four incident retrospectives", done: false, due: "Due by the end of the third fiscal quarter, 2026" },
-  { id: 42, title: `Approve ${LONG_DOC_TITLE} for publish across every connected workspace and region`, who: "DR", kind: "approval", kindLabel: "Needs a second approver", done: false, due: "Before the platform-wide freeze on Jul 23, 2026" },
-  { id: 43, title: LONG_PARAGRAPH, who: "MC", kind: "needs-review", kindLabel: "Needs review", done: false },
-  { id: 44, title: "Retire the deprecated single-sign-on migration screenshots scattered across the authentication README and the onboarding guide", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
-  { id: 45, title: "Tag the consolidated quarterly platform reliability runbook as the canonical source of truth", who: "SL", kind: "canonical", kindLabel: "Canonical", done: true },
-];
-
-const STRESS_TASKS: Task[] = [
-  { id: 51, title: UNBREAKABLE, who: "ABCDEFGH", kind: "factcheck", kindLabel: LONG_WORD, done: false, due: HUGE_NUMBER_STR },
-  { id: 52, title: LONG_WORD, who: "日本語ABC", kind: "approval", kindLabel: MIXED_SCRIPT, done: false, due: MIXED_SCRIPT },
-  { id: 53, title: LONG_URL, who: "MM", kind: "stale", kindLabel: "stale", done: false, due: HUGE_NUMBER_STR },
-  { id: 54, title: `${MIXED_SCRIPT} ${UNBREAKABLE}`, who: MANY_INITIALS.slice(0, 4).join(""), kind: "canonical", kindLabel: HUGE_NUMBER_STR, done: true },
-];
-
-function seedFor(state: string): Task[] {
-  switch (state) {
-    case "overflow": return OVERFLOW_TASKS;
-    case "stress": return STRESS_TASKS;
-    case "open-only": return SEED.map((t) => ({ ...t, done: false }));
-    case "all-done": return SEED.map((t) => ({ ...t, done: true }));
-    case "single": return SEED.slice(0, 1);
-    case "many": return MANY;
-    case "overdue": return OVERDUE;
-    case "assigned-to-me": return MINE;
-    default: return SEED;
-  }
-}
+/* Emptiness is derived per column from the rows themselves (`rows.length === 0`
+   below), not from a state flag, so an inbox with nothing in it renders the
+   same on the canvas and in a real workspace. */
 
 /* One row = title + a meta cluster. The title takes the slack (min-w-0 so a
    long one wraps instead of collapsing to one word per line) and the meta
@@ -175,32 +134,29 @@ function Column({
 
 /* Inline strip exercising chip-row / avatar-stack / huge-number / mixed-script
    overflow that the two-column task list can't show on its own. */
-function StressStrip({ pathological }: { pathological: boolean }) {
-  const tags = pathological ? MANY_TAGS : MANY_TAGS.slice(0, 10);
-  const people = (pathological ? MANY_INITIALS : MANY_INITIALS.slice(0, 8)).map((i) => ({ initials: i }));
+function StressStrip({ strip }: { strip: TaskStrip }) {
   return (
     <Card className="space-y-3">
-      <div className="min-w-0 text-[13.5px] font-semibold text-ink break-words">
-        {pathological ? MIXED_SCRIPT : "Every reviewer, tag, and label on this task: wrapped rather than clipped"}
-      </div>
+      <div className="min-w-0 text-[13.5px] font-semibold text-ink break-words">{strip.title}</div>
       <div className="flex flex-wrap items-center gap-1.5">
-        {tags.map((t) => <Chip key={t} label={t} tone="neutral" />)}
+        {strip.tags.map((t) => <Chip key={t} label={t} tone="neutral" />)}
       </div>
       <div className="flex flex-wrap items-center gap-4">
-        <AvatarGroup people={people} max={6} />
-        <Stat value={pathological ? HUGE_NUMBER_STR : "482,913"} label="times reopened" tone="info" />
+        <AvatarGroup people={strip.people.map((initials) => ({ initials }))} max={6} />
+        <Stat value={strip.statValue} label={strip.statLabel} tone="info" />
       </div>
     </Card>
   );
 }
 
-function Body({ state, mobile }: { state: string; mobile: boolean }) {
-  const composerOpen = state === "composer-open";
-  const saving = state === "saving";
-  const [tasks, setTasks] = useState<Task[]>(() => seedFor(state));
-  const [draft, setDraft] = useState(
-    composerOpen ? "Re-verify the enterprise SLA uptime fact against the status page" : "",
-  );
+function Body({ data, error, mobile }: { data: TasksData; error: string | null; mobile: boolean }) {
+  const [tasks, setTasks] = useState<Task[]>(() => data.tasks);
+  const [draft, setDraft] = useState(data.draft);
+
+  const saving = data.saving;
+  // The composer reads as "active" whenever it holds a draft or is submitting
+  // one — a mode derived from the content, not a separate flag.
+  const composing = Boolean(draft.trim()) || saving;
 
   const toggle = (id: number) =>
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -212,16 +168,15 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   };
   const clearDone = () => setTasks((ts) => ts.filter((t) => !t.done));
 
-  const offline = state === "error";
-  const isEmpty = state === "empty";
+  const offline = Boolean(error);
 
-  const open = isEmpty ? [] : tasks.filter((t) => !t.done);
-  const done = isEmpty ? [] : tasks.filter((t) => t.done);
+  const open = tasks.filter((t) => !t.done);
+  const done = tasks.filter((t) => t.done);
 
   const listBody = (rows: Task[], emptyText: string) => {
     // One banner for the page, not one per column: the same alert twice reads
     // as two separate failures.
-    if (offline) return <div className="py-6 text-center text-[13px] text-ink/70">Tasks are unavailable right now.</div>;
+    if (error) return <div className="py-6 text-center text-[13px] text-ink/70">{error}</div>;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
     return rows.map((t) => <TaskRow key={t.id} task={t} onToggle={toggle} />);
   };
@@ -229,7 +184,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   return (
     <div className="flex flex-col gap-5">
       {/* Fields first, primary action bottom LEFT (§2). */}
-      <Card className={composerOpen || saving ? "ring-1 ring-biscay-2/40" : ""}>
+      <Card className={composing ? "ring-1 ring-biscay-2/40" : ""}>
         <div className="flex items-center gap-3">
           <Input
             value={draft}
@@ -253,7 +208,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
 
       {offline && <ErrorMessage id="server.unavailable" />}
 
-      {(state === "overflow" || state === "stress") && <StressStrip pathological={state === "stress"} />}
+      {data.strip && <StressStrip strip={data.strip} />}
 
       {/* Two equal columns on a full-size desktop (§11); mobile, and any window
           too narrow for two task columns, collapses to one column at the page
@@ -282,10 +237,10 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
   );
 }
 
-function TasksPage({ state = "default", mobile = false }: PageProps) {
+function TasksPage({ data, loading = false, error = null, mobile = false }: PageProps<TasksData>) {
   return (
     <PageFrame active={navFor("tasks")} title="Tasks" mobile={mobile}>
-      {state === "loading" ? (
+      {loading ? (
         <SkeletonPage variant="board" />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
@@ -296,7 +251,7 @@ function TasksPage({ state = "default", mobile = false }: PageProps) {
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
-          <Body key={state} state={state} mobile={mobile} />
+          <Body data={data} error={error} mobile={mobile} />
         </div>
       </div>
       )}
@@ -304,7 +259,7 @@ function TasksPage({ state = "default", mobile = false }: PageProps) {
   );
 }
 
-export const page: PageModule = {
+export const page: PageModule<TasksData> = {
   id: "tasks",
   title: "Tasks",
   route: "/tasks",
