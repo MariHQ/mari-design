@@ -268,6 +268,10 @@ mid-column or a list cut off mid-row reads as "that's all there is".
   resize.
 - The indicator appears only when content is actually cut off in that
   direction, and disappears at the end of the scroll range.
+- The scrollbar itself is visible whenever there is overflow, on both
+  axes, so it can be grabbed and dragged. Never rely on the macOS overlay
+  scrollbar that only appears mid-scroll; Scrollable styles a thin
+  always-rendered bar.
 - Match the fade to the surface: `fade="flysch"` inside code boxes and
   tinted panels, default paper elsewhere.
 - Page-level scrolling (the app shell's main column, full-page auth

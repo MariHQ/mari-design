@@ -38,6 +38,23 @@ export type ScrollableProps = HTMLAttributes<HTMLDivElement> & {
 const FADE_FROM = { paper: "from-paper", flysch: "from-flysch", biscay: "from-biscay" } as const;
 const HINT_INK = { paper: "text-ink/45", flysch: "text-ink/45", biscay: "text-white/60" } as const;
 
+/* The scrollbar is visible and draggable whenever there is overflow, on both
+   axes. Styling ::-webkit-scrollbar opts Chrome/Safari out of the macOS
+   overlay scrollbar that hides until the user is already scrolling. Do NOT
+   also set scrollbar-width/scrollbar-color: Chrome 121+ ignores the webkit
+   pseudo styling when either is present, and the standard thin bar stays an
+   auto-hiding overlay. `auto` overflow still means no bar when nothing
+   overflows. */
+const BAR_SHARED =
+  "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 " +
+  "[&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full " +
+  "[&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-clip-padding";
+const BAR = {
+  paper: `${BAR_SHARED} [&::-webkit-scrollbar-thumb]:bg-ink/35 [&::-webkit-scrollbar-thumb:hover]:bg-ink/55`,
+  flysch: `${BAR_SHARED} [&::-webkit-scrollbar-thumb]:bg-ink/35 [&::-webkit-scrollbar-thumb:hover]:bg-ink/55`,
+  biscay: `${BAR_SHARED} [&::-webkit-scrollbar-thumb]:bg-white/40 [&::-webkit-scrollbar-thumb:hover]:bg-white/60`,
+} as const;
+
 export function Scrollable({
   axis = "x", fade = "paper", className = "", scrollerClassName = "", scrollerRef, children, ...rest
 }: ScrollableProps) {
@@ -76,7 +93,7 @@ export function Scrollable({
 
   return (
     <div className={`relative min-w-0 ${className}`.trim()} {...rest}>
-      <div ref={setScroller} className={`${overflow} ${scrollerClassName}`.trim()}>{children}</div>
+      <div ref={setScroller} className={`${overflow} ${BAR[fade]} ${scrollerClassName}`.trim()}>{children}</div>
       <span aria-hidden className={`${hint} left-0 top-0 bottom-0 w-6 items-center justify-start bg-gradient-to-r ${from} ${edge.left ? "opacity-100" : "opacity-0"}`}>
         <ChevronLeft size={13} strokeWidth={2.4} />
       </span>
