@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Mail, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Logo, Brandmark } from "../shell/Logo";
@@ -43,6 +43,17 @@ export type LoginProvider = "github" | "google" | "sso";
 export type LoginScreen = "credentials" | "oauth" | "magic-link" | "two-factor";
 
 /** Everything the Login screen renders. */
+/** Credentials a sign-in or registration submits. */
+export type Credentials = { name: string; email: string; password: string; workspace: string };
+
+/** What the login screen can do. Every handler may throw; the form shows it. */
+export type LoginActions = {
+  signIn?: (c: Credentials) => void | Promise<void>;
+  register?: (c: Credentials) => void | Promise<void>;
+  magicLink?: (email: string) => void | Promise<void>;
+  oauth?: (provider: "github" | "google") => void | Promise<void>;
+};
+
 export type LoginData = {
   screen: LoginScreen;
   /** Branding above the card. */
@@ -161,34 +172,64 @@ function ModeToggle({ register }: { register: boolean }) {
   );
 }
 
-function CredForm({ data, error }: { data: LoginData; error: string | null }) {
+function CredForm({ data, error, actions }: { data: LoginData; error: string | null; actions?: LoginActions }) {
   const { register, workspace } = data;
+  /* Controlled, because the values have to leave the form. They used to be
+     `defaultValue` on an uncontrolled input inside a form whose only handler
+     was `preventDefault()` — so the submit button genuinely did nothing, and
+     did it silently, with no console error to find. */
+  const [name, setName] = useState(data.name);
+  const [email, setEmail] = useState(data.email);
+  const [password, setPassword] = useState(data.password);
+  const [ws, setWs] = useState(workspace ?? "");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const run = register ? actions?.register : actions?.signIn;
+    if (!run) return; // canvas: no server behind the page
+    setBusy(true);
+    setFailed(null);
+    try {
+      await run({ name, email, password, workspace: ws });
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "Sign in failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+    <form className="flex flex-col gap-3" onSubmit={submit}>
       {register && (
         <Field label="Name">
-          <Input className="w-full" autoComplete="name" placeholder="Maya Chen" defaultValue={data.name} />
+          <Input className="w-full" autoComplete="name" placeholder="Maya Chen" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
       )}
       <Field label="Email">
-        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" defaultValue={data.email} />
+        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" value={email} onChange={(e) => setEmail(e.target.value)} />
       </Field>
       <Field label="Password">
-        <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" defaultValue={data.password} />
+        <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       {workspace !== null && (
         <Field label="Workspace">
-          <Input className="w-full" defaultValue={workspace} />
+          <Input className="w-full" value={ws} onChange={(e) => setWs(e.target.value)} />
         </Field>
       )}
-      {error && <FieldError>{error}</FieldError>}
+      {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
       {/* Primary bottom left, secondary to its right (§2). */}
       <div className={`mt-1 ${AUTH_ACTIONS}`}>
-        <Button type="submit" variant="primary">
-          {register ? "Create account" : workspace !== null ? `Sign in to ${workspace}` : "Sign in"}
+        <Button type="submit" variant="primary" disabled={busy}>
+          {busy ? "Signing in…" : register ? "Create account" : workspace !== null ? `Sign in to ${workspace}` : "Sign in"}
         </Button>
         {!register && (
-          <button type="button" className={`text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}>
+          <button
+            type="button"
+            onClick={() => actions?.magicLink?.(email)}
+            className={`text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}
+          >
             Email me a magic link instead
           </button>
         )}
@@ -217,7 +258,7 @@ function NoticeCard({ icon, title, children, footer }: {
   );
 }
 
-function Body({ data, error }: { data: LoginData; error: string | null }) {
+function Body({ data, error, actions }: { data: LoginData; error: string | null; actions?: LoginActions }) {
   switch (data.screen) {
     case "oauth": {
       const google = data.handoff === "google";
@@ -272,7 +313,7 @@ function Body({ data, error }: { data: LoginData; error: string | null }) {
     default:
       return (
         <Card variant="plain">
-          <CredForm data={data} error={error} />
+          <CredForm data={data} error={error} actions={actions} />
           <OAuthRow providers={data.providers} />
           {data.allowRegister && <ModeToggle register={data.register} />}
         </Card>
@@ -280,7 +321,7 @@ function Body({ data, error }: { data: LoginData; error: string | null }) {
   }
 }
 
-function LoginPage({ data, loading = false, error = null, mobile = false }: PageProps<LoginData>) {
+function LoginPage({ data, loading = false, error = null, actions, mobile = false }: PageProps<LoginData, LoginActions>) {
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
@@ -293,13 +334,13 @@ function LoginPage({ data, loading = false, error = null, mobile = false }: Page
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader title={data.title} sub={data.sub} />
-        <Body data={data} error={error} />
+        <Body data={data} error={error} actions={actions} />
       </div>
     </div>
   );
 }
 
-export const page: PageModule<LoginData> = {
+export const page: PageModule<LoginData, LoginActions> = {
   id: "login",
   title: "Login",
   route: "/login",
