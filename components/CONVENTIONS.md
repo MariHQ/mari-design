@@ -158,6 +158,11 @@ constrain the *column*, not individual cards.
 `grid grid-cols-3 gap-5` with widgets spanning columns as needed, so tile edges
 line up both horizontally and vertically. Not a single stacked column.
 
+**Card galleries.** Wrapping card collections (templates, connectors) use
+`flex flex-wrap` with `flex-1 basis-*` cards, not a fixed column count, so
+every row runs edge to edge. A short last row stretches its cards across the
+full width; a dead bottom-right corner is a bug.
+
 **Mobile.** Pages receive a `mobile` prop. Mobile collapses the grid to one
 column and drops rails below the main content. Components themselves stay
 desktop fixed-width (§10); mobile is composed at the page level.
