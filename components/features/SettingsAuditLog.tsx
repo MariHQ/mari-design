@@ -7,6 +7,7 @@ import { Avatar } from "../data-display/Avatar";
 import { EmptyState } from "../data-display/EmptyState";
 import { Skeleton, SkeletonLine, SkeletonTable } from "../data-display/Skeleton";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
+import { Scrollable } from "../data-display/Scrollable";
 import { fmtDateTime } from "../tokens/format";
 
 /* Settings — Access log ───────────────────────────────────────────────────
@@ -84,7 +85,7 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
             {events.length === 0 ? "Workspace activity will appear here." : "No events match that filter."}
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <Scrollable>
             <table className="w-full text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
                 <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "36%" }} /><col style={{ width: "20%" }} />
@@ -113,7 +114,7 @@ export function SettingsAuditLog({ events = DEMO_EVENTS, total = DEMO_EVENTS.len
                 ))}
               </tbody>
             </table>
-          </div>
+          </Scrollable>
         )}
       </Card>
     </div>

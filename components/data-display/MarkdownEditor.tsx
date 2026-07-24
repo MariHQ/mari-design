@@ -3,6 +3,7 @@ import { Eye, Columns2, Pencil } from "lucide-react";
 import { Button } from "../actions/Button";
 import { focusRing } from "../tokens/focusRing";
 import { MarkdownView } from "./MarkdownView";
+import { Scrollable } from "./Scrollable";
 
 // A self-contained markdown editor: a monospace source pane and a live
 // blueprint preview, controlled by value + onChange. See the note in the
@@ -11,7 +12,6 @@ import { MarkdownView } from "./MarkdownView";
 
 type Mode = "split" | "write" | "preview";
 
-const PANE = "min-h-0 overflow-auto";
 const SOURCE = `w-full h-full min-h-[240px] resize-none px-3.5 py-3 font-term text-[13px] leading-[1.6] text-ink bg-paper placeholder:text-ink/35 outline-none ${focusRing}`;
 
 export type MarkdownEditorProps = {
@@ -63,8 +63,10 @@ export function MarkdownEditor({
       </div>
 
       <div className={`grid ${showSource && showPreview ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} h-[360px] divide-ink/12 md:divide-x`}>
+        {/* h-full on the source scroll box so the h-full textarea fills the
+            pane (a percentage height needs a sized parent, not max-h). */}
         {showSource && (
-          <div className={PANE}>
+          <Scrollable axis="both" className="min-h-0" scrollerClassName="h-full">
             <textarea
               value={value}
               onChange={(e) => onChange(e.target.value)}
@@ -72,14 +74,14 @@ export function MarkdownEditor({
               spellCheck={false}
               className={SOURCE}
             />
-          </div>
+          </Scrollable>
         )}
         {showPreview && (
-          <div className={`${PANE} px-4 py-3`}>
+          <Scrollable axis="both" className="min-h-0" scrollerClassName="px-4 py-3">
             {value.trim()
               ? <MarkdownView>{value}</MarkdownView>
               : <p className="font-term text-[13px] text-ink/35">Nothing to preview yet.</p>}
-          </div>
+          </Scrollable>
         )}
       </div>
     </div>

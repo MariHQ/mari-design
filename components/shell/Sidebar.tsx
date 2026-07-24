@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { Scrollable } from "../data-display/Scrollable";
 import { Tooltip } from "../navigation/Tooltip";
 import { focusRing } from "../tokens/focusRing";
 
@@ -210,19 +211,21 @@ export function Sidebar({ sections, activeId, onNavigate, collapsed = false, bra
       {brand && (
         <div className={["flex shrink-0 items-center pb-3", collapsed ? "justify-center" : "px-2"].join(" ")}>{brand}</div>
       )}
-      <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto" aria-label="Primary">
-        {sections.map((s, i) => (
-          <SidebarSection
-            key={s.id ?? s.heading ?? i}
-            heading={s.heading}
-            divider={s.divider}
-            items={s.items}
-            activeId={activeId}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </nav>
+      <Scrollable axis="y" fade="biscay" className="min-h-0 flex-1">
+        <nav className="flex flex-col gap-3" aria-label="Primary">
+          {sections.map((s, i) => (
+            <SidebarSection
+              key={s.id ?? s.heading ?? i}
+              heading={s.heading}
+              divider={s.divider}
+              items={s.items}
+              activeId={activeId}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </nav>
+      </Scrollable>
       {footer && <div className="shrink-0 pt-3">{footer}</div>}
     </aside>
   );

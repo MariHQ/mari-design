@@ -14,6 +14,7 @@ import { PropertyList } from "../data-display/PropertyList";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Scrollable } from "../data-display/Scrollable";
 import { Alert } from "../feedback/Alert";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { SettingsMembersTable, type Member } from "../features/SettingsMembersTable";
@@ -133,7 +134,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
       )}
 
       <Card variant="flush" title="Members" hint={`${ROSTER.length} people`}>
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full text-left border-collapse" style={{ minWidth: 720 }}>
             <thead><tr>{["Member", "Email", "Role", "Status", "Joined", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 5 ? { width: 160 } : undefined}>{h}</th>)}</tr></thead>
             <tbody>
@@ -182,7 +183,7 @@ function MembersInline({ variant }: { variant: "invite-open" | "role-change" | "
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </Card>
     </>
   );

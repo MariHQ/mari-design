@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, X, ChevronRight } from "lucide-react";
+import { Scrollable } from "../data-display/Scrollable";
 import { Spinner } from "../data-display/Spinner";
 import { focusRing } from "../tokens/focusRing";
 import type { ToolCallData } from "./types";
@@ -75,9 +76,11 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
       </div>
 
       {expanded && (
-        <pre className="ml-[22px] mb-1.5 px-2.5 py-2 rounded-[4px] border border-ink/10 bg-flysch font-term text-[11.5px] leading-relaxed text-ink/70 overflow-x-auto">
-          {JSON.stringify({ args, result: tool.summary, ok: tool.ok }, null, 2)}
-        </pre>
+        <Scrollable fade="flysch" className="ml-[22px] mb-1.5 rounded-[4px] border border-ink/10 bg-flysch">
+          <pre className="px-2.5 py-2 font-term text-[11.5px] leading-relaxed text-ink/70">
+            {JSON.stringify({ args, result: tool.summary, ok: tool.ok }, null, 2)}
+          </pre>
+        </Scrollable>
       )}
     </div>
   );

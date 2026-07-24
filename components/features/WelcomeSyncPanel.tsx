@@ -11,6 +11,7 @@ import { SyncStatusLine, type SyncSource } from "../feedback/SyncPanel";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SourceMark, GithubMark } from "../icons/marks";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 import { fmtAgo } from "../tokens/format";
 
 /* WelcomeSyncPanel — the Welcome wizard's live sync read-out for just-connected
@@ -136,7 +137,7 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
         <SyncStatusLine sources={items} />
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-ink/12 bg-paper">
+      <Scrollable className="rounded-md border border-ink/12 bg-paper">
         <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
           <colgroup>
             <col style={{ width: "28%" }} /><col style={{ width: "20%" }} /><col style={{ width: "20%" }} />
@@ -210,7 +211,7 @@ export function WelcomeSyncPanel({ sources = DEMO, loading = false, className = 
             })}
           </tbody>
         </table>
-      </div>
+      </Scrollable>
     </div>
   );
 }

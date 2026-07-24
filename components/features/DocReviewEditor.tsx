@@ -372,7 +372,10 @@ export function DocReviewEditor({
         <Menu
           align="start"
           trigger={
-            <Button compact aria-label="Block type">
+            /* Full-height button: every control in this toolbar group shares
+               the 36px height of the B/I/U icon buttons (CONVENTIONS.md §13).
+               The compact 28px variant sat visibly shorter beside them. */
+            <Button aria-label="Block type">
               {focusedBlock ? BLOCK_LABEL[focusedBlock.type] : "¶"} <ChevronDown size={11} />
             </Button>
           }

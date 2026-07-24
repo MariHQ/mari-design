@@ -245,8 +245,9 @@ export function DecisionCardFeature({ decisions = DEMO, loading = false, classNa
             /* Every nowrap box in the card (the source chip, the date/owner
                group) has to be allowed to shrink, or one long source label
                pins the meta row at its full width and the card spills past
-               its own border. The chips ellipsize once they can shrink. */
-            className="[&_.gap-x-3>div]:min-w-0 [&_.whitespace-nowrap]:min-w-0 [&_.whitespace-nowrap]:overflow-hidden"
+               its own border. Chips shrink on their own now; CardMeta keeps
+               its own min-width floor on the tag block, so no child override. */
+            className="[&_.whitespace-nowrap]:min-w-0 [&_.whitespace-nowrap]:overflow-hidden"
             statement={d.statement}
             context={d.context}
             status={d.status}

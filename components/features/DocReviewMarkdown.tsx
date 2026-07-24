@@ -20,6 +20,7 @@ import { Tabs } from "../navigation/Tabs";
 import { Chip } from "../data-display/Chip";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* ————— ported doc-specific helpers (not in the shared lib module) ————— */
 
@@ -279,7 +280,8 @@ export function DocReviewMarkdown({
         </p>
       </div>
 
-      <div className="overflow-x-auto px-4 pt-3">
+      {/* Padding rides the scroll box so the tab row can slide under it. */}
+      <Scrollable scrollerClassName="px-4 pt-3">
         <Tabs<EngineTab>
           ariaLabel="Markdown engine"
           variant="underline"
@@ -292,14 +294,14 @@ export function DocReviewMarkdown({
             { id: "diff", label: "Word diff" },
           ]}
         />
-      </div>
+      </Scrollable>
 
       <div className="p-4">
         {tab === "blocks" && (
           /* A real table with sortable column headers (CONVENTIONS.md §3).
              The type marker is plain bold mono and sits in its own column, well
              clear of the flag chips on the right. */
-          <div className="overflow-x-auto rounded-[6px] border border-ink/12">
+          <Scrollable className="rounded-[6px] border border-ink/12">
             {/* table-fixed so a 90-char unbreakable token wraps inside the
                 content column instead of widening the whole table. */}
             <table className="w-full table-fixed border-collapse text-left">
@@ -340,7 +342,7 @@ export function DocReviewMarkdown({
                 )}
               </tbody>
             </table>
-          </div>
+          </Scrollable>
         )}
 
         {tab === "roundtrip" && (

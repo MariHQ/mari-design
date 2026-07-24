@@ -2,6 +2,7 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Network } from "lucide-react";
 import { LineageToolbar } from "../features/LineageToolbar";
+import { Scrollable } from "../data-display/Scrollable";
 import { LineageGraph } from "../features/LineageGraph";
 import { LineageTimeScrubber } from "../features/LineageTimeScrubber";
 import { LineageNodeDrawer } from "../features/LineageNodeDrawer";
@@ -139,9 +140,9 @@ function Rig({ rail, scroll = false, canvas, drawer }: {
   if (rail === null && !scroll) return <div className="relative flex min-w-0 flex-col gap-5">{canvas}</div>;
   const column = (
     <div className="min-w-0">
-      <div className="overflow-x-auto pb-1">
+      <Scrollable className="pb-1">
         <div className="relative flex min-w-[720px] flex-col gap-5">{canvas}</div>
-      </div>
+      </Scrollable>
     </div>
   );
   if (rail === null) return column;
@@ -210,7 +211,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
           )}
           drawer={sideCard}
         />
-        {mobile && <div className="overflow-x-auto pb-1">{sideCard}</div>}
+        {mobile && <Scrollable className="pb-1">{sideCard}</Scrollable>}
       </div>
     );
   }
@@ -244,7 +245,7 @@ function Body({ state, mobile }: { state: string; mobile: boolean }) {
       {/* The lineage drawers are desktop-fixed (420/460px, §10). Below the
           canvas on a phone they scroll sideways inside their own row rather
           than spilling past the page gutter. */}
-      {mobile && <div className="overflow-x-auto pb-1"><Drawer state={state} /></div>}
+      {mobile && <Scrollable className="pb-1"><Drawer state={state} /></Scrollable>}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Chip, StatusChip, SeverityChip, CountChip } from "../data-display/Chip";
+import { Scrollable } from "../data-display/Scrollable";
 import { Stat } from "../data-display/Stat";
 import { Badge } from "../data-display/Badge";
 import { Swatch } from "../data-display/Swatch";
@@ -348,9 +349,9 @@ function StressSection() {
         rule="A single non-wrapping row of every tag: it must scroll inside its own container, never push the page body sideways."
         imp={LONG_URL}
       >
-        <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+        <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
           {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-        </div>
+        </Scrollable>
         <CountChip count={MANY_TAGS.length} />
       </Exhibit>
 

@@ -1,6 +1,7 @@
 import { Chip, StatusChip, DryChip, type ChipStatus } from "../data-display/Chip";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonTable } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import { card } from "../tokens/card";
 import { fmtDate, fmtDateTime, type DateInput } from "../tokens/format";
 
@@ -114,7 +115,7 @@ export function RunHistory({
       ) : list.length === 0 ? (
         <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           {/* table-fixed + a colgroup: column widths are declared, not derived
               from the longest word, so a long unbroken value can neither push
               the trailing columns out of sight nor squeeze its neighbours to a
@@ -165,7 +166,7 @@ export function RunHistory({
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
     </div>
   );

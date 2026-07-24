@@ -159,21 +159,27 @@ function resultsFor(state: string): Result[] {
   }
 }
 
+/* Every empty/offline box on this page shares one wrapper, so the "No
+   results" and "No document" cards render at the same height (§15). */
+function EmptyBox({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <div className="grid place-items-center py-16">
+        <EmptyState title={title}>{children}</EmptyState>
+      </div>
+    </Card>
+  );
+}
+
 function Feed({ state, mobile }: { state: string; mobile: boolean }) {
   if (state === "error") {
-    return (
-      <Card>
-        <EmptyState title="API offline">Search is unavailable. Retrying…</EmptyState>
-      </Card>
-    );
+    return <EmptyBox title="API offline">Search is unavailable. Retrying…</EmptyBox>;
   }
   if (state === "empty") {
     return (
-      <Card>
-        <EmptyState title="No results">
-          No results match the current filters. Clear a filter or try a different search.
-        </EmptyState>
-      </Card>
+      <EmptyBox title="No results">
+        No results match the current filters. Clear a filter or try a different search.
+      </EmptyBox>
     );
   }
   return <KnowledgeBrowser key={state} results={resultsFor(state)} stacked={mobile} />;
@@ -181,20 +187,10 @@ function Feed({ state, mobile }: { state: string; mobile: boolean }) {
 
 function Inspector({ state }: { state: string }) {
   if (state === "no-selection") {
-    return (
-      <Card>
-        <div className="grid place-items-center py-16">
-          <EmptyState title="Nothing selected">Select a result to inspect it here.</EmptyState>
-        </div>
-      </Card>
-    );
+    return <EmptyBox title="Nothing selected">Select a result to inspect it here.</EmptyBox>;
   }
   if (state === "error" || state === "empty") {
-    return (
-      <Card>
-        <EmptyState title="No document">Nothing to inspect.</EmptyState>
-      </Card>
-    );
+    return <EmptyBox title="No document">Nothing to inspect.</EmptyBox>;
   }
   if (state === "inspector-slack" || state === "conversations") {
     return <KnowledgeInspector key={state} doc={SLACK_DOC} />;

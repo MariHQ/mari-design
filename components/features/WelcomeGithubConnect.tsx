@@ -9,6 +9,7 @@ import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { GithubMark } from "../icons/marks";
+import { Scrollable } from "../data-display/Scrollable";
 import { focusRing } from "../tokens/focusRing";
 
 /* WelcomeGithubConnect — the Welcome wizard's GitHub sub-flow: pick a repo from
@@ -42,32 +43,34 @@ function RepoPicker({
       {shown.length === 0 ? (
         <p className="text-[12.5px] text-ink/70 py-3">No repositories match "{filter}".</p>
       ) : (
-        <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5 max-h-[300px] overflow-y-auto">
-          {shown.map((r) => {
-            const active = selected === r.fullName;
-            return (
-              <label
-                key={r.fullName}
-                className={`flex items-center gap-2.5 p-2.5 rounded-md border cursor-pointer transition-colors ${focusRing} ${
-                  r.connected ? "cursor-not-allowed border-ink/12 bg-flysch text-ink/70" : active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
-                }`}
-              >
-                <input type="radio" name="wc-repo" className="accent-biscay" disabled={r.connected} checked={active} onChange={() => onSelect(r.fullName)} />
-                <GitFork size={14} className="text-ink/65 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <b className="min-w-0 break-all text-[13px] font-semibold text-ink">{r.fullName}</b>
-                    {r.private && <Chip label="Private" tone="neutral" icon={<Lock size={10} />} />}
+        <Scrollable axis="y" className="max-h-[300px]">
+          <div role="radiogroup" aria-label="Repositories" className="grid grid-cols-1 gap-1.5">
+            {shown.map((r) => {
+              const active = selected === r.fullName;
+              return (
+                <label
+                  key={r.fullName}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-md border cursor-pointer transition-colors ${focusRing} ${
+                    r.connected ? "cursor-not-allowed border-ink/12 bg-flysch text-ink/70" : active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
+                  }`}
+                >
+                  <input type="radio" name="wc-repo" className="accent-biscay" disabled={r.connected} checked={active} onChange={() => onSelect(r.fullName)} />
+                  <GitFork size={14} className="text-ink/65 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <b className="min-w-0 break-all text-[13px] font-semibold text-ink">{r.fullName}</b>
+                      {r.private && <Chip label="Private" tone="neutral" icon={<Lock size={10} />} />}
+                    </span>
+                    <span className="block break-words text-[11.5px] text-ink/70 line-clamp-2">{r.description}</span>
                   </span>
-                  <span className="block break-words text-[11.5px] text-ink/70 line-clamp-2">{r.description}</span>
-                </span>
-                {r.connected
-                  ? <Chip label="Connected" tone="ok" className="shrink-0" />
-                  : <span className="shrink-0 font-term text-[11px] text-ink/65">{r.defaultBranch}</span>}
-              </label>
-            );
-          })}
-        </div>
+                  {r.connected
+                    ? <Chip label="Connected" tone="ok" className="shrink-0" />
+                    : <span className="shrink-0 font-term text-[11px] text-ink/65">{r.defaultBranch}</span>}
+                </label>
+              );
+            })}
+          </div>
+        </Scrollable>
       )}
     </div>
   );

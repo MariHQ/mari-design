@@ -8,6 +8,7 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Scrollable } from "../data-display/Scrollable";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
 import { GithubMark } from "../icons/marks";
@@ -266,9 +267,9 @@ function Body({ state }: { state: string }) {
             <p role="alert" className="break-words text-[12.5px] leading-relaxed text-espelette">
               {MIXED_SCRIPT}, {UNBREAKABLE}
             </p>
-            <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+            <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
               {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-            </div>
+            </Scrollable>
             <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
             <p className="font-term text-[11px] text-ink/65">{HUGE_NUMBER_STR} sign-ins</p>
             <div className={`mt-1 ${AUTH_ACTIONS}`}>

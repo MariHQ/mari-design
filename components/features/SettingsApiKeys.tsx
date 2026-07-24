@@ -12,6 +12,7 @@ import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-disp
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
+import { Scrollable } from "../data-display/Scrollable";
 import { fmtDate } from "../tokens/format";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
              100-character token let the Key column collapse to ~70px and wrap
              one character per line. The table keeps its 720px floor and
              scrolls inside this card. */
-          <div className="min-w-0 overflow-x-auto">
+          <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 720 }}>
               {/* Widths are binding under table-fixed, so the share is
                   redistributed (not the table widened) to give the trailing
@@ -158,7 +159,7 @@ export function SettingsApiKeys({ keys: initialKeys = DEMO_KEYS, loading = false
                 ))}
               </tbody>
             </table>
-          </div>
+          </Scrollable>
         )}
       </Card>
     </div>

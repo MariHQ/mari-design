@@ -12,6 +12,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skeleton";
 import { type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
 import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* LibraryRulesPanel — the Library › Rules tab.
    Configures the deterministic prose engine: rules across four families
@@ -327,7 +328,7 @@ function RuleTable({
           ))}
         </div>
 
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full min-w-[620px] table-fixed border-collapse text-left">
             <colgroup>
               <col />
@@ -382,7 +383,7 @@ function RuleTable({
               )}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       </div>
     </Card>
   );

@@ -3,6 +3,7 @@ import { Inbox } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { cellClass, sortRows, type Column } from "./DataTable";
+import { Scrollable } from "./Scrollable";
 import { SkeletonTable } from "./Skeleton";
 import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 
@@ -77,7 +78,7 @@ export function SelectableTable<T>({
 
   return (
     <div className={`${card} mt-5 overflow-hidden`}>
-      <div className="overflow-x-auto">
+      <Scrollable>
         <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
           <thead>
             {someSelected ? (
@@ -139,7 +140,7 @@ export function SelectableTable<T>({
             })}
           </tbody>
         </table>
-      </div>
+      </Scrollable>
     </div>
   );
 }

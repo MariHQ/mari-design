@@ -6,6 +6,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonTable } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Facts verification audit — a client-side audit derived entirely from the
@@ -125,7 +126,7 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
       {auditRows.length === 0 ? (
         <EmptyState icon={<ShieldCheck size={24} />} title="Nothing to audit">No verified facts to audit yet.</EmptyState>
       ) : (
-        <div className="overflow-x-auto">
+        <Scrollable>
           <table className="w-full border-collapse text-left" style={{ minWidth: 700 }}>
             <thead>
               <tr>
@@ -186,7 +187,7 @@ export function FactsVerificationAudit({ facts = DEMO_FACTS, onClose, loading = 
               })}
             </tbody>
           </table>
-        </div>
+        </Scrollable>
       )}
     </Card>
   );

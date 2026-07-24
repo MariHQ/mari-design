@@ -36,8 +36,9 @@ export function CardTitleBlock({
 }
 
 /* Source + status chips on the LEFT, date and author/approver right-aligned on
-   the SAME line (order slots 6 and 7). Wraps to a second line only when the
-   container is genuinely too narrow. */
+   the SAME line (order slots 6 and 7). When there are too many tags they stack
+   inside the left block, and the date/author group rides the BOTTOM tag row
+   (items-end), never a line below the whole stack (CONVENTIONS.md §14). */
 export function CardMeta({
   source, status, date, author, className = "",
 }: {
@@ -51,8 +52,11 @@ export function CardMeta({
   const hasRight = date || author;
   if (!hasLeft && !hasRight) return null;
   return (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${className}`.trim()}>
-      <div className="flex flex-wrap items-center gap-1.5">{source}{status}</div>
+    <div className={`flex flex-wrap items-end gap-x-3 gap-y-2 ${className}`.trim()}>
+      {/* The tag block keeps an 8rem floor so a long date/author group can
+          never crush the chips into a 2px column; past that, the right group
+          truncates or wraps below instead. */}
+      {hasLeft && <div className="flex min-w-[8rem] flex-1 flex-wrap items-center gap-1.5">{source}{status}</div>}
       {hasRight && (
         <div className="ml-auto flex min-w-0 items-center gap-2 font-term text-[11px] text-ink/65">
           {date != null && <span className="shrink-0 whitespace-nowrap">{date}</span>}

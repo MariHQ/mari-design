@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { parseMarkdown, type Block } from "./markdown";
+import { Scrollable } from "./Scrollable";
 import { SkeletonLine, SkeletonText } from "./Skeleton";
 
 // Blueprint prose styling: display font for headings, ink body text, a flysch
@@ -41,9 +42,11 @@ function renderBlocks(blocks: Block[]): ReactNode[] {
     }
     if (b.type === "code") {
       out.push(
-        <pre key={b.id} className="my-3 px-3 py-2.5 rounded-[6px] bg-flysch border border-ink/10 overflow-x-auto">
-          <code className="font-term text-[12.5px] leading-[1.55] text-ink/90 whitespace-pre">{b.html.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")}</code>
-        </pre>,
+        <Scrollable key={b.id} fade="flysch" className="my-3 rounded-[6px] bg-flysch border border-ink/10">
+          <pre className="px-3 py-2.5">
+            <code className="font-term text-[12.5px] leading-[1.55] text-ink/90 whitespace-pre">{b.html.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")}</code>
+          </pre>
+        </Scrollable>,
       );
       i++;
       continue;

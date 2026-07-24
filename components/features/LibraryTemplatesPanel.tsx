@@ -87,8 +87,10 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
         <div className="flex gap-2 px-4 pt-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} w={64} />)}
         </div>
-        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} lines={2} footer />)}
+        <div className="flex flex-wrap gap-3 p-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="min-w-[280px] flex-1 basis-[300px]"><SkeletonCard lines={2} footer /></div>
+          ))}
         </div>
       </div>
     );
@@ -166,13 +168,17 @@ export function LibraryTemplatesPanel({ templates = TEMPLATES, loading = false, 
         {visible.length === 0 ? (
           <EmptyState icon={<FileText size={20} />}>No templates match these filters.</EmptyState>
         ) : (
-          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          /* flex-wrap + growing cards, not a fixed column grid: every row,
+             including a short last row, runs edge to edge with no dead corner
+             (CONVENTIONS §11). Intrinsic basis also replaces the sm:/xl:
+             breakpoints (§10). */
+          <div className="flex flex-wrap gap-3 p-4">
             {visible.map((t) => {
               const Icon = t.icon;
               const open = previewId === t.id;
               const used = usedId === t.id;
               return (
-                <article key={t.id} className="flex flex-col rounded-[6px] border border-ink/12 p-3.5">
+                <article key={t.id} className="flex min-w-[280px] flex-1 basis-[300px] flex-col rounded-[6px] border border-ink/12 p-3.5">
                   <div className="flex items-start gap-2.5">
                     <span className="grid place-items-center w-8 h-8 rounded-[5px] bg-flysch border border-ink/12 text-ink/70"><Icon size={16} /></span>
                     <div className="min-w-0 flex-1">

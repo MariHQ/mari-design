@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Stepper } from "../data-display/Stepper";
+import { Scrollable } from "../data-display/Scrollable";
 import { Button } from "../actions/Button";
 import { Logo, Brandmark } from "../shell/Logo";
 import { Card } from "../layout/Card";
@@ -542,9 +543,9 @@ function StressStep() {
         <Truncate as="code" className="mt-1 font-term text-[12px] text-biscay-2">{UNBREAKABLE}</Truncate>
         <Truncate className="mt-2 text-[13.5px] text-ink/65">{LONG_URL}</Truncate>
       </div>
-      <div className="flex w-full gap-1.5 overflow-x-auto pb-1">
+      <Scrollable className="w-full pb-1" scrollerClassName="flex gap-1.5">
         {MANY_TAGS.map((t) => <Chip key={t} label={t} tone="neutral" className="shrink-0" />)}
-      </div>
+      </Scrollable>
       <div className="flex min-w-0 flex-wrap items-center gap-4">
         <AvatarGroup people={MANY_INITIALS.map((i) => ({ initials: i }))} max={MANY_INITIALS.length} />
         <Truncate className="min-w-0 flex-1 basis-[8rem] font-term text-[12px] text-ink/65">{`${HUGE_NUMBER_STR} members`}</Truncate>

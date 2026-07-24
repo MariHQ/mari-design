@@ -10,6 +10,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
 import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import { PageHeader } from "../layout/PageHeader";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
@@ -134,7 +135,7 @@ export function InsightsWidgets({
           {readability.length === 0 ? (
             <EmptyState icon={<Search size={24} />} title="Nothing scored yet">Score your documents to see readability grades.</EmptyState>
           ) : (
-            <div className="overflow-x-auto">
+            <Scrollable>
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr>
@@ -155,7 +156,7 @@ export function InsightsWidgets({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Scrollable>
           )}
           <p className="px-4 py-3 text-[12px] text-ink/70">Deterministic A to C grades from the local model. Re-run scoring after big edits.</p>
         </Card>

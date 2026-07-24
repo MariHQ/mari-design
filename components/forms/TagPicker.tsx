@@ -3,6 +3,7 @@ import * as RPop from "@radix-ui/react-popover";
 import { Popover } from "../navigation/Popover";
 import { Button } from "../actions/Button";
 import { focusRing } from "../tokens/focusRing";
+import { Scrollable } from "../data-display/Scrollable";
 import { TagChip, TAG_OPTIONS } from "../data-display/TagChip";
 import { Skeleton, SkeletonChip } from "../data-display/Skeleton";
 
@@ -44,7 +45,7 @@ export function TagPicker({
         <span className="text-[13px] font-semibold text-ink">Document tags</span>
         <small className="font-term text-[11px] text-ink/65">{tags.length} applied</small>
       </div>
-      <div className="p-1.5 flex flex-col gap-0.5 max-h-64 overflow-y-auto">
+      <Scrollable axis="y" className="max-h-64" scrollerClassName="p-1.5 flex flex-col gap-0.5">
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2.5 px-2 py-1.5" aria-hidden="true">
@@ -70,7 +71,7 @@ export function TagPicker({
             </button>
           );
         })}
-      </div>
+      </Scrollable>
       <div className="flex items-center justify-between px-3 py-2 border-t border-ink/10">
         {onManage
           ? <button type="button" onClick={onManage} className={`font-term text-[11.5px] text-biscay-2 hover:text-ink hover:underline underline-offset-[3px] ${focusRing}`}>Manage definitions</button>

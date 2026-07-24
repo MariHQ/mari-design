@@ -13,6 +13,7 @@ import { Progress } from "../data-display/Progress";
 import { EmptyState } from "../data-display/EmptyState";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 
 /* LibraryTagsPanel — the Library › Tags tab (default tab).
    The single source of truth for the project's tag vocabulary: one
@@ -243,7 +244,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
           {visible.length === 0 ? (
             <EmptyState icon={<Search size={20} />}>No tags match this search.</EmptyState>
           ) : (
-            <div className="overflow-x-auto">
+            <Scrollable>
               <table className="w-full min-w-[860px] table-fixed border-collapse text-left">
                 <colgroup>
                   <col style={{ width: "16rem" }} />
@@ -310,7 +311,7 @@ export function LibraryTagsPanel({ tags = DEMO_TAGS, loading = false, compact = 
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Scrollable>
           )}
         </div>
       </Card>

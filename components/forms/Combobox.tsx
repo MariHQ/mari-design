@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import * as RPop from "@radix-ui/react-popover";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
+import { Scrollable } from "../data-display/Scrollable";
 
 export type ComboboxOption = { value: string; label: string };
 
@@ -58,7 +59,8 @@ export function Combobox({
               <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} className="flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65" />
             </div>
           )}
-          <div role="listbox" className="max-h-[220px] overflow-y-auto p-1">
+          <Scrollable axis="y" className="max-h-[220px]">
+            <div role="listbox" className="p-1">
             {filtered.length === 0 && <div className="px-3 py-4 text-center text-[12.5px] text-ink/70">{emptyLabel}</div>}
             {filtered.map((opt) => (
               <div
@@ -72,7 +74,8 @@ export function Combobox({
                 {opt.value === value && <Check size={16} className="text-biscay-2 shrink-0" aria-hidden />}
               </div>
             ))}
-          </div>
+            </div>
+          </Scrollable>
         </RPop.Content>
       </RPop.Portal>
     </RPop.Root>

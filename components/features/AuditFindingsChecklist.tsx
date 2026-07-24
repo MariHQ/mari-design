@@ -163,12 +163,12 @@ export function AuditFindingsChecklist({
           eyebrow="Repository audit"
           title="Findings"
           description={`${provider} · ${repo} · last run ${ranAt}`}
-          actions={<Button variant="primary" disabled={scanning} onClick={reaudit}><RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}</Button>}
         />
       </div>
 
-      {/* Summary strip */}
-      <div className="flex flex-wrap gap-2">
+      {/* Summary strip. Re-audit rides this line, right of the kind chips,
+          not floating alone in the header above them. */}
+      <div className="flex flex-wrap items-center gap-2">
         {[...byKind.keys()].map((k) => {
           const open = openCount(k);
           return (
@@ -182,6 +182,11 @@ export function AuditFindingsChecklist({
             </button>
           );
         })}
+        <div className="ml-auto">
+          <Button variant="primary" disabled={scanning} onClick={reaudit}>
+            <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}
+          </Button>
+        </div>
       </div>
 
       {/* Progress header */}
