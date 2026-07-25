@@ -45,6 +45,11 @@ const BASE = `http://localhost:${PORT}`;
 const SIZES = { desktop: { w: 1440, h: 900 }, mobile: { w: 390, h: 844 } };
 const CONCURRENCY = Math.max(2, Math.min(8, (os.cpus()?.length || 4) - 1));
 
+/* Ceiling for one frame: navigate, settle, probe. Generous — the catalog page
+   is genuinely slow, since the probe calls getComputedStyle on every element —
+   but finite, so a wedged frame costs 45s instead of the whole run. */
+const FRAME_MS = Number(opt("frameMs", 45000));
+
 function waitForServer(url, tries = 90) {
   return new Promise((res, rej) => {
     const tick = async (n) => {
@@ -133,7 +138,44 @@ async function main() {
     }
 
     const findings = [];
+    /* Frames the sweep could NOT measure. These have to be reported: a frame
+       that errored produces no findings, which is indistinguishable in the
+       final count from a frame that was measured and found clean. A sweep that
+       silently skips is a false green. */
+    const skipped = [];
     let cursor = 0, done = 0;
+
+    /* One frame, measured. */
+    const measure = async (page, url) => {
+      await page.goto(url, { waitUntil: "load" });
+      /* Wait for the WEB FONTS, not for a guess. `load` fires before a
+         CSS-triggered font finishes downloading, and the fallback face has
+         different metrics — so a frame measured too early comes out the wrong
+         width and the probe reports escapes that do not exist. That is exactly
+         what a full sweep produced (three hits, all clean when re-run alone,
+         because by then the font was warm).
+
+         Bounded, because `document.fonts.ready` on a frame whose font never
+         settles would never resolve and `evaluate` has no default timeout.
+         Falling through after 2s only restores the old behaviour: a possible
+         false hit, rather than no answer at all. */
+      await page.evaluate(() => Promise.race([
+        document.fonts.ready.then(() => undefined),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]));
+      await page.waitForTimeout(120);
+      return page.evaluate(probe);
+    };
+
+    /* A hard ceiling on one frame. Playwright's navigation timeout does not
+       cover `evaluate`, and when the browser dies mid-sweep the pending call
+       simply never settles: the run sat at 0% CPU with no Chromium process
+       left, having printed 575/664 and nothing since. A sweep that hangs is
+       worse than one that fails — you cannot tell it from a slow one. */
+    const deadline = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`frame exceeded ${ms}ms`)), ms)),
+    ]);
     async function worker() {
       const page = await ctx.newPage();
       for (;;) {
@@ -146,36 +188,22 @@ async function main() {
         // rather than losing the whole sweep to one flake.
         const url = `${BASE}/render.html?page=${encodeURIComponent(f.page)}&state=${encodeURIComponent(f.state)}&view=${f.view}&full=1`;
         let r = null;
+        let lastErr = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            await page.goto(url, { waitUntil: "load" });
-            /* Wait for the WEB FONTS, not for a guess.
-               `load` fires before a CSS-triggered font finishes downloading, so
-               a frame measured right after it is measured in the fallback face.
-               The fallback has different metrics, so text boxes come out the
-               wrong width and the probe reports escapes that do not exist —
-               which is exactly what a full sweep produced (three hits that were
-               all clean when re-run on their own) while a single-page run,
-               where the font was already warm, stayed green.
-
-               A flaky audit is worse than a slow one in both directions: it
-               invents defects, and a false-green is indistinguishable from a
-               real one. */
-            /* Bounded. `document.fonts.ready` is a promise that a frame with a
-               font that never resolves will never settle, and `evaluate` has no
-               default timeout — an unbounded wait here hung the sweep partway
-               through with no output, which is the same black box the streaming
-               progress line exists to avoid. Falling through after 2s measures
-               in the fallback face, which is the old behaviour: possibly a false
-               hit, rather than no answer at all. */
-            await page.evaluate(() => Promise.race([
-              document.fonts.ready.then(() => undefined),
-              new Promise((r) => setTimeout(r, 2000)),
-            ]));
-            await page.waitForTimeout(120);
-            r = await page.evaluate(probe);
+            r = await deadline(measure(page, url), FRAME_MS);
             break;
-          } catch { await page.waitForTimeout(300); }
+          } catch (e) {
+            lastErr = e;
+            // A closed page or a gone browser will never come back on a retry,
+            // so stop hammering it and let the worker report upward.
+            if (page.isClosed() || !browser.isConnected()) break;
+            await new Promise((res) => setTimeout(res, 300));
+          }
+        }
+        if (r === null) {
+          skipped.push({ page: f.page, state: f.state, view: f.view, why: String(lastErr).split("\n")[0] });
+          if (!browser.isConnected()) throw new Error("the browser exited mid-sweep");
         }
         if (r && (r.page.length || r.escapes.length || r.crushes.length)) {
           const finding = {
@@ -215,10 +243,18 @@ async function main() {
       byPage.set(f.page, e);
     }
     const rows = [...byPage.values()].sort((a, b) => (b.escapes + b.crushes) - (a.escapes + a.crushes));
-    console.log(`\n${findings.length} frames with defects, of ${frames.length} checked\n`);
+    console.log(`\n${findings.length} frames with defects, of ${frames.length - skipped.length} measured` +
+      (skipped.length ? ` (${skipped.length} NOT measured, listed below)` : ` of ${frames.length}`) + `\n`);
     for (const r of rows) {
       console.log(`${String(r.page).padEnd(20)} overflow=${String(r.overflow).padStart(3)}  escapes=${String(r.escapes).padStart(4)}  crushes=${String(r.crushes).padStart(4)}`);
       for (const w of r.worst.slice(0, 3)) console.log(`    ${w}`);
+    }
+
+    /* Never let an unmeasured frame pass for a clean one. */
+    if (skipped.length) {
+      console.log(`\n${skipped.length} frame(s) could not be measured — these are UNKNOWN, not clean:`);
+      for (const s2 of skipped.slice(0, 20)) console.log(`  ${s2.page}/${s2.state}/${s2.view}: ${s2.why}`);
+      if (skipped.length > 20) console.log(`  … ${skipped.length - 20} more`);
     }
     if (JSON_OUT) await writeFile(JSON_OUT, JSON.stringify(findings, null, 2));
 
