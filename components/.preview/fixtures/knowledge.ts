@@ -88,8 +88,8 @@ const SLACK_DOC: KnowledgeDoc = {
     { source: "notion", title: "Payments incident runbook" },
   ],
   timeline: [
-    { at: "Jul 15, 3:20 PM", actor: "Marcus Vale", verb: "summarized the decision" },
-    { at: "Jul 15, 2:58 PM", actor: "Priya Nair", verb: "raised the rollback window" },
+    { at: "Jul 15, 2026, 3:20 PM", actor: "Marcus Vale", verb: "summarized the decision" },
+    { at: "Jul 15, 2026, 2:58 PM", actor: "Priya Nair", verb: "raised the rollback window" },
   ],
 };
 
@@ -128,8 +128,12 @@ const OVERFLOW_DOC: KnowledgeDoc = {
     { source: "slack", title: LONG_SOURCE },
   ],
   timeline: [
-    { at: "Jul 16, 4:12 PM", actor: LONG_NAME, verb: "verified the consolidated runbook after reconciling it against four quarters of incident retrospectives" },
-    { at: "Jul 11, 9:38 AM", actor: LONG_NAME, verb: "added the end-of-business-day rollback window" },
+    /* Years are not optional here. "Jul 16, 4:12 PM" is a display string, and
+       Date.parse reads its "4" as the YEAR, so the inspector rendered a 2026
+       revision as "Jul 16, 2001" beside a document updated Jul 16, 2026. This
+       fixture stresses long strings, not date parsing. */
+    { at: "Jul 16, 2026, 4:12 PM", actor: LONG_NAME, verb: "verified the consolidated runbook after reconciling it against four quarters of incident retrospectives" },
+    { at: "Jul 11, 2026, 9:38 AM", actor: LONG_NAME, verb: "added the end-of-business-day rollback window" },
   ],
 };
 

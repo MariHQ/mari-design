@@ -176,7 +176,15 @@ export function OverviewTodayReview({
                     when the card itself is narrow. */}
                 <SortHeader label="Task" sortKey="task" sort={sort} onSort={onSort} className="w-full min-w-[200px] max-w-0" />
                 <SortHeader label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} align="center" className="whitespace-nowrap" />
-                <SortHeader label="Kind" sortKey="kind" sort={sort} onSort={onSort} align="center" className="whitespace-nowrap" />
+                {/* KIND is a free-text editorial label, so it is capped. It
+                    used to be `whitespace-nowrap` with no cap, and one long
+                    label ("Needs review: long editorial label that will not
+                    fit") stretched this column to 878px — which pushed STATUS
+                    clean out of the scroll viewport and read, to anyone
+                    looking at the card, as a column the table had dropped. A
+                    value truncates with the whole of it on hover (§12); a
+                    column does not disappear. */}
+                <SortHeader label="Kind" sortKey="kind" sort={sort} onSort={onSort} align="center" className="whitespace-nowrap max-w-[12rem]" />
                 {/* No clickable item in the row past the checkbox, so status is last (§3). */}
                 <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} align="right" className="whitespace-nowrap" />
               </tr>
@@ -213,7 +221,7 @@ export function OverviewTodayReview({
                   <td className={`${tdPad} text-center align-middle whitespace-nowrap`}>
                     <span className="inline-flex"><Avatar initials={t.who} /></span>
                   </td>
-                  <td className={`${tdPad} text-center align-middle whitespace-nowrap`}>
+                  <td className={`${tdPad} max-w-[12rem] text-center align-middle whitespace-nowrap`} title={t.pillText}>
                     <Pill kind={t.pill} text={t.pillText} />
                   </td>
                   <td className={`${tdPad} text-right align-middle whitespace-nowrap`}>

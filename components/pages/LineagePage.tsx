@@ -419,6 +419,9 @@ function LineagePage({ data, loading = false, error = null, actions, chrome, mob
           eyebrow="Lineage"
           title="Product lineage"
           description="The document graph: provenance, impact, and drift across every source."
+          /* The header's one button is labelled by `data.action.label` — the
+             response's word, not this file's — so it stays a bar. */
+          actions={1}
           mobile={mobile}
         />
       ) : (

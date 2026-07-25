@@ -16,7 +16,7 @@ const SUB = "Your product knowledge, curated.";
 /** Signing in to a workspace that offers both social providers and SAML. */
 const SIGN_IN: LoginData = {
   screen: "credentials",
-  title: "Mari",
+  title: "Sign in to Mari",
   sub: SUB,
   register: false,
   name: "Maya Chen",

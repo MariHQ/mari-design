@@ -110,11 +110,20 @@ export function ImpactPanelFeature({
           />
 
           {/* 8 — references */}
+          {/* `title={null}`: this card's own header two blocks up already says
+              "Impact analysis", and the panel printed it again inside itself.
+              The References label drops its `count` for the same reason — the
+              panel's count strip is the one place that list is counted (§13
+              count rule). */}
           {phase === "loading" ? (
-            <ImpactPanelUI loading />
+            <ImpactPanelUI loading title={null} />
           ) : phase === "done" ? (
-            <CardSection label="References" count={docs.length}>
-              <ImpactPanelUI boxed docs={docs} onClose={() => setPhase("idle")} />
+            <CardSection label="References">
+              {/* No `onClose` either: it collapsed the analysis to `idle`, which
+                  is exactly what "Reset" in the action row below does. With the
+                  heading gone the ✕ was also the only thing left in the panel's
+                  header, floating in an empty band. */}
+              <ImpactPanelUI boxed title={null} docs={docs} />
             </CardSection>
           ) : null}
 

@@ -203,7 +203,10 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
   );
 
   return (
-    <Card title="Workspace" eyebrow="Identity" hint="Workspace identity and language.">
+    /* The page header above already reads "Workspace" / "Workspace identity
+       and language."; this card repeated both strings verbatim, 150px lower.
+       It names the section it holds instead. */
+    <Card title="Identity" hint="Name, slug, plan, timezone, and language.">
       <div className={FORM_GRID}>
         <Field label="Workspace name">
           <Input value={name} onChange={(e) => { setName(e.target.value); setJustSaved(false); }} className="w-full" />

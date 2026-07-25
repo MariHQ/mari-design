@@ -138,9 +138,13 @@ ${LONG_PARAGRAPH}
 ### ${LONG_DOC_TITLE}
 ${LONG_PARAGRAPH}`,
   revisions: [
-    { id: 1, actor: LONG_NAME, verb: "reconciled the runbook against four quarters of incident retrospectives", at: "2h ago" },
-    { id: 2, actor: LONG_NAME, verb: "ran Tighten across every section of the consolidated document", at: "Yesterday, 4:12 PM" },
-    { id: 3, actor: "Maya Chen", verb: "accepted 3 changes", at: "Jul 18, 11:03 AM" },
+    /* `at` is a timestamp the panel formats, not a phrase it prints. "2h ago"
+       and "Yesterday" are the formatter's OUTPUT vocabulary, and "Jul 18,
+       11:03 AM" parses to the year 2001. Overflow is about long strings; these
+       are dates, spelled the way every other fixture spells them. */
+    { id: 1, actor: LONG_NAME, verb: "reconciled the runbook against four quarters of incident retrospectives", at: "Jul 21, 2026, 2:40 PM" },
+    { id: 2, actor: LONG_NAME, verb: "ran Tighten across every section of the consolidated document", at: "Jul 20, 2026, 4:12 PM" },
+    { id: 3, actor: "Maya Chen", verb: "accepted 3 changes", at: "Jul 18, 2026, 11:03 AM" },
   ],
   editorBody: `# ${LONG_TITLE}
 

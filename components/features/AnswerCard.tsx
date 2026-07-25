@@ -255,7 +255,7 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
                row's width and drags the card past its own border. */
             <span className="flex min-w-0 items-center gap-1.5">
               <Avatar initials={initials(a.owner)} />
-              <span className="min-w-0 truncate text-[12px] text-ink/70">{a.owner}</span>
+              <span className="min-w-0 truncate text-[12px] text-ink/70" title={a.owner}>{a.owner}</span>
             </span>
           )}
         />
@@ -295,7 +295,7 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
         <CardSection label="Owners">
           <span className="flex min-w-0 items-center gap-1.5">
             <Avatar initials={initials(a.owner)} />
-            <span className="min-w-0 truncate text-[12.5px] text-ink/80">{a.owner}</span>
+            <span className="min-w-0 truncate text-[12.5px] text-ink/80" title={a.owner}>{a.owner}</span>
           </span>
         </CardSection>
 

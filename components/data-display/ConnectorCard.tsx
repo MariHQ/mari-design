@@ -40,6 +40,11 @@ export type ConnectorCardProps = {
   sync?: ReactNode;
   /** Recent activity, rendered as a sparkline. */
   bars?: number[];
+  /** What to say in the activity slot when there is no series to draw. Grids of
+      these cards keep equal heights (§15), so a card with no sparkline is
+      otherwise padded to its neighbour's height with nothing in it. Omit it
+      where the card stands alone and the slot can simply close up. */
+  barsNote?: ReactNode;
   busy?: boolean;
   running?: boolean;
   paused?: boolean;
@@ -61,7 +66,7 @@ export type ConnectorCardProps = {
 };
 
 export function ConnectorCard({
-  name, mark, health = "Healthy", counts, sync, bars,
+  name, mark, health = "Healthy", counts, sync, bars, barsNote,
   busy = false, running = false, paused = false, canResync = false,
   onSyncNow, onFullResync, onPause, onResume, onDisconnect, actionError = null,
   loading = false, className = "",
@@ -120,11 +125,15 @@ export function ConnectorCard({
           error line inside the card instead of past its right edge. */}
       {counts && <div className="mt-3 font-term text-[11.5px] text-ink/65 break-words">{counts}</div>}
       {sync && <div className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-ink/70 break-words">{sync}</div>}
-      {bars && bars.length > 1 && (
+      {bars && bars.length > 1 ? (
         <div className="mt-3">
           <Sparkline values={bars} width={150} height={20} tone={SPARK_TONE[health]} />
         </div>
-      )}
+      ) : barsNote ? (
+        /* The sparkline's own slot, at the sparkline's height, saying why it is
+           not drawn. Never a flat or invented series. */
+        <div className="mt-3 font-term text-[11px] leading-[20px] text-ink/65">{barsNote}</div>
+      ) : null}
       {/* XA-02: a refused sync or disconnect is a failed WRITE, and it was
           rendered here as a bespoke 12px red line while the same event is a
           banner everywhere else. The body is still the server's own words, not

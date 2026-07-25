@@ -174,8 +174,13 @@ function SettingsMembersPage({ data, loading = false, error = null, actions, chr
           description="Manage workspace access, invitations, and provisioning."
           tabs={SETTINGS_TAB_LABELS}
           activeTab="Members"
-          rail={["At a glance"]}
-          actions={1}
+          rail={["At a glance", "Roles"]}
+          sections={["Members", "GitHub team sync", "Provisioning"]}
+          /* Members is a TABLE, not a form: without `columns` the settings
+             skeleton drew five grey input boxes and then settled into a member
+             roster. */
+          columns={["Member", "Email", "Role", "Joined", "Status", "Actions"]}
+          actions={[{ label: "Invite member", variant: "primary" }]}
           mobile={mobile}
         />
       ) : (

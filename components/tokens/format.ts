@@ -22,9 +22,23 @@ function toDate(input: DateInput): Date {
   return new Date(input);
 }
 
+/* WHAT A DATE FORMATTER RENDERS FOR SOMETHING THAT IS NOT A DATE: nothing.
+ *
+ * Every function here used to fall back to `String(input)`, which put the raw
+ * value into a slot the surrounding chrome labels as a date — so a count of
+ * 12,847,392 rendered under "LAST UPDATED" and as a revision-timeline entry,
+ * reading as a date the reader could not parse rather than as the bad value it
+ * is. Echoing the input is the one thing a formatter must not do: it launders
+ * garbage into the shape of an answer.
+ *
+ * So all four functions agree: unparsable in, "" out. The caller renders
+ * nothing, and a caller that draws a separator or a caption beside the date
+ * must check for "" and drop the whole row (see `DocReviewOutlinePanel`,
+ * `KnowledgeInspector`). An empty slot says "we do not have this"; "12,847,392"
+ * says "this is when it happened", and only one of those is true. */
 export function fmtDate(input: DateInput, _now: Date = new Date()): string {
   const d = toDate(input);
-  if (Number.isNaN(d.getTime())) return String(input);
+  if (Number.isNaN(d.getTime())) return "";
   // Always carry the year: an undated "Jul 16" is ambiguous once content spans
   // more than one year, and audit/lineage views routinely do.
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
@@ -32,7 +46,7 @@ export function fmtDate(input: DateInput, _now: Date = new Date()): string {
 
 function fmtTime(input: DateInput): string {
   const d = toDate(input);
-  if (Number.isNaN(d.getTime())) return String(input);
+  if (Number.isNaN(d.getTime())) return "";
   const h24 = d.getHours();
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
   const m = String(d.getMinutes()).padStart(2, "0");
@@ -41,11 +55,12 @@ function fmtTime(input: DateInput): string {
 
 export function fmtDateTime(input: DateInput, now: Date = new Date()): string {
   const d = toDate(input);
-  if (Number.isNaN(d.getTime())) return String(input);
+  if (Number.isNaN(d.getTime())) return "";
   return `${fmtDate(d, now)}, ${fmtTime(d)}`;
 }
 
-/** Returns "" for unparsable input so callers can render nothing instead of a lie. */
+/** Returns "" for unparsable input so callers can render nothing instead of a
+    lie — the rule the three formatters above now follow too. */
 export function fmtAgo(input: DateInput, now: Date = new Date()): string {
   const d = toDate(input);
   if (Number.isNaN(d.getTime())) return "";

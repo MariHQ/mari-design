@@ -310,10 +310,18 @@ export function SettingsMembersTable({
           <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="members"
             note={narrowed ? `filtered from ${members.length.toLocaleString("en-US")}` : undefined} />
           <Scrollable>
+            {/* The four right-hand columns hold fixed-size furniture — a role
+                select, a formatted date, a status chip, a Remove button — and
+                none of them gets narrower just because the card does. As
+                percentages they did: at this card's width STATUS was 98px, so
+                the chip truncated to "ACTI…", which could be ACTIVE or
+                ACTIONED, and JOINED broke "Jan 18, 2025" across three lines.
+                They are px now and only the two text columns flex; below the
+                760px floor the table scrolls (§20) instead of crushing (§12). */}
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
-                <col style={{ width: "24%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
-                <col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
+                <col /><col /><col style={{ width: "8.5rem" }} />
+                <col style={{ width: "8rem" }} /><col style={{ width: "7.5rem" }} /><col style={{ width: "7rem" }} />
               </colgroup>
               <thead>
                 <tr>

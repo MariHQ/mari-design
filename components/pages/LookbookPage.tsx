@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor, DASH2 } from "./PageFrame";
+import { PageFrame, navFor } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -406,8 +406,11 @@ function StressSection({ s }: { s: LookbookSamples }) {
 
 /* ── Page ─────────────────────────────────────────────────────────────── */
 
-/* Sections that render exactly one exhibit: no point splitting them in two. */
-const SINGLE_EXHIBIT = new Set(["buttons", "inputs", "icons"]);
+/* Sections with too few exhibits to flow: one card cannot fill two columns, and
+   two cards in two columns are a row again — which is exactly the shape that
+   left 600px under the shorter of the two long-text exhibits. They run one
+   full-width column instead. */
+const SINGLE_COLUMN = new Set(["buttons", "inputs", "icons", "overflow", "stress"]);
 
 function Sections({ data }: { data: LookbookData | null }) {
   switch (data?.section) {
@@ -466,11 +469,23 @@ function LookbookPage({ data, loading = false, chrome, mobile = false }: PagePro
           title="Design lookbook"
           description="Every canonical primitive, exhibited live with its usage rule and import path. This page is built only from the components it documents."
         />
-        {/* One gallery grid owns the gaps, so every exhibit card shares the
-            same left and right edge (§11). Single-exhibit sections run one
-            full-width column rather than leaving a dead right half. Mobile
-            always collapses to one column. */}
-        <div className={mobile || SINGLE_EXHIBIT.has(section) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
+        {/* One gallery, two columns, and the exhibits FLOW between them.
+
+            It was a two-column grid, and the exhibits it lays out differ in
+            height by more than an order of magnitude: "Empty state" is 220px,
+            "Icons, marks & notebook art" beside it is over 2,000px, and a grid
+            row is as tall as its tallest cell. That left about 1,800px of blank
+            left column on the "all" view, with smaller holes in the buttons,
+            chips and progress rows. CSS columns pack each exhibit under the one
+            above it and balance the two columns instead, so there is no row to
+            leave a hole in — every card still shares its column's left and
+            right edge (§11) and never breaks across a column. Single-exhibit
+            sections and mobile stay one full-width column. */}
+        <div
+          className={mobile || SINGLE_COLUMN.has(section)
+            ? "mt-6 flex flex-col gap-5"
+            : "mt-6 columns-2 gap-5 [&>*]:mb-5 [&>*]:break-inside-avoid-column"}
+        >
           <Sections data={data} />
         </div>
       </div>

@@ -170,11 +170,34 @@ single most visible inconsistency across the console.
 
     <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">
 
-- Standard rail: **320px** (Answers, Decisions, Audit, Insights, Publish).
+- Standard rail: **320px** (Audit, Insights, Publish, Settings).
 - Knowledge inspector rail: **360px**.
 - Lineage drawer rail: **420px** (**460px** for impact analysis).
 - The main column always carries `minmax(0,1fr)` so long content cannot push
   the rail off-screen.
+
+**Band, not rail, when the rail cannot fill the column.** A 320px rail is only
+honest when its content is as tall as the main column. Answers and Decisions
+were the worst instances of the opposite: Coverage plus an explainer is about
+760px of card, the answer list is as long as the library is, and the rail simply
+stopped — over 1,100px of empty right third on the default state alone. Nothing
+could fill it, because there is no third thing those pages know.
+
+So the supporting cards run **across the top** instead, on the same
+`1fr / 320px` plumb line the rail used, and the content below gets the whole
+container width:
+
+    <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">  {/* the band */}
+      <div className="min-w-0"><CoverageCard /></div>
+      <div className="min-w-0"><HowServingWorks /></div>
+    </div>
+    <AnswersList />                                                {/* full width */}
+
+This is a legitimate alternative to the rail, not a workaround: the plumb line
+is unchanged, so nothing about the page's alignment moves. Choose it whenever a
+rail's content is a fixed, short set of cards and the main column is an
+unbounded list. Choose the rail when the rail's content genuinely scrolls with
+the page (Audit's run history, Insights' evidence panels, a settings summary).
 
 **Cards.** All cards in a column share the same left and right edge. Do not
 wrap one card in an extra `max-w-[720px]` while its siblings run full width;

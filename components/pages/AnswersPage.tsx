@@ -176,8 +176,14 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
       </Card>
     );
   }
+  /* A card gallery, not a single stacked column (§11). The list used to run
+     down a 1,060px column beside a rail that ran out after two cards, so a
+     workspace with a dozen answers was 1,900px of list beside 1,100px of empty
+     page. Two-up at the full container width halves that, and `flex-1
+     basis-[520px]` means a short last row stretches instead of leaving a dead
+     bottom-right corner. Siblings in a row share a height (§15). */
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[520px]">
       {answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
     </div>
   );
@@ -194,8 +200,10 @@ function CoverageCard({
   onCompose: (question: string) => void;
   onSeeAll?: () => void;
 }) {
-  const RAIL = 2;
-  const qs = extended ? questions : questions.slice(0, RAIL);
+  /* Three across the band, which is what one row of `basis-[280px]` holds at
+     the container width. It was two, stacked in a 320px rail. */
+  const BAND = 3;
+  const qs = extended ? questions : questions.slice(0, BAND);
   const hidden = questions.length - qs.length;
   return (
     <Card>
@@ -223,6 +231,10 @@ function CoverageCard({
               ? <ShowRest expanded={false} total={questions.length} onToggle={onSeeAll} />
               : undefined}
           />
+          {/* Across, not down: the card is full width now, in the band and in
+              the pane alike, and a stack of one-line questions in it would be
+              short lines with a page of nothing beside them (§11). */}
+          <div className="flex flex-wrap gap-3 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[215px]">
           {qs.map((q) => (
             <div key={q} className="rounded-[6px] border border-ink/12 p-3">
               <div className="text-[13px] text-ink">{q}</div>
@@ -232,6 +244,7 @@ function CoverageCard({
               <Button variant="link" compact className="mt-1.5" onClick={() => onCompose(q)}>Draft answer</Button>
             </div>
           ))}
+          </div>
         </div>
       )}
     </Card>
@@ -251,18 +264,29 @@ function HowServingWorks() {
   );
 }
 
-/* The rail. Every card in it shares the rail's left and right edge (§11), so
-   no card carries its own max-width. */
-function CoverageRail({
-  questions, error, withCoverage, onCompose, onSeeAll,
+/* The supporting band, above the answers rather than beside them.
+
+   It was a 320px rail, and that is what made this page the worst instance of
+   the dead-space bug in the console: Coverage plus the explainer are about
+   760px of card, the answer list is as long as the library is, and the rail
+   simply stopped — over 1,100px of empty right third on the default state
+   alone. Nothing could fill it honestly, because there is no third thing this
+   page knows. So the supporting cards run across the top instead, on the same
+   1fr/320px plumb line the rail used, and the answers below get the whole
+   container width (§11). */
+function CoverageBand({
+  questions, error, withCoverage, mobile, onCompose, onSeeAll,
 }: {
-  questions: string[]; error: string | null; withCoverage: boolean;
+  questions: string[]; error: string | null; withCoverage: boolean; mobile: boolean;
   onCompose: (question: string) => void; onSeeAll: () => void;
 }) {
+  if (!withCoverage) return <HowServingWorks />;
   return (
-    <div className="flex flex-col gap-5">
-      {withCoverage && <CoverageCard questions={questions} error={error} onCompose={onCompose} onSeeAll={onSeeAll} />}
-      <HowServingWorks />
+    <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
+      <div className="min-w-0">
+        <CoverageCard questions={questions} error={error} onCompose={onCompose} onSeeAll={onSeeAll} />
+      </div>
+      <div className="min-w-0"><HowServingWorks /></div>
     </div>
   );
 }
@@ -567,7 +591,9 @@ function HarvestWizard({ harvest, actions, onClose }: {
                   {done ? <CheckCircle2 size={16} className="shrink-0 text-moss" />
                     : saving ? <Spinner size="sm" />
                     : <Circle size={14} className="shrink-0 text-ink/30" />}
-                  <span className="min-w-0 flex-1 truncate">{r.question}</span>
+                  {/* §12: a value that may ellipsize carries the whole of
+                      itself in `title`, so the reader can still reach it. */}
+                  <span className="min-w-0 flex-1 truncate" title={r.question}>{r.question}</span>
                   <span className="font-term text-[11px] shrink-0 text-ink/65">
                     {done ? "draft saved" : saving ? "saving…" : "queued"}
                   </span>
@@ -614,8 +640,9 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
   if (seenFilter !== data.filter) { setSeenFilter(data.filter); setFilter(data.filter); }
   const shown = inFilter(data.answers, filter);
 
-  /* One main column + the standard 320px rail (§11) for every state, so the
-     outer edges and the rail plumb line never move between states. */
+  /* One main column, full container width, for every state — the composer, the
+     harvest wizard, the coverage pane and the list all share the same outer
+     edges (§11). */
   const main = harvest ? (
     <HarvestWizard harvest={harvest} actions={actions} onClose={onCloseHarvest} />
   ) : isCoverage ? (
@@ -657,17 +684,19 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
         {data.stats.map((s) => <Stat key={s.label} value={s.value} label={s.label} tone={s.tone} sub={s.sub} />)}
       </div>
 
-      <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
-        <div className="flex min-w-0 flex-col gap-5">
-          {composing !== null && (
-            <NewAnswer question={composing} actions={actions} onClose={onCloseComposer} />
-          )}
-          {main}
-        </div>
-        <div className="min-w-0">
-          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} onCompose={onCompose} onSeeAll={onSeeAllCoverage} />
-        </div>
-      </div>
+      <CoverageBand
+        questions={data.coverage}
+        error={error}
+        withCoverage={!isCoverage}
+        mobile={mobile}
+        onCompose={onCompose}
+        onSeeAll={onSeeAllCoverage}
+      />
+
+      {composing !== null && (
+        <NewAnswer question={composing} actions={actions} onClose={onCloseComposer} />
+      )}
+      {main}
     </div>
   );
 }
@@ -724,6 +753,15 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
           eyebrow="Knowledge"
           title="Approved answers"
           description="Curate the answers bots and teams serve verbatim: no generation, no drift."
+          actions={["Harvest questions", { label: "New answer", variant: "primary" }]}
+          stats={["Approved", "Drafts", "Served this week"]}
+          tabs={["All", "Approved", "Drafts", "Retired"]}
+          /* A BAND, not a rail: this page's supporting cards run across the top
+             on the 1fr/320px plumb line and the answer list below gets the
+             whole container width (§11). Drawn as a rail, the skeleton claimed
+             a right column the load then threw away. */
+          rail={["Coverage", "How serving works"]}
+          railPlacement="above"
           mobile={mobile}
         />
       ) : (

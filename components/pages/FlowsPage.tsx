@@ -221,6 +221,11 @@ function FlowsPage({ data, loading = false, error = null, actions, chrome, mobil
           eyebrow="Flows"
           title="Flows"
           description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
+          /* The list surface's three real headings. NOT the four template
+             cards: a template card is titled with a FLOW NAME, which is the
+             response's to give, so naming them here would invent four values
+             the workspace may not have. The gallery's own heading stands. */
+          sections={["Start from a template", "Flows", "Run history"]}
           actions={0}
           mobile={mobile}
         />

@@ -1,5 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor, SPLIT } from "./PageFrame";
+import { PageFrame, navFor } from "./PageFrame";
 import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
@@ -49,7 +49,7 @@ export type SettingsDesignData = {
   /** Figures the live preview shows off, so the preview is about THIS
       workspace rather than invented numbers. */
   previewStats: BrandPreviewStat[];
-  /** Read-only facts in the rail. */
+  /** Read-only facts in the band under the editor. */
   summary: PropertyItem[];
 };
 
@@ -77,7 +77,6 @@ function SettingsDesignPage({
           description="The colours, type and logo this workspace publishes under. Doc sites and exports pick these up."
           tabs={SETTINGS_TAB_LABELS}
           activeTab="Design & brand"
-          rail={["Where this shows up"]}
           actions={0}
           mobile={mobile}
         />
@@ -90,7 +89,15 @@ function SettingsDesignPage({
             icon={<span className="text-clay"><Palette size={24} /></span>}
           />
           <div className="mt-5"><SettingsTabs active="design" onNavigate={chrome?.onNavigate} /></div>
-          <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[320]}`}>
+          {/* One column, not an editor plus a rail.
+              "Where this shows up" is three read-only facts — about 240px of
+              card — and the branding editor below it runs past 1,300px, so as a
+              320px rail it left the right third of the page empty from the
+              palette down. It reads as a closing footnote to the editor anyway
+              ("set this, and here is what picks it up"), so that is where it
+              sits, full width, with its facts laid out across rather than down
+              (§11). */}
+          <div className="mt-6 flex min-w-0 flex-col gap-5">
             <div className="flex min-w-0 flex-col gap-5">
               {error ? (
                 /* XA-01: a failed read is a blocked banner, never the
@@ -123,19 +130,17 @@ function SettingsDesignPage({
                 </>
               )}
             </div>
-            <aside className="flex min-w-0 flex-col gap-5">
-              <Card title="Where this shows up" hint="Read only">
-                {/* An empty PropertyList renders as a blank box that reads as a
-                    loading failure. It says what it means instead. */}
-                {data.summary.length === 0 ? (
-                  <p className="text-[12.5px] leading-relaxed text-ink/70">
-                    Nothing publishes this brand yet. Doc sites and exports list themselves here once one exists.
-                  </p>
-                ) : (
-                  <PropertyList items={data.summary} />
-                )}
-              </Card>
-            </aside>
+            <Card title="Where this shows up" hint="Read only">
+              {/* An empty PropertyList renders as a blank box that reads as a
+                  loading failure. It says what it means instead. */}
+              {data.summary.length === 0 ? (
+                <p className="text-[12.5px] leading-relaxed text-ink/70">
+                  Nothing publishes this brand yet. Doc sites and exports list themselves here once one exists.
+                </p>
+              ) : (
+                <PropertyList items={data.summary} layout="grid" columns={3} boxed={false} />
+              )}
+            </Card>
           </div>
         </div>
       )}

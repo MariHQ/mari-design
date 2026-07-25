@@ -166,9 +166,14 @@ function StressExtras({ extras }: { extras: DecisionExtras }) {
   );
 }
 
-/** Main column + the standard 320px rail (§11). One plumb line for every
-    ledger view: `minmax(0,1fr)` keeps long content from pushing the rail out,
-    and mobile drops the rail below the main column. */
+/** The ledger, with its supporting cards as a band across the top.
+
+    They were a 320px rail, and the two cards in it are short by nature: what is
+    awaiting sign-off is a handful of proposals, and "How this works" is one
+    paragraph. Beside a timeline that runs to the length of the ledger that left
+    roughly 600px of empty right column on the default state. The band keeps the
+    1fr/320px plumb line the rail drew, and the timeline below it gets the whole
+    container width (§11). */
 function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter, children }: {
   data: DecisionsData; mobile: boolean; actions?: DecisionsActions;
   composerOpen: boolean; onCloseComposer: () => void;
@@ -177,32 +182,30 @@ function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, o
 }) {
   const composer = data.composer ?? (composerOpen ? BLANK_COMPOSER : null);
   return (
-    <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
-      <div className="flex min-w-0 flex-col gap-5">
-        {composer && <Composer composer={composer} actions={actions} onClose={onCloseComposer} />}
-        {/* Counts describe the records this page holds, not a workspace-wide
-            total the timeline cannot show: a tab used to promise a number the
-            ledger below it never rendered (C2). */}
-        <LedgerFilter
-          filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
-          filter={filter}
-          onChange={onFilter}
-        />
-        {data.extras && <StressExtras extras={data.extras} />}
-        {children}
-      </div>
-      <Rail howItWorks={data.howItWorks} decisions={data.decisions} actions={actions} />
+    <div className="flex min-w-0 flex-col gap-5">
+      {composer && <Composer composer={composer} actions={actions} onClose={onCloseComposer} />}
+      <SupportBand howItWorks={data.howItWorks} decisions={data.decisions} mobile={mobile} actions={actions} />
+      {/* Counts describe the records this page holds, not a workspace-wide
+          total the timeline cannot show: a tab used to promise a number the
+          ledger below it never rendered (C2). */}
+      <LedgerFilter
+        filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
+        filter={filter}
+        onChange={onFilter}
+      />
+      {data.extras && <StressExtras extras={data.extras} />}
+      {children}
     </div>
   );
 }
 
-/* The rail signs a proposal off in place. It lists RECORDS, not statements: it
+/* The band signs a proposal off in place. It lists RECORDS, not statements: it
    used to be handed `data.awaiting` (statements) and look the id back up by
    string-matching the ledger, so a proposal outside the current filter silently
    became a local-only "Ratified" chip that never persisted (P-DE-3). Every row
    here carries the id its mutation needs. */
-function Rail({ howItWorks, decisions, actions }: {
-  howItWorks: string; decisions: Decision[]; actions?: DecisionsActions;
+function SupportBand({ howItWorks, decisions, mobile, actions }: {
+  howItWorks: string; decisions: Decision[]; mobile: boolean; actions?: DecisionsActions;
 }) {
   const [signed, setSigned] = useState<number[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -230,14 +233,16 @@ function Rail({ howItWorks, decisions, actions }: {
   };
 
   return (
-    <aside className="flex min-w-0 flex-col gap-5">
-      <Card variant="plain" title="Awaiting sign-off">
+    <aside className={mobile ? "flex min-w-0 flex-col gap-5" : SPLIT[320]}>
+      <Card variant="plain" title="Awaiting sign-off" className="min-w-0">
         {awaiting.length === 0 ? (
           /* An empty <ul> rendered as a blank box that read like a loading
              failure; the card says what it means now (P-DE-4). */
           <EmptyState title="Nothing awaiting sign-off">Every proposal in the ledger has been signed or set aside.</EmptyState>
         ) : (
-          <ul className="space-y-2 text-[12.5px]">
+          /* Across, not down: in the band a stacked list of three proposals
+             would be three short lines under a wide empty card (§11). */
+          <ul className="flex flex-wrap gap-2 text-[12.5px] [&>li]:min-w-0 [&>li]:flex-1 [&>li]:basis-[280px]">
             {awaiting.map((d) => (
               <li key={d.id} className="rounded-[5px] border border-ink/12 p-2.5">
                 <Truncate lines={3} className="font-medium text-ink">{d.statement}</Truncate>
@@ -266,7 +271,7 @@ function Rail({ howItWorks, decisions, actions }: {
             beside the control that fired (XA-02). */}
         <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       </Card>
-      <Card variant="plain" title="How this works">
+      <Card variant="plain" title="How this works" className="min-w-0">
         <p className="text-[12.5px] leading-relaxed text-ink/70">{howItWorks}</p>
       </Card>
     </aside>

@@ -202,7 +202,12 @@ export function OverviewWorkflowStrip({
           <div className="mt-4 border-t border-ink/10 pt-3">
             <div className="flex items-center justify-between gap-3">
               <Truncate className="text-[13.5px] font-semibold text-ink">{flow.name}</Truncate>
-              <StatusChip status={flow.status === "active" ? "running" : "paused"} />
+              {/* shrink-0: the chip is a fixed two-state label, so it is the
+                  flow NAME that gives way, never the status. Without it a long
+                  name squeezed the chip to "RUNN…", which reads as neither
+                  "Running" nor "Runnable" — an ALL-CAPS state truncated into
+                  ambiguity (§12). */}
+              <StatusChip className="shrink-0" status={flow.status === "active" ? "running" : "paused"} />
             </div>
             <div className="mt-1.5 flex items-center justify-between gap-3">
               {/* `started` is free text from the API and can be arbitrarily

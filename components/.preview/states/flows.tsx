@@ -384,14 +384,14 @@ const STRESS_FINDINGS: AuditFinding[] = Array.from({ length: 200 }, (_, i) => ({
 const AUDIT_CHECKLIST: ComponentSpec = {
   id: "AuditFindingsChecklist", title: "AuditFindingsChecklist", width: 960,
   states: [
-    { id: "default", label: "Default", node: <AuditFindingsChecklist findings={FINDINGS} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
-    { id: "loading", label: "Loading", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} loading /> },
-    { id: "empty", label: "Empty (no audit yet)", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
-    { id: "all-handled", label: "All handled", node: <AuditFindingsChecklist findings={FINDINGS.map((f) => ({ ...f, status: "fixed" as const }))} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
-    { id: "many-members", label: "Many members in the mapping picker", node: <AuditFindingsChecklist findings={FINDINGS.filter((f) => f.fixAction === "invite_member")} members={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, name: `Member ${i + 1} Lastname` }))} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
-    { id: "overflow-text", label: "Overflow: long titles and details", node: <AuditFindingsChecklist findings={FINDINGS_OVERFLOW} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} ranAt={AUDIT_RAN_AT} repo={HUGE} /> },
-    { id: "narrow", label: "Narrow frame", width: NARROW, node: <AuditFindingsChecklist findings={FINDINGS.slice(0, 3)} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
-    { id: "stress", label: "Volume: 200 findings", node: <AuditFindingsChecklist findings={STRESS_FINDINGS} members={AUDIT_MEMBERS} provider={AUDIT_PROVIDER} repo={AUDIT_REPO} ranAt={AUDIT_RAN_AT} /> },
+    { id: "default", label: "Default", node: <AuditFindingsChecklist findings={FINDINGS} members={AUDIT_MEMBERS} /> },
+    { id: "loading", label: "Loading", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} loading /> },
+    { id: "empty", label: "Empty (no audit yet)", node: <AuditFindingsChecklist findings={[]} members={AUDIT_MEMBERS} /> },
+    { id: "all-handled", label: "All handled", node: <AuditFindingsChecklist findings={FINDINGS.map((f) => ({ ...f, status: "fixed" as const }))} members={AUDIT_MEMBERS} /> },
+    { id: "many-members", label: "Many members in the mapping picker", node: <AuditFindingsChecklist findings={FINDINGS.filter((f) => f.fixAction === "invite_member")} members={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, name: `Member ${i + 1} Lastname` }))} /> },
+    { id: "overflow-text", label: "Overflow: long titles and details", node: <AuditFindingsChecklist findings={FINDINGS_OVERFLOW} members={AUDIT_MEMBERS} /> },
+    { id: "narrow", label: "Narrow frame", width: NARROW, node: <AuditFindingsChecklist findings={FINDINGS.slice(0, 3)} members={AUDIT_MEMBERS} /> },
+    { id: "stress", label: "Volume: 200 findings", node: <AuditFindingsChecklist findings={STRESS_FINDINGS} members={AUDIT_MEMBERS} /> },
   ],
 };
 

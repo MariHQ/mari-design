@@ -158,8 +158,10 @@ function SettingsApiKeysPage({ data, loading = false, error = null, actions, chr
           description="Programmatic access for CI, bots, and the MCP gateway."
           tabs={SETTINGS_TAB_LABELS}
           activeTab="API keys"
-          rail={["At a glance"]}
-          actions={1}
+          rail={["At a glance", "Scopes"]}
+          sections={["Keys"]}
+          columns={["Name", "Key", "Scopes", "Created", "Last used", "Status", "Actions"]}
+          actions={[{ label: "Create key", variant: "primary" }]}
           mobile={mobile}
         />
       ) : (

@@ -231,9 +231,6 @@ function Body({ data, error, actions, mobile, scan, scanning, onReaudit, onDismi
 
   const checklist = (
     <AuditFindingsChecklist
-      provider={data.provider}
-      repo={data.repo}
-      ranAt={data.ranAt}
       members={data.members}
       findings={data.findings}
       actions={actions}
@@ -315,12 +312,24 @@ function AuditPage({ data, loading = false, error = null, actions, chrome, mobil
       <PageFrame chrome={chrome} active={navFor("audit")} title="Repository audit" mobile={mobile}>
         <SkeletonPage
           variant="list"
-          eyebrow="Onboarding"
+          eyebrow="Repository audit"
           /* The loaded title appends the repo name and the description IS the
              run summary; both are the response's to give. The stem of the
              title is the page's own and stands. */
           title="Repository audit"
-          sections={["What we scan", "Audit history"]}
+          /* The icon is what puts the loaded title at x=288; without it the
+             loading title started at x=250 and slid right on load. */
+          icon={<span className="text-moss"><Shield size={26} /></span>}
+          /* The rail carries the run history and the explainer; the main column
+             is the findings checklist, whose five groups are KIND_ORDER in
+             AuditFindingsChecklist — page chrome, not response values. This
+             passed both rail cards as `sections` and so drew them down the main
+             column with nothing beside them. */
+          rail={["Audit history", "What we scan"]}
+          sections={["Localization", "Tags", "Authorship", "Coverage", "Hygiene"]}
+          /* Gated exactly as the loaded header gates it: no handler, no button,
+             in the skeleton as well as in the page (§2). */
+          actions={reaudit ? [{ label: "Re-audit", variant: "primary" }] : 0}
           mobile={mobile}
         />
       </PageFrame>
@@ -331,7 +340,10 @@ function AuditPage({ data, loading = false, error = null, actions, chrome, mobil
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
           icon={<span className="text-moss"><Shield size={26} /></span>}
-          eyebrow="Onboarding"
+          /* The eyebrow names the page, not the journey that happens to
+             reach it: this said ONBOARDING on a re-audit of a repo connected
+             months ago. */
+          eyebrow="Repository audit"
           title={data.repo ? `Repository audit, ${data.repo}` : "Repository audit"}
           description={data.summary}
           actions={mobile ? undefined : headerActions || undefined}

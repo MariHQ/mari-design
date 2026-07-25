@@ -164,9 +164,18 @@ export function InsightsWidgets({
 
   /* The page's own header and the three panel headings below it are literals
      in this file — the reader can be told what is arriving while it arrives.
-     The DESCRIPTION is not: it names the date the figures count since, so it
-     stays a bar rather than a sentence about a period nobody has returned.
-     Stat captions come from `stats`, which is the response, so those tiles
+
+     The DESCRIPTION was the one place this went the other way. It was drawn as
+     a bar 88% of the page wide, on the argument that the loaded sentence names
+     the date the figures count since. But the sentence is not a date: it is
+     "Usage, quality, and coverage" with a date on the end, and a grey rule
+     running the width of the header claimed a paragraph where a short line
+     goes. So the static sentence renders — the same one this page already
+     shows in its error and empty states — and the counting-since clause
+     arrives with the figures it qualifies. A static label greyed out is the
+     bug this whole treatment exists to remove.
+
+     Stat captions do come from `stats`, which is the response, so those tiles
      stay anonymous; the rest of the layout is the loaded layout. */
   if (loading) {
     return (
@@ -174,10 +183,8 @@ export function InsightsWidgets({
         <PageHeader
           eyebrow="Insights"
           title="Insights"
-          description={undefined}
+          description="Usage, quality, and coverage across your knowledge base."
         />
-        {/* Percentage, not 340px: a fixed skeleton line overran a phone column. */}
-        <SkeletonLine w="88%" h={13} className="-mt-3" />
         <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
@@ -354,7 +361,8 @@ export function InsightsWidgets({
       <Card
         icon={<IconRing tone="ink"><Clock size={15} /></IconRing>}
         title="Recent audit activity"
-        hint={`Last ${activity.length} events`}
+        /* No `hint` count: "Last 4 events" sat directly over a "4 events"
+           strip. The strip owns the number (§13 count rule). */
       >
         {activity.length === 0 ? (
           <EmptyState icon={<Clock size={24} />} title="Nothing logged yet">Actions on Insights will show up here.</EmptyState>

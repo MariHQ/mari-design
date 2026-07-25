@@ -165,7 +165,7 @@ function Panel({ tab, data, narrowed, query, mobile, actions }: {
       return <LibraryTemplatesPanel compact={mobile} templates={narrowed.templates} actions={actions} />;
     case "tags":
     default:
-      return <LibraryTagsPanel compact={mobile} tags={narrowed.tags} totalDocs={data.totalDocs} actions={actions} />;
+      return <LibraryTagsPanel compact={mobile} prefiltered tags={narrowed.tags} totalDocs={data.totalDocs} actions={actions} />;
   }
 }
 
@@ -193,7 +193,18 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
           eyebrow="Editorial system"
           title="Library"
           description="Project-wide vocabulary, deterministic rules, voice, and scaffolds for every document."
+          icon={<span className="text-moss"><BookOpen size={24} /></span>}
           tabs={["Tags", "Rules", "Glossary", "Style guides", "Templates"]}
+          /* The loaded header's one button and the loaded body's own search
+             placeholder, both literals in this file, so both render. "Setup
+             guide" is gated exactly as the loaded header gates it: with nowhere
+             to navigate, the loaded page draws no button and neither may the
+             skeleton. */
+          actions={chrome?.onNavigate ? ["Setup guide"] : 0}
+          search="Search tags, rules, terms, guides, and templates"
+          /* The Tags panel's own stat captions — `activeTab` defaults to the
+             first tab, which is the panel that will actually arrive. */
+          stats={["Active definitions", "Documents tagged", "Need curation", "Ranking rules"]}
           mobile={mobile}
         />
       </PageFrame>

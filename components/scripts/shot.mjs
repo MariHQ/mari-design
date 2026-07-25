@@ -93,7 +93,12 @@ async function main() {
 
   try {
     await waitForServer(`${BASE}/index.html`);
-    const browser = await chromium.launch();
+    /* Same reason as prerender.mjs: headless Chrome's default
+       `--hide-scrollbars` suppresses the styled ::-webkit-scrollbar that
+       Scrollable relies on, so a region that scrolls correctly (§20)
+       photographs as content sliced at an edge with no affordance. A QA shot
+       that cannot show the affordance cannot be used to check for it. */
+    const browser = await chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] });
 
     // Expand wildcard targets against the live DOM.
     const expanded = [];

@@ -49,6 +49,10 @@ export type ImpactPanelProps = {
   footer?: ReactNode;
   /** Bordered inset box — for hosts without their own strip chrome (Facts). */
   boxed?: boolean;
+  /** The panel's own heading. Pass `null` when the host has ALREADY named it:
+      the Facts card says "Impact analysis" at the top and this printed the
+      same two words again ~220px lower, inside it. */
+  title?: ReactNode | null;
   className?: string;
 };
 
@@ -60,6 +64,7 @@ export function ImpactPanel({
   onClose,
   footer,
   boxed = false,
+  title = "Impact analysis",
   className = "",
 }: ImpactPanelProps) {
   const [expanded, setExpanded] = useState(false);
@@ -92,9 +97,11 @@ export function ImpactPanel({
   if (loading) {
     return (
       <div className={wrap} aria-busy="true">
-        <div className="flex items-center gap-2.5">
-          <b className="font-display text-[13.5px] font-semibold text-ink">Impact analysis</b>
-        </div>
+        {title && (
+          <div className="flex items-center gap-2.5">
+            <b className="font-display text-[13.5px] font-semibold text-ink">{title}</b>
+          </div>
+        )}
         <p className="mt-1.5 max-w-[640px] text-[12.5px] italic text-ink/70">{loadingText}</p>
         <div className="mt-2 overflow-hidden">
           <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 480 }}>
@@ -130,14 +137,16 @@ export function ImpactPanel({
 
   return (
     <div className={wrap}>
-      <div className="flex items-center gap-2.5">
-        <b className="font-display text-[13.5px] font-semibold text-ink">Impact analysis</b>
-        {onClose && (
-          <Button icon aria-label="Hide impact analysis" onClick={onClose} className="ml-auto w-7 h-7">
-            <X size={14} />
-          </Button>
-        )}
-      </div>
+      {(title || onClose) && (
+        <div className="flex items-center gap-2.5">
+          {title && <b className="font-display text-[13.5px] font-semibold text-ink">{title}</b>}
+          {onClose && (
+            <Button icon aria-label="Hide impact analysis" onClick={onClose} className="ml-auto w-7 h-7">
+              <X size={14} />
+            </Button>
+          )}
+        </div>
+      )}
       {summary && <p className="mt-1.5 max-w-[640px] break-words text-ink/70">{summary}</p>}
       {docs.length === 0 && !summary && <span className="font-term text-[11px] text-ink/65">No impacted documents found.</span>}
       {/* §13: the count strip renders ABOVE the rows it describes. It used to

@@ -270,7 +270,10 @@ function InsightsPage({ data, loading = false, error = null, actions, chrome, mo
           /* The loaded description names the date it counts since, so it is a
              value, not a label: the bar stands until the range comes back. */
           sections={["LLM readability", "Glossary health", "Recent audit activity"]}
-          actions={1}
+          /* The header's export control, spelled as the loaded page spells it
+             (ExportButton, format CSV). The date-range picker beside it is not
+             here: its label IS the range, a value. */
+          actions={["Export CSV"]}
           mobile={mobile}
         />
       ) : (

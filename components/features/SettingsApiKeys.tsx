@@ -10,6 +10,9 @@ import { Checkbox } from "../forms/Checkbox";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-display/TokenReveal";
+
+/** What is true of the KEYS LIST, as opposed to a secret on screen. */
+const KEYS_LIST_HINT = "Keys are rate limited individually, and revocation takes effect immediately.";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
@@ -178,7 +181,7 @@ export function SettingsApiKeys({
           description="Programmatic access for CI, bots, and the MCP gateway"
           actions={<SkeletonButton w={110} />}
         />}
-        <Card variant="flush" title="Keys" hint={TOKEN_REVEAL_WARNING}>
+        <Card variant="flush" title="Keys" hint={KEYS_LIST_HINT}>
           <SkeletonTable rows={4} columns={["Name", "Key", "Scopes", "Created", "Last used", "Status", "Actions"]} className="border-0 rounded-none" />
         </Card>
       </div>
@@ -235,7 +238,10 @@ export function SettingsApiKeys({
 
       {token && <TokenRevealUI token={token} title="Your new key" onDismiss={() => setToken(null)} />}
 
-      <Card variant="flush" title="Keys" hint={`${TOKEN_REVEAL_WARNING} Keys are rate limited individually, and revocation takes effect immediately.`}>
+      {/* The one-time-reveal warning is about a secret being shown RIGHT NOW,
+          so it lives on <TokenReveal> and on the create form — not permanently
+          over a list of keys that shows nothing but masked prefixes. */}
+      <Card variant="flush" title="Keys" hint={KEYS_LIST_HINT}>
         {keys.length === 0 ? (
           <EmptyState icon={<KeyRound size={24} />} title="No keys yet">Create the first one above to give CI or an agent programmatic access.</EmptyState>
         ) : (
@@ -248,13 +254,19 @@ export function SettingsApiKeys({
             note={`${keys.filter((k) => k.revoked).length} revoked`} />
           <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 720 }}>
-              {/* Widths are binding under table-fixed, so the share is
-                  redistributed (not the table widened) to give the trailing
-                  columns room for their own one-word headers: "Created",
-                  "Status" and "Actions" cannot wrap. */}
+              {/* Percentages made every column a share of a width nobody
+                  controls: STATUS landed at 94px and rendered an ALL-CAPS chip
+                  as "ACT…"/"REV…" — two states truncated into the same
+                  ambiguous stub — while "Last used" wrapped to three lines. The
+                  columns that hold FIXED-SIZE FURNITURE (a formatted date, a
+                  status chip, a Revoke button) are sized in px; only the three
+                  text columns flex, because they are the only ones whose
+                  content can honestly absorb the slack. Same rule as
+                  SettingsMembersTable. */}
               <colgroup>
-                <col style={{ width: "20%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} />
-                <col style={{ width: "11.5%" }} /><col style={{ width: "10%" }} /><col style={{ width: "11.5%" }} /><col style={{ width: "13%" }} />
+                <col /><col /><col />
+                <col style={{ width: "8rem" }} /><col style={{ width: "8rem" }} />
+                <col style={{ width: "7.5rem" }} /><col style={{ width: "7rem" }} />
               </colgroup>
               <thead>
                 <tr>

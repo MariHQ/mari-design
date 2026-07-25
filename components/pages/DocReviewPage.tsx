@@ -217,7 +217,14 @@ function Workspace({ mobile, initialTab, doc, actions, onBodyChange, onSave }: {
         <div className="order-2 flex min-w-0 flex-col gap-5 xl:order-none xl:col-start-2 xl:row-start-1 2xl:col-start-1">
           <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
         </div>
-        <div className="order-1 min-w-0 xl:order-none xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
+        {/* The editor fills the row rather than stopping where the document
+            happens to stop. Outline + revisions + refine are three fixed
+            panels; a short document left the centre column ending 200px above
+            them, which read as a missing panel rather than as a short document.
+            The space it takes is the page surface you write on, not padding
+            (§11). `[&>section]:h-full` reaches the editor's own Card, which
+            owns its class list. */}
+        <div className="order-1 min-w-0 [&>section]:h-full xl:order-none xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
           <DocReviewEditor
             compact={mobile}
             body={doc.editorBody}
@@ -412,9 +419,16 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
              and a document name is the response's to give. The three panels
              around it are the page's own furniture and render as themselves. */
           label="Doc Review"
-          sections={["Document outline"]}
-          rail={["Fact check", "Refine"]}
-          actions={3}
+          /* Every panel is in the RIGHT rail — outline included. Passing the
+             outline as a `section` drew it as a full-width band UNDER the
+             document, which is not where the loaded page puts it. `sections` is
+             only the change queue below. */
+          rail={["Document outline", "Revision history", "Refine"]}
+          sections={["Change queue"]}
+          /* The two controls this header ALWAYS draws. Share is conditional on
+             an `share` handler, so a skeleton that drew it would claim a
+             control the loaded page may never grow. */
+          actions={["Save", "Watch"]}
           mobile={mobile}
         />
       ) : (

@@ -341,7 +341,9 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
                 <ul className="flex min-w-0 flex-col gap-2">
                   {revisions.map((r, i) => (
                     <li key={i} className="break-words text-[12px] text-ink/75">
-                      <b className="font-term text-[11px] text-ink/65 block">{fmtDate(r.at)}</b>
+                      {/* No date line at all when `at` is not a date: an empty
+                          bold row left a gap that read as a missing entry. */}
+                      {fmtDate(r.at) && <b className="font-term text-[11px] text-ink/65 block">{fmtDate(r.at)}</b>}
                       {r.verb}, {r.actor}
                     </li>
                   ))}

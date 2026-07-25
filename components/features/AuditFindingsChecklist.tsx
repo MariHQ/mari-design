@@ -15,10 +15,8 @@ import { WriteError } from "../feedback/WriteError";
 import { ResultCount } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
 import { why } from "../actions/useWrite";
-import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
-import { fmtDate, type DateInput } from "../tokens/format";
 import type { ScanRun } from "./ScanRunCard";
 
 /* Audit findings checklist — the core of the repo-audit page: scan findings
@@ -87,14 +85,6 @@ export type AuditFindingsChecklistProps = {
   actions?: AuditActions;
   /** The people an unmapped git author can be mapped to. */
   members: { id: number; name: string }[];
-  /** Where the audited repository lives, e.g. "github". */
-  provider: string;
-  /** The audited repository, e.g. "acme/product-docs". */
-  repo: string;
-  /** When this run happened: an ISO timestamp, rendered here through `fmtDate`
-      (§5). It used to arrive pre-formatted, so it could be neither sorted nor
-      re-localised (P-AU-3). */
-  ranAt: DateInput;
   /** Start a re-scan. The PAGE owns the run and follows it; the checklist only
       asks for one, so the two cannot report different things about the same
       scan. Omitted = no Re-audit button (§2). */
@@ -109,7 +99,7 @@ export type AuditFindingsChecklistProps = {
 };
 
 export function AuditFindingsChecklist({
-  findings, members, provider, repo, ranAt, actions, onReaudit,
+  findings, members, actions, onReaudit,
   scanning = false, scanError = null, loading = false, className = "",
 }: AuditFindingsChecklistProps) {
   const [overrides, setOverrides] = useState<Record<number, Override>>({});
@@ -251,17 +241,11 @@ export function AuditFindingsChecklist({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>
-      {/* `repo` is a raw remote identifier and can be arbitrarily long.
-          PageHeader renders `description` as a bare <p> with no truncation of
-          its own, so the ellipsis and the hover value are applied from here
-          (§12). The real fix belongs in layout/PageHeader.tsx. */}
-      <div className="min-w-0 [&_p]:truncate" title={describe(provider, repo, ranAt)}>
-        <PageHeader
-          eyebrow="Repository audit"
-          title="Findings"
-          description={describe(provider, repo, ranAt)}
-        />
-      </div>
+      {/* No page header here. The PAGE names the run — same repo, same
+          provider, same date — and this used to restate all three under a
+          second <PageHeader>, so Repository audit opened on two stacked
+          headers and, on mobile, on nothing else. The checklist is a section
+          of that page, not another page. */}
 
       {/* Summary strip. Re-audit rides this line, right of the kind chips,
           not floating alone in the header above them. */}
@@ -336,10 +320,15 @@ export function AuditFindingsChecklist({
                   <div className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-moss"><Check size={14} /> All handled.</div>
                 ) : (
                   <>
-                  {/* XA-08/XA-09: the strip and its expand toggle were written
-                      out here; both come from the shared pair now, so this
-                      section counts and expands exactly like every other list. */}
+                  {/* The count rule (§13, Pagination.tsx): this section header
+                      carries the count because the section COLLAPSES, so
+                      `whenTruncated` keeps the strip quiet until it has
+                      something the header cannot say — that these rows are a
+                      slice of a longer list. It used to print "2 findings"
+                      under a header chip already reading ②, five times on one
+                      screen. */}
                   <ResultCount
+                    whenTruncated
                     from={visible.length === 0 ? 0 : 1}
                     to={shown.length}
                     total={visible.length}
@@ -394,15 +383,6 @@ export function AuditFindingsChecklist({
       })}
     </div>
   );
-}
-
-/* The header line, with the run's date rendered rather than pasted: `ranAt` is
-   an ISO value now, so it carries a year and can be re-localised (§5). An
-   unparsable value falls through `fmtDate` unchanged, so a workspace still
-   sending a pre-formatted string reads exactly as it did. */
-function describe(provider: string, repo: string, ranAt: DateInput): string {
-  const when = ranAt ? `last run ${fmtDate(ranAt)}` : "never run";
-  return `${provider} · ${repo} · ${when}`;
 }
 
 function summaryFor(f: AuditFinding): string {

@@ -121,12 +121,11 @@ export function FactsVerificationAudit({
     }
   };
 
-  const hint =
-    auditRows.length === 0
-      ? undefined
-      : staleCount === 0
-        ? "None verified more than 60 days ago."
-        : `${staleCount} verified more than 60 days ago: stale candidate${staleCount === 1 ? "" : "s"}.`;
+  /* Prose, not a number: this used to restate `staleCount`, which the strip
+     below already carries as its note (§13 count rule). */
+  const hint = auditRows.length === 0
+    ? undefined
+    : "Anything verified more than 60 days ago is a stale candidate.";
 
   if (loading) {
     return (

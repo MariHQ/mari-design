@@ -83,7 +83,11 @@ export type LoginActions = {
 
 export type LoginData = {
   screen: LoginScreen;
-  /** Branding above the card. */
+  /** The heading over the card. A workspace may brand it, so it is a value and
+      not a label — but it is NOT the place for the product name: <Logo> prints
+      the wordmark directly above it, and "Mari" here rendered "Mari" twice, as
+      wordmark and as H1 within 60px. A blank value, or one that is only the
+      wordmark, falls back to the screen's own heading (see `headingFor`). */
   title: string;
   sub: string;
   /** `credentials`: create an account rather than sign in. */
@@ -141,6 +145,18 @@ function AuthBackdrop() {
       <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
     </>
   );
+}
+
+/** The wordmark <Logo> prints. A `title` equal to it is not a heading. */
+const WORDMARK = "Mari";
+
+/** What the H1 says: the workspace's own heading where it has one, and
+    otherwise the screen's — the same way Welcome ("Welcome to Mari") and Setup
+    carry a heading distinct from the mark above them. */
+function headingFor(data: LoginData): string {
+  const given = data.title.trim();
+  if (given && given !== WORDMARK) return given;
+  return data.register ? "Create your account" : `Sign in to ${WORDMARK}`;
 }
 
 function AuthHeader({ title, sub }: { title: string; sub: string }) {
@@ -630,7 +646,7 @@ function LoginPage({ data, loading = false, error = null, actions, mobile = fals
     <div className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
-        <AuthHeader title={data.title} sub={data.sub} />
+        <AuthHeader title={headingFor(data)} sub={data.sub} />
         <Body data={data} error={error} actions={actions} />
       </div>
     </div>

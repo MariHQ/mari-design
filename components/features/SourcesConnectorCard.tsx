@@ -63,12 +63,17 @@ const HEALTH: Record<SyncState, ConnectorHealth> = {
   healthy: "Healthy", running: "Syncing", failed: "Error", paused: "Paused",
 };
 
+/* Every card carries the same three lines — counts, sync, activity — because
+   siblings in a row keep equal heights (§15) and a card that skips a line is
+   padded to its neighbour's height with nothing in it: "Notion · Product wiki"
+   said "620 documents" and then held 90px of blank. A line the server did not
+   report says so; none of them invents a figure. */
 function counts(s: Source): ReactNode {
   if (s.docCount != null) {
     return `${s.docCount.toLocaleString()} documents · ${(s.chunkCount ?? 0).toLocaleString()} chunks · ${(s.embeddedCount ?? 0).toLocaleString()} embedded`;
   }
   if (s.docsCount != null) return `${s.docsCount.toLocaleString()} documents`;
-  return null;
+  return "Document count not reported";
 }
 
 /** What a connected-source card can DO. Every handler may throw; the card
@@ -190,6 +195,15 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         ? <>Last sync: {fmtDateTime(s.lastSyncAt)}</>
         : <span className="text-ink/65">Sync status unavailable</span>;
     }
+    /* A legacy source with no last-sync time in the seed is the SAME missing
+       fact as an actionless one, and it used to render as nothing at all while
+       Google Drive said "Sync status unavailable" two cards away — the reader
+       had to guess whether the blank meant never or unknown. Still no
+       fabricated time (the old reason for the blank): the card says the server
+       did not report one. */
+    if (s.tier === "legacy" && !s.lastSyncAt && s.state !== "running" && s.state !== "failed") {
+      return <span className="text-ink/65">Sync status unavailable</span>;
+    }
     if (s.state === "running") {
       const tail = s.total && s.total > 0 ? ` · ${s.done ?? 0}/${s.total} items` : "…";
       return <><Spinner size="sm" /> {PHASE_LABEL[s.phase ?? "listing"]}{tail}</>;
@@ -201,7 +215,6 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         </Truncate>
       );
     }
-    if (s.tier === "legacy" && !s.lastSyncAt) return null; // never fabricate a last-sync
     return s.lastSyncAt ? <>Last sync: {fmtDateTime(s.lastSyncAt)}</> : <>Never synced</>;
   };
 
@@ -215,13 +228,16 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
     );
   }
 
-  /* Auto-fill, not a fixed column count (CONVENTIONS.md §11). `lg:grid-cols-3`
-     held three columns no matter how narrow the page column got, which
-     squeezed each card to 124px and pushed its name and health chip out
-     through the border. Auto-fill drops to two columns, then one, and never
-     renders a card under 260px. */
+  /* A wrapping gallery, not a fixed column count (CONVENTIONS.md §11).
+     `lg:grid-cols-3` held three columns no matter how narrow the page column
+     got, which squeezed each card to 124px and pushed its name and health chip
+     out through the border. `flex-1 basis-[260px]` drops to two columns, then
+     one, never renders a card under 260px, and — unlike the auto-fill grid that
+     replaced it — lets a short last row stretch across the full width instead
+     of leaving a dead bottom-right corner. Cards in a row share a height (§15),
+     which is why each one fills all three of its content slots. */
   return (
-    <div className={`grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 ${className}`.trim()}>
+    <div className={`flex flex-wrap gap-3 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[260px] ${className}`.trim()}>
       {items.map((s) => {
         const isBusy = Boolean(busy[s.id]);
         const running = s.state === "running";
@@ -236,6 +252,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
             counts={counts(s)}
             sync={syncLine(s, isBusy)}
             bars={s.bars}
+            barsNote="Recent activity not reported"
             busy={isBusy}
             running={running}
             paused={paused}
@@ -257,7 +274,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         );
       })}
       {/* keep the Clock import referenced for the paused-tier legend below */}
-      <p className="col-span-full mt-1 flex items-center gap-1.5 font-term text-[11px] text-ink/65">
+      <p className="mt-1 flex w-full !flex-none items-center gap-1.5 font-term text-[11px] text-ink/65">
         <Clock size={12} /> Live sources poll while a sync runs; legacy sources show only what the server reports.
       </p>
     </div>

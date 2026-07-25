@@ -49,7 +49,7 @@ export {
   SkeletonCard, SkeletonStat, SkeletonListRow, SkeletonList, SkeletonTable, SkeletonRows,
   SkeletonRegion, SkeletonSwitch, CELL_WIDTHS,
 } from "./data-display/Skeleton";
-export { SkeletonPage, type SkeletonPageVariant, type SkeletonPageProps } from "./data-display/Skeletons";
+export { SkeletonPage, type SkeletonPageVariant, type SkeletonPageProps, type SkeletonAction } from "./data-display/Skeletons";
 export { Progress, type ProgressTone } from "./data-display/Progress";
 export { Pagination } from "./data-display/Pagination";
 export { Accordion, type AccordionItemData, type AccordionProps } from "./data-display/Accordion";
@@ -168,7 +168,7 @@ export { useResync, listSig } from "./actions/useResync";
 // The one run-status vocabulary (XA-25, X2).
 export { RUN_STATUS_CHIP, toRunStatus, runStatusChip } from "./tokens/runStatus";
 // The one result-count strip and the one "show the rest" toggle (§13, §16).
-export { ResultCount, PagerBar, usePaged } from "./data-display/Pagination";
+export { ResultCount, PagerBar, usePaged, countOf, singularize } from "./data-display/Pagination";
 export { ShowRest } from "./data-display/ShowRest";
 // Actions that appear on more than one pane, spelled once (§16).
 export {

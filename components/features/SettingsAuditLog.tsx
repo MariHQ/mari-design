@@ -196,10 +196,16 @@ export function SettingsAuditLog({
           <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="events"
             note={filtered ? `filtered from ${total.toLocaleString("en-US")}` : undefined} />
           <Scrollable>
-            <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
+            {/* The last column carried 6%, which at this card's width is 49px
+                — less than the 32px of cell padding plus the word DETAIL, so
+                the header was sliced by the card border and the chevrons sat
+                flush against it. A column has to be at least as wide as its
+                own name: 10% of the 800px floor is 80px, which fits both the
+                header and the 28px expand control with room to spare (§12). */}
+            <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 800 }}>
               <colgroup>
-                <col style={{ width: "23%" }} /><col style={{ width: "19%" }} /><col style={{ width: "34%" }} />
-                <col style={{ width: "18%" }} /><col style={{ width: "6%" }} />
+                <col style={{ width: "22%" }} /><col style={{ width: "18%" }} /><col style={{ width: "32%" }} />
+                <col style={{ width: "18%" }} /><col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>

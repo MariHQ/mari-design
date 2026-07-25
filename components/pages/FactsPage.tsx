@@ -258,7 +258,11 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
     write(f, () => onRetire?.(f.id), () => setRetired((r) => [...r, f.id]), "Could not retire that claim.");
 
   return (
-    <Card variant="flush">
+    /* <Table> draws its own card. It used to be wrapped in a second, flush
+       <Card>, so the ledger opened on a blank ~22px band between two nested
+       borders — read on the canvas as a count strip rendering with nothing in
+       it. One box per table. */
+    <>
       {/* Every column carries the standard sort affordance; the action column
           is the one exception and says so rather than passing a bare string
           the table would try to sort by (§3, C3). Every row carries a
@@ -325,7 +329,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
           );
         })}
       </Table>
-    </Card>
+    </>
   );
 }
 
@@ -520,18 +524,24 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
   }
   return (
     <div className="mt-6 flex flex-col gap-5">
-      {/* Filter row: tabs left, search right, on ONE line (§13). */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
-        <Input
-          type="search"
-          aria-label="Search claims"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search claims, sources, owners"
-          className="ml-auto w-[280px] max-w-full"
-        />
-      </div>
+      {/* Filter row: tabs left, search right, on ONE line (§13). It filters the
+          LEDGER, so it is drawn only when the ledger is what is on screen. On
+          the expanded-fact view it stayed up over a table that was not
+          rendered and counted rows that were not there: `All 0 · Verified 0 ·
+          Needs review 0 · Contradicted 0 · Stale 0` above a verified fact. */}
+      {!data.impact && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
+          <Input
+            type="search"
+            aria-label="Search claims"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search claims, sources, owners"
+            className="ml-auto w-[280px] max-w-full"
+          />
+        </div>
+      )}
       {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
       {data.banner && <Alert tone="blocked" title={data.banner.title}>{data.banner.body}</Alert>}
       {data.extras && <Extras extras={data.extras} />}
@@ -622,7 +632,11 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           description="Every claim the team relies on: verified, owned, and traced to its impact across the corpus."
           /* The same head the loaded table renders, so the grid does not
              reflow when the rows land. */
+          icon={<span className="text-moss"><Shield size={26} /></span>}
           columns={["Claim", "Owner", "Verified", "Status"]}
+          search="Search claims, sources, owners"
+          sections={["Verification audit"]}
+          actions={["Audit documents", { label: "New fact", variant: "primary" }]}
           mobile={mobile}
         />
       </PageFrame>

@@ -148,7 +148,13 @@ export function DocReviewOutlinePanel({
                   <span className="min-w-0 truncate">{r.actor}</span>
                   {i === 0 && <span className="shrink-0"><Chip label="Current" tone="ok" dot pulse /></span>}
                 </span>
-                <span className="mt-0.5 block break-words text-[11px] text-ink/70">{r.verb} · {fmtDate(r.at)}</span>
+                {/* `fmtDate` returns "" for anything that is not a date, so the
+                    separator goes with it: "ran Tighten ·" trailing into
+                    nothing reads as a value that failed to load rather than a
+                    revision with no timestamp. */}
+                <span className="mt-0.5 block break-words text-[11px] text-ink/70">
+                  {[r.verb, fmtDate(r.at)].filter(Boolean).join(" · ")}
+                </span>
               </span>
             </div>
           ))}

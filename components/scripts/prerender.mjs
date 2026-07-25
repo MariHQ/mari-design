@@ -82,7 +82,14 @@ async function main() {
 
   try {
     await waitForServer(`${BASE}/render.html`);
-    const browser = await chromium.launch();
+    /* Headless Chrome is launched with `--hide-scrollbars`, which suppresses
+       EVERY scrollbar in the frame — including the ones Scrollable styles into
+       existence with ::-webkit-scrollbar. So a table, tab row or breadcrumb
+       that scrolls correctly (CONVENTIONS §20) photographed as content sliced
+       at a card edge with no affordance at all, and a visual review of these
+       frames reported that as a clipping bug on six pages. The frames have to
+       show what a real browser shows. */
+    const browser = await chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] });
     // Desktop at 1x (its tall frames would blow past browser image-size limits
     // at 2x); mobile at 2x DPR so the small 390px frames stay crisp when zoomed
     // in on the canvas (manifest stays CSS px — the image just carries 2x

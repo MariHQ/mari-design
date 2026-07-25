@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { UserRound, KeyRound, Bell, IdCard, AlertTriangle, Trash2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor, SPLIT } from "./PageFrame";
+import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -358,16 +358,35 @@ function AccountDangerZone({ actions }: { actions?: PreferencesActions }) {
   );
 }
 
-function Body({ data, error, actions }: { data: PreferencesData; error: string | null; actions?: PreferencesActions }) {
+/* Two balanced columns, not a form column plus a rail.
+ *
+ * The rail held one card: four read-only facts about the account, about 220px
+ * of it, beside a form column that runs past 1,100px. That is 730px of empty
+ * right column on the default state, and there is no fifth account fact to
+ * invent. So the four cards are dealt between two equal columns instead, in the
+ * pairing that leaves the least at the bottom: profile and notifications (the
+ * two things you set about yourself) on the left, the account facts, the
+ * password form and the danger zone on the right (§11).
+ */
+function Body({ data, error, actions, mobile }: {
+  data: PreferencesData; error: string | null; actions?: PreferencesActions; mobile: boolean;
+}) {
   // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
   if (error) return <ReadError>{error}</ReadError>;
   return (
-    <>
-      <ProfileCard data={data} actions={actions} />
-      <PasswordCard data={data} actions={actions} />
-      <NotificationsCard data={data} actions={actions} />
-      <AccountDangerZone actions={actions} />
-    </>
+    <div className={mobile ? "flex flex-col gap-5" : DASH2}>
+      <div className="flex min-w-0 flex-col gap-5">
+        <ProfileCard data={data} actions={actions} />
+        <NotificationsCard data={data} actions={actions} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-5">
+        <Card title="Account" icon={<IdCard size={18} />}>
+          <PropertyList items={data.summary} />
+        </Card>
+        <PasswordCard data={data} actions={actions} />
+        <AccountDangerZone actions={actions} />
+      </div>
+    </div>
   );
 }
 
@@ -395,15 +414,8 @@ function PreferencesPage({ data, loading = false, error = null, actions, chrome,
             description="Your profile, password and notifications. Workspace-wide settings live under Settings."
             icon={<span className="text-biscay-2"><UserRound size={24} /></span>}
           />
-          <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[320]}`}>
-            <div className="flex min-w-0 flex-col gap-5">
-              <Body data={data} error={error} actions={actions} />
-            </div>
-            <aside className="flex min-w-0 flex-col gap-5">
-              <Card title="Account" icon={<IdCard size={18} />}>
-                <PropertyList items={data.summary} />
-              </Card>
-            </aside>
+          <div className="mt-6">
+            <Body data={data} error={error} actions={actions} mobile={mobile} />
           </div>
         </div>
       )}

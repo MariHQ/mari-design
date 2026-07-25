@@ -192,8 +192,10 @@ function SettingsAuditLogPage({ data, loading = false, error = null, actions, ch
           description="Every workspace change: actor, action, target, and time."
           tabs={SETTINGS_TAB_LABELS}
           activeTab="Audit log"
-          rail={["At a glance"]}
-          actions={1}
+          rail={["At a glance", "Reading the log"]}
+          sections={["Events"]}
+          columns={["Actor", "Action", "Target", "When", "Detail"]}
+          actions={["Refresh"]}
           mobile={mobile}
         />
       ) : (

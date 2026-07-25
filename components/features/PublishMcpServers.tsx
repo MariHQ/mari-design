@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Plus, KeyRound } from "lucide-react";
 import { ConfirmButton } from "../actions/ConfirmButton";
-import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { CopyButton } from "../actions/CopyButton";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Chip, ChipList, CountChip } from "../data-display/Chip";
+import { Chip, ChipList } from "../data-display/Chip";
 import { ResultCount } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
@@ -16,6 +15,7 @@ import { CodeBlock } from "../data-display/CodeBlock";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI } from "../data-display/TokenReveal";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
+import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
@@ -208,11 +208,33 @@ export function PublishMcpServers({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      <PageHeader
-        title="MCP servers"
-        description="Expose your curated knowledge to Claude and other agents, scoped to exactly what they may read."
-        actions={<><CountChip count={servers.length} /><Button variant="primary" onClick={() => setCreating((v) => !v)}><Plus size={15} /> New server</Button></>}
-      />
+      {/* Framed exactly like the Doc sites list next door: both tabs of one
+          page used to draw their heading differently — Doc sites inside a
+          bordered card, MCP as bare page text — so the plumb line jumped
+          sideways when you switched tabs. The bare `<CountChip>` beside "New
+          server" is gone with it: it restated the strip below on a populated
+          workspace and, on an empty one, rendered as a naked grey `0` with no
+          noun at all (§13 count rule). */}
+      <div className={`${card} overflow-hidden`}>
+        <div className="flex items-start gap-3 px-4 pt-4 pb-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[15px] font-semibold text-ink">MCP servers</h3>
+            <div className="mt-0.5 text-[12px] text-ink/70">
+              Expose your curated knowledge to Claude and other agents, scoped to exactly what they may read.
+            </div>
+          </div>
+          <Button variant="primary" compact onClick={() => setCreating((v) => !v)}><Plus size={13} /> New server</Button>
+        </div>
+        {servers.length > 0 && (
+          <ResultCount
+            className="mt-2"
+            from={1} to={showAll ? servers.length : Math.min(PAGE, servers.length)} total={servers.length} noun="servers"
+            actions={servers.length > PAGE && (
+              <ShowRest expanded={showAll} total={servers.length} onToggle={() => setShowAll((v) => !v)} />
+            )}
+          />
+        )}
+      </div>
 
       <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
 
@@ -238,15 +260,6 @@ export function PublishMcpServers({
         <Card><EmptyState icon={<KeyRound size={24} />} title="No MCP servers yet">Create one to expose this knowledge base to agents.</EmptyState></Card>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="overflow-hidden rounded-md border border-ink/12 bg-paper">
-            <ResultCount
-              from={1} to={showAll ? servers.length : Math.min(PAGE, servers.length)} total={servers.length} noun="servers"
-              className="border-b-0"
-              actions={servers.length > PAGE && (
-                <ShowRest expanded={showAll} total={servers.length} onToggle={() => setShowAll((v) => !v)} />
-              )}
-            />
-          </div>
           {(showAll ? servers : servers.slice(0, PAGE)).map((s) => (
             <ServerCard
               key={s.id}

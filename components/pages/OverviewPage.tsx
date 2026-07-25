@@ -55,12 +55,21 @@ export type OverviewData = {
   activityPollMs?: number;
 };
 
-/* §11 dashboard grid. Every widget is a direct child of one shared DASH3, so
-   tile edges line up horizontally and vertically and the body fills the whole
-   1400px container. The grid drops to two-up below 1280 and one-up below 1024
-   (see PageFrame), because a three-up row of console widgets does not fit
-   beside the 218px sidebar on a small laptop. Mobile falls out of the same
-   classes, never out of component breakpoints (§10). */
+/* §11 dashboard grid. The widgets sit on one shared DASH3 so tile edges line up
+   and the body fills the whole 1400px container. The grid drops to two-up below
+   1280 and one-up below 1024 (see PageFrame), because a three-up row of console
+   widgets does not fit beside the 218px sidebar on a small laptop. Mobile falls
+   out of the same classes, never out of component breakpoints (§10).
+
+   The widgets are grouped into TWO TRACKS rather than dropped into the grid one
+   by one. A grid row is as tall as its tallest cell, and these widgets are
+   sized by their content: "Today's review" (4 task rows) beside "This week's
+   digest" (3 prose topics) left a quarter of a screen of empty grid cell under
+   the shorter one, and "Recent docs" beside the live feed left more. Stacking
+   each track in its own cell means the only place heights have to agree is the
+   bottom of the dashboard, and the two tracks are loaded to land there
+   together: the wide track carries the tables and the strips, the narrow one
+   the two prose feeds. */
 function DashGrid({ mobile, children }: { mobile: boolean; children: React.ReactNode }) {
   return <div className={mobile ? "grid grid-cols-1 gap-5" : DASH3}>{children}</div>;
 }
@@ -68,6 +77,15 @@ function DashGrid({ mobile, children }: { mobile: boolean; children: React.React
 /** A dashboard cell. `span` is ignored on mobile (single column). */
 function Cell({ mobile, span = 1, children }: { mobile: boolean; span?: 1 | 2 | 3; children: React.ReactNode }) {
   return <div className={mobile ? "min-w-0" : SPAN[span]}>{children}</div>;
+}
+
+/** One track of the dashboard: a column of widgets that share a grid cell. */
+function Track({ mobile, span, children }: { mobile: boolean; span: 1 | 2; children: React.ReactNode }) {
+  return (
+    <Cell mobile={mobile} span={span}>
+      <div className="flex flex-col gap-5">{children}</div>
+    </Cell>
+  );
 }
 
 /* The greeting used to read "Good morning" at every hour of the day, in every
@@ -144,7 +162,14 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
              not invent. The widget headings below it are the page's own, so
              they arrive with the frame. */
           label="Overview"
-          sections={["Today's review", "This week's digest", "Live activity", "Recent docs", "Source pulse"]}
+          /* The stat strip is THREE tiles, not the fallback four: a skeleton
+             drawing a fourth relaid the whole dashboard when the row rewrapped
+             on load. Captions are this page's own literals (OverviewStatTiles),
+             so they render. */
+          stats={["Changes", "Facts to review", "Flows running"]}
+          sections={["Today's review", "Recent docs", "Source pulse", "Workflow", "This week's digest", "Live activity"]}
+          /* The one header control is a date-range picker whose label IS the
+             range — a value, so it stays a bar. */
           actions={1}
           mobile={mobile}
         />
@@ -190,25 +215,43 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                   </EmptyState>
                 )
               ) : (
+                mobile ? (
+                  /* One column, timeliest first (§17). The tracks below are a
+                     desktop composition; on a phone the order is the reading
+                     order. */
+                  <div className="flex flex-col gap-5">
+                    <OverviewStatTiles stats={data.stats} />
+                    <OverviewTodayReview tasks={data.tasks} />
+                    <OverviewDigestCard topics={data.digest} />
+                    <OverviewLiveActivity items={data.activity} pollMs={data.activityPollMs ?? 0} />
+                    <OverviewRecentDocs docs={data.docs} />
+                    {data.flow && <OverviewWorkflowStrip flow={data.flow} run={data.run} />}
+                    <OverviewSourcePulse tiles={data.sources} />
+                  </div>
+                ) : (
                 <DashGrid mobile={mobile}>
-                  {/* Spans follow each widget's own minimum width. The two table
-                      widgets take two columns (their title column alone is
-                      min-w-[200px] plus four no-wrap columns); Source pulse packs
-                      a 2 x 250px tile grid and the workflow strip a row of 86px
-                      nodes, so both take all three. The one-column slots hold the
-                      two prose widgets, which reflow. */}
+                  {/* The stat strip is the one full-width row: three tiles, one
+                      per column. */}
                   <Cell mobile={mobile} span={3}><OverviewStatTiles stats={data.stats} /></Cell>
-                  {/* Today's review sits above/left of the weekly digest:
-                      timeliest content first (§17). */}
-                  <Cell mobile={mobile} span={2}><OverviewTodayReview tasks={data.tasks} /></Cell>
-                  <Cell mobile={mobile}><OverviewDigestCard topics={data.digest} /></Cell>
-                  <Cell mobile={mobile}><OverviewLiveActivity items={data.activity} pollMs={data.activityPollMs ?? 0} /></Cell>
-                  <Cell mobile={mobile} span={2}><OverviewRecentDocs docs={data.docs} /></Cell>
-                  {data.flow && (
-                    <Cell mobile={mobile} span={3}><OverviewWorkflowStrip flow={data.flow} run={data.run} /></Cell>
-                  )}
-                  <Cell mobile={mobile} span={3}><OverviewSourcePulse tiles={data.sources} /></Cell>
+                  {/* Wide track. Both tables need two columns (their title
+                      column alone is min-w-[200px] plus four no-wrap columns);
+                      Source pulse packs a 2 x 250px tile grid and the workflow
+                      strip a row of 86px nodes, which both fit in two. */}
+                  <Track mobile={mobile} span={2}>
+                    {/* Today's review sits above the weekly digest and beside
+                        it: timeliest content first (§17). */}
+                    <OverviewTodayReview tasks={data.tasks} />
+                    <OverviewRecentDocs docs={data.docs} />
+                    <OverviewSourcePulse tiles={data.sources} />
+                    {data.flow && <OverviewWorkflowStrip flow={data.flow} run={data.run} />}
+                  </Track>
+                  {/* Narrow track: the two prose feeds, which reflow. */}
+                  <Track mobile={mobile} span={1}>
+                    <OverviewDigestCard topics={data.digest} />
+                    <OverviewLiveActivity items={data.activity} pollMs={data.activityPollMs ?? 0} />
+                  </Track>
                 </DashGrid>
+                )
               )}
             </CardCollapseScope.Provider>
           </div>

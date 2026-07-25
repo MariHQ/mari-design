@@ -81,10 +81,16 @@ export type LibraryTagsPanelProps = {
       onto its own row, so the action cluster still fits (CONVENTIONS.md §10 —
       pages own mobile, the panel just takes the instruction). */
   compact?: boolean;
+  /** The caller already narrows `tags` with a search field of its own (the
+      Library page does, above the tab strip). The panel then draws no second
+      field: one table had a page-level "Search tags, rules, terms, guides,
+      and templates" and a card-level "Filter tags" ~230px apart, filtering the
+      same rows. */
+  prefiltered?: boolean;
   className?: string;
 };
 
-export function LibraryTagsPanel({ tags, actions, totalDocs, loading = false, compact = false, className = "" }: LibraryTagsPanelProps) {
+export function LibraryTagsPanel({ tags, actions, totalDocs, loading = false, compact = false, prefiltered = false, className = "" }: LibraryTagsPanelProps) {
   const [rows, setRows] = useState<TagDef[]>(tags);
   const [query, setQuery] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -231,20 +237,21 @@ export function LibraryTagsPanel({ tags, actions, totalDocs, loading = false, co
         <Stat value={rankingRules} label="Ranking rules" tone="info" sub="weight ≠ 1.0" />
       </div>
 
+      {/* No `hint` count: "7 tags" in this header sat 46px above a "7 tags"
+          strip. The strip owns the number (§13 count rule). */}
       <Card
         variant="flush"
         title="Tag definitions"
-        hint={`${rows.length} tags`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {!compact && filterField}
+            {!prefiltered && !compact && filterField}
             <Button compact onClick={() => setAnalyzing((v) => !v)}><Sparkles size={13} /> Analyze documents</Button>
             <Button variant="primary" compact onClick={() => openComposer()}><Plus size={13} /> New tag</Button>
           </div>
         }
       >
         <div className="border-t border-ink/10">
-          {compact && <div className="px-4 pt-3">{filterField}</div>}
+          {!prefiltered && compact && <div className="px-4 pt-3">{filterField}</div>}
           {/* Analyze panel */}
           {analyzing && (
             <div className="px-4 py-3.5 bg-ink/[0.015] border-b border-ink/10">

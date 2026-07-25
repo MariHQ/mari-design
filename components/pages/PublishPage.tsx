@@ -946,11 +946,15 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
     return (
       <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
         <SkeletonPage
-          variant="editor"
+          variant="table"
           eyebrow="Doc site"
           title="Publish"
           description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
+          /* The icon is what puts the loaded title at x=288; without it the
+             loading title started at x=250 and slid right on load. */
+          icon={<span className="text-moss"><Send size={24} /></span>}
           tabs={["Doc sites", "MCP servers"]}
+          columns={["Site", "Docs", "Status", "Actions"]}
           actions={0}
           mobile={mobile}
         />
@@ -961,8 +965,11 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
   return (
     <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
+        {/* The eyebrow follows the tab. It was pinned to "Doc site" and kept
+            saying so with the MCP tab underlined — left over from the tab
+            repair, which fixed the panel and not the label above it. */}
         <PageHeader
-          eyebrow="Doc site"
+          eyebrow={tab === "mcp" ? "MCP" : "Doc site"}
           title="Publish"
           description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
           icon={<span className="text-moss"><Send size={24} /></span>}

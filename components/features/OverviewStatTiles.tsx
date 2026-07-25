@@ -92,7 +92,14 @@ export function OverviewStatTiles({
               tone={STAT_TONE[t.tone]}
               icon={<IconRing tone={RING_TONE[t.tone]} size={31}>{STAT_ICONS[t.key]}</IconRing>}
               onClick={() => go(STAT_AREA[t.key])}
-              className={swatch ? "pl-4" : ""}
+              /* w-full: a clickable Stat is a <button>, which is an
+                 inline-level box and so shrink-to-fits inside this grid cell
+                 instead of filling it. On a phone, where the tiles stack, that
+                 rendered three cards at three different widths — 200px, 218px,
+                 200px in a 350px column — with no shared right edge. As a flex
+                 item (the other stat strips) `flex-1 basis-[200px]` still wins,
+                 so this changes nothing there. */
+              className={`w-full ${swatch ? "pl-4" : ""}`.trim()}
             />
           </div>
         );
