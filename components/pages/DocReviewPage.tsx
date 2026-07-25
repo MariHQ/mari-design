@@ -172,17 +172,24 @@ function Workspace({ mobile, initialTab, doc, actions, onBodyChange }: {
           sheds rails rather than squeezing the editor to a gutter (§12/§15):
           at 2xl it is outline | editor | refine, at xl the editor keeps the
           main column and both panels stack in one 320px rail beside it, and
-          below xl the three panels stack in reading order. The panels are
-          placed explicitly rather than reordered in the DOM so the editor is
-          always the second thing a screen reader reaches. */}
+          below xl the three panels stack in one column.
+
+          In that one column the editor comes FIRST. It used to come second,
+          in DOM order, which put the outline and the whole revision history
+          above it and started the editor about 850px down the page — on a
+          laptop you opened a document and saw no editor at all. `order` is
+          what fixes it without disturbing the wider layouts: it reorders the
+          auto-placed single column and is ignored by the explicit row/column
+          placement the xl and 2xl grids use. DOM order is untouched, so a
+          screen reader still reaches outline → editor → refine. */}
       <div className={mobile ? "flex flex-col gap-5" : "grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[320px_minmax(0,1fr)_320px]"}>
-        <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-1 2xl:col-start-1">
+        <div className="order-2 flex min-w-0 flex-col gap-5 xl:order-none xl:col-start-2 xl:row-start-1 2xl:col-start-1">
           <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
         </div>
-        <div className="min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
+        <div className="order-1 min-w-0 xl:order-none xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
           <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} onChange={onBodyChange} />
         </div>
-        <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
+        <div className="order-3 flex min-w-0 flex-col gap-5 xl:order-none xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
           <DocReviewRefinePanel {...doc.refine} actions={actions} />
         </div>
       </div>

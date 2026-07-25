@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
-import { Shield, ShieldCheck } from "lucide-react";
+import { Shield, ShieldCheck, Workflow } from "lucide-react";
 import { FactsVerificationAudit, type Fact } from "../features/FactsVerificationAudit";
 import { ImpactPanelFeature } from "../features/ImpactPanelFeature";
 import type { ImpactDoc } from "../data-display/ImpactPanel";
@@ -19,6 +19,9 @@ import { Drawer } from "../layout/Drawer";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Textarea } from "../forms/Textarea";
+import { Progress } from "../data-display/Progress";
+import type { ChipStatus } from "../data-display/Chip";
+import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
 import { fmtDate } from "../tokens/format";
@@ -55,6 +58,12 @@ const STATES = [
 /** A claim being captured. */
 export type NewFact = { claim: string; source: string; owner: string };
 
+/** A fact scan, as the page follows it: a real background run, in the same
+    vocabulary the Flows page uses for every other run in the product. Mining
+    the corpus takes minutes and touches the ledger, so it is a flow with steps
+    and a progress reading, not something a link fires and forgets. */
+export type FactScan = ScanRun;
+
 /** What the Facts page can DO. Every handler may throw and the control that
     called it shows the message. All optional: without actions the page keeps
     the local behaviour the library ships (the canvas has no server). */
@@ -63,14 +72,27 @@ export type FactsActions = {
   verifyFact?: (id: number) => void | Promise<void>;
   /** Capture a new claim into the ledger. */
   addFact?: (fact: NewFact) => void | Promise<void>;
-  /** Mine the corpus for claims worth tracking. Long-running. */
-  scanFacts?: () => void | Promise<void>;
+  /** Start the corpus scan as a background run, and answer with the run so the
+      page can follow it. Long-running: the run outlives this call. */
+  scanFacts?: () => FactScan | Promise<FactScan>;
+  /** Re-read a scan the page started. Polled until the run stops running;
+      without it the page shows the run once and does not follow it. */
+  scanProgress?: (id: string) => FactScan | Promise<FactScan>;
   /** Open a re-verification task on a stale fact. */
   createReviewTask?: (fact: Fact) => void | Promise<void>;
 };
 
 /** One status filter tab, with the count the workspace actually holds. */
-export type FactFilter = { id: string; label: string; count: number };
+export type FactFilter = {
+  id: string;
+  label: string;
+  count: number;
+  /** The `Fact.status` this tab keeps. Absent = every claim. It is here so the
+      tab row can filter the rows it is sitting above without a round trip —
+      the tabs used to be inert, and a status with no tab (the ledger's own
+      "Needs review") could not be reached at all. */
+  status?: string;
+};
 
 /** A verified fact expanded into its impact analysis. */
 export type FactImpact = {
@@ -191,12 +213,15 @@ function FactsTable({ facts, onVerify }: { facts: Fact[]; onVerify?: (id: number
               <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 break-words">{f.owner}</td>
               <td className="px-4 py-3 align-top text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : ""}</td>
               <td className="px-4 py-3 align-top">{factChip(isVerified ? "Verified" : f.status)}</td>
-              <td className="px-4 py-3 align-top text-right">
+              {/* nowrap: a long owner name pushed this column narrow enough to
+                  break "Verify" across two lines. */}
+              <td className="whitespace-nowrap px-4 py-3 align-top text-right">
+                {/* A verified claim has nothing left to do here, and the
+                    status column one cell to the left already says so — the
+                    word used to be repeated in this cell, twice per row. */}
                 {failed[f.id] ? (
                   <FieldError>{failed[f.id]}</FieldError>
-                ) : isVerified ? (
-                  <span className="font-term text-[11.5px] text-ink/65">Verified</span>
-                ) : (
+                ) : isVerified ? null : (
                   <Button compact variant="primary" disabled={busy === f.id} onClick={() => void verify(f)}>
                     {busy === f.id ? "Verifying…" : "Verify"}
                   </Button>
@@ -271,6 +296,13 @@ function NewFactDrawer({ onAdd, onClose }: {
   );
 }
 
+/* The scan, while it runs. "Scan for facts" used to be a text link that slept
+   for a moment and told you nothing; the work behind it is a background flow
+   over the whole corpus, so the page shows the run: progress, the steps the
+   engine has reached, and what it captured. */
+/* Run status in the console's chip vocabulary. A finished scan "succeeded" —
+   the Flows inspector calls a passed run "Approved", which is the right word
+   for a run someone signs off and the wrong one for a scan nobody approves. */
 /* Frozen create-review-task lifecycle — mirrors FactsVerificationAudit's stale
    row so each mutation phase (creating / done / error) is capturable. */
 function ReviewTaskAudit({ task }: { task: FactTaskAudit }) {
@@ -309,10 +341,19 @@ function isEmpty(d: FactsData): boolean {
   return !d.facts.length && !d.audit?.length && !d.taskAudit && !d.impact && !d.extras;
 }
 
-function Body({ data, error, actions, auditOpen, onCloseAudit }: {
+function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissScan }: {
   data: FactsData; error: string | null; actions?: FactsActions;
   auditOpen: boolean; onCloseAudit: () => void;
+  scan: FactScan | null; onDismissScan: () => void;
 }) {
+  /* Which status tab is showing. `data.filter` seeds it and an app can still
+     serve pre-filtered rows, but the row itself is a view over the rows already
+     on screen — it was wired to `onChange={() => {}}`, so every tab but the one
+     the data named was unreachable. */
+  const [tab, setTab] = useState(data.filter);
+  const selected = data.filters.find((f) => f.id === tab) ?? data.filters.find((f) => f.id === data.filter);
+  const rows = selected?.status ? data.facts.filter((f) => f.status === selected.status) : data.facts;
+
   if (error) {
     return (
       <div className="mt-6">
@@ -322,7 +363,10 @@ function Body({ data, error, actions, auditOpen, onCloseAudit }: {
   }
   if (isEmpty(data)) {
     return (
-      <div className="mt-6">
+      <div className="mt-6 flex flex-col gap-5">
+        {/* The scan strip belongs here too: an empty ledger is exactly where
+            someone presses the button, and the run has to be visible then. */}
+        {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
         <EmptyState title="No facts yet">
           Capture a claim or run “Scan for facts” to start building your verified knowledge base.
         </EmptyState>
@@ -331,7 +375,8 @@ function Body({ data, error, actions, auditOpen, onCloseAudit }: {
   }
   return (
     <div className="mt-6 flex flex-col gap-5">
-      <Tabs ariaLabel="Filter facts" options={data.filters} value={data.filter} onChange={() => {}} />
+      <Tabs ariaLabel="Filter facts" options={data.filters} value={selected?.id ?? data.filter} onChange={setTab} />
+      {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
       {data.banner && <Alert tone="blocked" title={data.banner.title}>{data.banner.body}</Alert>}
       {data.extras && <Extras extras={data.extras} />}
       {data.impact ? (
@@ -346,7 +391,9 @@ function Body({ data, error, actions, auditOpen, onCloseAudit }: {
           />
         </Card>
       ) : (
-        data.facts.length > 0 && <FactsTable facts={data.facts} onVerify={actions?.verifyFact} />
+        // The table stands down for a ledger with no rows at all; a tab that
+        // filters every row out is the table's own empty state, which says so.
+        data.facts.length > 0 && <FactsTable facts={rows} onVerify={actions?.verifyFact} />
       )}
       {data.taskAudit && <ReviewTaskAudit task={data.taskAudit} />}
       {/* The audit is a view of the same rows: it arrives in `data` for the
@@ -363,11 +410,53 @@ function Body({ data, error, actions, auditOpen, onCloseAudit }: {
   );
 }
 
+/** How often the page re-reads a running scan. Slow enough that a minutes-long
+    corpus scan is not a hot loop, fast enough that the bar visibly moves. */
+const SCAN_POLL_MS = 1500;
+
 function FactsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<FactsData, FactsActions>) {
   const [auditOpen, setAuditOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [scanning, setScanning] = useState(false);
+  const [scan, setScan] = useState<FactScan | null>(null);
+  const [starting, setStarting] = useState(false);
   const [scanFailed, setScanFailed] = useState<string | null>(null);
+
+  /* Follow a run that is still going. The poll is an effect (not a chain of
+     timeouts inside the click) so it stops when the page unmounts and never
+     outlives the run it is reading. */
+  const progress = actions?.scanProgress;
+  const runId = scan && (scan.status === "running" || scan.status === "pending") ? scan.id : null;
+  const seen = useRef(0);
+  useEffect(() => {
+    if (!runId || !progress) return;
+    let alive = true;
+    const tick = window.setInterval(() => {
+      void (async () => {
+        try {
+          const next = await progress(runId);
+          if (alive) setScan(next);
+        } catch (err) {
+          if (alive) setScanFailed(err instanceof Error ? err.message : "The scan could not be read.");
+        }
+      })();
+    }, SCAN_POLL_MS);
+    return () => { alive = false; window.clearInterval(tick); };
+  }, [runId, progress]);
+
+  /* No handler (the canvas): the run still has to move, so the page advances
+     its own reading of the same shape. It invents no steps and no total — only
+     the progress the button's own click can honestly account for. */
+  useEffect(() => {
+    if (!scan || scan.id !== "local" || scan.status !== "running") return;
+    const tick = window.setInterval(() => {
+      setScan((s) => {
+        if (!s || s.id !== "local") return s;
+        const next = Math.min(100, s.progress + 20);
+        return { ...s, progress: next, status: next === 100 ? "passed" : "running" };
+      });
+    }, 260);
+    return () => window.clearInterval(tick);
+  }, [scan]);
 
   if (loading) {
     return (
@@ -377,25 +466,27 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
     );
   }
 
-  const scan = async () => {
-    if (scanning) return;
-    setScanning(true);
+  const startScan = async () => {
+    if (starting || runId) return;
+    setStarting(true);
     setScanFailed(null);
     try {
-      // No handler (the canvas): the button still says it worked and settled.
-      if (actions?.scanFacts) await actions.scanFacts();
-      else await new Promise((r) => setTimeout(r, 900));
+      setScan(actions?.scanFacts
+        ? await actions.scanFacts()
+        : { id: "local", label: `Fact scan · run ${++seen.current}`, status: "running", progress: 0, steps: [], added: null });
     } catch (err) {
-      setScanFailed(err instanceof Error ? err.message : "The scan could not run.");
+      setScanFailed(err instanceof Error ? err.message : "The scan could not be started.");
     } finally {
-      setScanning(false);
+      setStarting(false);
     }
   };
 
   const headerActions = (
     <>
-      <Button variant="link" disabled={scanning} onClick={() => void scan()}>
-        {scanning ? "Scanning…" : "Scan for facts"}
+      {/* A real background run, so a real button — the text link beside two
+          buttons read as a footnote and hid what it starts. */}
+      <Button variant="default" disabled={starting || Boolean(runId)} onClick={() => void startScan()}>
+        <Workflow size={14} /> {starting || runId ? "Scanning…" : "Scan for facts"}
       </Button>
       <Button variant="default" aria-expanded={auditOpen} onClick={() => setAuditOpen((v) => !v)}>
         {auditOpen ? "Hide audit" : "Audit documents"}
@@ -421,6 +512,8 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           actions={actions}
           auditOpen={auditOpen}
           onCloseAudit={() => setAuditOpen(false)}
+          scan={scan}
+          onDismissScan={() => setScan(null)}
         />
       </div>
       {adding && <NewFactDrawer onAdd={actions?.addFact} onClose={() => setAdding(false)} />}

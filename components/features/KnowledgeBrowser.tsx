@@ -9,6 +9,7 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuRadioGroup, MenuRadioItem, MenuLabel } from "../navigation/Menu";
+import { Link } from "../navigation/Link";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
@@ -48,6 +49,13 @@ const KNOWN_OWNERS = ["Priya Nair", "Marcus Vale", "Dana Osei"];
 
 /** KnowledgeResult cards rendered per page. */
 const PAGE = 25;
+
+/* Where a result opens: the library's own Doc Review page (its `route` in
+   pages/DocReviewPage.tsx), with the document in the query string. This is a
+   link from one page of this library to another, not an app URL — the page
+   registry owns both ends of it — which is the same reason DocReviewPage can
+   point its back-link at "/knowledge". */
+const docHref = (id: string) => `/knowledge/doc?id=${encodeURIComponent(id)}`;
 
 /* ── local sub-components ─────────────────────────────────────────────── */
 
@@ -131,6 +139,16 @@ export type KnowledgeBrowserProps = {
   /** Stack the facet rail above the results instead of beside them. Pages own
       this (CONVENTIONS.md §10) — the component never breakpoints itself. */
   stacked?: boolean;
+  /** Which result is being inspected. Pass it to CONTROL the selection: the
+      browser then highlights what its owner says is selected, and a page can
+      keep that in the URL so it survives a reload.
+
+      Leave it undefined and the selection stays local, which is what makes the
+      cards respond on the design canvas with nobody listening (§2). */
+  selectedId?: string | null;
+  /** A result was picked. Emitted for every pick, controlled or not, so a page
+      can fill an inspector beside the feed. */
+  onSelect?: (id: string) => void;
   className?: string;
 };
 
@@ -176,7 +194,9 @@ function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked
   );
 }
 
-export function KnowledgeBrowser({ results, loading = false, stacked = false, className = "" }: KnowledgeBrowserProps) {
+export function KnowledgeBrowser({
+  results, loading = false, stacked = false, selectedId, onSelect, className = "",
+}: KnowledgeBrowserProps) {
   const [q, setQ] = useState("");
   const [srcSel, setSrcSel] = useState<Set<string>>(new Set());
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
@@ -185,7 +205,14 @@ export function KnowledgeBrowser({ results, loading = false, stacked = false, cl
   const [fresh, setFresh] = useState("Any time");
   const [tab, setTab] = useState("all");
   const [sort, setSort] = useState("best");
-  const [selId, setSelId] = useState<string | null>("r1");
+  /* The selection used to be this state alone, seeded with a fixture's id —
+     so it named a row that exists in no real corpus, and picking a card moved
+     a highlight that nothing outside this component could see. It is now the
+     FALLBACK: whoever owns the selection passes `selectedId`, and without an
+     owner the cards still respond exactly as before (§2). */
+  const [localSel, setLocalSel] = useState<string | null>(null);
+  const selId = selectedId !== undefined ? selectedId : localSel;
+  const select = (id: string) => { setLocalSel(id); onSelect?.(id); };
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(PAGE);
 
@@ -337,7 +364,7 @@ export function KnowledgeBrowser({ results, loading = false, stacked = false, cl
                 <Card
                   key={r.id}
                   variant="flush"
-                  onClick={() => setSelId(r.id)}
+                  onClick={() => select(r.id)}
                   className={`p-4 cursor-pointer transition-colors ${selected ? "ring-1 ring-biscay-2/50 border-biscay-2/40" : "hover:border-ink/25"}`}
                 >
                   {/* Content order per CONVENTIONS.md §1: title, summary, then
@@ -349,7 +376,26 @@ export function KnowledgeBrowser({ results, loading = false, stacked = false, cl
                     <div className="flex items-start gap-3">
                       <CardTitleBlock
                         className="flex-1"
-                        title={<Truncate className="hover:text-biscay-2">{r.title}</Truncate>}
+                        /* The title OPENS the document. It was plain text with
+                           a hover colour, which promised a link and delivered
+                           nothing; it is now a real anchor, so it can be
+                           middle-clicked, copied and opened in a new tab. The
+                           rest of the card only selects, which is what fills
+                           the inspector beside the feed. */
+                        title={(
+                          <Truncate title={r.title} className="hover:text-biscay-2">
+                            <Link
+                              href={docHref(r.id)}
+                              /* The card behind the title selects, and that
+                                 selection may be a navigation of its own: let
+                                 the click bubble and it lands on the feed's
+                                 own URL instead of the document's. */
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {r.title}
+                            </Link>
+                          </Truncate>
+                        )}
                         summary={<Truncate lines={2}>{r.snippet}</Truncate>}
                       />
                       <button

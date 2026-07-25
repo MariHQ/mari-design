@@ -409,14 +409,15 @@ function StressSection({ s }: { s: LookbookSamples }) {
 /* Sections that render exactly one exhibit: no point splitting them in two. */
 const SINGLE_EXHIBIT = new Set(["buttons", "inputs", "icons"]);
 
-function Sections({ data }: { data: LookbookData }) {
-  switch (data.section) {
+function Sections({ data }: { data: LookbookData | null }) {
+  switch (data?.section) {
     case "foundations": return <Foundations />;
     case "buttons": return <Buttons />;
     case "inputs": return <FormsExhibit />;
     case "data-display": return <DataDisplay />;
     case "feedback": return <Feedback />;
     case "icons": return <IconsArt />;
+    /* Reachable only when there IS data: the section came out of it. */
     case "overflow": return <OverflowSection s={data.samples} />;
     case "stress": return <StressSection s={data.samples} />;
     default:
@@ -433,7 +434,16 @@ function Sections({ data }: { data: LookbookData }) {
   }
 }
 
-function LookbookPage({ data, loading = false, chrome, mobile = false }: PageProps<LookbookData>) {
+function LookbookPage({ data, loading = false, chrome, mobile = false }: PageProps<LookbookData | null>) {
+  /* This is the one page whose content is its own subject, so it is also the
+     one page a host can render with nothing to give it: the exhibits document
+     the catalog, and `data` only carries the sample strings the two long-text
+     sections push through it. The console has no source for those — they are
+     pathological truncation fixtures, not content — so it passes nothing, and
+     dereferencing `data.section` was a crash on the one page nobody could
+     then open. No data means the whole catalog and neither long-text section,
+     which is the honest reading of having been handed no samples. */
+  const section = data?.section ?? "all";
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
@@ -448,17 +458,12 @@ function LookbookPage({ data, loading = false, chrome, mobile = false }: PagePro
           eyebrow="Design system"
           title="Design lookbook"
           description="Every canonical primitive, exhibited live with its usage rule and import path. This page is built only from the components it documents."
-          actions={(
-            <Button variant="primary" icon={false} onClick={() => window.open("/index.html", "_blank", "noopener")}>
-              Open catalog ↗
-            </Button>
-          )}
         />
         {/* One gallery grid owns the gaps, so every exhibit card shares the
             same left and right edge (§11). Single-exhibit sections run one
             full-width column rather than leaving a dead right half. Mobile
             always collapses to one column. */}
-        <div className={mobile || SINGLE_EXHIBIT.has(data.section) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
+        <div className={mobile || SINGLE_EXHIBIT.has(section) ? "mt-6 flex flex-col gap-5" : `mt-6 items-start ${DASH2}`}>
           <Sections data={data} />
         </div>
       </div>

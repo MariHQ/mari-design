@@ -162,9 +162,16 @@ export type FlowsListActions = {
   setFlowEnabled?: (args: { id: number; enabled: boolean }) => void | Promise<void>;
   /** Delete a flow and its run history. Destructive: goes through ConfirmButton. */
   deleteFlow?: (id: number) => void | Promise<void>;
-  /** Create a draft flow, from scratch or copied off a template. */
+  /** Create a flow and open it in the pipeline editor.
+   *
+   *  `fromId` is the flow whose pipeline the new one copies, or null for a
+   *  blank one. It is an ID rather than the step list because `Flow.nodes` is
+   *  the DISPLAY of a pipeline (labels only) — copying that would produce a
+   *  flow whose steps have no kind and therefore cannot run. Whoever owns the
+   *  real pipeline copies it; this list only says which one. */
   createFlow?: (args: {
-    name: string; description: string; steps: FlowStep[]; color: string;
+    name: string; description: string; color: string;
+    trigger: FlowTrigger; fromId: number | null;
   }) => void | Promise<void>;
   /** Persist a flow's trigger. */
   saveTrigger?: (args: { id: number; trigger: FlowTrigger }) => void | Promise<void>;
@@ -176,6 +183,9 @@ export type FlowsListProps = {
       own open state, which is exactly why FlowsPage carried a static copy of
       it whose Save and Cancel did nothing. */
   editTriggerFor?: number | null;
+  /** Open the new-flow drawer on mount, for a caller whose route IS the create
+      step. Same reason as `editTriggerFor`: the drawer owns its open state. */
+  createOpen?: boolean;
   /** Follow a flow through to its pipeline editor. */
   onOpenFlow?: (id: number) => void;
   /** Sources a document trigger can be scoped to. */
@@ -193,14 +203,14 @@ const td = `${tdPad} align-middle border-b border-ink/[0.06]`;
 const PAGE = 25;
 
 export function FlowsList({
-  flows, sources, actions, editTriggerFor = null, onOpenFlow,
+  flows, sources, actions, editTriggerFor = null, createOpen = false, onOpenFlow,
   loading = false, className = "",
 }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(
     () => flows.find((f) => f.id === editTriggerFor) ?? null,
   );
-  const [draft, setDraft] = useState<{ from: Flow | null } | null>(null);
+  const [draft, setDraft] = useState<{ from: Flow | null } | null>(createOpen ? { from: null } : null);
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [running, setRunning] = useState<number | null>(null);
@@ -272,9 +282,13 @@ export function FlowsList({
     }
   };
 
-  const createDraft = async (name: string, description: string, from: Flow | null) => {
+  /* Creating a flow is three decisions, not one: what it is called, when it
+     fires, and what it does. The drawer takes the first two — the third is the
+     pipeline editor, which is where a successful create lands. The row is
+     echoed here so the list is right even when nothing follows the write. */
+  const createDraft = async (name: string, description: string, trigger: FlowTrigger, from: Flow | null) => {
     const id = Math.max(0, ...rows.map((r) => r.id)) + 1;
-    const steps = from?.nodes ?? [{ label: "Manual" }];
+    const steps = from?.nodes ?? [{ label: "Trigger" }];
     const color = from?.color ?? "#1C3F60";
     setDraft(null);
     setFailed(null);
@@ -282,14 +296,14 @@ export function FlowsList({
       ...rs,
       {
         id, name, description, color, status: "paused",
-        whenLabel: "Manual only", trigger: {}, nodes: steps,
+        whenLabel: describeTrigger(trigger, sources), trigger, nodes: steps,
         lastRun: null, recentRuns: [],
       },
     ]);
     setNote(`Draft flow "${name}" created, paused until you turn it on.`);
     if (!actions?.createFlow) return;
     try {
-      await actions.createFlow({ name, description, steps, color });
+      await actions.createFlow({ name, description, color, trigger, fromId: from?.id ?? null });
     } catch (err) {
       setRows((rs) => rs.filter((r) => r.id !== id));
       setNote(null);
@@ -443,7 +457,11 @@ export function FlowsList({
                             <Trash2 size={13} />
                           </ConfirmButton>
                           <Menu trigger={<Button icon aria-label="More actions"><MoreVertical size={15} /></Button>}>
-                            <MenuItem icon={<Pencil size={14} />}>Edit</MenuItem>
+                            {/* Editing a flow IS its pipeline editor, so this
+                                only exists where there is one to open (§2). */}
+                            {onOpenFlow && (
+                              <MenuItem icon={<Pencil size={14} />} onSelect={() => onOpenFlow(f.id)}>Edit pipeline</MenuItem>
+                            )}
                             <MenuItem icon={<Bell size={14} />} onSelect={() => setTrigEdit(f)}>Edit trigger</MenuItem>
                             <MenuItem icon={<Copy size={14} />} onSelect={() => setDraft({ from: f })}>Duplicate</MenuItem>
                           </Menu>
@@ -470,7 +488,14 @@ export function FlowsList({
           onClose={() => setTrigEdit(null)}
         />
       )}
-      {draft && <DraftEditor from={draft.from} onCreate={(n, d, f) => void createDraft(n, d, f)} onClose={() => setDraft(null)} />}
+      {draft && (
+        <DraftEditor
+          from={draft.from}
+          sources={sources}
+          onCreate={(n, d, t, f) => void createDraft(n, d, t, f)}
+          onClose={() => setDraft(null)}
+        />
+      )}
     </div>
   );
 }
@@ -478,11 +503,19 @@ export function FlowsList({
 /* ── DraftEditor: "New flow" and "Use template" both land here ─────────── */
 
 function DraftEditor({
-  from, onCreate, onClose,
-}: { from: Flow | null; onCreate: (name: string, description: string, from: Flow | null) => void; onClose: () => void }) {
+  from, sources, onCreate, onClose,
+}: {
+  from: Flow | null; sources: SourceRef[];
+  onCreate: (name: string, description: string, trigger: FlowTrigger, from: Flow | null) => void;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(from ? `${from.name} copy` : "");
   const [desc, setDesc] = useState(from?.description ?? "");
+  /* A template arrives with the trigger it was written for; a blank flow
+     starts manual-only, which is the one trigger that needs no configuring. */
+  const [trigger, setTrigger] = useState<FlowTrigger>(from?.trigger ?? { on: "" });
 
+  const bad = triggerInvalid(trigger);
   return (
     <Drawer
       open
@@ -492,8 +525,12 @@ function DraftEditor({
       icon={<Workflow size={16} className="text-ink/70" />}
       footer={
         <>
-          <Button variant="primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), desc.trim() || "No description yet.", from)}>
-            Create draft
+          <Button
+            variant="primary"
+            disabled={!name.trim() || bad}
+            onClick={() => onCreate(name.trim(), desc.trim() || "No description yet.", trigger, from)}
+          >
+            Create and open editor
           </Button>
           <Button onClick={onClose}>Cancel</Button>
         </>
@@ -505,58 +542,57 @@ function DraftEditor({
       <Field label="What does it guarantee?">
         <Textarea short value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="One sentence." className="w-full" />
       </Field>
-      {from && (
-        <div className="pt-2 text-[12.5px] text-ink/70">
-          Copies {from.nodes.length} steps: {from.nodes.map((n) => n.label).join(", ")}.
-        </div>
-      )}
+
+      <div className="pt-1">
+        <div className="mb-1 font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65">When it fires</div>
+        <TriggerFields value={trigger} onChange={setTrigger} sources={sources} />
+      </div>
+
+      {/* What the flow will DO is the pipeline, and the pipeline editor is the
+          surface for it. Saying so here is the difference between a create
+          form that stops halfway and one that hands over. */}
+      <div className="pt-2 text-[12.5px] text-ink/70">
+        {from
+          ? <>Copies {from.nodes.length} steps: {from.nodes.map((n) => n.label).join(", ")}. The editor opens on them next.</>
+          : <>The pipeline editor opens next, where you add the steps this flow runs.</>}
+      </div>
       <div className="pt-2 text-[11.5px] text-ink/65">The draft starts paused, so nothing fires until you turn it on.</div>
     </Drawer>
   );
 }
 
-/* ── TriggerEditor: the compact trigger Drawer ─────────────────────────── */
+/* ── TriggerFields: the one trigger form ──────────────────────────────────
+   "New flow" and the trigger drawer ask the same four questions, so they ask
+   them with the same component — a create form that could not name a schedule
+   was why a new flow arrived with no way to fire. */
 
-function TriggerEditor({ flow, sources, onSave, onClose }: {
-  flow: Flow; sources: SourceRef[]; onSave: (trigger: FlowTrigger) => void; onClose: () => void;
+/** True when the form cannot be saved as it stands. */
+function triggerInvalid(t: FlowTrigger): boolean {
+  if (t.on !== "schedule") return false;
+  const n = t.every_minutes ?? 0;
+  return Number.isNaN(n) || n < 1 || n > 10080;
+}
+
+function TriggerFields({ value, onChange, sources }: {
+  value: FlowTrigger; onChange: (t: FlowTrigger) => void; sources: SourceRef[];
 }) {
-  const [on, setOn] = useState<TriggerOn>(flow.trigger?.on ?? "");
-  const [every, setEvery] = useState<number>(flow.trigger?.every_minutes ?? 1440);
-  const [sourceId, setSourceId] = useState<string>(flow.trigger?.source_id != null ? String(flow.trigger.source_id) : "");
-  const [tag, setTag] = useState<string>(flow.trigger?.tag ?? "");
-  const [pathGlob, setPathGlob] = useState<string>(flow.trigger?.path_glob ?? "");
+  const on = value.on ?? "";
+  const every = value.every_minutes ?? 1440;
+  const bad = triggerInvalid(value);
 
-  const everyN = Math.floor(Number(every));
-  const everyBad = on === "schedule" && (Number.isNaN(everyN) || everyN < 1 || everyN > 10080);
+  /* Switching event resets the filters with it: a path glob left over from a
+     document trigger is not a field a schedule has. */
+  const setOn = (next: TriggerOn) => onChange(
+    next === "schedule" ? { on: next, every_minutes: 1440 }
+    : next === "document_added" || next === "document_changed"
+      ? { on: next, source_id: null, tag: null, path_glob: null }
+      : { on: "" },
+  );
 
   return (
-    <Drawer
-      open
-      onClose={onClose}
-      title="Trigger"
-      subtitle={flow.name}
-      icon={<Bell size={16} className="text-ink/70" />}
-      footer={
-        <>
-          <Button
-            variant="primary"
-            disabled={everyBad}
-            onClick={() => onSave(
-              on === "schedule"
-                ? { on, every_minutes: everyN }
-                : on === "document_added" || on === "document_changed"
-                  ? { on, source_id: sourceId ? Number(sourceId) : null, tag: tag || null, path_glob: pathGlob || null }
-                  : { on: "" },
-            )}
-          >
-            Save trigger
-          </Button>
-          <Button onClick={onClose}>Cancel</Button>
-        </>
-      }
-    >
+    <>
       <Field label="On">
-        <Select value={on ?? ""} onChange={(e) => setOn(e.target.value as TriggerOn)} className="w-full">
+        <Select value={on} onChange={(e) => setOn(e.target.value as TriggerOn)} className="w-full">
           <option value="">Manual only</option>
           <option value="document_added">Document added</option>
           <option value="document_changed">Document changed</option>
@@ -568,10 +604,11 @@ function TriggerEditor({ flow, sources, onSave, onClose }: {
         <Field label="Every (minutes)">
           <Input
             type="number" min={1} max={10080} value={every}
-            onChange={(e) => setEvery(Number(e.target.value))} className="w-full"
+            onChange={(e) => onChange({ on: "schedule", every_minutes: Math.floor(Number(e.target.value)) })}
+            className="w-full"
           />
-          <div className={`mt-1.5 font-term text-[11px] ${everyBad ? "text-espelette" : "text-ink/70"}`}>
-            {everyBad ? "Enter 1 to 10080 minutes (up to a week)." : `${fmtEvery(everyN)} · presets: 10 / 60 / 1440 / 10080`}
+          <div className={`mt-1.5 font-term text-[11px] ${bad ? "text-espelette" : "text-ink/70"}`}>
+            {bad ? "Enter 1 to 10080 minutes (up to a week)." : `${fmtEvery(every)} · presets: 10 / 60 / 1440 / 10080`}
           </div>
           <div className="mt-1 text-[11.5px] text-ink/65">
             The scheduler checks twice a minute and never starts a run while the previous one is still going.
@@ -582,27 +619,59 @@ function TriggerEditor({ flow, sources, onSave, onClose }: {
       {(on === "document_added" || on === "document_changed") && (
         <>
           <Field label="Source">
-            <Select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="w-full">
+            <Select
+              value={value.source_id != null ? String(value.source_id) : ""}
+              onChange={(e) => onChange({ ...value, source_id: e.target.value ? Number(e.target.value) : null })}
+              className="w-full"
+            >
               <option value="">Any source</option>
               {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
           </Field>
           <Field label="Tag">
-            <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. customer-facing" className="w-full" />
+            <Input value={value.tag ?? ""} onChange={(e) => onChange({ ...value, tag: e.target.value || null })} placeholder="e.g. customer-facing" className="w-full" />
           </Field>
           <Field label="Path glob">
-            <Input value={pathGlob} onChange={(e) => setPathGlob(e.target.value)} placeholder="docs/**" className="w-full font-term" />
+            <Input value={value.path_glob ?? ""} onChange={(e) => onChange({ ...value, path_glob: e.target.value || null })} placeholder="docs/**" className="w-full font-term" />
           </Field>
           <div className="pt-2 text-[11.5px] text-ink/65">Filters are optional and combine: a run fires only when all set filters match.</div>
         </>
       )}
 
-      {(on === "" || on == null) && (
+      {on === "" && (
         <div className="pt-2 text-[12.5px] text-ink/70">
           <FileText size={13} className="mr-1 inline text-ink/65" />
           Manual only: this flow runs when you press Run or Test run.
         </div>
       )}
+    </>
+  );
+}
+
+/* ── TriggerEditor: the compact trigger Drawer ─────────────────────────── */
+
+function TriggerEditor({ flow, sources, onSave, onClose }: {
+  flow: Flow; sources: SourceRef[]; onSave: (trigger: FlowTrigger) => void; onClose: () => void;
+}) {
+  const [trigger, setTrigger] = useState<FlowTrigger>(flow.trigger ?? { on: "" });
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="Trigger"
+      subtitle={flow.name}
+      icon={<Bell size={16} className="text-ink/70" />}
+      footer={
+        <>
+          <Button variant="primary" disabled={triggerInvalid(trigger)} onClick={() => onSave(trigger)}>
+            Save trigger
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </>
+      }
+    >
+      <TriggerFields value={trigger} onChange={setTrigger} sources={sources} />
     </Drawer>
   );
 }

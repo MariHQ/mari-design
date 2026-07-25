@@ -1,6 +1,5 @@
 import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Workflow, Bell, FileText } from "lucide-react";
+import { PageFrame, navFor } from "./PageFrame";
 import { FlowsList, type Flow, type FlowsListActions, type SourceRef } from "../features/FlowsList";
 import { FlowsPipelineEditor, type EditorStep, type SiteRef } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
@@ -8,12 +7,6 @@ import { FlowsRunPanel, type FlowsRunActions } from "../features/FlowsRunPanel";
 import type { WorkflowRun } from "../workflow/RunHistory";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 import { PageHeader } from "../layout/PageHeader";
-import { Button } from "../actions/Button";
-import { Drawer } from "../layout/Drawer";
-import { Field } from "../forms/Field";
-import { Input } from "../forms/Input";
-import { Select } from "../forms/Select";
-import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ErrorMessage } from "../feedback/ErrorMessage";
 
@@ -24,12 +17,15 @@ import { ErrorMessage } from "../feedback/ErrorMessage";
 
    This page is a pure presenter. It holds no demo content: which surface it
    shows is derived from the data it was handed — an `editor` payload means the
-   pipeline editor, a `runPanel` means the run inspector, and a workspace with
-   no flows at all falls out of `isEmpty`. The canvas supplies the same shape
+   pipeline editor, a `runPanel` means the run inspector, `creating` means the
+   new-flow drawer, and a workspace with no flows renders the list's own empty
+   state, under the list's own "New flow". The canvas supplies the same shape
    from `.preview/fixtures/flows.ts`. */
 
 const STATES = [
   { id: "default", label: "Default (list)" },
+  { id: "new-flow", label: "New flow · name and trigger" },
+  { id: "new-flow-first", label: "New flow · first one in the workspace" },
   { id: "pipeline-editor", label: "Pipeline editor" },
   { id: "pipeline-branch", label: "Pipeline editor · branching" },
   { id: "run", label: "Run panel · waiting (approval)" },
@@ -52,14 +48,27 @@ const STATES = [
 export type FlowsActions = FlowsListActions & FlowsRunActions & {
   /** Open one flow's pipeline editor. */
   openFlow?: (id: number) => void;
+  /** Leave the pipeline editor for the list. Which surface is on screen lives
+      in `data`, so the page cannot go back on its own. */
+  openFlows?: () => void;
+  /** Persist the flow the pipeline editor is open on, pipeline and all. The
+      editor only clears its dirty flag once this resolves. */
+  saveFlow?: (flow: {
+    id: number; name: string; description: string; enabled: boolean; steps: EditorStep[];
+  }) => void | Promise<void>;
 };
 
 export type TriggerKind = "manual" | "schedule" | "document";
 
-/** The pipeline editor, open on one flow. */
+/** The pipeline editor, open on one flow. Carries that flow's id: saving and
+    running from inside the editor act on it, and a page cannot infer which
+    row it is looking at from a name. */
 export type FlowsEditor = {
+  id: number;
   name: string;
   description: string;
+  /** Whether the flow is currently on. */
+  enabled: boolean;
   steps: EditorStep[];
   runs: WorkflowRun[];
   members: string[];
@@ -92,6 +101,9 @@ export type FlowsExtras = {
 export type FlowsData = {
   flows: Flow[];
   sources: SourceRef[];
+  /** The new-flow drawer is open. It is the first step of creating a flow, so
+      an app can route straight to it. */
+  creating: boolean;
   editor: FlowsEditor | null;
   runPanel: { runs: WorkflowRun[]; openNumber?: number } | null;
   runHistory: { runs: WorkflowRun[]; limit: number } | null;
@@ -113,15 +125,11 @@ function Extras({ extras }: { extras: FlowsExtras }) {
   );
 }
 
-function isEmpty(d: FlowsData): boolean {
-  return !d.flows.length && !d.editor && !d.runPanel && !d.runHistory && !d.trigger && !d.extras;
-}
-
 /* The list surface brings its OWN page header (title, summary, and a working
    "New flow"), and so does the pipeline editor. Stacking a second header on
    top of either is the bug this guards. */
 function showsHeader(d: FlowsData, error: string | null): boolean {
-  if (error || isEmpty(d)) return true;
+  if (error) return true;
   if (d.editor) return false;
   return Boolean(d.extras || d.runHistory || d.runPanel);
 }
@@ -130,15 +138,25 @@ function Body({ data, error, actions, mobile }: {
   data: FlowsData; error: string | null; actions?: FlowsActions; mobile: boolean;
 }) {
   if (error) return <ErrorMessage id="server.unavailable" />;
-  if (isEmpty(data)) {
+
+  /* A workspace with no flows used to get a page-level empty state and nothing
+     else — the one screen where creating a flow matters most had no way to do
+     it. The list draws its own "no flows yet", under its own "New flow". */
+
+  if (data.editor) {
+    const { id, ...editor } = data.editor;
     return (
-      <EmptyState icon={<Workflow size={22} />} title="No flows yet">
-        Start from a template or create one to automate editorial work.
-      </EmptyState>
+      <FlowsPipelineEditor
+        {...editor}
+        onBack={actions?.openFlows}
+        onSave={actions?.saveFlow && ((flow) => actions.saveFlow!({ id, ...flow }))}
+        /* Running from the editor is the same run the list starts, so it is
+           the same handler — a second one would be a second way to be wrong
+           about what a test run is. */
+        onRun={actions?.runFlow && (({ dry }) => actions.runFlow!({ id, dryRun: dry }))}
+      />
     );
   }
-
-  if (data.editor) return <FlowsPipelineEditor {...data.editor} />;
 
   if (data.extras || data.runHistory || data.runPanel) {
     return (
@@ -165,6 +183,7 @@ function Body({ data, error, actions, mobile }: {
       sources={data.sources}
       actions={actions}
       editTriggerFor={editTriggerFor}
+      createOpen={data.creating}
       onOpenFlow={actions?.openFlow}
     />
   );

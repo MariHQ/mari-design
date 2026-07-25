@@ -22,6 +22,7 @@ import { page as settingsMembers } from "./SettingsMembersPage";
 import { page as settingsModels } from "./SettingsModelsPage";
 import { page as settingsApiKeys } from "./SettingsApiKeysPage";
 import { page as settingsAuditLog } from "./SettingsAuditLogPage";
+import { page as settingsDesign } from "./SettingsDesignPage";
 import { page as lookbook } from "./LookbookPage";
 import { page as login } from "./LoginPage";
 import { page as setup } from "./SetupPage";
@@ -48,6 +49,7 @@ export const PAGES: PageModule<any, any>[] = [
   settingsModels,
   settingsApiKeys,
   settingsAuditLog,
+  settingsDesign,
   lookbook,
   login,
   setup,

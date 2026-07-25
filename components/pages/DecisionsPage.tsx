@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Feather } from "lucide-react";
+import { Feather, Workflow } from "lucide-react";
 import { DecisionCardFeature, type Decision, type DecisionLedgerActions } from "../features/DecisionCardFeature";
 import { FieldError } from "../feedback/ErrorMessage";
+import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { DecisionCard } from "../data-display/DecisionCard";
 import { SourceMark } from "../icons/marks";
 import { PageHeader } from "../layout/PageHeader";
@@ -46,8 +47,16 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** One tab of the ledger filter, with the number of records behind it. */
-export type LedgerFilterTab = { id: string; label: string; count: number };
+/** One tab of the ledger filter, with the number of records behind it.
+    `status` is which records it shows; a tab without one shows every record. */
+export type LedgerFilterTab = { id: string; label: string; count: number; status?: Decision["status"] };
+
+/** "superseded" is the ledger's old spelling of "ignored", so a tab for either
+    word has to match records recorded under both. */
+const resolved = (s: Decision["status"]) => (s === "superseded" ? "ignored" : s);
+
+const inTab = (decisions: Decision[], tab?: LedgerFilterTab): Decision[] =>
+  tab?.status ? decisions.filter((d) => resolved(d.status) === resolved(tab.status!)) : decisions;
 
 /** The capture composer, prefilled with whatever the user has typed so far. */
 export type DecisionComposer = {
@@ -91,8 +100,13 @@ export type DecisionExtras = {
 export type DecisionsActions = DecisionLedgerActions & {
   /** Record a new proposal from the capture composer. */
   capture?: (args: { statement: string; context: string; source: string }) => void | Promise<void>;
-  /** Read the connected sources for decisions nobody has captured yet. */
-  scan?: () => void | Promise<void>;
+  /** Read the connected sources for decisions nobody has captured yet, as a
+      background run, and answer with it so the page can follow it. Long: the
+      run outlives this call. */
+  scan?: () => ScanRun | Promise<ScanRun> | void | Promise<void>;
+  /** Re-read a scan the page started. Polled until the run stops running;
+      without it the page shows the run once and does not follow it. */
+  scanProgress?: (id: string) => ScanRun | Promise<ScanRun>;
 };
 
 /** Whatever the server said, or a floor when the failure carried no message. */
@@ -137,16 +151,18 @@ function StressExtras({ extras }: { extras: DecisionExtras }) {
 /** Main column + the standard 320px rail (§11). One plumb line for every
     ledger view: `minmax(0,1fr)` keeps long content from pushing the rail out,
     and mobile drops the rail below the main column. */
-function Shell({ data, mobile, actions, composerOpen, onCloseComposer, children }: {
+function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter, children }: {
   data: DecisionsData; mobile: boolean; actions?: DecisionsActions;
-  composerOpen: boolean; onCloseComposer: () => void; children: React.ReactNode;
+  composerOpen: boolean; onCloseComposer: () => void;
+  filter: string; onFilter: (id: string) => void;
+  children: React.ReactNode;
 }) {
   const composer = data.composer ?? (composerOpen ? BLANK_COMPOSER : null);
   return (
     <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
       <div className="flex min-w-0 flex-col gap-5">
         {composer && <Composer composer={composer} actions={actions} onClose={onCloseComposer} />}
-        <LedgerFilter filters={data.filters} filter={data.filter} />
+        <LedgerFilter filters={data.filters} filter={filter} onChange={onFilter} />
         {data.extras && <StressExtras extras={data.extras} />}
         {children}
       </div>
@@ -213,9 +229,15 @@ function Rail({ awaiting, howItWorks, decisions, actions }: {
 }
 
 /** The ledger filter lives in the main column, above the timeline: the same
-    place Facts puts its status filter, and wide enough that no tab clips. */
-function LedgerFilter({ filters, filter }: { filters: LedgerFilterTab[]; filter: string }) {
-  return <Tabs ariaLabel="Filter the ledger" options={filters} value={filter} onChange={() => {}} />;
+    place Facts puts its status filter, and wide enough that no tab clips.
+
+    It is the ledger's only filter. The timeline used to carry a second row of
+    facet chips with its own state, so this strip changed nothing and the two
+    could disagree about what was selected. */
+function LedgerFilter({ filters, filter, onChange }: {
+  filters: LedgerFilterTab[]; filter: string; onChange: (id: string) => void;
+}) {
+  return <Tabs ariaLabel="Filter the ledger" options={filters} value={filter} onChange={onChange} />;
 }
 
 /* The composer sits at the top of the main column, not above the whole layout:
@@ -290,7 +312,10 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   data: DecisionsData; error: string | null; actions?: DecisionsActions; mobile: boolean;
   composerOpen: boolean; onCloseComposer: () => void;
 }) {
-  const shell = { data, mobile, actions, composerOpen, onCloseComposer };
+  /* The page owns the filter, and `data.filter` says which tab it opens on:
+     the tab strip was wired to a no-op while the timeline filtered itself. */
+  const [filter, setFilter] = useState(data.filter);
+  const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter };
   if (error) return <EmptyState title="API offline">{error}</EmptyState>;
   if (isEmpty(data) && !composerOpen) {
     return (
@@ -328,26 +353,42 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   }
   return (
     <Shell {...shell}>
-      <DecisionCardFeature decisions={data.decisions} actions={actions} />
+      <DecisionCardFeature
+        decisions={inTab(data.decisions, data.filters.find((f) => f.id === filter))}
+        actions={actions}
+      />
     </Shell>
   );
 }
 
-/* "Scan for decisions" is a long read of every connected source, so it reports
-   what it found rather than finishing silently. */
-function ScanButton({ scan }: { scan?: () => void | Promise<void> }) {
+/* "Scan for decisions" is a multi-minute model pass over every connected
+   source that writes to the ledger. It was a `variant="link"` that awaited the
+   call and forgot it: no run, no progress, no history — the same shape the
+   fact scan had. It starts a real run now and the page follows it. */
+function ScanButton({ scan, onStarted }: {
+  scan?: DecisionsActions["scan"];
+  onStarted: (run: ScanRun) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const run = async () => {
     if (!scan || busy) return;
     setBusy(true);
     setFailed(null);
-    try { await scan(); } catch (e) { setFailed(why(e, "The scan could not be run.")); } finally { setBusy(false); }
+    try {
+      const started = await scan();
+      // A handler that answers with a run gets followed; one that only
+      // succeeds keeps the old fire-and-forget behaviour, which is what the
+      // canvas renders.
+      if (started && typeof started === "object" && "id" in started) onStarted(started as ScanRun);
+    } catch (e) {
+      setFailed(why(e, "The scan could not be run."));
+    } finally { setBusy(false); }
   };
   return (
     <span className="inline-flex flex-col items-start">
-      <Button variant="link" disabled={busy} onClick={run}>
-        {busy ? "Scanning sources…" : "Scan for decisions"}
+      <Button variant="default" compact disabled={busy} onClick={run}>
+        <Workflow size={15} /> {busy ? "Starting…" : "Scan for decisions"}
       </Button>
       <FieldError>{failed}</FieldError>
     </span>
@@ -358,6 +399,22 @@ function DecisionsPage({ data, loading = false, error = null, actions, chrome, m
   /* The composer is a mode of this page, not a property of the ledger: the
      header button opens it whether or not an app pre-opened one in `data`. */
   const [composerOpen, setComposerOpen] = useState(false);
+
+  /* The run the scan button started, followed until it stops. Same shape the
+     Facts page uses, through the same card, so the two cannot drift. */
+  const [scan, setScan] = useState<ScanRun | null>(null);
+  const poll = actions?.scanProgress;
+  useEffect(() => {
+    if (!scan || !poll) return;
+    if (scan.status !== "running" && scan.status !== "pending") return;
+    const t = setInterval(() => {
+      // A failed poll leaves the last good reading on screen: losing the card
+      // mid-run would look like the run vanished.
+      Promise.resolve(poll(scan.id)).then(setScan).catch(() => {});
+    }, 1500);
+    return () => clearInterval(t);
+  }, [scan, poll]);
+
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("decisions")} title="Decisions" mobile={mobile}>
@@ -367,7 +424,7 @@ function DecisionsPage({ data, loading = false, error = null, actions, chrome, m
   }
   const headerActions = (
     <>
-      <ScanButton scan={actions?.scan} />
+      <ScanButton scan={actions?.scan} onStarted={setScan} />
       <Button variant="primary" onClick={() => setComposerOpen(true)}>Capture decision</Button>
     </>
   );
@@ -382,6 +439,17 @@ function DecisionsPage({ data, loading = false, error = null, actions, chrome, m
           actions={mobile ? undefined : headerActions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+        {scan && (
+          <div className="mt-5">
+            <ScanRunCard
+              run={scan}
+              noun="decision"
+              label="Reading connected sources"
+              destination="awaiting sign-off"
+              onDismiss={() => setScan(null)}
+            />
+          </div>
+        )}
         <div className="mt-6">
           <Body
             data={data}

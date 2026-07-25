@@ -236,11 +236,15 @@ export type LineageControlState = {
   scope: "focus" | "all";
   /** Canvas scale, 1 = 100%. */
   zoom: number;
+  /** Path finder: `null` = off, otherwise the node ids picked so far (0–2).
+      It lives here, with the other toolbar⇄canvas state, because the picking
+      happens on the canvas and the button that armed it is in the toolbar. */
+  path: string[] | null;
 };
 
 const DEFAULT_CONTROLS: LineageControlState = {
   query: "", sources: null, rels: null, status: "all",
-  lens: "source", layout: "flow", scope: "all", zoom: 1,
+  lens: "source", layout: "flow", scope: "all", zoom: 1, path: null,
 };
 
 let controlState: LineageControlState = DEFAULT_CONTROLS;
@@ -305,6 +309,56 @@ export function nodeMatchesQuery(n: LNode, query: string): boolean {
     n.source.toLowerCase().includes(q) ||
     (n.tags ?? []).some((t) => t.toLowerCase().includes(q))
   );
+}
+
+/* ── Path finder ────────────────────────────────────────────────────────── */
+
+/** Fewest-hop route between two nodes, as the ids along it (both ends
+    included), or `null` when nothing connects them. Undirected on purpose: a
+    reader asking "how are these two documents related" does not care which way
+    the arrows point, and half the corpus is only reachable upstream. */
+export function findPath(fromId: string, toId: string, edges: LEdge[]): string[] | null {
+  if (fromId === toId) return [fromId];
+  const adj = new Map<string, string[]>();
+  const link = (a: string, b: string) => {
+    const at = adj.get(a);
+    if (at) at.push(b); else adj.set(a, [b]);
+  };
+  for (const e of edges) { link(e.from, e.to); link(e.to, e.from); }
+  const prev = new Map<string, string>([[fromId, fromId]]);
+  const queue = [fromId];
+  for (let i = 0; i < queue.length; i++) {
+    const cur = queue[i];
+    for (const next of adj.get(cur) ?? []) {
+      if (prev.has(next)) continue;
+      prev.set(next, cur);
+      if (next === toId) {
+        const out = [toId];
+        while (out[0] !== fromId) out.unshift(prev.get(out[0])!);
+        return out;
+      }
+      queue.push(next);
+    }
+  }
+  return null;
+}
+
+/** What the canvas draws for a resolved path: the nodes on it, every edge
+    joining two consecutive ones, and the hop count. `null` while fewer than two
+    nodes are picked, or when the two picked are not connected at all. */
+export type PathTrace = { ids: string[]; nodes: Set<string>; edges: Set<string>; hops: number };
+
+export function tracePath(picks: string[] | null, edges: LEdge[]): PathTrace | null {
+  if (!picks || picks.length < 2) return null;
+  const ids = findPath(picks[0], picks[1], edges);
+  if (!ids) return null;
+  const onPath = new Set<string>();
+  for (let i = 0; i < ids.length - 1; i++) {
+    for (const e of edges) {
+      if ((e.from === ids[i] && e.to === ids[i + 1]) || (e.to === ids[i] && e.from === ids[i + 1])) onPath.add(e.id);
+    }
+  }
+  return { ids, nodes: new Set(ids), edges: onPath, hops: ids.length - 1 };
 }
 
 /** Accent color per toolbar control — each control owns one hue. */

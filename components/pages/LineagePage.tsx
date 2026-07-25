@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Network } from "lucide-react";
@@ -160,16 +161,19 @@ function SearchResults({ nodes, query }: { nodes: LNode[]; query: string }) {
 
 /* Which §11 rail width the open drawer takes: standard lineage drawer 420px,
    impact analysis 460px. `null` = no drawer, canvas runs the full container. */
-function railFor(data: LineageData): number | null {
+function railFor(data: LineageData, drawer: LineageDrawer | null): number | null {
   if (data.extras) return 420;
-  if (!data.drawer) return null;
-  return data.drawer.kind === "assert" ? 460 : 420;
+  if (!drawer) return null;
+  return drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ data, actions }: { data: LineageData; actions?: LineageActions }) {
+function Drawer({ data, drawer, actions, onClose }: {
+  data: LineageData; drawer: LineageDrawer | null;
+  actions?: LineageActions; onClose?: () => void;
+}) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
-  const d = data.drawer;
+  const d = drawer;
   if (!d) return null;
   if (d.kind === "node") {
     return (
@@ -267,6 +271,30 @@ const isEmpty = (d: LineageData) => !d.nodes.length && !d.edges.length && !d.dra
 function Body({ data, error, actions, mobile }: {
   data: LineageData; error: string | null; actions?: LineageActions; mobile: boolean;
 }) {
+  /* Which drawer is open.
+     `data.drawer` seeds it, so the canvas can still open on any drawer and an
+     app can deep-link one. After that it is local, because opening a drawer is
+     a selection on a canvas and not a trip to the server — and without it the
+     graph was a picture: LineageGraph has emitted `onSelectNode`/`onSelectEdge`
+     all along, this page just never listened, so clicking a node did nothing
+     and the drawer beside it could only ever show what the data pinned. */
+  const [picked, setPicked] = useState<LineageDrawer | null>(null);
+  const drawerFor = picked ?? data.drawer;
+
+  const openNode = (id: string) => {
+    const n = data.nodes.find((x) => x.id === id);
+    // A macro node stands for a collapsed group, so it opens the group drawer.
+    if (n?.macro) {
+      const members = data.nodes.filter((x) => x.group === n.group && !x.macro);
+      setPicked({ kind: "group", groupId: n.group, totalMembers: n.count ?? members.length, members });
+      return;
+    }
+    // History belongs to the document and this page does not carry it per
+    // node; the drawer renders an empty timeline rather than another
+    // document's revisions.
+    setPicked({ kind: "node", nodeId: id, history: data.drawer?.kind === "node" && data.drawer.nodeId === id ? data.drawer.history : [] });
+  };
+
   if (error) {
     return (
       <div className="mt-6">
@@ -289,8 +317,10 @@ function Body({ data, error, actions, mobile }: {
   }
 
   // Mobile collapses to one column (§11): the rail drops below the canvas.
-  const rail = mobile ? null : railFor(data);
-  const railBody = data.extras ? <Extras extras={data.extras} /> : <Drawer data={data} actions={actions} />;
+  const rail = mobile ? null : railFor(data, drawerFor);
+  const railBody = data.extras
+    ? <Extras extras={data.extras} />
+    : <Drawer data={data} drawer={drawerFor} actions={actions} onClose={() => setPicked(null)} />;
 
   return (
     <div className="mt-6 flex flex-col gap-5">
@@ -299,7 +329,7 @@ function Body({ data, error, actions, mobile }: {
         rail={rail}
         canvas={(
           <>
-            <LineageToolbar nodes={data.nodes} onDeriveLinks={actions?.deriveLinks} onSaveView={actions?.saveView} />
+            <LineageToolbar nodes={data.nodes} edges={data.edges} onDeriveLinks={actions?.deriveLinks} onSaveView={actions?.saveView} />
             {data.search && <SearchResults nodes={data.nodes} query={data.search.query} />}
             <LineageGraph
               key={`${data.lens}-${data.layout}-${data.focalId}-${data.trace?.direction ?? "none"}`}
@@ -310,6 +340,8 @@ function Body({ data, error, actions, mobile }: {
               trace={data.trace}
               focalId={data.focalId}
               onPinNode={actions?.pinNode}
+              onSelectNode={openNode}
+              onSelectEdge={(id) => setPicked({ kind: "edge", edgeId: id })}
             />
             <LineageTimeScrubber dates={data.dates} activity={data.activity} value={data.asOf} />
           </>

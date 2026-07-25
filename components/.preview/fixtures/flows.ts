@@ -94,7 +94,9 @@ const EDITOR_RUNS: WorkflowRun[] = [
 ];
 
 const editor = (over: Partial<FlowsEditor>): FlowsEditor => ({
+  id: 1,
   name: "Docs guardrail",
+  enabled: true,
   description: "Fact-checks every changed doc before it can ship.",
   steps: EDITOR_STEPS,
   runs: EDITOR_RUNS,
@@ -216,6 +218,7 @@ const extras = (extreme: boolean): FlowsExtras => ({
 const BASE: FlowsData = {
   flows: FLOWS,
   sources: SOURCES,
+  creating: false,
   editor: null,
   runPanel: null,
   runHistory: null,
@@ -232,9 +235,12 @@ const EMPTY: FlowsData = view({ flows: [] });
 export const FIXTURES: PageFixtures<FlowsData> = {
   default: { data: BASE },
   "pipeline-editor": { data: view({ editor: editor({}) }) },
+  "new-flow": { data: view({ creating: true }) },
+  "new-flow-first": { data: view({ flows: [], creating: true }) },
   "pipeline-branch": {
     data: view({
       editor: editor({
+        id: 3,
         name: "Stale sweeper",
         description: "Flags docs that have gone quiet and routes contradictions for review.",
         steps: BRANCH_STEPS,

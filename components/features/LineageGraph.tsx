@@ -11,7 +11,7 @@ import { FieldError } from "../feedback/ErrorMessage";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
-  nodeById,
+  nodeById, tracePath,
   type LNode, type LEdge, type Lens, type LayoutMode,
 } from "./LineageDataModel";
 
@@ -223,19 +223,28 @@ export function LineageGraph({
     [trace, edges],
   );
 
+  /* The toolbar's "Find path" arms `controls.path`; the picking happens here,
+     because the two ends are nodes on this canvas. Two picks resolve to a
+     route, which is drawn and holds everything else back. */
+  const pathMode = controls.path !== null;
+  const path = useMemo(() => tracePath(controls.path, edges), [controls.path, edges]);
+
   /* The cap: keep the best-connected nodes, and never drop the focal node, the
      trace origin, or anything inside an active trace closure. */
   const visibleNodes = useMemo(() => {
     if (passing.length <= maxNodes) return passing;
     const deg = degreeMap(edges);
     const keep = [...passing].sort((a, b) => {
-      const pin = (n: LNode) => (n.id === focalId || n.id === trace?.originId ? 1 : 0) + (closure?.has(n.id) ? 1 : 0);
+      // A node on the current path is never capped away: dropping one end (or
+      // a hop in the middle) would draw a route with a hole in it.
+      const pin = (n: LNode) => (n.id === focalId || n.id === trace?.originId ? 1 : 0) +
+        (closure?.has(n.id) ? 1 : 0) + (path?.nodes.has(n.id) ? 2 : 0);
       return pin(b) - pin(a) || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || a.id.localeCompare(b.id);
     }).slice(0, maxNodes);
     const kept = new Set(keep.map((n) => n.id));
     // Restore the authored order so the layout is not reshuffled by ranking.
     return passing.filter((n) => kept.has(n.id));
-  }, [passing, maxNodes, edges, focalId, trace?.originId, closure]);
+  }, [passing, maxNodes, edges, focalId, trace?.originId, closure, path]);
 
   const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -259,6 +268,9 @@ export function LineageGraph({
   const posOf = (n: LNode) => moved[n.id] ?? lanes?.[n.id] ?? basePos(n);
   const px = (n: LNode) => { const p = posOf(n); return { x: p.x * VB_W, y: p.y * VB_H }; };
   const dimmed = (id: string) => {
+    // A resolved path is the strongest statement on the canvas: everything off
+    // it recedes, including whatever the search or a trace was spotlighting.
+    if (path) return !path.nodes.has(id);
     if (closure && !closure.has(id)) return true;
     const n = byId[id];
     return n ? !nodeMatchesQuery(n, controls.query) : false;
@@ -323,6 +335,15 @@ export function LineageGraph({
 
   const selectNode = (id: string) => {
     if (suppressClick.current) { suppressClick.current = false; return; }
+    /* In path mode a click is a pick, not an inspection: opening the drawer
+       over the canvas would hide the very route the pick is meant to reveal.
+       A third pick starts a new pair from the node just clicked. */
+    if (pathMode) {
+      const picks = controls.path ?? [];
+      if (picks.length === 1 && picks[0] === id) return; // same node twice is not a path
+      setControls({ path: picks.length >= 2 ? [id] : [...picks, id] });
+      return;
+    }
     setSel({ kind: "node", id });
     onSelectNode?.(id);
   };
@@ -418,7 +439,10 @@ export function LineageGraph({
               const agg = e.id.startsWith("ge:") || (e.count ?? 0) > 1;
               const s = REL[e.rel];
               const selEdge = sel?.kind === "edge" && sel.id === e.id;
-              const dim = dimmed(e.from) || dimmed(e.to);
+              const onPath = path?.edges.has(e.id) ?? false;
+              // Two nodes on the route can also be joined by a link the route
+              // does not use; that link is not the answer, so it recedes too.
+              const dim = path ? !onPath : dimmed(e.from) || dimmed(e.to);
               const midX = (p1.x + p2.x) / 2;
               const midY = (p1.y + p2.y) / 2;
               const c1 = `${midX} ${p1.y}`, c2 = `${midX} ${p2.y}`;
@@ -437,7 +461,7 @@ export function LineageGraph({
                     d={d}
                     fill="none"
                     stroke={s.color}
-                    strokeWidth={selEdge ? s.width + 1.6 : s.width}
+                    strokeWidth={selEdge || onPath ? s.width + 1.6 : s.width}
                     strokeDasharray={s.dash}
                     markerEnd="url(#lg-arrow)"
                     vectorEffect="non-scaling-stroke"
@@ -469,7 +493,10 @@ export function LineageGraph({
               const accent = accentColor(n, effLens);
               const changed = trace?.direction === "up" && closure?.has(n.id) &&
                 n.date && byId[trace.originId]?.date && n.date > (byId[trace.originId].date as string);
-              const ring = isSel ? "#35549d" : isFocal ? "#c8502e" : null;
+              // A picked end of a path outranks selection and focus: while the
+              // path finder is armed, "which two did I click" is the question.
+              const isPick = controls.path?.includes(n.id) ?? false;
+              const ring = isPick ? "#1E6FA8" : isSel && !pathMode ? "#35549d" : isFocal ? "#c8502e" : null;
               return (
                 <button
                   key={n.id}
@@ -568,8 +595,8 @@ export function LineageGraph({
           );
         })()}
 
-        {/* trace summary */}
-        {trace && closure && (() => {
+        {/* trace summary — stood down while the path finder owns this corner */}
+        {trace && closure && !pathMode && (() => {
           const origin = byId[trace.originId];
           const groups = new Map<string, number>();
           for (const e of visibleEdges) {
@@ -593,6 +620,31 @@ export function LineageGraph({
           );
         })()}
 
+        {/* path readout — the answer sits on the canvas the picks were made on,
+            not only in the toolbar row that armed the mode */}
+        {pathMode && (
+          <div className="absolute bottom-3 left-3 z-20 max-w-[320px] rounded-[5px] border border-biscay-2/45 bg-paper/95 p-3 backdrop-blur">
+            <div className="text-[12.5px] font-semibold text-ink">
+              {!controls.path?.length
+                ? "Find path: click the first document"
+                : controls.path.length === 1
+                  ? "Find path: click the second document"
+                  : path
+                    ? `${path.hops} hop${path.hops === 1 ? "" : "s"} between them`
+                    : "No route between those two"}
+            </div>
+            {path && (
+              <Truncate lines={3} className="mt-1 font-term text-[11px] text-ink/70">
+                {path.ids.map((id) => byId[id]?.title ?? id).join(" → ")}
+              </Truncate>
+            )}
+            <div className="mt-2 flex items-center gap-1.5">
+              <Button compact onClick={() => setControls({ path: [] })}>Start over</Button>
+              <Button compact onClick={() => setControls({ path: null })}>Exit</Button>
+            </div>
+          </div>
+        )}
+
         {/* filter readout — proves the toolbar reached the canvas */}
         {(hiddenCount > 0 || controls.query.trim()) && (
           <div className="absolute left-3 top-3 z-20 max-w-[260px] truncate rounded-[4px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 font-term text-[11px] text-ink/70 backdrop-blur">
@@ -610,7 +662,7 @@ export function LineageGraph({
 
         {/* drag hint */}
         <div className="pointer-events-none absolute bottom-3 right-3 z-20 inline-flex items-center gap-1.5 rounded-[4px] border border-ink/15 bg-paper/90 px-2 py-1 font-term text-[10.5px] text-ink/65 backdrop-blur">
-          <Move size={12} /> Drag to pan · drag a node to move it · click to open
+          <Move size={12} /> Drag to pan · drag a node to move it · click to {pathMode ? "pick" : "open"}
         </div>
 
         {/* zoom controls */}

@@ -40,6 +40,15 @@ const STATES = [
 
 export type AnswersFilter = "all" | "approved" | "drafts" | "retired";
 
+/* Tab id → the lifecycle status behind it. The tabs are plural, the status on
+   an answer is not, so the strip needs the mapping to filter anything. */
+const OF_STATUS: Record<Exclude<AnswersFilter, "all">, Answer["status"]> = {
+  approved: "approved", drafts: "draft", retired: "retired",
+};
+
+const inFilter = (answers: Answer[], filter: AnswersFilter): Answer[] =>
+  filter === "all" ? answers : answers.filter((a) => a.status === OF_STATUS[filter]);
+
 /** One tile of the headline strip. */
 export type AnswerStat = {
   value: string;
@@ -131,8 +140,12 @@ const HARVEST_SOURCES: HarvestSource[] = [
   { key: "history", label: "Ask history", desc: "What people have asked Mari that had no approved answer.", on: false },
 ];
 
-function AnswersList({ data, error, actions, onCompose }: {
-  data: AnswersData; error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
+/** `data` is the whole page's answers — what "nothing curated at all" is judged
+    against — while `answers` is only the selected tab's slice. Judging both off
+    the slice would call a workspace empty because one tab happens to be. */
+function AnswersList({ data, filter, answers, error, actions, onCompose }: {
+  data: AnswersData; filter: AnswersFilter; answers: Answer[];
+  error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
 }) {
   if (error) {
     return (
@@ -150,7 +163,7 @@ function AnswersList({ data, error, actions, onCompose }: {
       </Card>
     );
   }
-  if (!data.answers.length) {
+  if (!answers.length) {
     const copy: Record<AnswersFilter, string> = {
       all: "No answers yet.",
       approved: "No approved answers yet.",
@@ -160,14 +173,14 @@ function AnswersList({ data, error, actions, onCompose }: {
     return (
       <Card>
         <EmptyState title="Nothing here" action={<Button variant="primary" compact onClick={() => onCompose("")}><Plus size={14} /> New answer</Button>}>
-          {copy[data.filter]}
+          {copy[filter]}
         </EmptyState>
       </Card>
     );
   }
   return (
     <div className="flex flex-col gap-5">
-      {data.answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
+      {answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
     </div>
   );
 }
@@ -508,7 +521,11 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
   harvest: Harvest | null;
   onCloseHarvest: () => void;
 }) {
+  /* The strip filters the answers the page was given; `data.filter` only says
+     which tab opens selected. The state fed nothing but the empty-state copy
+     before, so every tab drew the same list. */
   const [filter, setFilter] = useState<AnswersFilter>(data.filter);
+  const shown = inFilter(data.answers, filter);
 
   const isCoverage = data.pane.kind === "coverage";
 
@@ -527,14 +544,16 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
         variant="underline"
         value={filter}
         onChange={setFilter}
+        /* Counts come off the same list the tabs filter, so a tab can never
+           promise rows the column then fails to show. */
         options={[
-          { id: "all", label: "All" },
-          { id: "approved", label: "Approved" },
-          { id: "drafts", label: "Drafts" },
-          { id: "retired", label: "Retired" },
+          { id: "all", label: "All", count: data.answers.length },
+          { id: "approved", label: "Approved", count: inFilter(data.answers, "approved").length },
+          { id: "drafts", label: "Drafts", count: inFilter(data.answers, "drafts").length },
+          { id: "retired", label: "Retired", count: inFilter(data.answers, "retired").length },
         ]}
       />
-      <AnswersList data={{ ...data, filter }} error={error} actions={actions} onCompose={onCompose} />
+      <AnswersList data={data} filter={filter} answers={shown} error={error} actions={actions} onCompose={onCompose} />
     </div>
   );
 

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Sparkles, Layers } from "lucide-react";
 import { DecisionCard as DecisionCardUI, type DecisionStatus } from "../data-display/DecisionCard";
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
-import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
@@ -15,9 +14,12 @@ const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ?
 /* DecisionCardFeature — the Decisions ledger column: a timeline of decision
    cards, each composing the data-display <DecisionCard> (aliased DecisionCardUI)
    plus, for ratified rows, the shared <ImpactPanel> (ImpactPanelUI) as the
-   inline "blast radius" strip with a Create-N-tasks footer. Interactions
-   (ratify, run impact, collapse, create tasks) run against baked-in demo
-   state — no network. Source: web/src/pages/decisions/DecisionCard.tsx. */
+   inline "blast radius" strip with a Create-N-tasks footer.
+
+   It renders the decisions it is given and does not filter them: the page owns
+   the ledger filter (DecisionsPage's tab strip). This column used to carry a
+   second row of facet chips with private state, which is why the page's own
+   strip appeared dead — two filters, one of them unreachable. */
 
 /** The impact readout carried on a ledger entry. */
 export type ImpactState = {
@@ -48,16 +50,6 @@ export type Decision = {
   supersededBy?: string;
   impact: ImpactState;
 };
-
-/* The ledger calls setting a decision aside "Ignored", never "superseded".
-   These labels drive the facet chips so the copy and the cards agree. */
-type Facet = "all" | "proposed" | "ratified" | "ignored";
-const FACETS: { value: Facet; label: string }[] = [
-  { value: "all", label: "All decisions" },
-  { value: "proposed", label: "Proposed" },
-  { value: "ratified", label: "Ratified" },
-  { value: "ignored", label: "Ignored" },
-];
 
 /** A decision with no impact run against it yet. Zero values, not content. */
 export const NO_IMPACT: ImpactState = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
@@ -90,26 +82,24 @@ export type DecisionCardFeatureProps = {
 };
 
 export function DecisionCardFeature({ decisions, loading = false, actions, className = "" }: DecisionCardFeatureProps) {
-  const [items, setItems] = useState<Decision[]>(decisions);
   const [ratifying, setRatifying] = useState<number | null>(null);
-  const [filter, setFilter] = useState<Facet>("all");
   /* A failed write is as visible as a failed read: the server's own message
      sits above the timeline the write was meant to change. */
   const [failed, setFailed] = useState<string | null>(null);
 
-  const resolved = (d: Decision) => (d.status === "superseded" ? "ignored" : d.status);
-  const counts: Record<Facet, number> = {
-    all: items.length,
-    proposed: items.filter((d) => resolved(d) === "proposed").length,
-    ratified: items.filter((d) => resolved(d) === "ratified").length,
-    ignored: items.filter((d) => resolved(d) === "ignored").length,
-  };
-  const shown = filter === "all" ? items : items.filter((d) => resolved(d) === filter);
+  /* What this session has changed, laid over the ledger it was given rather
+     than copied out of it: a state copy froze the timeline at its first render,
+     so filtering the ledger — or reading it again — never reached the cards. */
+  const [echo, setEcho] = useState<Record<number, Partial<Decision>>>({});
+  const shown = decisions.map((d) => (echo[d.id] ? { ...d, ...echo[d.id] } : d));
 
   const patch = (id: number, next: Partial<Decision>) =>
-    setItems((cur) => cur.map((d) => (d.id === id ? { ...d, ...next } : d)));
+    setEcho((cur) => ({ ...cur, [id]: { ...cur[id], ...next } }));
   const patchImpact = (id: number, next: Partial<ImpactState>) =>
-    setItems((cur) => cur.map((d) => (d.id === id ? { ...d, impact: { ...d.impact, ...next } } : d)));
+    setEcho((cur) => {
+      const base = cur[id]?.impact ?? decisions.find((d) => d.id === id)?.impact ?? NO_IMPACT;
+      return { ...cur, [id]: { ...cur[id], impact: { ...base, ...next } } };
+    });
 
   const ratify = async (id: number) => {
     if (ratifying !== null) return;
@@ -182,26 +172,12 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
         <p className="mt-0.5 text-[13px] text-ink/70">
           Proposals awaiting sign-off, ratified decisions, the ones the team set aside, and their downstream impact.
         </p>
-        {/* Facet counts read from the live ledger, so the labels and the
-            numbers can never drift apart. The old copy still said
-            "superseded" while the cards already rendered "Ignored". */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {FACETS.map((f) => (
-            <Chip
-              key={f.value}
-              label={`${f.label} ${counts[f.value]}`}
-              tone={f.value === filter ? "info" : "neutral"}
-              selected={f.value === filter}
-              onClick={() => setFilter(f.value)}
-            />
-          ))}
-        </div>
       </div>
 
       <FieldError>{failed}</FieldError>
 
       {shown.length === 0 && (
-        <EmptyState title="Nothing in this filter">No decisions match the {FACETS.find((f) => f.value === filter)?.label.toLowerCase()} filter yet.</EmptyState>
+        <EmptyState title="Nothing in this filter">No decisions match the selected filter yet.</EmptyState>
       )}
 
       {shown.map((d, i) => {

@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { Sparkles } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
+import { WriteError } from "../feedback/WriteError";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
@@ -97,38 +98,78 @@ function ColorField({ label, value, onChange, onAuto, explicit }: { label: strin
   );
 }
 
+/** What the branding editor can DO.
+
+    It had none of this: Save set a local flag and cleared the dirty mark, and
+    Import replayed a baked `harvest` after a 700ms fake delay. Everything you
+    did here was forgotten on reload, which makes it a colour picker rather
+    than a workspace setting.
+
+    Optional as always — with no actions the editor keeps exactly that local
+    behaviour, which is what the design canvas renders. */
+export type BrandingEditorActions = {
+  /** Persist the brand for the whole workspace. */
+  save?: (branding: Branding) => void | Promise<void>;
+  /** Read a site and report what it found. Answers rather than just
+      succeeding, because the editor renders the evidence it returns. */
+  importFrom?: (url: string) => BrandHarvest | Promise<BrandHarvest>;
+};
+
 export type BrandingEditorProps = {
   branding: Branding;
-  /** Result the import flow returns for the URL the user typed. */
+  /** Result the import flow returns for the URL the user typed. Used when no
+      `importFrom` handler is supplied. */
   harvest: BrandHarvest;
   /** Figures the live preview shows off. */
   previewStats: BrandPreviewStat[];
+  actions?: BrandingEditorActions;
   loading?: boolean;
   className?: string;
 };
 
-export function BrandingEditor({ branding, harvest, previewStats, loading = false, className = "" }: BrandingEditorProps) {
+export function BrandingEditor({ branding, harvest, previewStats, actions, loading = false, className = "" }: BrandingEditorProps) {
   const [draft, setDraft] = useState<Branding>(branding);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [evidence, setEvidence] = useState<BrandHarvest | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const patch = (p: Branding) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const clearKey = (key: keyof Branding) => { setDraft((d) => { const next = { ...d }; delete next[key]; return next; }); setDirty(true); };
 
-  const runImport = () => {
+  const runImport = async () => {
     if (!url.trim()) return;
     setImporting(true);
-    setTimeout(() => {
-      setEvidence(harvest);
-      patch({ accent: harvest.themeColor, displayFont: harvest.fonts[0], bodyFont: harvest.fonts[2] });
+    setFailed(null);
+    try {
+      // With a handler the evidence is what the server actually read; without
+      // one it is the supplied `harvest`, after a beat so the spinner reads.
+      const found = actions?.importFrom
+        ? await actions.importFrom(url.trim())
+        : await new Promise<BrandHarvest>((r) => setTimeout(() => r(harvest), 700));
+      setEvidence(found);
+      patch({ accent: found.themeColor, displayFont: found.fonts[0], bodyFont: found.fonts[2] });
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : `Could not read ${host}.`);
+    } finally {
       setImporting(false);
-    }, 700);
+    }
   };
 
-  const doSave = () => { setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 1600); };
+  const doSave = async () => {
+    setFailed(null);
+    try {
+      await actions?.save?.(draft);
+      setDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1600);
+    } catch (e) {
+      // The brand stays dirty, so the unsaved work is still on screen.
+      setFailed(e instanceof Error ? e.message : "That brand could not be saved.");
+    }
+  };
   const doReset = () => { setDraft({}); setDirty(false); setEvidence(null); };
 
   const host = (() => { try { return new URL(url.startsWith("http") ? url : `https://${url}`).host; } catch { return url; } })();
@@ -170,9 +211,13 @@ export function BrandingEditor({ branding, harvest, previewStats, loading = fals
 
       {/* 1 — Import */}
       <Card icon={<Sparkles size={16} className="text-clay" />} title="Import your brand">
+        {/* min-w-0 on the field and shrink-0 on the button: the URL input has
+            `w-full` and no minimum, so in a rail-width column it took the whole
+            row and crushed the button until "Import" wrapped to "Impor / t"
+            (CONVENTIONS.md §12 — truncate, do not pack). */}
         <div className="flex items-center gap-2">
-          <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runImport()} placeholder="https://yourcompany.com" className="w-full" />
-          <Button variant="primary" disabled={importing || !url.trim()} onClick={runImport}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import"}</Button>
+          <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void runImport(); }} placeholder="https://yourcompany.com" className="w-full min-w-0" />
+          <Button variant="primary" className="shrink-0 whitespace-nowrap" disabled={importing || !url.trim()} onClick={() => void runImport()}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import"}</Button>
         </div>
         {evidence && (
           <div className="mt-4 flex flex-col gap-3">
@@ -213,10 +258,11 @@ export function BrandingEditor({ branding, harvest, previewStats, loading = fals
           <Field label="Logo"><input type="file" accept="image/*" className="w-full min-w-0 text-[12.5px] text-ink/60 file:mr-2 file:rounded-[4px] file:border file:border-ink/20 file:bg-paper file:px-2.5 file:py-1 file:text-[12px] file:text-ink/80" onChange={() => patch({ logo: "demo" })} /></Field>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="primary" disabled={!dirty} onClick={doSave}>Save branding</Button>
+          <Button variant="primary" disabled={!dirty} onClick={() => void doSave()}>Save branding</Button>
           <ConfirmButton confirmLabel="Reset all?" onConfirm={doReset}>Reset to defaults</ConfirmButton>
           {saved && <span className="font-term text-[11.5px] text-moss">✓ Saved</span>}
         </div>
+        <WriteError>{failed}</WriteError>
       </Card>
 
       {/* 3 — Live preview (scoped, inline-styled by the draft) */}

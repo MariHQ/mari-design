@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Truncate } from "../data-display/Truncate";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Send, ExternalLink, FileText, Check, Plus, GripVertical } from "lucide-react";
+import { Drawer } from "../layout/Drawer";
+import { Field } from "../forms/Field";
+import { SortHeader, tdPad } from "../data-display/sortable";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { PageHeader } from "../layout/PageHeader";
@@ -41,9 +44,10 @@ import { siteUrl } from "../tokens/siteUrl";
    (list / add-server / token-created / empty) — composed in the page body so a
    static screenshot reads each step, rather than relying on a portalled flow.
 
-   Pure presenter: the site being edited, its nav tree, theme presets, gates,
-   release history and the MCP servers all arrive in `data`. "No sites yet" is
-   derived from there being neither a site nor a server. */
+   Pure presenter: the list of sites, the site being edited, its nav tree,
+   theme presets, gates, release history and the MCP servers all arrive in
+   `data`. A workspace with no sites renders the list's own empty state, under
+   the list's own "New site" — the create path this page used to lack. */
 
 type Tab = "sites" | "mcp";
 
@@ -59,7 +63,19 @@ export type PublishPhase = "draft" | "publishing" | "published";
 /** Which screen of Publish is on: the site editor, the deploy flow, or one of
     the three MCP screens. An app drives it from its own route. */
 export type PublishView =
-  | "site-editor" | "publish-flow" | "mcp-list" | "mcp-add" | "mcp-token";
+  | "site-list" | "site-new" | "site-editor" | "publish-flow"
+  | "mcp-list" | "mcp-add" | "mcp-token";
+
+/** A doc site as the site list shows it. The workspace has as many as it has
+    made; `site` below is the one an editor is open on. */
+export type SiteSummary = {
+  id: number;
+  name: string;
+  domain: string;
+  status: "live" | "draft";
+  /** Documents the last build put on it. */
+  docs: number;
+};
 
 /** One toggleable static-site-generator feature. */
 export type SiteFeature = { key: string; label: string; hint: string; on: boolean };
@@ -76,6 +92,10 @@ export type SiteRelease = { version: string; note: string };
 export type DocSite = {
   name: string;
   domain: string;
+  /** Whether a release of this site is actually serving. A draft has never
+      been deployed, so it has no live URL to open — this page used to label
+      every site it was given "Live" and offer that link regardless. */
+  status: "live" | "draft";
   /** Version the deploy flow is working on, e.g. "v14". */
   version: string;
   /** Tags that decide which documents are eligible. */
@@ -124,6 +144,12 @@ export type PublishActions = PublishMcpActions & {
   /** Leave the site editor and go back to the list of sites. Which view is on
       screen lives in `data`, so the page cannot go back on its own. */
   openSites?: () => void;
+  /** Open one site's editor. */
+  openSite?: (id: number) => void;
+  /** Create a doc site. `sourceTags` are the tags that decide which documents
+      the site is allowed to publish, and they are set here because the editor
+      treats them as fixed ("Sources are set at creation"). */
+  createSite?: (args: { name: string; domain: string; sourceTags: string[] }) => void | Promise<void>;
   deploySite?: () => void | Promise<void>;
   buildSite?: () => void | Promise<void>;
   rollbackRelease?: (version: string) => void | Promise<void>;
@@ -137,8 +163,13 @@ export type PublishData = {
   view: PublishView;
   editorTab: EditorTab;
   phase: PublishPhase;
-  /** The site being edited. `null` = this workspace has no sites. */
+  /** Every doc site in the workspace. Empty = none made yet, which the list
+      says for itself, over a New site button. */
+  sites: SiteSummary[];
+  /** The site being edited. `null` = no editor is open on one. */
   site: DocSite | null;
+  /** Tags a new site can draw its documents from. */
+  tagOptions: string[];
   servers: McpServer[];
   /** Servers in the workspace, shown on the MCP screen headers. */
   serverCount: number;
@@ -147,7 +178,10 @@ export type PublishData = {
 };
 
 const STATES = [
-  { id: "default", label: "Site · Content" },
+  { id: "default", label: "Sites · List" },
+  { id: "site-new", label: "Sites · New site" },
+  { id: "site-none", label: "Sites · None yet" },
+  { id: "site-content", label: "Site · Content" },
   { id: "site-theme", label: "Site · Theme" },
   { id: "site-preview", label: "Site · Preview" },
   { id: "site-domains", label: "Site · Domains" },
@@ -160,7 +194,7 @@ const STATES = [
   { id: "mcp-empty", label: "MCP · No servers" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
-  { id: "empty", label: "No sites yet" },
+  { id: "empty", label: "Nothing published yet" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -412,13 +446,15 @@ function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site
         backLink={{ href: page.route, label: "All sites", onClick: actions?.openSites }}
         actions={
           <>
-            <Chip label="Live" tone="ok" dot pulse caps />
+            <Chip label={site.status === "live" ? "Live" : "Draft"} tone={site.status === "live" ? "ok" : "neutral"} dot pulse={site.status === "live"} caps />
             <span className="hidden font-term text-[12px] text-ink/70 sm:inline">{site.domain}</span>
             {/* The published site itself, on its own domain — a genuinely
-                external destination, so a real new-tab link rather than the
-                "#" that used to sit here. This header only renders for a site
-                the page has already labelled Live. */}
-            <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><ExternalLink size={14} /> Open site</Link>
+                external destination, so a real new-tab link. A draft has never
+                been deployed: that domain serves nothing, so there is no link
+                to offer (§2). */}
+            {site.status === "live" && (
+              <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><ExternalLink size={14} /> Open site</Link>
+            )}
             <Button variant={deployed ? "success" : "primary"} disabled={write.busy} onClick={() => void deploy()}>
               {write.busy ? "Deploying…" : deployed ? "Deployed" : "Deploy"}
             </Button>
@@ -455,6 +491,168 @@ function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site
         )}
       </div>
     </div>
+  );
+}
+
+/* ── Doc site list + create ────────────────────────────────────────────────*/
+
+/* The workspace publishes as many doc sites as it has made, and this is the
+   only surface that can make one. It used to be absent entirely: `site` was a
+   single nullable row, so a workspace with no site got an empty state with
+   nothing on it to press and one with three sites could only ever see one. */
+function SiteList({ sites, tagOptions, createOpen, actions }: {
+  sites: SiteSummary[]; tagOptions: string[]; createOpen: boolean; actions?: PublishActions;
+}) {
+  const [rows, setRows] = useState<SiteSummary[]>(sites);
+  const [creating, setCreating] = useState(createOpen);
+  const write = useWrite();
+
+  /* A create invalidates the read behind it, so the next `sites` is the new
+     truth rather than the copy taken at mount. */
+  useEffect(() => { setRows(sites); }, [sites]);
+
+  const create = async (name: string, domain: string, sourceTags: string[]) => {
+    const ok = await write.run(
+      actions?.createSite && (() => actions.createSite!({ name, domain, sourceTags })),
+      /* The echo is what the canvas (and any caller with no handler) sees; a
+         real create re-reads and this row is replaced by the server's. Draft
+         and 0 docs are true of every site that has never been built. */
+      () => setRows((rs) => [...rs, {
+        id: Math.max(0, ...rs.map((r) => r.id)) + 1, name, domain, status: "draft", docs: 0,
+      }]),
+    );
+    if (ok) setCreating(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className={`${card} overflow-hidden`}>
+        <div className="flex items-start gap-3 px-4 pt-4 pb-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[15px] font-semibold text-ink">Doc sites</h3>
+            <div className="mt-0.5 text-[12px] text-ink/70">
+              {rows.length === 1 ? "1 site" : `${rows.length} sites`}. Each one publishes the documents its source tags allow.
+            </div>
+          </div>
+          <Button variant="primary" compact onClick={() => setCreating(true)}><Plus size={13} /> New site</Button>
+        </div>
+
+        {rows.length === 0 ? (
+          <EmptyState title="No doc sites yet">
+            Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.
+          </EmptyState>
+        ) : (
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr>
+                <SortHeader label="Site" sortable={false} />
+                <SortHeader label="Status" sortable={false} />
+                <SortHeader label="Docs" sortable={false} align="right" />
+                <SortHeader label="Actions" sortable={false} align="right" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id}>
+                  <td className={`${tdPad} max-w-[320px] border-b border-ink/[0.06] align-middle`}>
+                    {/* Opening a site is the app's route, so the name is a
+                        button only where there is one to follow (§2). */}
+                    {actions?.openSite ? (
+                      <button
+                        type="button"
+                        onClick={() => actions.openSite!(s.id)}
+                        className={`block max-w-full truncate text-left text-[14px] font-semibold text-ink hover:underline rounded-[3px] ${focusRing}`}
+                      >
+                        {s.name}
+                      </button>
+                    ) : (
+                      <Truncate className="text-[14px] font-semibold text-ink">{s.name}</Truncate>
+                    )}
+                    <div className="truncate font-term text-[11.5px] text-ink/65">{s.domain}</div>
+                  </td>
+                  <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] align-middle`}>
+                    <Chip label={s.status === "live" ? "Live" : "Draft"} tone={s.status === "live" ? "ok" : "neutral"} dot pulse={s.status === "live"} caps />
+                  </td>
+                  <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] text-right align-middle font-term text-[12px] text-ink/70`}>
+                    {s.docs.toLocaleString()}
+                  </td>
+                  <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] text-right align-middle`}>
+                    {actions?.openSite && <Button compact onClick={() => actions.openSite!(s.id)}>Open</Button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {write.failed && <div className="border-t border-ink/10 px-4 py-2.5"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
+      </div>
+
+      {creating && (
+        <NewSiteDrawer
+          tagOptions={tagOptions}
+          busy={write.busy}
+          onCreate={(n, d, t) => void create(n, d, t)}
+          onClose={() => setCreating(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function NewSiteDrawer({ tagOptions, busy, onCreate, onClose }: {
+  tagOptions: string[]; busy: boolean;
+  onCreate: (name: string, domain: string, sourceTags: string[]) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title="New doc site"
+      subtitle="Name it, point a domain at it, choose what it may publish"
+      icon={<Send size={16} className="text-ink/70" />}
+      footer={
+        <>
+          <Button variant="primary" disabled={!name.trim() || !domain.trim() || busy} onClick={() => onCreate(name.trim(), domain.trim(), tags)}>
+            {busy ? "Creating…" : "Create site"}
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </>
+      }
+    >
+      <Field label="Name">
+        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Docs" className="w-full" />
+      </Field>
+      <Field label="Domain">
+        <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="docs.acme.com" className="w-full font-term" />
+      </Field>
+      <Field label="Source tags">
+        {/* Sources cannot be changed from the editor, so this is the one place
+            they are chosen — a site created with none publishes nothing. */}
+        {tagOptions.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {tagOptions.map((t) => (
+              <Chip
+                key={t}
+                label={t}
+                caps={false}
+                selected={tags.includes(t)}
+                onClick={() => setTags((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t])}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-ink/65">This workspace has no tags yet, so the site starts with no source filter.</p>
+        )}
+      </Field>
+      <div className="pt-2 text-[11.5px] text-ink/65">
+        The site starts as a draft: it publishes nothing until you build and deploy it.
+      </div>
+    </Drawer>
   );
 }
 
@@ -543,15 +741,14 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
   );
 }
 
-function isEmpty(d: PublishData): boolean {
-  return d.site === null && d.servers.length === 0;
-}
-
 function Body({ data, error, mobile, actions }: { data: PublishData; error: string | null; mobile: boolean; actions?: PublishActions }): ReactNode {
   /* The catalog owns the heading and the tone (§8); the body is the message
      the server actually sent, so the user sees the real failure. */
   if (error) return <Alert tone="blocked" title={ERRORS["server.unavailable"].title}>{error}</Alert>;
-  if (isEmpty(data)) return <EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState>;
+
+  const siteList = (
+    <SiteList sites={data.sites} tagOptions={data.tagOptions} createOpen={data.view === "site-new"} actions={actions} />
+  );
 
   switch (data.view) {
     /* All three MCP screens are the same component. They used to be two static
@@ -566,15 +763,22 @@ function Body({ data, error, mobile, actions }: { data: PublishData; error: stri
     case "publish-flow":
       return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} actions={actions} /> : null;
     case "site-editor":
+      /* No site on an editor route means the row is gone (or has not arrived).
+         The list is the honest fallback — a blank panel is not. */
+      return data.site ? <SiteEditorInline tab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : siteList;
+    case "site-list":
+    case "site-new":
     default:
-      return data.site ? <SiteEditorInline tab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : null;
+      return siteList;
   }
 }
 
 function PublishPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<PublishData, PublishActions>) {
   const mcpView = data.view.startsWith("mcp");
   const [tab, setTab] = useState<Tab>(mcpView ? "mcp" : "sites");
-  const bare = error !== null || isEmpty(data);
+  // Only a failed read has nothing to switch between: the site list exists
+  // even when the workspace has no sites, because it is where one is made.
+  const bare = error !== null;
 
   if (loading) {
     return (

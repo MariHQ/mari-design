@@ -25,10 +25,17 @@ import { focusRing } from "../tokens/focusRing";
    step picker. Owns the in-memory draft (name/steps/selection/dirty). Scoped
    run history renders below. Renders standalone with a baked draft. */
 
-type StepKind =
-  | "trigger" | "fetch_docs" | "refine" | "fact_check" | "condition" | "tag"
-  | "derive_links" | "create_task" | "approval" | "deploy_site" | "notify"
-  | "summarize" | "sync_source" | "refresh_digest";
+/* Every step kind this editor can draw and configure. Exported as a value as
+   well as a type: whoever loads a stored pipeline has to drop the kinds this
+   build has no config panel for, and guessing that list is how a step ends up
+   on screen with no settings behind it. */
+export const STEP_KINDS = [
+  "trigger", "fetch_docs", "refine", "fact_check", "condition", "tag",
+  "derive_links", "create_task", "approval", "deploy_site", "notify",
+  "summarize", "sync_source", "refresh_digest", "scan_facts",
+] as const;
+
+export type StepKind = typeof STEP_KINDS[number];
 
 type Section = "when" | "do" | "check" | "then";
 
@@ -42,7 +49,7 @@ export type EditorStep = {
 const SECTION_OF: Record<StepKind, Section> = {
   trigger: "when",
   fetch_docs: "do", refine: "do", fact_check: "do", summarize: "do", tag: "do",
-  derive_links: "do", sync_source: "do", refresh_digest: "do",
+  derive_links: "do", sync_source: "do", refresh_digest: "do", scan_facts: "do",
   condition: "check", approval: "check",
   create_task: "then", notify: "then", deploy_site: "then",
 };
@@ -72,6 +79,7 @@ const KIND_META: Record<StepKind, KindMeta> = {
   notify: { name: "Notify", desc: "Sends an in-app notification. Dry runs preview the message.", defLabel: "Notify", defConfig: { text: "", detail: "" }, icon: I(<Bell size={15} />) },
   deploy_site: { name: "Deploy site", desc: "Publishes a documentation site version. Dry runs report what would deploy.", defLabel: "Deploy site", defConfig: { site_id: 1 }, icon: I(<Globe size={15} />) },
   sync_source: { name: "Sync source", desc: "Re-syncs a connected source so the run sees the latest.", defLabel: "Sync source", defConfig: { source_id: 0 }, icon: I(<RefreshCw size={15} />) },
+  scan_facts: { name: "Scan for facts", llm: true, desc: "Mines recent documents for checkable claims and captures them as facts.", defLabel: "Scan for facts", defConfig: {}, icon: I(<CheckSquare size={15} />) },
   refresh_digest: { name: "Refresh digest", llm: true, desc: "Rebuilds the recent-activity digest over recent docs.", defLabel: "Refresh digest", defConfig: {}, icon: I(<Send size={15} />) },
 };
 
@@ -83,7 +91,7 @@ const TASK_KINDS: { value: string; label: string }[] = [
 ];
 
 const PICKER_SECTIONS: { section: Section; tagline: string; kinds: StepKind[] }[] = [
-  { section: "do", tagline: "editorial work on the matched docs", kinds: ["fetch_docs", "refine", "fact_check", "summarize", "tag", "derive_links"] },
+  { section: "do", tagline: "editorial work on the matched docs", kinds: ["fetch_docs", "refine", "fact_check", "summarize", "tag", "derive_links", "scan_facts"] },
   { section: "check", tagline: "gate the result", kinds: ["condition", "approval"] },
   { section: "then", tagline: "deliver where the team works", kinds: ["create_task", "notify", "deploy_site"] },
 ];
@@ -100,6 +108,9 @@ const asStr = (v: unknown) => (v == null ? "" : String(v));
 export type FlowsPipelineEditorProps = {
   name: string;
   description: string;
+  /** Whether the flow is on. The toggle is the draft's value and `onSave`
+      carries it, so opening a paused flow must not show it as running. */
+  enabled?: boolean;
   steps: EditorStep[];
   runs: WorkflowRun[];
   /** Assignees a task/notify step can be pointed at. */
@@ -123,7 +134,7 @@ export type FlowsPipelineEditorProps = {
 };
 
 export function FlowsPipelineEditor({
-  name, description, steps: initialSteps, runs, members, sites, tags,
+  name, description, enabled: initialEnabled = true, steps: initialSteps, runs, members, sites, tags,
   onBack, onSave, onRun,
   loading = false,
   className = "",
@@ -133,7 +144,7 @@ export function FlowsPipelineEditor({
   const [steps, setSteps] = useState<EditorStep[]>(initialSteps);
   const [sel, setSel] = useState(0);
   const [dirty, setDirty] = useState(false);
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(initialEnabled);
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [allSteps, setAllSteps] = useState(false);
   const write = useWrite();
@@ -569,7 +580,7 @@ function ConfigPanel({
           </Field>
         )}
 
-        {(step.kind === "fact_check" || step.kind === "summarize" || step.kind === "derive_links" || step.kind === "refresh_digest") && (
+        {(step.kind === "fact_check" || step.kind === "summarize" || step.kind === "derive_links" || step.kind === "refresh_digest" || step.kind === "scan_facts") && (
           <div className="py-3 text-[12px] leading-snug text-ink/65">
             No configuration for this step: it operates over the fetched set from earlier in the flow. Position it after a Fetch docs step.
           </div>

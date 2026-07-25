@@ -2,7 +2,7 @@
    `features/PublishMcpServers.tsx`, which are now pure presenters. */
 
 import type {
-  DocSite, McpCreated, McpDraft, PublishData, SiteTheme,
+  DocSite, McpCreated, McpDraft, PublishData, SiteSummary, SiteTheme,
 } from "../../pages/PublishPage";
 import type { McpServer } from "../../features/PublishMcpServers";
 import type { PageFixtures } from "./types";
@@ -21,6 +21,7 @@ const THEMES: SiteTheme[] = [
 const SITE: DocSite = {
   name: "Acme Docs",
   domain: "docs.acme.com",
+  status: "live",
   version: "v14",
   sourceTags: ["customer-facing", "canonical"],
   docsMatched: 148,
@@ -60,6 +61,16 @@ const SITE_PUBLISHED: DocSite = {
   releases: [{ version: "v14", note: "Live · just now" }, ...SITE.releases.slice(1)],
 };
 
+/* The workspace's sites, as the list shows them. `SITE` is the first of them
+   opened in the editor, which is why the names line up. */
+const SITES: SiteSummary[] = [
+  { id: 1, name: "Acme Docs", domain: "docs.acme.com", status: "live", docs: 148 },
+  { id: 2, name: "Acme API reference", domain: "api.acme.com", status: "live", docs: 62 },
+  { id: 3, name: "Partner handbook", domain: "partners.acme.com", status: "draft", docs: 0 },
+];
+
+const TAG_OPTIONS = ["customer-facing", "canonical", "internal-only", "needs-review", "deprecated"];
+
 const SERVERS: McpServer[] = [
   { id: 1, name: "support-kb", url: "https://mcp.acme.com/s/support-kb", scope: "product", status: "connected", capabilities: ["search", "facts", "answers"] },
   { id: 2, name: "eng-lineage", url: "https://mcp.acme.com/s/eng-lineage", scope: "org", status: "idle", capabilities: ["search", "lineage"] },
@@ -87,9 +98,11 @@ const CREATED: McpCreated = {
 };
 
 const BASE: PublishData = {
-  view: "site-editor",
+  view: "site-list",
   editorTab: "content",
   phase: "draft",
+  sites: SITES,
+  tagOptions: TAG_OPTIONS,
   site: SITE,
   servers: SERVERS,
   serverCount: 3,
@@ -97,8 +110,9 @@ const BASE: PublishData = {
   created: CREATED,
 };
 
-/** A workspace that publishes nothing: no site, no server. */
-const EMPTY: PublishData = { ...BASE, site: null, servers: [], serverCount: 0 };
+/** A workspace that publishes nothing: no site, no server. The site list is
+    still on screen — it is where the first site gets made. */
+const EMPTY: PublishData = { ...BASE, sites: [], site: null, servers: [], serverCount: 0 };
 
 /** Long natural text on the site editor; pathological tokens on the MCP list,
     so both halves of the page get strained. */
@@ -132,6 +146,8 @@ function strained(extreme: boolean): PublishData {
   };
   return {
     ...BASE,
+    view: "site-editor",
+    sites: repeat((i) => ({ id: i + 1, name: `${i + 1}. ${LONG_TITLE}`, domain: LONG_SOURCE, status: i % 2 ? "live" : "draft", docs: 12847392 + i }), 4),
     site,
     servers: [
       { id: 1, name: "support-kb-consolidated-across-every-service-and-region", url: `https://mcp.mari.guru/s/${LONG_DOC_TITLE}`, scope: "workspace", status: "connected", capabilities: ["search", "facts", "answers", "glossary", "chat", "lineage"] },
@@ -140,14 +156,19 @@ function strained(extreme: boolean): PublishData {
   };
 }
 
+const EDITOR: PublishData = { ...BASE, view: "site-editor" };
+
 export const FIXTURES: PageFixtures<PublishData> = {
   default: { data: BASE },
-  "site-theme": { data: { ...BASE, editorTab: "theme" } },
-  "site-preview": { data: { ...BASE, editorTab: "preview" } },
-  "site-domains": { data: { ...BASE, editorTab: "domains" } },
-  "publish-draft": { data: { ...BASE, view: "publish-flow", phase: "draft" } },
-  "publish-publishing": { data: { ...BASE, view: "publish-flow", phase: "publishing" } },
-  "publish-published": { data: { ...BASE, view: "publish-flow", phase: "published", site: SITE_PUBLISHED } },
+  "site-new": { data: { ...BASE, view: "site-new" } },
+  "site-none": { data: { ...BASE, view: "site-new", sites: [] } },
+  "site-content": { data: EDITOR },
+  "site-theme": { data: { ...EDITOR, editorTab: "theme" } },
+  "site-preview": { data: { ...EDITOR, editorTab: "preview" } },
+  "site-domains": { data: { ...EDITOR, editorTab: "domains" } },
+  "publish-draft": { data: { ...EDITOR, view: "publish-flow", phase: "draft" } },
+  "publish-publishing": { data: { ...EDITOR, view: "publish-flow", phase: "publishing" } },
+  "publish-published": { data: { ...EDITOR, view: "publish-flow", phase: "published", site: SITE_PUBLISHED } },
   mcp: { data: { ...BASE, view: "mcp-list" } },
   "mcp-add": { data: { ...BASE, view: "mcp-add" } },
   "mcp-token": { data: { ...BASE, view: "mcp-token", serverCount: 4 } },

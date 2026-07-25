@@ -28,10 +28,13 @@ const TABS: TabOption<SettingsTab>[] = [
   { id: "design", label: "Design & brand" },
 ];
 
-/** Tab -> the page id it opens. Two of these are not `settings-*` pages at
-    all: Sources is a top-level page that Settings borrows, and Design & brand
-    is the lookbook. Keeping the mapping here is what lets those live in the
-    row without every page inventing its own routing rules. */
+/** Tab -> the page id it opens. Sources is the odd one out: a top-level page
+    that Settings borrows. Keeping the mapping here is what lets it live in the
+    row without every page inventing its own routing rules.
+
+    "design" pointed at `lookbook` — the component CATALOG, which documents
+    this design system rather than the workspace's brand, and which crashed in
+    an app because it is the one page with no data behind it. */
 const PAGE_FOR: Record<SettingsTab, string> = {
   general: "settings-general",
   members: "settings-members",
@@ -39,7 +42,7 @@ const PAGE_FOR: Record<SettingsTab, string> = {
   sources: "sources",
   "api-keys": "settings-api-keys",
   audit: "settings-audit-log",
-  design: "lookbook",
+  design: "settings-design",
 };
 
 export function SettingsTabs({

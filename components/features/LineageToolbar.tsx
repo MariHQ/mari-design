@@ -1,4 +1,4 @@
-import { useMemo, useState, forwardRef, type ButtonHTMLAttributes } from "react";
+import { useEffect, useMemo, useState, forwardRef, type ButtonHTMLAttributes } from "react";
 import type { ReactNode } from "react";
 import { Search, Minus, Plus, Maximize2, Sparkles, GitFork, Bookmark, ChevronDown, X } from "lucide-react";
 import { card } from "../tokens/card";
@@ -13,8 +13,8 @@ import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
-  useLineageControls, clamp,
-  type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
+  useLineageControls, clamp, nodeById, tracePath,
+  type LEdge, type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -40,6 +40,9 @@ const SOURCE_MENU_ROWS = 9;
 export type LineageToolbarProps = {
   /** The graph the source/owner filters are built from. */
   nodes: LNode[];
+  /** The same graph's links. "Find path" resolves against these, so a toolbar
+      rendered without them can arm path mode but has nothing to route over. */
+  edges?: LEdge[];
   /** Ask Mari to propose new edges across the corpus. Long-running: the button
       says it is reading. May throw; the toolbar shows the message. */
   onDeriveLinks?: () => void | Promise<void>;
@@ -87,7 +90,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 }
 
 export function LineageToolbar({
-  nodes, onDeriveLinks, onSaveView, loading = false, className = "",
+  nodes, edges = [], onDeriveLinks, onSaveView, loading = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
@@ -97,8 +100,6 @@ export function LineageToolbar({
   const [deriving, setDeriving] = useState(false);
   const [derived, setDerived] = useState(0);
   const [assertOpen, setAssertOpen] = useState(false);
-  const [pathMode, setPathMode] = useState(false);
-  const [picks, setPicks] = useState(0);
   const [deriveErr, setDeriveErr] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -107,6 +108,25 @@ export function LineageToolbar({
 
   const onSources = controls.sources ?? sources;
   const onRels = controls.rels ?? REL_ORDER;
+
+  /* Find path. The picks live in the shared control store because the picking
+     happens on the CANVAS: this button used to keep a private counter and
+     offered a "simulate pick" link beside it, so the feature could never do
+     anything to the graph however many nodes you clicked. Now the button arms
+     the mode, the canvas records the two picks, and this row reports what the
+     canvas resolved. */
+  const picked = controls.path;
+  const path = useMemo(() => tracePath(picked, edges), [picked, edges]);
+  const byId = useMemo(() => nodeById(nodes), [nodes]);
+  const titleOf = (id: string) => byId[id]?.title ?? id;
+
+  // Esc leaves path mode, which is the exit the button's own label promises.
+  useEffect(() => {
+    if (!picked) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setControls({ path: null }); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [picked, setControls]);
 
   const results: SearchResult[] = useMemo(() => {
     const q = controls.query.trim().toLowerCase();
@@ -193,7 +213,13 @@ export function LineageToolbar({
 
   const setZoom = (z: number) => setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
 
-  const pathLabel = !pathMode ? "Find path" : picks < 2 ? "Pick two nodes (Esc)" : "Exit path";
+  const pathLabel = !picked
+    ? "Find path"
+    : picked.length === 0
+      ? "Pick two nodes (Esc)"
+      : picked.length === 1
+        ? "Pick one more (Esc)"
+        : "Exit path";
 
   if (loading) {
     return (
@@ -371,8 +397,8 @@ export function LineageToolbar({
           <Sparkles size={14} /> Assert impact
         </Button>
         <Button
-          onClick={() => { setPathMode((p) => !p); setPicks(0); }}
-          className={pathMode ? "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2" : ""}
+          onClick={() => setControls({ path: picked ? null : [] })}
+          className={picked ? "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2" : ""}
         >
           <GitFork size={14} /> {pathLabel}
         </Button>
@@ -410,17 +436,32 @@ export function LineageToolbar({
         </Row>
       )}
 
-      {/* path-mode pick state */}
-      {pathMode && (
-        <div className="flex items-center gap-2 pl-[66px]">
-          <Badge tone="info" label={`Path mode · ${picks}/2 picked`} />
-          <button
-            type="button"
-            className={`font-term text-[11px] text-ink/65 underline ${focusRing}`}
-            onClick={() => setPicks((p) => Math.min(2, p + 1))}
-          >
-            simulate pick
-          </button>
+      {/* path-mode pick state: what the canvas has recorded, and what routing
+          the two picks resolved to. */}
+      {picked && (
+        <div className="flex flex-wrap items-center gap-2 pl-[66px]">
+          <Badge tone="info" label={`Path mode · ${picked.length}/2 picked`} />
+          {picked.length < 2 ? (
+            <span className="min-w-0 font-term text-[11px] text-ink/65">
+              {picked.length === 0
+                ? "Click a node on the canvas to start."
+                : `From “${titleOf(picked[0])}” — click the other end.`}
+            </span>
+          ) : path ? (
+            <>
+              <Badge tone="ok" label={`${path.hops} hop${path.hops === 1 ? "" : "s"}`} />
+              <TruncateInline className="font-term text-[11px] text-ink/70">
+                {path.ids.map(titleOf).join(" → ")}
+              </TruncateInline>
+            </>
+          ) : (
+            <span className="min-w-0 font-term text-[11px] text-ink/70">
+              No route links “{titleOf(picked[0])}” to “{titleOf(picked[1])}”.
+            </span>
+          )}
+          {picked.length > 0 && (
+            <Button compact onClick={() => setControls({ path: [] })}>Start over</Button>
+          )}
         </div>
       )}
     </div>

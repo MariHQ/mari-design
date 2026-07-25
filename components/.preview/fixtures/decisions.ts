@@ -12,12 +12,23 @@ import {
   MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
 } from "./stress";
 
-const FILTERS: LedgerFilterTab[] = [
-  { id: "all", label: "All", count: 6 },
-  { id: "proposed", label: "Proposed", count: 2 },
-  { id: "ratified", label: "Ratified", count: 3 },
-  { id: "superseded", label: "Superseded", count: 1 },
+/* The tab strip is the ledger's only filter, so its counts have to come off the
+   timeline behind it: a hardcoded "6" promised rows the column never had. */
+const TABS: { id: string; label: string; status?: Decision["status"] }[] = [
+  { id: "all", label: "All" },
+  { id: "proposed", label: "Proposed", status: "proposed" },
+  { id: "ratified", label: "Ratified", status: "ratified" },
+  { id: "ignored", label: "Ignored", status: "ignored" },
 ];
+
+/** Records filed under the old "superseded" spelling count as ignored. */
+const seen = (d: Decision) => (d.status === "superseded" ? "ignored" : d.status);
+
+const filtersFor = (decisions: Decision[]): LedgerFilterTab[] =>
+  TABS.map((t) => ({
+    ...t,
+    count: t.status ? decisions.filter((d) => seen(d) === t.status).length : decisions.length,
+  }));
 
 const AWAITING_RAIL = [
   "Adopt short-lived JWTs for service auth",
@@ -139,7 +150,7 @@ const STRESS_EXTRAS: DecisionExtras = {
 const ledger = (decisions: Decision[], filter = "all"): DecisionsData => ({
   decisions,
   filter,
-  filters: FILTERS,
+  filters: filtersFor(decisions),
   awaiting: AWAITING_RAIL,
   howItWorks: HOW_IT_WORKS,
   composer: null,
@@ -153,7 +164,7 @@ const DEFAULT = ledger(DEFAULT_DECISIONS);
     empty, so the page's own `isEmpty` check fires. */
 const EMPTY: DecisionsData = {
   decisions: [], filter: "all",
-  filters: FILTERS.map((f) => ({ ...f, count: 0 })),
+  filters: filtersFor([]),
   awaiting: [], howItWorks: HOW_IT_WORKS,
   composer: null, ratify: null, extras: null,
 };
@@ -197,7 +208,7 @@ export const FIXTURES: PageFixtures<DecisionsData> = {
       },
     },
   },
-  superseded: { data: ledger(SUPERSEDED, "superseded") },
+  superseded: { data: ledger(SUPERSEDED, "ignored") },
   filtered: { data: ledger(RATIFIED_ONLY, "ratified") },
   empty: { data: EMPTY },
   loading: { data: DEFAULT, loading: true },

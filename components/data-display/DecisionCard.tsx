@@ -46,10 +46,19 @@ const STAMP_TONE: Record<ResolvedStatus, string> = {
 };
 
 /* Square, not round: a circle on a list means "choose one". */
+/* Timeline markers, NOT checkboxes.
+
+   These were 24px rounded SQUARES, empty with an amber border when proposed
+   and solid green with a tick when ratified — which is a checkbox in every
+   visual respect, on a ledger where nothing is checkable. The status is
+   already stated twice on each card (the stamp on the title line and the
+   verb in the body), so the marker's only job is to sit on the spine and say
+   where this record falls in the sequence. A dot does that; a tickbox invites
+   a click that does not exist. */
 const NODE: Record<ResolvedStatus, string> = {
-  proposed: "border-clay/60 bg-paper text-clay",
-  ratified: "border-moss bg-moss text-white",
-  ignored: "border-ink/30 bg-flysch text-ink/65",
+  proposed: "border-clay bg-paper",
+  ratified: "border-moss bg-moss",
+  ignored: "border-ink/25 bg-flysch",
 };
 
 function initialsOf(name: string): string {
@@ -127,14 +136,14 @@ export function DecisionCard({
   return (
     <div className={`relative flex gap-4 ${className}`.trim()}>
       <div className="relative flex flex-col items-center">
-        {spine && <span className="absolute top-6 bottom-0 w-px bg-ink/12" aria-hidden="true" />}
+        {/* The rail was bg-ink/12 — close enough to the page that the markers
+            read as free-floating rather than as points on a timeline. */}
+        {spine && <span className="absolute top-5 bottom-0 w-px bg-ink/20" aria-hidden="true" />}
         <span
-          className={`relative z-10 grid place-items-center w-6 h-6 rounded-[5px] border ${NODE[state]}`}
+          className={`relative z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 ${NODE[state]}`}
           role="img"
           aria-label={STAMP_LABEL[state]}
-        >
-          {state === "ratified" && <Check size={13} strokeWidth={2.6} />}
-        </span>
+        />
       </div>
 
       <article className={`${card} min-w-0 flex-1 p-4 mb-4 ${ignored ? "opacity-80" : ""}`.trim()}>

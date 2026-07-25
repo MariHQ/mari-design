@@ -14,11 +14,14 @@ import {
   MANY_TAGS, MANY_INITIALS, LONG_BREADCRUMB,
 } from "./stress";
 
+/* `status` is what the tab keeps, so the row filters the table it sits above.
+   "Stale" carries none: staleness is derived from verification age rather than
+   stored on a claim, and the states that show it arrive pre-filtered. */
 const FILTERS: FactFilter[] = [
-  { id: "all", label: "All", count: 12 },
-  { id: "verified", label: "Verified", count: 6 },
-  { id: "review", label: "Needs review", count: 2 },
-  { id: "contradicted", label: "Contradicted", count: 1 },
+  { id: "all", label: "All", count: 9 },
+  { id: "verified", label: "Verified", count: 6, status: "Verified" },
+  { id: "review", label: "Needs review", count: 2, status: "Needs review" },
+  { id: "contradicted", label: "Contradicted", count: 1, status: "Contradicted" },
   { id: "stale", label: "Stale", count: 2 },
 ];
 

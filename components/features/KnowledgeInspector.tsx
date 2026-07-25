@@ -3,6 +3,8 @@ import { CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
+import { btn } from "../actions/buttons";
+import { Link as NavLink } from "../navigation/Link";
 import { FieldError } from "../feedback/ErrorMessage";
 import { SectionLabel } from "../forms/SectionLabel";
 import { TagPicker } from "../forms/TagPicker";
@@ -63,6 +65,11 @@ export type KnowledgeInspectorActions = {
 const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
+
+/* The document's own address: the library's Doc Review route (its `route` in
+   pages/DocReviewPage.tsx) with the document in the query string. Same link
+   the result title in KnowledgeBrowser carries, so both ways in agree. */
+const docHref = (id: string) => `/knowledge/doc?id=${encodeURIComponent(id)}`;
 
 type InsTab = "document" | "inspector";
 
@@ -207,7 +214,14 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
             <div className="mt-4 flex flex-col items-start gap-2">
               {watchButton}
               <FieldError>{failed}</FieldError>
-              <Button block>Open document <ArrowRight size={14} /></Button>
+              {/* "Open document" was a <button> with no handler: the one
+                  control on this rail whose whole job is to take you to the
+                  document did nothing. It is an anchor at the document's own
+                  address now, so it opens, opens in a new tab, and can be
+                  copied. */}
+              <NavLink href={docHref(doc.id)} className={`${btn} w-full`}>
+                Open document <ArrowRight size={14} />
+              </NavLink>
             </div>
           </div>
         ) : (

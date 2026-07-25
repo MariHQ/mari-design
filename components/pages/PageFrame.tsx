@@ -238,7 +238,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
   const search = useGlobalSearch(chrome);
   const [navOpen, setNavOpen] = useState(false);
   return (
-    <div className={`flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-full min-h-0 overflow-hidden"}`}>
+    <div className={`flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-screen min-h-0 overflow-hidden"}`}>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-ink/12 bg-paper px-4">
         <button
           aria-label="Menu"
@@ -369,6 +369,15 @@ export function PageFrame({
   if (staticFrame) return <DesktopStatic active={active} chrome={chrome}>{children}</DesktopStatic>;
   return (
     <AppShell
+      /* The shell claims the VIEWPORT. AppShell is `h-full`, which resolves
+         against whatever contains it — and in a host that has not set a height
+         on html/body/#root, that is the document. On a long document the rail
+         then stretched to the full 17,559px of scroll height instead of the
+         704px of window: the sidebar ran off the bottom, its height changed
+         with every page, and the internal scroll regions never engaged because
+         nothing was ever bounded. Asking for the viewport here makes the frame
+         correct on its own rather than dependent on the host's stylesheet. */
+      className="h-screen"
       defaultCollapsed={false}
       sidebar={({ collapsed }) => (
         <Sidebar

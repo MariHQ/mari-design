@@ -46,7 +46,13 @@ export type KnowledgeData = {
 
     Optional, as always: with no actions the watch toggle keeps its local
     behaviour, which is what the design canvas renders. */
-export type KnowledgeActions = KnowledgeInspectorActions;
+export type KnowledgeActions = KnowledgeInspectorActions & {
+  /** Inspect this result. Selection outlives this page — it decides what the
+      rail describes and should survive a reload — so the page reports which
+      result was picked and the app decides where that lives (a query param, a
+      route). Without the handler the feed keeps its own highlight. */
+  select?: (args: { id: string }) => void;
+};
 
 /** Nothing matched. Derived from the data, not from a state flag, so it is
     true in the real app for exactly the same reason it is true on the canvas. */
@@ -66,7 +72,9 @@ function EmptyBox({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function Feed({ data, error, mobile }: { data: KnowledgeData; error: string | null; mobile: boolean }) {
+function Feed({ data, error, mobile, actions }: {
+  data: KnowledgeData; error: string | null; mobile: boolean; actions?: KnowledgeActions;
+}) {
   if (error) return <EmptyBox title="API offline">{error}</EmptyBox>;
   if (isEmpty(data)) {
     return (
@@ -75,7 +83,19 @@ function Feed({ data, error, mobile }: { data: KnowledgeData; error: string | nu
       </EmptyBox>
     );
   }
-  return <KnowledgeBrowser results={data.results} stacked={mobile} />;
+  /* Selection is only the page's business when something can receive it: with
+     a `select` handler the inspected document IS the selection, so the feed is
+     told what to highlight and reports every pick. Without one the browser
+     keeps its own highlight, which is what the canvas renders (§2). */
+  const select = actions?.select;
+  return (
+    <KnowledgeBrowser
+      results={data.results}
+      stacked={mobile}
+      selectedId={select ? data.doc?.id ?? null : undefined}
+      onSelect={select && ((id) => select({ id }))}
+    />
+  );
 }
 
 function Inspector({ data, error, actions }: { data: KnowledgeData; error: string | null; actions?: KnowledgeActions }) {
@@ -99,7 +119,7 @@ function KnowledgePage({ data, loading = false, error = null, actions, chrome, m
         />
         <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[360]}`}>
           <div className="min-w-0">
-            <Feed data={data} error={error} mobile={mobile} />
+            <Feed data={data} error={error} mobile={mobile} actions={actions} />
           </div>
           <div className={mobile ? "min-w-0" : "min-w-0 sticky top-6 self-start"}>
             <Inspector data={data} error={error} actions={actions} />
