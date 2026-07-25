@@ -28,6 +28,13 @@ const TABS: TabOption<SettingsTab>[] = [
   { id: "design", label: "Design & brand" },
 ];
 
+/** The tab row's labels, in order. Exported because the LOADING state of every
+    Settings page draws the same row: the tabs are static chrome the app holds
+    at first paint, so they render as themselves rather than as grey bars, and
+    from this one list so the loading row can never list different tabs than
+    the loaded one. */
+export const SETTINGS_TAB_LABELS = TABS.map((t) => t.label);
+
 /** Tab -> the page id it opens. Sources is the odd one out: a top-level page
     that Settings borrows. Keeping the mapping here is what lets it live in the
     row without every page inventing its own routing rules.

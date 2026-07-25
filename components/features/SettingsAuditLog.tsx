@@ -6,7 +6,7 @@ import { Button } from "../actions/Button";
 import { ExportButton, RefreshButton } from "../actions/RepeatedActions";
 import { Avatar } from "../data-display/Avatar";
 import { EmptyState } from "../data-display/EmptyState";
-import { Skeleton, SkeletonLine, SkeletonTable } from "../data-display/Skeleton";
+import { SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
@@ -137,14 +137,20 @@ export function SettingsAuditLog({
 
   const filtered = filter.trim().length > 0 || range.preset !== "all";
 
+  /* Same fix as the keys table: the page's own words render, the events do
+     not exist yet. "Every change in this workspace, newest first" is a
+     promise about the log, not a fact from it, so it stands. */
   if (loading) {
     return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5"><Skeleton width={150} height={20} /><SkeletonLine w={320} h={11} /></div>
-          <Skeleton width={190} height={32} rounded="rounded-[4px]" />
-        </div>
-        <SkeletonTable rows={6} cols={4} />
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-busy="true">
+        {!embedded && <PageHeader
+          title="Access log"
+          description="Every change in the workspace, who made it, and when"
+          actions={<SkeletonButton w={110} />}
+        />}
+        <Card variant="flush" title="Events" hint="Every change in this workspace, newest first">
+          <SkeletonTable rows={6} columns={["Actor", "Action", "Target", "When", "Detail"]} className="border-0 rounded-none" />
+        </Card>
       </div>
     );
   }

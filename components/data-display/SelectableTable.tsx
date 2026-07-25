@@ -4,7 +4,7 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { cellClass, sortRows, type Column } from "./DataTable";
 import { Scrollable } from "./Scrollable";
-import { SkeletonTable } from "./Skeleton";
+import { SkeletonRows } from "./Skeleton";
 import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 
 function Check({ checked, indeterminate = false, onChange, label }: {
@@ -68,10 +68,28 @@ export function SelectableTable<T>({
 
   const colSpan = columns.length + 1;
 
+  /* The head is the caller's literal column set, so it renders while the
+     rows are still in flight — a grey silhouette hid what the table was for
+     and re-laid every column out when the words appeared. The select-all box
+     is drawn but disabled: there is nothing to select yet. */
   if (loading) {
     return (
-      <div className={`${card} mt-5 overflow-hidden`}>
-        <SkeletonTable rows={8} cols={columns.length + 1} className="border-0 rounded-none" />
+      <div className={`${card} mt-5 overflow-hidden`} aria-busy="true">
+        <Scrollable>
+          <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
+            <thead>
+              <tr>
+                <th className={`${thPad} border-y border-ink/10 w-9`}>
+                  <input type="checkbox" disabled aria-label={selectAllLabel} className="w-3.5 h-3.5 rounded-[3px] border-ink/30 disabled:opacity-100" />
+                </th>
+                {columns.map((c) => (
+                  <SortHeader key={c.key} label={c.header} align={c.align ?? "left"} sortable={false} />
+                ))}
+              </tr>
+            </thead>
+            <tbody><SkeletonRows rows={8} cols={columns.length} lead /></tbody>
+          </table>
+        </Scrollable>
       </div>
     );
   }

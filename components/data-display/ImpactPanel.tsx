@@ -6,7 +6,7 @@ import { ResultCount } from "./Pagination";
 import { ShowRest } from "./ShowRest";
 import { Scrollable } from "./Scrollable";
 import { SortHeader, useSort, tdPad } from "./sortable";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
+import { SkeletonLine, SkeletonChip } from "./Skeleton";
 import { Button } from "../actions/Button";
 import { Truncate } from "./Truncate";
 
@@ -82,20 +82,47 @@ export function ImpactPanel({
     className,
   ].filter(Boolean).join(" ");
 
+  /* "Impact analysis" is this panel's own name and the four column headers
+     are its own literals: none of them wait on the graph. Greying them out
+     left a nameless grey block that could have been anything, next to a
+     `title` attribute nobody hovers — while `loadingText` says exactly what is
+     happening and belongs on screen. Only the summary and the rows are the
+     analysis's to return, and they stay bars. Same table box, same colgroup
+     widths, so the columns do not move when the documents land. */
   if (loading) {
     return (
-      <div className={wrap} aria-hidden="true" title={loadingText}>
-        <SkeletonLine w={130} h={13} />
-        <SkeletonText lines={2} className="mt-2" lastWidth="68%" />
-        <div className="mt-2 flex flex-col">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex items-center gap-2.5 border-t border-ink/10 py-[7px] first:border-t-0">
-              <SkeletonLine w={110} h={11} />
-              <SkeletonLine w={70} h={10} />
-              <Skeleton width={140} height={10} rounded="rounded-full" />
-              <span className="ml-auto"><SkeletonChip w={88} /></span>
-            </div>
-          ))}
+      <div className={wrap} aria-busy="true">
+        <div className="flex items-center gap-2.5">
+          <b className="font-display text-[13.5px] font-semibold text-ink">Impact analysis</b>
+        </div>
+        <p className="mt-1.5 max-w-[640px] text-[12.5px] italic text-ink/70">{loadingText}</p>
+        <div className="mt-2 overflow-hidden">
+          <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 480 }}>
+            <colgroup>
+              <col style={{ width: "30%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "29%" }} />
+              <col style={{ width: "24%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <SortHeader label="Document" sortable={false} />
+                <SortHeader label="Source" align="center" sortable={false} />
+                <SortHeader label="Reason" sortable={false} />
+                <SortHeader label="Severity" sortable={false} />
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2].map((i) => (
+                <tr key={i} className="border-b border-ink/[0.06] last:border-b-0">
+                  <td className={tdPad}><SkeletonLine w="80%" h={11} /></td>
+                  <td className={tdPad}><SkeletonLine w="60%" h={11} /></td>
+                  <td className={tdPad}><SkeletonLine w="90%" h={11} /></td>
+                  <td className={tdPad}><SkeletonChip w={88} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );

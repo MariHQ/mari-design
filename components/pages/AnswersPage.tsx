@@ -719,7 +719,13 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
   return (
     <PageFrame chrome={chrome} active={navFor("answers")} title="Answers" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="list" />
+        <SkeletonPage
+          variant="list"
+          eyebrow="Knowledge"
+          title="Approved answers"
+          description="Curate the answers bots and teams serve verbatim: no generation, no drift."
+          mobile={mobile}
+        />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader

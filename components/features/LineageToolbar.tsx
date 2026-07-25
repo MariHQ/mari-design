@@ -9,7 +9,7 @@ import { Badge } from "../data-display/Badge";
 import { Input } from "../forms/Input";
 import { WriteError } from "../feedback/WriteError";
 import { why } from "../actions/useWrite";
-import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
+import { Skeleton, SkeletonLine, SkeletonButton } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
 import {
@@ -292,19 +292,40 @@ export function LineageToolbar({
         ? "Pick one more (Esc)"
         : "Exit path";
 
+  /* This toolbar's shape is entirely the component's own: three bands named
+     Filter / View / Actions, holding controls named Sources, Relations,
+     Status, Zoom, Color by, Layout, Flow, Views. Not one of those words comes
+     from the graph — only each control's current SELECTION does. The old
+     silhouette threw all of it away and drew nine anonymous grey pills of
+     invented widths, which then jumped when the real controls (each sized to
+     its own label) took their places. Labels render; the values are bars, at
+     the ControlTrigger's own 32px height and the row's own gaps. */
   if (loading) {
+    const Pending = ({ accent, label }: { accent: string; label: string }) => (
+      <span className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85">
+        <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: accent }} aria-hidden />
+        <span className="pl-0.5 shrink-0 text-ink/70">{label}:</span>
+        <SkeletonLine w={64} h={11} />
+      </span>
+    );
     return (
-      <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-center gap-2">
-          <Skeleton width={236} height={32} rounded="rounded-[4px]" />
-          {Array.from({ length: 3 }).map((_, i) => <SkeletonButton key={i} w={120} />)}
-        </div>
-        <div className="flex items-center gap-2">
-          {Array.from({ length: 4 }).map((_, i) => <SkeletonButton key={i} w={128} />)}
-        </div>
-        <div className="flex items-center gap-2">
+      <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
+        <Row label="Filter">
+          <Skeleton width={168} height={32} rounded="rounded-[4px]" />
+          <Pending accent={CONTROL_ACCENT.sources} label="Sources" />
+          <Pending accent={CONTROL_ACCENT.relations} label="Relations" />
+          <Pending accent={CONTROL_ACCENT.status} label="Status" />
+          <Pending accent={CONTROL_ACCENT.zoom} label="Zoom" />
+        </Row>
+        <Row label="View" divide>
+          <Pending accent={CONTROL_ACCENT.lens} label="Color by" />
+          <Pending accent={CONTROL_ACCENT.layout} label="Layout" />
+          <Pending accent={CONTROL_ACCENT.flow} label="Flow" />
+          <Pending accent={CONTROL_ACCENT.views} label="Views" />
+        </Row>
+        <Row label="Actions" divide>
           {Array.from({ length: 3 }).map((_, i) => <SkeletonButton key={i} w={110} />)}
-        </div>
+        </Row>
       </div>
     );
   }

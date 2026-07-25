@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { ScrollText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { PropertyList } from "../data-display/PropertyList";
@@ -185,7 +185,17 @@ function SettingsAuditLogPage({ data, loading = false, error = null, actions, ch
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="settings" />
+        <SkeletonPage
+          variant="settings"
+          eyebrow="Settings"
+          title="Access log"
+          description="Every workspace change: actor, action, target, and time."
+          tabs={SETTINGS_TAB_LABELS}
+          activeTab="Audit log"
+          rail={["At a glance"]}
+          actions={1}
+          mobile={mobile}
+        />
       ) : (
         <div className={PAGE}>
           <PageHeader

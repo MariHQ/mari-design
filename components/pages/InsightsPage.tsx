@@ -263,7 +263,16 @@ function InsightsPage({ data, loading = false, error = null, actions, chrome, mo
   return (
     <PageFrame chrome={chrome} active={navFor("insights")} title="Insights" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="dashboard" />
+        <SkeletonPage
+          variant="dashboard"
+          eyebrow="Insights"
+          title="Insights"
+          /* The loaded description names the date it counts since, so it is a
+             value, not a label: the bar stands until the range comes back. */
+          sections={["LLM readability", "Glossary health", "Recent audit activity"]}
+          actions={1}
+          mobile={mobile}
+        />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <Body data={data} error={error} actions={actions} mobile={mobile} headerActions={headerActions} />

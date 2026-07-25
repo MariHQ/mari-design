@@ -615,7 +615,16 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("facts")} title="Facts" mobile={mobile}>
-        <SkeletonPage variant="table" />
+        <SkeletonPage
+          variant="table"
+          eyebrow="Verification"
+          title="Facts"
+          description="Every claim the team relies on: verified, owned, and traced to its impact across the corpus."
+          /* The same head the loaded table renders, so the grid does not
+             reflow when the rows land. */
+          columns={["Claim", "Owner", "Verified", "Status"]}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

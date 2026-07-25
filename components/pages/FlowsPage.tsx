@@ -216,7 +216,14 @@ function FlowsPage({ data, loading = false, error = null, actions, chrome, mobil
   return (
     <PageFrame chrome={chrome} active={navFor("flows")} title="Flows" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="list" />
+        <SkeletonPage
+          variant="list"
+          eyebrow="Flows"
+          title="Flows"
+          description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           {/* One header, every state. Flows used to compute whether to draw it

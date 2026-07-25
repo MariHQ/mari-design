@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Tag, Clock, ArrowRight, AlertTriangle, Trash2, Palette } from "lucide-react";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -348,7 +348,19 @@ function SettingsGeneralPage({ data, loading = false, error = null, actions, chr
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="settings" />
+        <SkeletonPage
+          variant="settings"
+          eyebrow="Settings"
+          title="Workspace"
+          description="Workspace identity and language."
+          tabs={SETTINGS_TAB_LABELS}
+          activeTab="General"
+          sections={["Workspace"]}
+          fields={["Workspace name", "Slug", "Plan", "Timezone", "Language"]}
+          rail={["At a glance"]}
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
         <div className={PAGE}>
           <PageHeader eyebrow="Settings" title="Workspace" description="Workspace identity and language." />

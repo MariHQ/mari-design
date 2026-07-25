@@ -8,7 +8,7 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
-import { Skeleton, SkeletonLine, SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
+import { SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
 import { Spinner } from "../data-display/Spinner";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
@@ -237,13 +237,22 @@ export function SettingsModelsConfig({
   /* One chunking row per connected source: a large workspace has dozens. */
   const pager = usePaged(sorted, 10);
 
+  /* Which four panels this page has, and what they are called, is settled
+     here and not by the server: only WHICH model is selected in each is in
+     flight. The panel headings render at their real sizes so the four cards
+     do not resize on arrival. */
   if (loading) {
     return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="space-y-2.5"><Skeleton width={130} height={20} /><SkeletonLine w={340} h={11} /></div>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2"><SkeletonCard lines={2} /><SkeletonCard lines={2} /></div>
-        <SkeletonCard lines={3} />
-        <SkeletonTable rows={3} cols={4} />
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-busy="true">
+        {!embedded && <PageHeader title="Models" description="Choose which models embed, search, and answer for this workspace" />}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <SkeletonCard title="Embedding model" lines={2} />
+          <SkeletonCard title="LLM provider" lines={2} />
+        </div>
+        <SkeletonCard title="LLM provider keys" lines={3} />
+        <Card variant="flush" title="Chunking">
+          <SkeletonTable rows={3} columns={["Source", "Strategy", "Max tokens", "Overlap"]} className="border-0 rounded-none" />
+        </Card>
       </div>
     );
   }

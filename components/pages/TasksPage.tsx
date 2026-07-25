@@ -539,7 +539,17 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
   return (
     <PageFrame chrome={chrome} active={navFor("tasks")} title="Tasks" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="board" />
+        <SkeletonPage
+          variant="board"
+          eyebrow="Tasks"
+          title="Tasks"
+          description="Everything Mari opened for a human: fact checks, approvals, stale docs, and canonical tagging."
+          /* The board's two columns are the workflow itself, never a query
+             result, so they name themselves while the cards are still bars. */
+          sections={["Open", "Done"]}
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader

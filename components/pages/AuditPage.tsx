@@ -313,7 +313,16 @@ function AuditPage({ data, loading = false, error = null, actions, chrome, mobil
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("audit")} title="Repository audit" mobile={mobile}>
-        <SkeletonPage variant="list" />
+        <SkeletonPage
+          variant="list"
+          eyebrow="Onboarding"
+          /* The loaded title appends the repo name and the description IS the
+             run summary; both are the response's to give. The stem of the
+             title is the page's own and stands. */
+          title="Repository audit"
+          sections={["What we scan", "Audit history"]}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

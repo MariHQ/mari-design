@@ -150,11 +150,14 @@ export function InsightsFreshnessChart({ freshness, onOpenBand, loading = false,
 
   if (loading) {
     return (
+      /* The widget's own name and icon are fixed here; the doc count in the
+         hint is not, so only that waits. A chart that greys its own title is
+         a grey box that could be any of the four widgets on the page. */
       <Card
         className={className}
-        icon={<SkeletonCircle size={30} />}
-        title={<SkeletonLine w={180} h={13} />}
-        hint={<SkeletonLine w={54} h={10} />}
+        icon={<IconRing tone="ok"><Leaf size={15} /></IconRing>}
+        title="Freshness by source"
+        aria-busy="true"
       >
         <div className="flex flex-col gap-3.5">
           {Array.from({ length: 5 }).map((_, i) => (

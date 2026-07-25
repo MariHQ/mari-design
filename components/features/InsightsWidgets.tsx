@@ -162,19 +162,31 @@ export function InsightsWidgets({
     .filter((a) => !String(a.action).startsWith("__"))
     .map((a) => ({ ...a, icon: a.icon ? ACTIVITY_GLYPH[a.icon] : undefined }));
 
+  /* The page's own header and the three panel headings below it are literals
+     in this file — the reader can be told what is arriving while it arrives.
+     The DESCRIPTION is not: it names the date the figures count since, so it
+     stays a bar rather than a sentence about a period nobody has returned.
+     Stat captions come from `stats`, which is the response, so those tiles
+     stay anonymous; the rest of the layout is the loaded layout. */
   if (loading) {
     return (
-      <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
+      <div className={`flex flex-col gap-5 ${className}`} aria-busy="true">
+        <PageHeader
+          eyebrow="Insights"
+          title="Insights"
+          description={undefined}
+        />
         {/* Percentage, not 340px: a fixed skeleton line overran a phone column. */}
-        <div className="space-y-2"><Skeleton width={120} height={20} /><SkeletonLine w="88%" h={11} /></div>
+        <SkeletonLine w="88%" h={13} className="-mt-3" />
         <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
           <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
         </div>
         {/* Readability is a five-column table, so it gets the wider column. */}
-      <div className="grid items-start gap-5 lg:grid-cols-[1.7fr_1fr] [&>*]:min-w-0">
-          <SkeletonCard lines={6} /><SkeletonCard lines={5} />
+        <div className="grid items-start gap-5 lg:grid-cols-[1.7fr_1fr] [&>*]:min-w-0">
+          <SkeletonCard title="LLM readability" lines={6} />
+          <SkeletonCard title="Glossary health" lines={5} />
         </div>
-        <SkeletonCard lines={4} />
+        <SkeletonCard title="Recent audit activity" lines={4} />
       </div>
     );
   }

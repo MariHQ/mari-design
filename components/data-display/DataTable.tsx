@@ -4,7 +4,7 @@ import { card } from "../tokens/card";
 import { cellText } from "./Table";
 import { PagerBar, ResultCount } from "./Pagination";
 import { Scrollable } from "./Scrollable";
-import { SkeletonTable } from "./Skeleton";
+import { Skeleton, SkeletonRows } from "./Skeleton";
 import { SortHeader, tdPad, type Align, type SortState } from "./sortable";
 
 export type Column<T> = {
@@ -108,18 +108,53 @@ export function DataTable<T>({
     setPage(0);
   };
 
+  /* Loading used to replace the whole table with a grey silhouette: no title
+     bar, no search box, no facet, and column headers drawn as bars. All of
+     that is chrome the caller spelled out in this render — it is known before
+     the response and it renders. What is unknown is the ROWS, the count, and
+     which values the facet can offer. Same box, same header, same padding, so
+     nothing moves when the rows land. */
   if (loading) {
     return (
-      <div className={`${card} mt-5 overflow-hidden`}>
-        {title && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ink/10">
+      <div className={`${card} mt-5 overflow-hidden`} aria-busy="true">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ink/10">
+          {title && (
             <div className="flex items-center gap-2 mr-1">
               <h4 className="text-[15px] font-semibold text-ink">{title}</h4>
-              {count != null && <span className="font-term text-[11px] font-medium text-ink/60 bg-flysch border border-ink/10 rounded-[3px] px-1.5 py-0.5">{count}</span>}
+              {/* No count: the number of rows is precisely what is in flight. */}
+              <Skeleton width={26} height={19} rounded="rounded-[3px]" />
             </div>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            {search && (
+              <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper">
+                <Search size={13} className="text-ink/65" />
+                <input disabled placeholder={searchPlaceholder} className="w-[130px] sm:w-[170px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none disabled:opacity-100" />
+              </div>
+            )}
+            {/* The "All sources" option is the facet's own label, not one of
+                its values: the values come from the rows, so the list holds
+                only the one option it can honestly offer. */}
+            {facet && (
+              <select disabled aria-label={facet.allLabel ?? allOptionLabel(facet.label)} className="h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper text-[12.5px] text-ink/75 outline-none disabled:opacity-100">
+                <option>{facet.allLabel ?? allOptionLabel(facet.label)}</option>
+              </select>
+            )}
+            {actions}
           </div>
-        )}
-        <SkeletonTable rows={8} cols={columns.length || 4} className="border-0 rounded-none" />
+        </div>
+        <Scrollable>
+          <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <SortHeader key={c.key} label={c.header} align={c.align ?? "left"} sortable={false} />
+                ))}
+              </tr>
+            </thead>
+            <tbody><SkeletonRows rows={pageSize} cols={columns.length} /></tbody>
+          </table>
+        </Scrollable>
       </div>
     );
   }

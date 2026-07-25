@@ -2,12 +2,10 @@ import { Children, cloneElement, isValidElement, useMemo, type ReactElement, typ
 import { card } from "../tokens/card";
 import { PagerBar, ResultCount, usePaged } from "./Pagination";
 import { Scrollable } from "./Scrollable";
-import { SkeletonLine } from "./Skeleton";
+import { SkeletonRows } from "./Skeleton";
 import { SortHeader, tdPad, useSort, type Align } from "./sortable";
 
 const cellWrap = "[overflow-wrap:anywhere]";
-
-const bodyWidths = ["40%", "70%", "55%", "60%", "50%", "65%"];
 
 /** A column header. A bare string is shorthand for `{ label }`. */
 export type TableHeadCol = {
@@ -142,11 +140,16 @@ export function Table({
     : children;
 
   return (
-    <div className={`${card} mt-5 overflow-hidden`}>
+    /* Not aria-hidden: the head now carries real column names, which are
+       content. aria-busy says the cells under them are still arriving. */
+    <div className={`${card} mt-5 overflow-hidden`} aria-busy={loading || undefined}>
       {(title || actions) && (
         <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+          {/* The title is the caller's own word and renders straight away; the
+              count is a RESULT, and a table that says "128" beside a body of
+              grey bars has told the reader a number nobody has returned yet. */}
           {title && <h4 className="text-[15px] font-semibold text-ink">{title}</h4>}
-          {count != null && <span className="font-term text-[11px] font-medium text-ink/60 bg-flysch border border-ink/10 rounded-[3px] px-1.5 py-0.5">{count}</span>}
+          {count != null && !loading && <span className="font-term text-[11px] font-medium text-ink/60 bg-flysch border border-ink/10 rounded-[3px] px-1.5 py-0.5">{count}</span>}
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
       )}
@@ -160,7 +163,11 @@ export function Table({
               {cols.map((c, i) => (
                 <SortHeader
                   key={c.key}
-                  label={loading ? <SkeletonLine w={Math.min(90, 32 + c.label.length * 6)} h={9} /> : c.label}
+                  /* The column headers are the caller's literals, known
+                     before the query returns. They used to grey out with the
+                     rows, which hid what the table was about and reflowed
+                     every column when the words arrived. */
+                  label={c.label}
                   sortKey={c.key}
                   sort={sort}
                   onSort={onSort}
@@ -173,17 +180,7 @@ export function Table({
           {/* Fallback dividers for non-<tr> children the composable path
               cannot clone. */}
           <tbody className={composable || loading ? undefined : "divide-y divide-ink/10"}>
-            {loading
-              ? Array.from({ length: 8 }).map((_, r) => (
-                  <tr key={r} className="border-b border-ink/10 last:border-0">
-                    {cols.map((c, i) => (
-                      <td key={c.key} className={`${tdPad} ${alignClass(alignOf(i))}`}>
-                        <SkeletonLine w={bodyWidths[(r + i) % bodyWidths.length]} h={11} />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              : body}
+            {loading ? <SkeletonRows rows={8} cols={cols.length} /> : body}
           </tbody>
         </table>
       </Scrollable>

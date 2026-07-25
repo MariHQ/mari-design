@@ -36,7 +36,7 @@ import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
-import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
+import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { ShowRest } from "../data-display/ShowRest";
@@ -740,10 +740,22 @@ export function DocReviewEditor({
 
   if (loading) {
     return (
-      <Card variant="flush" className="w-full">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink/12 px-3 py-2" aria-hidden="true">
-          <SkeletonChip w={44} /><SkeletonChip w={28} /><SkeletonChip w={28} /><SkeletonChip w={28} />
-          <span className="ml-auto"><SkeletonChip w={28} /></span>
+      <Card variant="flush" className="w-full" aria-busy="true">
+        {/* The writing controls are the editor's own furniture: B, I, S and
+            the block-type menu exist whatever the document turns out to say.
+            They render, disabled — a control that cannot act yet must look
+            like it cannot act (§2/§6: the explicit disabled palette, not a
+            ghost) — at the toolbar's real 36px height, so the row does not
+            resize when the document lands. Only the BLOCK TYPE reads as
+            unknown, because which block the caret will land in depends on the
+            document. */}
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink/12 px-3 py-2">
+          <Button disabled aria-label="Block type"><SkeletonLine w={52} h={11} /> <ChevronDown size={11} /></Button>
+          <Button icon disabled className="font-bold" aria-label="Bold selection">B</Button>
+          <Button icon disabled className="italic font-serif" aria-label="Italic selection">I</Button>
+          <Button icon disabled className="line-through" aria-label="Strikethrough selection">S</Button>
+          <Button icon disabled aria-label="Inline code"><Code2 size={15} /></Button>
+          <Button icon disabled aria-label="Link selection"><Link2 size={15} /></Button>
         </div>
         {/* Same measure floor as the live editor below, and the same scroller,
             so the skeleton and the thing it stands in for behave identically

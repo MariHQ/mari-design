@@ -64,15 +64,23 @@ export function LineageTimeScrubber({
     [dates, lastIdx],
   );
 
+  /* "Time travel" is the control's own name and is on screen before the graph
+     is: greying it out left a nameless grey card under the canvas. The as-of
+     chip, the event count and the date range are all the graph's to report,
+     so those stay bars — printing "All time" here would be a claim about a
+     history nobody has read yet. */
   if (loading) {
     return (
-      <div className={`${card} min-w-[560px] p-3 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} min-w-[560px] p-3 font-display ${className}`.trim()} aria-busy="true">
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <div className="flex items-center gap-2"><SkeletonLine w={70} h={10} /><SkeletonChip w={92} /></div>
-          <SkeletonLine w={160} h={10} />
+          <div className="flex items-center gap-2">
+            <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Time travel</span>
+            <SkeletonChip w={92} />
+          </div>
+          <span className="ml-auto"><SkeletonLine w={160} h={11} /></span>
         </div>
         <Skeleton height={38} className="rounded-md" />
-        <SkeletonLine w="72%" h={10} className="mt-2" />
+        <SkeletonLine w="72%" h={11} className="mt-2" />
       </div>
     );
   }

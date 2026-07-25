@@ -281,7 +281,12 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
-        <SkeletonPage variant="auth" />
+        <SkeletonPage
+          variant="auth"
+          title="Welcome to Mari"
+          description="Claim this workspace and create the admin account."
+          mobile={mobile}
+        />
       </div>
     );
   }

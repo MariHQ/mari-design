@@ -218,17 +218,21 @@ export function SettingsMembersTable({
      table pages and says how many people there really are (§13, §20). */
   const pager = usePaged(sorted, 12);
 
+  /* The panel names itself, its table's six columns and its two footer cards
+     without asking the server anything. The DESCRIPTION is the exception:
+     "Manage who can reach {name}" interpolates the workspace's name, so it
+     waits rather than being printed with a hole in it. */
   if (loading) {
     return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5"><Skeleton width={180} height={20} /><SkeletonLine w={280} h={11} /></div>
-          <SkeletonButton w={130} />
-        </div>
-        <SkeletonCard lines={1} />
-        <SkeletonTable rows={4} cols={6} />
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-busy="true">
+        {!embedded && <PageHeader title="Admin" actions={<SkeletonButton w={130} />} />}
+        {!embedded && <SkeletonLine w={280} h={13} className="-mt-3" />}
+        <Card variant="flush" title="Members" hint="Everyone who can reach this workspace">
+          <SkeletonTable rows={4} columns={["Member", "Email", "Role", "Joined", "Status", "Actions"]} className="border-0 rounded-none" />
+        </Card>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <SkeletonCard lines={2} /><SkeletonCard lines={3} />
+          <SkeletonCard title="GitHub team sync" lines={2} />
+          <SkeletonCard title="Provisioning" lines={3} />
         </div>
       </div>
     );

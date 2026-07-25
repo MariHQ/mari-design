@@ -616,7 +616,13 @@ function LoginPage({ data, loading = false, error = null, actions, mobile = fals
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
-        <SkeletonPage variant="auth" />
+        <SkeletonPage
+          variant="auth"
+          /* The sign-in headline is `data.title`: a workspace can brand it,
+             so it is a value and not a label. */
+          label="sign in"
+          mobile={mobile}
+        />
       </div>
     );
   }

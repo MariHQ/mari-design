@@ -12,7 +12,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { ResultCount } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
 import { Scrollable } from "../data-display/Scrollable";
-import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
+import { SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuItem } from "../navigation/Menu";
 import { useWrite } from "../actions/useWrite";
@@ -116,22 +116,36 @@ export function LibraryTemplatesPanel({ templates, actions, loading = false, com
     [rows, category, query],
   );
 
+  /* "Templates", the six category tabs and the sentence saying what a
+     template is are all fixed here: the panel's whole frame is known and only
+     the template CARDS wait. Greying the tabs was the worst of it — six
+     identical grey pills where six named categories were about to appear, in
+     six different widths. The counts in the summary line are the response's,
+     so that half of the sentence waits. */
   if (loading) {
     return (
-      <div className={`rounded-md border border-ink/12 bg-paper ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-          <SkeletonLine w={120} h={13} />
-          <SkeletonButton w={124} />
+      <Card variant="flush" title="Templates" className={className} aria-busy="true">
+        <div className="px-4 pt-3 text-[12.5px] text-ink/70">
+          Shared scaffolds for the editor, chat, workflows, and the GitHub bot.
         </div>
-        <div className="flex gap-2 px-4 pt-3">
-          {Array.from({ length: 6 }).map((_, i) => <SkeletonChip key={i} w={64} />)}
+        <div className="px-4 pt-3">
+          <div className="inline-flex max-w-full items-center gap-1 rounded-md border border-ink/15 bg-flysch p-1">
+            {CATEGORIES.map((c) => (
+              <span
+                key={c}
+                className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-[4px] px-3 py-1.5 text-[13px] font-medium ${
+                  c === "All" ? "border border-ink/15 bg-paper text-ink" : "text-ink/70"
+                }`}
+              >{c}</span>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap gap-3 p-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="min-w-[280px] flex-1 basis-[300px]"><SkeletonCard lines={2} footer /></div>
           ))}
         </div>
-      </div>
+      </Card>
     );
   }
 

@@ -46,9 +46,10 @@ export { Swatch } from "./data-display/Swatch";
 export { Sparkline } from "./data-display/Sparkline";
 export {
   Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip, SkeletonButton,
-  SkeletonCard, SkeletonStat, SkeletonListRow, SkeletonList, SkeletonTable, SkeletonSwitch,
+  SkeletonCard, SkeletonStat, SkeletonListRow, SkeletonList, SkeletonTable, SkeletonRows,
+  SkeletonRegion, SkeletonSwitch, CELL_WIDTHS,
 } from "./data-display/Skeleton";
-export { SkeletonPage, type SkeletonPageVariant } from "./data-display/Skeletons";
+export { SkeletonPage, type SkeletonPageVariant, type SkeletonPageProps } from "./data-display/Skeletons";
 export { Progress, type ProgressTone } from "./data-display/Progress";
 export { Pagination } from "./data-display/Pagination";
 export { Accordion, type AccordionItemData, type AccordionProps } from "./data-display/Accordion";

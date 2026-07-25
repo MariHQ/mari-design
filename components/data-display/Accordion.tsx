@@ -51,12 +51,23 @@ function Bounded({ items, children }: { items: AccordionItemData[]; children: Re
 
 /** Disclosure sections — a settings page's grouped panels, an FAQ list. */
 export function Accordion(props: AccordionProps) {
+  /* A disclosure list's SECTION TITLES are the caller's own headings, given
+     in `items` and known before anything is fetched — it is the panel bodies
+     that are in flight. Greying the titles turned a settings page into four
+     anonymous grey rows that said nothing about what was arriving, and each
+     one re-laid out when the real heading landed at a different width. When a
+     caller genuinely has no items yet, the bars stand. */
   if (props.loading) {
+    const heads: (ReactNode | null)[] = props.items.length
+      ? props.items.map((it) => it.title)
+      : [null, null, null, null];
     return (
-      <div className={ROOT_CLASS} aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className={ROOT_CLASS} aria-busy="true">
+        {heads.map((title, i) => (
           <div key={i} className="flex items-center justify-between gap-3 border-b border-ink/10 px-4 py-3 last:border-0">
-            <SkeletonLine w={`${52 - i * 6}%`} h={12} />
+            {title != null
+              ? <span className="min-w-0 truncate text-[13.5px] font-medium text-ink">{title}</span>
+              : <SkeletonLine w={`${52 - i * 6}%`} h={13} />}
             <Skeleton width={15} height={15} rounded="rounded-[3px]" />
           </div>
         ))}

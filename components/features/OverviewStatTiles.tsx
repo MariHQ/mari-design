@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Clipboard, CheckCircle2, Play } from "lucide-react";
 import { Stat, type StatTone } from "../data-display/Stat";
 import { IconRing, type IconRingTone } from "../data-display/IconRing";
-import { SkeletonStat } from "../data-display/Skeleton";
 
 /* Overview — Headline stat tiles ─────────────────────────────────────────
    Three big-number tiles summarizing the week: changes, facts to review,
@@ -55,19 +54,6 @@ export function OverviewStatTiles({
   const [area, setArea] = useState<string | null>(null);
   const go = (a: string) => { setArea(a); onNavigate?.(a); };
 
-  if (loading) {
-    return (
-      /* Three-up on the console via intrinsic track sizing, not a breakpoint
-         (CONVENTIONS.md §10). A Stat cannot render below ~200px: at
-         grid-cols-3 on a 390px phone each tile got 103px and the number,
-         label and icon ran 97px past the tile. auto-fit collapses the empty
-         tracks, so three tiles still fill the row exactly on desktop. */
-      <div className={`grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3 ${className}`.trim()} aria-hidden="true">
-        <SkeletonStat /><SkeletonStat /><SkeletonStat />
-      </div>
-    );
-  }
-
   const live = !loading && !offline && stats;
   const tiles: Tile[] = [
     { key: "clipboard", label: "Changes", tone: "green", num: live ? stats!.changes : null, sub: live ? "This week" : null },
@@ -76,6 +62,18 @@ export function OverviewStatTiles({
   ];
 
   return (
+    /* Three-up on the console via intrinsic track sizing, not a breakpoint
+       (CONVENTIONS.md §10). A Stat cannot render below ~200px: at
+       grid-cols-3 on a 390px phone each tile got 103px and the number,
+       label and icon ran 97px past the tile. auto-fit collapses the empty
+       tracks, so three tiles still fill the row exactly on desktop.
+
+       Loading renders THE SAME THREE TILES, not three grey rectangles: which
+       three stats this strip carries, what they are called, their icons and
+       their accents are all fixed in this file. Only the numbers and their
+       notes wait. The old skeleton branch discarded all of it and, because it
+       used gap-3 auto-fit against SkeletonStat's own box, settled at a
+       different tile height on arrival. */
     <div className={`grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3 ${className}`.trim()}>
       {tiles.map((t) => {
         /* Six- and seven-figure counts need thousands separators to stay
@@ -87,6 +85,7 @@ export function OverviewStatTiles({
           <div key={t.key} className="relative">
             {swatch && <span style={accentStyle} className={ACCENT[t.tone]} aria-hidden />}
             <Stat
+              loading={loading}
               value={value}
               label={t.label}
               sub={sub}

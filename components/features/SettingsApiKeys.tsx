@@ -11,7 +11,7 @@ import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-display/TokenReveal";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
-import { Skeleton, SkeletonLine, SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
+import { SkeletonButton, SkeletonTable } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
@@ -166,14 +166,21 @@ export function SettingsApiKeys({
      the card past the fold (CONVENTIONS §13). */
   const pager = usePaged(sorted, 12);
 
+  /* The header copy and the seven column names are this feature's own
+     literals — they were greyed out with the rows, so a loading Settings page
+     was a nameless title bar over a nameless grid, and every column resized
+     when its real name arrived. What is unknown is which keys exist. */
   if (loading) {
     return (
-      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-hidden="true">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2.5"><Skeleton width={150} height={20} /><SkeletonLine w={300} h={11} /></div>
-          <SkeletonButton w={110} />
-        </div>
-        <SkeletonTable rows={4} cols={7} />
+      <div className={`flex flex-col gap-5 ${className}`.trim()} aria-busy="true">
+        {!embedded && <PageHeader
+          title="API keys"
+          description="Programmatic access for CI, bots, and the MCP gateway"
+          actions={<SkeletonButton w={110} />}
+        />}
+        <Card variant="flush" title="Keys" hint={TOKEN_REVEAL_WARNING}>
+          <SkeletonTable rows={4} columns={["Name", "Key", "Scopes", "Created", "Last used", "Status", "Actions"]} className="border-0 rounded-none" />
+        </Card>
       </div>
     );
   }

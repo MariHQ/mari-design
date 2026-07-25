@@ -5,7 +5,7 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
-import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
+import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { WriteError } from "../feedback/WriteError";
@@ -406,11 +406,25 @@ export function LineageGraph({
 
   if (loading) {
     return (
-      <div className={`${card} min-w-[560px] overflow-hidden ${className}`.trim()} aria-hidden="true">
+      /* The relation LEGEND is the graph's key, and it is the same four
+         relations whatever the graph turns out to contain: colour, dash and
+         code all come from REL. Drawing it as three grey pills hid the one
+         thing that would have let the reader read the canvas the moment it
+         appeared, and it was the wrong number of pills besides. Only the node
+         volume on the right is a count, so only that waits. */
+      <div className={`${card} min-w-[560px] overflow-hidden font-display ${className}`.trim()} aria-busy="true">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-ink/10 px-3.5 py-2">
-          <SkeletonLine w={70} h={10} />
-          <SkeletonChip w={96} /><SkeletonChip w={88} /><SkeletonChip w={104} />
-          <span className="ml-auto"><SkeletonLine w={64} h={10} /></span>
+          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Relations</span>
+          {REL_ORDER.map((k) => (
+            <span key={k} className="inline-flex items-center gap-1.5 text-[12px] text-ink/75">
+              <svg width={26} height={9} viewBox="0 0 26 9" aria-hidden>
+                <line x1={1} y1={4.5} x2={25} y2={4.5} stroke={REL[k].color} strokeWidth={REL[k].width} strokeDasharray={REL[k].dash} />
+              </svg>
+              <span className="font-term text-[10px] font-medium tracking-[0.06em] text-ink/65">{REL[k].code}</span>
+              {REL[k].label}
+            </span>
+          ))}
+          <span className="ml-auto"><SkeletonLine w={64} h={11} /></span>
         </div>
         <div className="relative" style={{ aspectRatio: `${VB_W} / ${VB_H}` }}>
           <Skeleton className="absolute inset-0 h-full w-full" rounded="rounded-none" />

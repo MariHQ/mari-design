@@ -37,23 +37,36 @@ export function PropertyList({
   /** Height cap, in px, once the list is long enough to scroll. */
   maxHeight?: number;
 }) {
+  /* A property list is a set of LABELS with values beside them, and a caller
+     that already knows which properties the panel shows should show them: the
+     labels are the panel's structure, the values are the response. Greying
+     both made every inspector's loading state the same anonymous ladder and
+     shifted each row when the real label arrived at a different width. A
+     caller with no items yet (the panel does not know its own fields either)
+     still gets the full grey ladder. */
   if (loading) {
-    const rows = 6;
+    const labels: (ReactNode | null)[] = items.length
+      ? items.map((it) => it.label)
+      : Array.from({ length: 6 }, () => null);
+    const Label = ({ label, i }: { label: ReactNode | null; i: number }) =>
+      label != null
+        ? <dt className={labelClass}>{label}</dt>
+        : <dt><SkeletonLine w={labelWidths[i % labelWidths.length]} h={11} /></dt>;
     const skeleton = layout === "grid" ? (
-      <dl className={`grid gap-x-6 gap-y-4 grid-cols-1 ${columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"} ${boxed ? "p-4" : ""}`} aria-hidden="true">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="min-w-0 space-y-2">
-            <SkeletonLine w={labelWidths[i % labelWidths.length]} h={9} />
-            <SkeletonLine w={valueWidths[i % valueWidths.length]} h={12} />
+      <dl className={`grid gap-x-6 gap-y-4 grid-cols-1 ${columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"} ${boxed ? "p-4" : ""}`} aria-busy="true">
+        {labels.map((label, i) => (
+          <div key={i} className="min-w-0">
+            <Label label={label} i={i} />
+            <dd className="mt-1"><SkeletonLine w={valueWidths[i % valueWidths.length]} h={13} /></dd>
           </div>
         ))}
       </dl>
     ) : (
-      <dl className={boxed ? "px-4" : ""} aria-hidden="true">
-        {Array.from({ length: rows }).map((_, i) => (
+      <dl className={boxed ? "px-4" : ""} aria-busy="true">
+        {labels.map((label, i) => (
           <div key={i} className="flex items-baseline justify-between gap-4 py-2.5 border-b border-ink/10 last:border-0">
-            <SkeletonLine w={labelWidths[i % labelWidths.length]} h={9} />
-            <SkeletonLine w={valueWidths[i % valueWidths.length]} h={12} />
+            <Label label={label} i={i} />
+            <dd><SkeletonLine w={valueWidths[i % valueWidths.length]} h={13} /></dd>
           </div>
         ))}
       </dl>

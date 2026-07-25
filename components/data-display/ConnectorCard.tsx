@@ -66,19 +66,26 @@ export function ConnectorCard({
   onSyncNow, onFullResync, onPause, onResume, onDisconnect, actionError = null,
   loading = false, className = "",
 }: ConnectorCardProps) {
+  /* WHICH connector this card is for is the caller's own choice — the name
+     and the provider mark are in hand before a single sync fact comes back,
+     and hiding them behind a grey circle turned a page of connectors into a
+     page of identical grey cards. The HEALTH is the thing being fetched, so
+     the chip is a bar of the chip's exact size; likewise the counts, the sync
+     line and the sparkline. Same p-4 box, same gaps, so nothing shifts. */
   if (loading) {
     return (
-      <div className={`${card} p-4 ${className}`.trim()} aria-hidden="true">
+      <div className={`${card} p-4 ${className}`.trim()} aria-busy="true">
         <div className="flex items-center gap-3">
-          <SkeletonCircle size={26} />
-          <span className="min-w-0 flex-1 flex flex-col gap-1.5">
-            <SkeletonLine w="55%" h={13} />
-            <SkeletonChip w={72} />
+          {mark
+            ? <span className="grid place-items-center shrink-0 w-[26px] h-[26px]" aria-hidden="true">{mark}</span>
+            : <SkeletonCircle size={26} className="shrink-0" />}
+          <span className="min-w-0 flex-1 flex flex-col gap-1">
+            <b className="text-[14px] font-semibold text-ink truncate">{name}</b>
+            <SkeletonChip w={72} className="self-start" />
           </span>
-          <SkeletonCircle size={28} />
         </div>
-        <SkeletonLine w="42%" h={10} className="mt-3" />
-        <SkeletonLine w="60%" h={11} className="mt-2" />
+        <SkeletonLine w="42%" h={11.5} className="mt-3" />
+        <SkeletonLine w="60%" h={12.5} className="mt-1.5" />
         <Skeleton width={150} height={20} className="mt-3" />
       </div>
     );

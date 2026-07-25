@@ -1,6 +1,6 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { ReadError } from "../feedback/ReadError";
@@ -70,7 +70,17 @@ function SettingsDesignPage({
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="settings" />
+        <SkeletonPage
+          variant="settings"
+          eyebrow="Settings"
+          title="Design & brand"
+          description="The colours, type and logo this workspace publishes under. Doc sites and exports pick these up."
+          tabs={SETTINGS_TAB_LABELS}
+          activeTab="Design & brand"
+          rail={["Where this shows up"]}
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
         <div className={PAGE}>
           <PageHeader

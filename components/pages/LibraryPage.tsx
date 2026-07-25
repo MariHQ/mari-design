@@ -188,7 +188,14 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("library")} title="Library" mobile={mobile}>
-        <SkeletonPage variant="list" />
+        <SkeletonPage
+          variant="list"
+          eyebrow="Editorial system"
+          title="Library"
+          description="Project-wide vocabulary, deterministic rules, voice, and scaffolds for every document."
+          tabs={["Tags", "Rules", "Glossary", "Style guides", "Templates"]}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

@@ -509,7 +509,13 @@ function DecisionsPage({ data, loading = false, error = null, actions, chrome, m
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("decisions")} title="Decisions" mobile={mobile}>
-        <SkeletonPage variant="feed" />
+        <SkeletonPage
+          variant="feed"
+          eyebrow="Ledger"
+          title="Decisions"
+          description="One decision, one record: ratified by the people accountable, and traceable across the corpus."
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

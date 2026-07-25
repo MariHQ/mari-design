@@ -113,6 +113,32 @@ spacing are literally the same object everywhere.
 Existing skeleton/loading work must be preserved. If a component has a
 `loading` prop it keeps it.
 
+**A skeleton keeps its labels.** Everything the app already holds at first
+paint renders as its real self: section headings, card titles, column headers,
+field labels, tab names, the page title, units, static helper text,
+empty-state chrome. Only the values the response owes get a bar. A grey
+rectangle where a known word goes throws away information the reader could
+already be using, makes every loading screen in the console identical and
+unplaceable, and relays the layout out when the real text arrives at a
+different width.
+
+The inverse is worse and is also forbidden: **never render a value the query
+has not returned.** A count, a name, a date, a status or a total drawn beside
+a body of grey bars is invented data. If a title interpolates a value
+(`Repository audit, {repo}`), only the part that is the page's own may show.
+
+Consequently:
+
+- A loading region is not `aria-hidden` wholesale — the labels in it are
+  content. `aria-hidden` sits on the decorative bars (the `Skeleton` primitive
+  sets its own); the region carries `aria-busy="true"` and names what is
+  loading once, politely (`SkeletonRegion`).
+- A skeleton occupies the loaded thing's geometry: a skeleton row is the
+  height of a real row, a skeleton chip the size of a real chip, a page
+  skeleton sits in the §11 container and grid. Nothing may jump on swap.
+- A control that cannot act yet is drawn disabled (§2, §6), not as a bar,
+  where drawing it disabled is what keeps the row's height honest.
+
 ## 10. Responsiveness
 
 Components are **desktop-first, fixed-width**. Do not introduce

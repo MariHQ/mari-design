@@ -5,7 +5,7 @@ import { focusRing } from "../tokens/focusRing";
 import { cellClass, sortRows, type Column } from "./DataTable";
 import { PagerBar, ResultCount, usePaged } from "./Pagination";
 import { Scrollable } from "./Scrollable";
-import { SkeletonTable } from "./Skeleton";
+import { SkeletonRows } from "./Skeleton";
 import { SortHeader, tdPad, thPad, type SortState } from "./sortable";
 
 /* ── ExpandableTable: rows that expand to an inline detail region ────────
@@ -51,10 +51,25 @@ export function ExpandableTable<T>({
 
   const colSpan = columns.length + 1;
 
+  /* Real column headers over skeleton cells, in the real table box: the head
+     is the caller's own literal and is known at first paint, and the expand
+     gutter keeps its width so the grid does not shift on arrival. */
   if (loading) {
     return (
-      <div className={`${card} mt-5 overflow-hidden`}>
-        <SkeletonTable rows={8} cols={columns.length + 1} className="border-0 rounded-none" />
+      <div className={`${card} mt-5 overflow-hidden`} aria-busy="true">
+        <Scrollable>
+          <table className="w-full text-left border-collapse" style={{ minWidth: minW }}>
+            <thead>
+              <tr>
+                <th className={`${thPad} border-y border-ink/10 w-9`} aria-hidden />
+                {columns.map((c) => (
+                  <SortHeader key={c.key} label={c.header} align={c.align ?? "left"} sortable={false} />
+                ))}
+              </tr>
+            </thead>
+            <tbody><SkeletonRows rows={pageSize} cols={columns.length} lead /></tbody>
+          </table>
+        </Scrollable>
       </div>
     );
   }

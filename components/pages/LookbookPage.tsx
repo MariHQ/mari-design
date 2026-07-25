@@ -447,7 +447,14 @@ function LookbookPage({ data, loading = false, chrome, mobile = false }: PagePro
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("lookbook")} title="Lookbook" mobile={mobile}>
-        <SkeletonPage variant="gallery" />
+        <SkeletonPage
+          variant="gallery"
+          eyebrow="Design system"
+          title="Design lookbook"
+          description="Every canonical primitive, exhibited live with its usage rule and import path. This page is built only from the components it documents."
+          actions={0}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

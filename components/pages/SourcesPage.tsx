@@ -7,7 +7,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Tabs, type TabOption } from "../navigation/Tabs";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { Stepper } from "../data-display/Stepper";
 import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
@@ -661,7 +661,16 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
-        <SkeletonPage variant="gallery" />
+        <SkeletonPage
+          variant="gallery"
+          eyebrow="Settings"
+          title="Sources & connectors"
+          description="Bring every product conversation into one trusted library."
+          tabs={SETTINGS_TAB_LABELS}
+          activeTab="Sources"
+          actions={0}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

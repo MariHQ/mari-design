@@ -11,7 +11,7 @@ import { AvatarGroup } from "../data-display/AvatarGroup";
 import { ResultCount } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { WriteError } from "../feedback/WriteError";
-import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
+import { SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
   type ImpactResult, type Severity,
@@ -128,12 +128,16 @@ export function LineageAssertDrawer({
 
   if (loading) {
     return (
+      /* The drawer knows what it is for before the analysis returns: its
+         title and its question are literals below. Greying them left the
+         reader with an anonymous panel sliding in from the right. */
       <LgDrawerShell
         className={className}
         onClose={onClose}
         width={LG_DRAWER_W_WIDE}
-        icon={<SkeletonCircle size={19} />}
-        title={<SkeletonLine w="55%" h={14} />}
+        icon={<Sparkles size={19} className="text-biscay-2" />}
+        title="Impact analysis"
+        summary="What does changing this touch?"
       >
         <Skeleton height={34} className="rounded-[4px]" />
         <div className="mt-3"><Skeleton height={44} className="rounded-[4px]" /></div>

@@ -905,7 +905,15 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
-        <SkeletonPage variant="editor" />
+        <SkeletonPage
+          variant="editor"
+          eyebrow="Doc site"
+          title="Publish"
+          description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
+          tabs={["Doc sites", "MCP servers"]}
+          actions={0}
+          mobile={mobile}
+        />
       </PageFrame>
     );
   }

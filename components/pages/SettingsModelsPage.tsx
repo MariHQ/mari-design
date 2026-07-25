@@ -5,7 +5,7 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Card } from "../layout/Card";
 import { EmptyState } from "../data-display/EmptyState";
 import { ReadError } from "../feedback/ReadError";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
@@ -157,7 +157,17 @@ function SettingsModelsPage({ data, loading = false, error = null, actions, chro
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="settings" />
+        <SkeletonPage
+          variant="settings"
+          eyebrow="Settings"
+          title="Models"
+          description="Which models embed, search, and answer for this workspace."
+          tabs={SETTINGS_TAB_LABELS}
+          activeTab="Models"
+          rail={["At a glance"]}
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
         <div className={PAGE}>
           <PageHeader

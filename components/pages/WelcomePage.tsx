@@ -755,7 +755,13 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
   if (loading) {
     return (
       <div className={AUTH_SHELL}>
-        <SkeletonPage variant="auth" />
+        <SkeletonPage
+          variant="auth"
+          /* Which onboarding step you are on is server state, and every
+             headline in the wizard belongs to a step. */
+          label="setup"
+          mobile={mobile}
+        />
       </div>
     );
   }

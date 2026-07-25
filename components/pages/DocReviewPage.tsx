@@ -406,7 +406,17 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
   return (
     <PageFrame chrome={chrome} active={navFor("doc-review")} title="Doc Review" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="editor" />
+        <SkeletonPage
+          variant="editor"
+          /* No title or description: on Doc Review both are the document's,
+             and a document name is the response's to give. The three panels
+             around it are the page's own furniture and render as themselves. */
+          label="Doc Review"
+          sections={["Document outline"]}
+          rail={["Fact check", "Refine"]}
+          actions={3}
+          mobile={mobile}
+        />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         {/* The owner/verified line is a value, not prose: it carries a name and

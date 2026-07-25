@@ -414,7 +414,13 @@ function LineagePage({ data, loading = false, error = null, actions, chrome, mob
   return (
     <PageFrame chrome={chrome} active={navFor("lineage")} title="Lineage" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="graph" />
+        <SkeletonPage
+          variant="graph"
+          eyebrow="Lineage"
+          title="Product lineage"
+          description="The document graph: provenance, impact, and drift across every source."
+          mobile={mobile}
+        />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <PageHeader

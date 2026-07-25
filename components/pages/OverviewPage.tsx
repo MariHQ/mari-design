@@ -137,7 +137,17 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
   return (
     <PageFrame chrome={chrome} active={navFor("overview")} title="Overview" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="dashboard" />
+        <SkeletonPage
+          variant="dashboard"
+          /* No title: the Overview's h1 is a greeting carrying the signed-in
+             person's name, which is exactly the kind of value a skeleton may
+             not invent. The widget headings below it are the page's own, so
+             they arrive with the frame. */
+          label="Overview"
+          sections={["Today's review", "This week's digest", "Live activity", "Recent docs", "Source pulse"]}
+          actions={1}
+          mobile={mobile}
+        />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <div className={mobile ? "flex flex-col gap-3" : "flex items-start justify-between gap-4"}>

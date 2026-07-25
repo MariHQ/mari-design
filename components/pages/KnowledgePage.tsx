@@ -146,7 +146,14 @@ function KnowledgePage({ data, loading = false, error = null, actions, chrome, m
   return (
     <PageFrame chrome={chrome} active={navFor("knowledge")} title="Knowledge" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="detail" />
+        <SkeletonPage
+          variant="detail"
+          eyebrow="Knowledge"
+          title="Search the knowledge base"
+          description="Every connected source in one index: filter, read the match in context, and inspect the document beside it."
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader

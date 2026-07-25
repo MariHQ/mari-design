@@ -375,7 +375,18 @@ function PreferencesPage({ data, loading = false, error = null, actions, chrome,
   return (
     <PageFrame chrome={chrome} active={navFor("preferences")} title="Preferences" mobile={mobile}>
       {loading ? (
-        <SkeletonPage variant="settings" />
+        <SkeletonPage
+          variant="settings"
+          eyebrow="Account"
+          title="Preferences"
+          description="Your profile, password and notifications. Workspace-wide settings live under Settings."
+          /* Preferences is reached from the account menu and carries no
+             Settings tab row, so it draws none here either. */
+          sections={["Profile", "Password", "Notifications"]}
+          fields={["Display name", "Time zone", "Language"]}
+          actions={0}
+          mobile={mobile}
+        />
       ) : (
         <div className={PAGE}>
           <PageHeader
