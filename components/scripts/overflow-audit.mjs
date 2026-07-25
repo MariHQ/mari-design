@@ -149,7 +149,30 @@ async function main() {
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             await page.goto(url, { waitUntil: "load" });
-            await page.waitForTimeout(180);
+            /* Wait for the WEB FONTS, not for a guess.
+               `load` fires before a CSS-triggered font finishes downloading, so
+               a frame measured right after it is measured in the fallback face.
+               The fallback has different metrics, so text boxes come out the
+               wrong width and the probe reports escapes that do not exist —
+               which is exactly what a full sweep produced (three hits that were
+               all clean when re-run on their own) while a single-page run,
+               where the font was already warm, stayed green.
+
+               A flaky audit is worse than a slow one in both directions: it
+               invents defects, and a false-green is indistinguishable from a
+               real one. */
+            /* Bounded. `document.fonts.ready` is a promise that a frame with a
+               font that never resolves will never settle, and `evaluate` has no
+               default timeout — an unbounded wait here hung the sweep partway
+               through with no output, which is the same black box the streaming
+               progress line exists to avoid. Falling through after 2s measures
+               in the fallback face, which is the old behaviour: possibly a false
+               hit, rather than no answer at all. */
+            await page.evaluate(() => Promise.race([
+              document.fonts.ready.then(() => undefined),
+              new Promise((r) => setTimeout(r, 2000)),
+            ]));
+            await page.waitForTimeout(120);
             r = await page.evaluate(probe);
             break;
           } catch { await page.waitForTimeout(300); }
