@@ -172,6 +172,12 @@ export type FlowsListActions = {
 
 export type FlowsListProps = {
   flows: Flow[];
+  /** Open the trigger editor on this flow id. Canvas only: the drawer owns its
+      own open state, which is exactly why FlowsPage carried a static copy of
+      it whose Save and Cancel did nothing. */
+  editTriggerFor?: number | null;
+  /** Follow a flow through to its pipeline editor. */
+  onOpenFlow?: (id: number) => void;
   /** Sources a document trigger can be scoped to. */
   sources: SourceRef[];
   /** Side effects the list offers. Omitted = local echo only. */
@@ -186,9 +192,14 @@ const td = `${tdPad} align-middle border-b border-ink/[0.06]`;
 /** Flow rows rendered before "Show all". */
 const PAGE = 25;
 
-export function FlowsList({ flows, sources, actions, loading = false, className = "" }: FlowsListProps) {
+export function FlowsList({
+  flows, sources, actions, editTriggerFor = null, onOpenFlow,
+  loading = false, className = "",
+}: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
-  const [trigEdit, setTrigEdit] = useState<Flow | null>(null);
+  const [trigEdit, setTrigEdit] = useState<Flow | null>(
+    () => flows.find((f) => f.id === editTriggerFor) ?? null,
+  );
   const [draft, setDraft] = useState<{ from: Flow | null } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -389,7 +400,11 @@ export function FlowsList({ flows, sources, actions, loading = false, className 
                         <Switch checked={!paused} onCheckedChange={() => void toggleStatus(f)} aria-label={`${f.name}: ${f.status}`} />
                       </td>
                       <td className={`${td} max-w-[220px]`}>
-                        <button type="button" className={`block max-w-full truncate text-left text-[14px] font-semibold text-ink hover:underline ${focusRing} rounded-[3px]`}>
+                        <button
+                          type="button"
+                          onClick={() => onOpenFlow?.(f.id)}
+                          className={`block max-w-full truncate text-left text-[14px] font-semibold text-ink hover:underline ${focusRing} rounded-[3px]`}
+                        >
                           {f.name}
                         </button>
                         <div className="truncate text-[12px] text-ink/70">{f.description}</div>

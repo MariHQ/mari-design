@@ -73,6 +73,10 @@ export type SettingsMembersTableProps = {
       header button drives it and both may be omitted. */
   inviteOpen?: boolean;
   onInviteOpenChange?: (open: boolean) => void;
+  /** Pin one row's Remove into its armed "Remove?" step. Canvas only, for the
+      same reason `inviteOpen` is controllable: a state worth reviewing has to
+      be reachable without a click. */
+  confirmRemoveId?: number | null;
   loading?: boolean;
   className?: string;
 };
@@ -84,6 +88,7 @@ export function SettingsMembersTable({
   actions,
   inviteOpen,
   onInviteOpenChange,
+  confirmRemoveId = null,
   loading = false,
   embedded = false,
   className = "",
@@ -278,7 +283,7 @@ export function SettingsMembersTable({
                     </td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(m.joined)}</td>
                     <td className={tdPad}><Chip label={m.status === "invited" ? "Invited" : "Active"} tone={m.status === "invited" ? "attention" : "ok"} dot caps /></td>
-                    <td className={`${tdPad} whitespace-nowrap`}><ConfirmButton compact confirmLabel="Remove?" onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
+                    <td className={`${tdPad} whitespace-nowrap`}><ConfirmButton compact confirmLabel="Remove?" defaultArmed={m.id === confirmRemoveId} onConfirm={() => remove(m.id)}>Remove</ConfirmButton></td>
                   </tr>
                 ))}
               </tbody>

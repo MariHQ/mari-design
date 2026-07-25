@@ -1,3 +1,5 @@
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 import { useState, type ReactNode } from "react";
 import {
   ChevronLeft, Play, Eye, Plus, ArrowUp, ArrowDown, Trash2, X, Sparkles,
@@ -106,6 +108,15 @@ export type FlowsPipelineEditorProps = {
   sites: SiteRef[];
   /** Tags a fetch/tag step can filter or apply. */
   tags: string[];
+  /** Leave the editor for the flow list. */
+  onBack?: () => void;
+  /** Persist the flow as edited. The editor clears its dirty flag when this
+      resolves, so "Saved." only ever means the server said so. */
+  onSave?: (flow: { name: string; description: string; enabled: boolean; steps: EditorStep[] }) => void | Promise<void>;
+  /** Start a run. `dry` is the test run: it records what a real run WOULD do
+      without doing it, which is the distinction the footer chip explains.
+      A dirty flow saves first — a run always uses the saved version. */
+  onRun?: (opts: { dry: boolean }) => void | Promise<void>;
   /** Render a content-shaped skeleton silhouette instead of the editor. */
   loading?: boolean;
   className?: string;
@@ -113,6 +124,7 @@ export type FlowsPipelineEditorProps = {
 
 export function FlowsPipelineEditor({
   name, description, steps: initialSteps, runs, members, sites, tags,
+  onBack, onSave, onRun,
   loading = false,
   className = "",
 }: FlowsPipelineEditorProps) {
@@ -124,6 +136,21 @@ export function FlowsPipelineEditor({
   const [enabled, setEnabled] = useState(true);
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [allSteps, setAllSteps] = useState(false);
+  const write = useWrite();
+
+  /* Save and run are one control in two costumes: the labels already say
+     "Save & run" when the flow is dirty, because a run uses the SAVED version.
+     Doing the save here rather than in each button keeps that promise true
+     instead of merely written on the label. */
+  const save = () => write.run(
+    onSave && (() => onSave({ name: flowName, description: desc, enabled, steps })),
+    () => setDirty(false),
+  );
+
+  const run = async (dry: boolean) => {
+    if (dirty && !(await save())) return;
+    await write.run(onRun && (() => onRun({ dry })));
+  };
 
   const visibleSteps = allSteps ? steps : steps.slice(0, STEP_PAGE);
   const selIdx = Math.min(sel, steps.length - 1);
@@ -189,13 +216,13 @@ export function FlowsPipelineEditor({
     <div className={`flex flex-col gap-5 ${className}`}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="link" className="text-ink/60"><ChevronLeft size={15} /> Flows</Button>
+        <Button variant="link" className="text-ink/60" onClick={onBack}><ChevronLeft size={15} /> Flows</Button>
         <span className="font-term text-[12px] text-ink/65">/</span>
         <span className="text-[14px] font-semibold text-ink">{flowName || "Untitled flow"}</span>
         <span className="flex-1" />
         <Switch checked={enabled} onCheckedChange={setEnabled} label={enabled ? "Enabled" : "Paused"} />
-        <Button compact><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
-        <Button variant="primary" compact><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
+        <Button compact disabled={write.busy} onClick={() => void run(true)}><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
+        <Button variant="primary" compact disabled={write.busy} onClick={() => void run(false)}><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
       </div>
 
       {/* Meta card */}
@@ -308,10 +335,11 @@ export function FlowsPipelineEditor({
       </div>
 
       {/* Footer */}
+      <WriteError>{write.failed}</WriteError>
       <div className={`${card} flex flex-wrap items-center gap-2 px-5 py-3`}>
-        <Button variant="primary" compact disabled={!dirty} onClick={() => setDirty(false)}>Save flow</Button>
-        <Button compact><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
-        <Button compact><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
+        <Button variant="primary" compact disabled={!dirty || write.busy} onClick={() => void save()}>Save flow</Button>
+        <Button compact disabled={write.busy} onClick={() => void run(true)}><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
+        <Button compact disabled={write.busy} onClick={() => void run(false)}><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
         <DryChip />
         <span className="font-term text-[11.5px] text-ink/70">is what a test run records.</span>
         <span className="flex-1" />

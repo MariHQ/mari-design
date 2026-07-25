@@ -1,3 +1,5 @@
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/ImpactPanel";
@@ -24,6 +26,8 @@ export type ImpactPanelFeatureProps = {
   docs: ImpactDoc[];
   /** Start with the impact strip already resolved (skip the run affordance). */
   analyzed?: boolean;
+  /** Open a review task on each affected document, in one go. */
+  onCreateTasks?: (docs: ImpactDoc[]) => void | Promise<void>;
   /** Render a content-shaped skeleton while the fact context loads. */
   loading?: boolean;
   className?: string;
@@ -31,12 +35,15 @@ export type ImpactPanelFeatureProps = {
 
 export function ImpactPanelFeature({
   claim, source, verifiedAt, summary, docs,
-  analyzed = false,
+  analyzed = false, onCreateTasks,
   loading = false,
   className = "",
 }: ImpactPanelFeatureProps) {
   type Phase = "idle" | "loading" | "done";
   const [phase, setPhase] = useState<Phase>(analyzed ? "done" : "idle");
+  const [made, setMade] = useState(false);
+  const { busy, failed, run: write } = useWrite();
+  const make = () => write(onCreateTasks && (() => onCreateTasks(docs)), () => setMade(true));
 
   const run = () => {
     setPhase("loading");
@@ -104,6 +111,7 @@ export function ImpactPanelFeature({
             </CardSection>
           ) : null}
 
+          <WriteError>{failed}</WriteError>
           {/* 11 + 12 — buttons, biggest action last */}
           <CardActions
             primary={phase === "idle"
@@ -111,7 +119,14 @@ export function ImpactPanelFeature({
               : <Button compact onClick={() => setPhase("idle")}>Reset</Button>}
             secondary={phase === "done" && docs.length > 0 ? (
               <>
-                <Button variant="primary" compact>Create {docs.length} tasks</Button>
+                <Button
+                  variant="primary"
+                  compact
+                  disabled={made || busy}
+                  onClick={() => void make()}
+                >
+                  {made ? `Created ${docs.length} tasks` : busy ? "Creating…" : `Create ${docs.length} tasks`}
+                </Button>
                 <span className="font-term text-[11px] text-ink/65">one per affected document</span>
               </>
             ) : undefined}

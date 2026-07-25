@@ -53,12 +53,20 @@ export type WorkspaceIdentity = {
 
 /** What Settings → General can do.
 
-    There is deliberately no handler behind the danger zone: transferring or
-    deleting a workspace has no endpoint, and a button that pretends to is
-    worse than one that says nothing. Those controls stay local, and the page
-    only offers them when `data.danger` says the viewer owns the workspace. */
+    The danger-zone pair is offered per-row, and a row is only RENDERED when
+    its handler exists. That is the rule the previous version got half right:
+    it correctly refused to fake a transfer or a delete, but it drew both
+    buttons anyway, so the page still promised two things it could not do. An
+    app that implements them gets working controls; one that does not shows a
+    danger zone with only the rows it can honour, and none at all if it has
+    neither. `data.danger` gates the whole card on owning the workspace. */
 export type SettingsGeneralActions = {
   saveWorkspace?: (w: WorkspaceIdentity) => void | Promise<void>;
+  /** Hand the workspace to another admin. */
+  transferWorkspace?: () => void | Promise<void>;
+  /** Destructive and final. Goes through <ConfirmButton>, so this only ever
+      runs on the second click. */
+  deleteWorkspace?: () => void | Promise<void>;
 };
 
 /** Where the save of the identity form has got to. Validation is NOT a mode:
@@ -225,7 +233,12 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
   );
 }
 
-function DangerZone() {
+function DangerZone({ actions }: { actions?: SettingsGeneralActions }) {
+  const transfer = actions?.transferWorkspace;
+  const remove = actions?.deleteWorkspace;
+  // Nothing to offer: no card. An empty danger zone is a heading warning you
+  // about controls that are not there.
+  if (!transfer && !remove) return null;
   return (
     <Card className="border-espelette/30">
       <div className="flex items-center gap-2 text-espelette">
@@ -233,20 +246,24 @@ function DangerZone() {
         <h3 className="text-[14px] font-semibold">Danger zone</h3>
       </div>
       <ul className="mt-3 flex flex-col divide-y divide-ink/10">
-        <li className="flex items-center justify-between gap-4 py-3">
-          <div className="min-w-0">
-            <div className="text-[13.5px] font-medium text-ink">Transfer workspace</div>
-            <p className="mt-0.5 text-[12.5px] text-ink/60">Move ownership to another admin. You keep admin access.</p>
-          </div>
-          <Button variant="default" compact>Transfer</Button>
-        </li>
-        <li className="flex items-center justify-between gap-4 py-3">
-          <div className="min-w-0">
-            <div className="text-[13.5px] font-medium text-ink">Delete workspace</div>
-            <p className="mt-0.5 text-[12.5px] text-ink/60">Permanently remove all documents, members, and keys. This cannot be undone.</p>
-          </div>
-          <ConfirmButton compact confirmLabel="Delete forever?" onConfirm={() => {}}><Trash2 size={14} /> Delete</ConfirmButton>
-        </li>
+        {transfer && (
+          <li className="flex items-center justify-between gap-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-medium text-ink">Transfer workspace</div>
+              <p className="mt-0.5 text-[12.5px] text-ink/60">Move ownership to another admin. You keep admin access.</p>
+            </div>
+            <Button variant="default" compact onClick={() => void transfer()}>Transfer</Button>
+          </li>
+        )}
+        {remove && (
+          <li className="flex items-center justify-between gap-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-medium text-ink">Delete workspace</div>
+              <p className="mt-0.5 text-[12.5px] text-ink/60">Permanently remove all documents, members, and keys. This cannot be undone.</p>
+            </div>
+            <ConfirmButton compact confirmLabel="Delete forever?" onConfirm={() => void remove()}><Trash2 size={14} /> Delete</ConfirmButton>
+          </li>
+        )}
       </ul>
     </Card>
   );
@@ -286,7 +303,7 @@ function Body({ data, error, actions }: { data: SettingsGeneralData; error: stri
     <>
       {data.save === "saved" && <Alert tone="ok" title="Workspace saved">Your identity changes are live for all members.</Alert>}
       <WorkspaceForm data={data} actions={actions} />
-      {data.danger && <DangerZone />}
+      {data.danger && <DangerZone actions={actions} />}
     </>
   );
 }

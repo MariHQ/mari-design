@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Mail, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Logo, Brandmark } from "../shell/Logo";
@@ -56,6 +56,10 @@ export type LoginActions = {
   /** Sign in as the workspace admin with no credentials, when the server has
       the bypass enabled. */
   bypass?: () => void | Promise<void>;
+  /** Submit the six-digit code from the authenticator app. */
+  verifyCode?: (code: string) => void | Promise<void>;
+  /** Fall back to a recovery code when the device is gone. */
+  useRecoveryCode?: () => void;
   /** Leave a post-submit screen and go back to the credentials form. Which
       screen is showing comes from `data`, so the page cannot undo it itself —
       without this, "Check your inbox" was a one-way door. */
@@ -188,6 +192,97 @@ function OAuthRow({ providers, actions }: { providers: LoginProvider[]; actions?
    hatch on, so a workspace that would reject the call never advertises it. The
    label says plainly what it does; an unexplained way past the password field
    is the kind of thing someone should recognise on sight. */
+/* The six code boxes and their submit.
+
+   The boxes were uncontrolled and the button had no handler, so the screen
+   could be looked at and not used. They are one controlled value now: typing
+   advances, Backspace on an empty box steps back, and pasting a six-digit code
+   into any box fills all six — which is what people actually do with a code
+   they just copied out of an app. */
+function TwoFactorForm({ digits, error, actions }: {
+  digits: string[];
+  error: string | null;
+  actions?: LoginActions;
+}) {
+  const len = Math.max(6, digits.length);
+  const [code, setCode] = useState<string[]>(
+    () => Array.from({ length: len }, (_, i) => digits[i] ?? ""),
+  );
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const boxes = useRef<(HTMLInputElement | null)[]>([]);
+
+  const value = code.join("");
+  const ready = value.length === len && !code.includes("");
+
+  const put = (i: number, raw: string) => {
+    const chars = raw.replace(/\D/g, "");
+    if (!chars) { setCode((c) => c.map((x, j) => (j === i ? "" : x))); return; }
+    setCode((c) => {
+      const next = [...c];
+      // One character types; a pasted run fills forward from here.
+      for (let k = 0; k < chars.length && i + k < len; k += 1) next[i + k] = chars[k];
+      return next;
+    });
+    boxes.current[Math.min(i + chars.length, len - 1)]?.focus();
+  };
+
+  const submit = async () => {
+    if (!ready || !actions?.verifyCode) return;
+    setBusy(true);
+    setFailed(null);
+    try {
+      await actions.verifyCode(value);
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "That code was not accepted.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="my-3 flex gap-2" aria-label="Verification code">
+        {code.map((d, i) => (
+          <input
+            key={i}
+            ref={(el) => { boxes.current[i] = el; }}
+            inputMode="numeric"
+            autoComplete={i === 0 ? "one-time-code" : undefined}
+            maxLength={len}
+            value={d}
+            aria-label={`Digit ${i + 1}`}
+            onChange={(e) => put(i, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Backspace" && !code[i] && i > 0) boxes.current[i - 1]?.focus();
+              if (e.key === "Enter") void submit();
+            }}
+            className={`h-11 w-9 rounded-[4px] border border-ink/20 bg-paper text-center font-term text-[16px] text-ink outline-none focus:border-biscay-2 ${focusRing}`}
+          />
+        ))}
+      </div>
+      {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
+      <div className={`mt-4 ${AUTH_ACTIONS}`}>
+        <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
+          {busy ? "Verifying…" : "Verify & continue"}
+        </Button>
+        {actions?.useRecoveryCode && (
+          <span className="text-[12.5px] text-ink/65">
+            Lost your device?{" "}
+            <button
+              type="button"
+              onClick={actions.useRecoveryCode}
+              className={`font-medium text-biscay-2 hover:underline rounded-[3px] ${focusRing}`}
+            >
+              Use a recovery code
+            </button>
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
 function BypassRow({ actions }: { actions?: LoginActions }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -364,18 +459,7 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
               <p className="mt-1 text-[13px] text-ink/70">Enter the 6-digit code from your authenticator app.</p>
             </div>
           </div>
-          <div className="my-3 flex gap-2" aria-label="Verification code">
-            {data.codeDigits.map((d, i) => (
-              <input key={i} inputMode="numeric" maxLength={1} defaultValue={d} aria-label={`Digit ${i + 1}`}
-                className={`h-11 w-9 rounded-[4px] border border-ink/20 bg-paper text-center font-term text-[16px] text-ink outline-none focus:border-biscay-2 ${focusRing}`} />
-            ))}
-          </div>
-          <div className={`mt-4 ${AUTH_ACTIONS}`}>
-            <Button variant="primary">Verify &amp; continue</Button>
-            <span className="text-[12.5px] text-ink/65">
-              Lost your device? <span className="font-medium text-biscay-2">Use a recovery code</span>
-            </span>
-          </div>
+          <TwoFactorForm digits={data.codeDigits} error={error} actions={actions} />
         </Card>
       );
     default:

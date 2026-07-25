@@ -354,7 +354,9 @@ function ConnectFlow({ c, phase, uploadFiles, actions }: {
               )}
             </>
           ) : effective === "done" ? (
-            <Button variant="primary">Done <CheckCircle2 size={14} /></Button>
+            /* Finishing the wizard puts the panel back to the connector list,
+               which is what "Done" has always looked like it would do. */
+            <Button variant="primary" onClick={() => setLive(null)}>Done <CheckCircle2 size={14} /></Button>
           ) : null}
           <Button disabled={configuring} onClick={() => setLive("configure")}>Back</Button>
           {!configuring && effective !== "done" && (

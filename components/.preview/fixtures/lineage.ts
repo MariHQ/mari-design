@@ -157,7 +157,7 @@ const BASE: LineageData = {
   drawer: null,
   crumbs: null,
   extras: null,
-  action: "Authentication API ↗",
+  action: { label: "Authentication API ↗", docId: 1 },
 };
 
 const view = (over: Partial<LineageData>): LineageData => ({ ...BASE, ...over });

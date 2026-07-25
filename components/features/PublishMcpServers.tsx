@@ -105,15 +105,29 @@ function CapPicker({ selected, onToggle }: { selected: string[]; onToggle: (k: s
   );
 }
 
-export type PublishMcpServersProps = { servers: McpServer[]; actions?: PublishMcpActions; loading?: boolean; className?: string };
+export type PublishMcpServersProps = {
+  servers: McpServer[];
+  actions?: PublishMcpActions;
+  /** Open the create form, and show a server as if it had just been minted.
+      Canvas only: these two steps used to be depicted by a pair of static
+      copies of this panel living in PublishPage, whose Create/Cancel/New
+      server buttons did nothing. */
+  createOpen?: boolean;
+  revealServer?: { name: string; token: string } | null;
+  loading?: boolean;
+  className?: string;
+};
 
-export function PublishMcpServers({ servers: initialServers, actions, loading = false, className = "" }: PublishMcpServersProps) {
+export function PublishMcpServers({
+  servers: initialServers, actions, createOpen = false, revealServer = null,
+  loading = false, className = "",
+}: PublishMcpServersProps) {
   const [servers, setServers] = useState<McpServer[]>(initialServers);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(createOpen);
   const [name, setName] = useState("");
   const [scope, setScope] = useState<McpScope>("workspace");
   const [caps, setCaps] = useState<string[]>(["search", "facts"]);
-  const [fresh, setFresh] = useState<{ name: string; token: string } | null>(null);
+  const [fresh, setFresh] = useState<{ name: string; token: string } | null>(revealServer);
   /* A platform team runs dozens of servers. Show a screenful of cards and name
      the remainder rather than stacking 60 cards (CONVENTIONS §13). */
   const [showAll, setShowAll] = useState(false);

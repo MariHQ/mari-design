@@ -6,6 +6,7 @@ import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerC
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
@@ -54,7 +55,8 @@ export type HarvestSource = { key: "slack" | "docs" | "history"; label: string; 
 /** One question/answer pair the scan proposed. */
 export type HarvestCandidate = { question: string; draft: string; source: string; confidence: number };
 
-/** The harvest wizard, as a static rendition of one step of the drawer. */
+/** The harvest wizard's starting point. An app opens it at "select"; the
+    canvas opens it at whichever step it wants to review. */
 export type Harvest = {
   phase: "select" | "scan" | "review" | "importing" | "done";
   sources: HarvestSource[];
@@ -78,6 +80,12 @@ export type AnswersPane =
 export type AnswersActions = AnswerActions & {
   /** Save a new answer. It lands as a draft until someone approves it. */
   create?: (args: { question: string; answer: string }) => void | Promise<void>;
+  /** Scan the chosen sources for question/answer pairs. Answers with what it
+      found, so the wizard reviews the server's result rather than reading it
+      back from a second query. */
+  harvest?: (sources: HarvestSource["key"][]) => Promise<HarvestCandidate[]>;
+  /** Save the accepted candidates as draft answers, in one go. */
+  importAnswers?: (drafts: { question: string; answer: string }[]) => void | Promise<void>;
 };
 
 /** Whatever the server said, or a floor when the failure carried no message. */
@@ -110,6 +118,18 @@ const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
   docs: <FileText size={18} />,
   history: <Sparkles size={18} />,
 };
+
+/* What the wizard offers to scan when the page opens it fresh. This is
+   product structure rather than demo content — the same three places a
+   harvest can read from, in the same order, wherever the wizard is opened —
+   so it lives beside the icon map that already enumerates them. An app that
+   knows which sources a workspace actually has can override the whole list by
+   pinning `data.pane`. */
+const HARVEST_SOURCES: HarvestSource[] = [
+  { key: "slack", label: "Slack threads", desc: "Questions asked in channels Mari can read.", on: true },
+  { key: "docs", label: "Documents", desc: "FAQ sections and Q&A headings in the knowledge base.", on: true },
+  { key: "history", label: "Ask history", desc: "What people have asked Mari that had no approved answer.", on: false },
+];
 
 function AnswersList({ data, error, actions, onCompose }: {
   data: AnswersData; error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
@@ -262,17 +282,82 @@ function NewAnswer({ question: initial, actions, onClose }: {
   );
 }
 
-/* ── inline harvest-wizard step previews (static renditions of the drawer) ── */
+/* ── Harvest wizard ────────────────────────────────────────────────────────
+   Scan sources for question/answer pairs people keep asking, review what came
+   back, import the keepers as drafts.
+
+   This was five static renditions of a drawer: `data.pane.harvest.phase`
+   picked which step to draw, and every control in every step was inert — you
+   could not select a source, skip a candidate, or import anything. It is now
+   one state machine that actually advances, and `data.pane.harvest` seeds its
+   starting point so the canvas can still open on any step.
+
+   The scan and the import are optional actions, like every write in this
+   library. Without them the wizard still runs end to end on the candidates it
+   was given, which is what the canvas renders; with them the scan is the
+   server's answer and the import is a real write. */
 
 function confTone(c: number): ComponentProps<typeof Chip>["tone"] {
   return c >= 75 ? "ok" : c >= 45 ? "attention" : "neutral";
 }
 
-function HarvestPreview({ harvest }: { harvest: Harvest }) {
-  const { phase, candidates } = harvest;
+/** Confidence at or above which "Accept all high confidence" selects. */
+const HIGH_CONFIDENCE = 75;
+
+/** A candidate plus what the reviewer has done to it. `draft` is separate from
+    the proposal so editing the wording never loses what was suggested. */
+type Reviewed = HarvestCandidate & { accepted: boolean; draft: string };
+
+function HarvestWizard({ harvest, actions, onClose }: {
+  harvest: Harvest;
+  actions?: AnswersActions;
+  onClose: () => void;
+}) {
+  const [phase, setPhase] = useState<Harvest["phase"]>(harvest.phase);
+  const [sources, setSources] = useState<HarvestSource[]>(harvest.sources);
+  const [rows, setRows] = useState<Reviewed[]>(
+    () => harvest.candidates.map((c) => ({ ...c, accepted: true, draft: c.draft })),
+  );
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const selected = sources.filter((s) => s.on);
+  const accepted = rows.filter((r) => r.accepted);
   const step = HARVEST_STEP[phase];
-  const importing = phase === "importing";
-  const selected = harvest.sources.filter((s) => s.on).length;
+
+  const toggleSource = (label: string) =>
+    setSources((prev) => prev.map((s) => (s.label === label ? { ...s, on: !s.on } : s)));
+
+  const scan = async () => {
+    setFailed(null);
+    setPhase("scan");
+    try {
+      // With no handler the wizard reviews what it was given, which is how the
+      // canvas drives it; with one, the server decides what was found.
+      const found = actions?.harvest
+        ? await actions.harvest(selected.map((s) => s.key))
+        : harvest.candidates;
+      setRows(found.map((c) => ({ ...c, accepted: c.confidence >= HIGH_CONFIDENCE, draft: c.draft })));
+      setPhase("review");
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "The scan could not finish.");
+      setPhase("select");
+    }
+  };
+
+  const importDrafts = async () => {
+    setFailed(null);
+    setPhase("importing");
+    try {
+      if (actions?.importAnswers) {
+        await actions.importAnswers(accepted.map((r) => ({ question: r.question, answer: r.draft })));
+      }
+      setPhase("done");
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "The import could not finish.");
+      setPhase("review");
+    }
+  };
+
   return (
     <Card>
       <div className="mb-5 flex items-center gap-2 text-[15px] font-semibold text-ink">
@@ -280,11 +365,22 @@ function HarvestPreview({ harvest }: { harvest: Harvest }) {
       </div>
       <Stepper labels={["Sources", "Scan", "Review", "Import"]} current={step} />
 
+      {failed && <div className="mt-4"><WriteError>{failed}</WriteError></div>}
+
       {phase === "select" && (
         <div className="mt-5 flex flex-col gap-3">
           <p className="text-[13px] text-ink/70">Pick the sources Mari should scan for question and answer candidates. Nothing is saved until you import.</p>
-          {harvest.sources.map((s) => (
-            <label key={s.label} className={`flex items-start gap-3 rounded-[5px] border px-3.5 py-3 ${s.on ? "border-biscay-2/60 bg-biscay-2/[0.04] ring-1 ring-biscay-2/40" : "border-ink/15"}`}>
+          {sources.map((s) => (
+            <label
+              key={s.label}
+              className={`flex cursor-pointer items-start gap-3 rounded-[5px] border px-3.5 py-3 ${s.on ? "border-biscay-2/60 bg-biscay-2/[0.04] ring-1 ring-biscay-2/40" : "border-ink/15"}`}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={s.on}
+                onChange={() => toggleSource(s.label)}
+              />
               <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{SOURCE_ICON[s.key]}</span>
               <span className="min-w-0">
                 <b className="block text-[13.5px] font-semibold text-ink">{s.label}</b>
@@ -292,7 +388,12 @@ function HarvestPreview({ harvest }: { harvest: Harvest }) {
               </span>
             </label>
           ))}
-          <div className="flex items-center gap-2"><Button variant="primary">{`Scan ${selected} sources`}</Button><Button variant="default">Cancel</Button></div>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" disabled={selected.length === 0} onClick={() => void scan()}>
+              {selected.length === 0 ? "Pick a source to scan" : `Scan ${selected.length} source${selected.length === 1 ? "" : "s"}`}
+            </Button>
+            <Button variant="default" onClick={onClose}>Cancel</Button>
+          </div>
         </div>
       )}
 
@@ -306,55 +407,89 @@ function HarvestPreview({ harvest }: { harvest: Harvest }) {
 
       {phase === "review" && (
         <div className="mt-5 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="font-term text-[12px] text-ink/65">{`${candidates.length} of ${candidates.length} accepted`}</span>
-            <Button compact>Accept all high confidence</Button>
-          </div>
-          {candidates.map((c) => (
-            <Card key={c.question}>
-              <h3 className="text-[13.5px] font-semibold text-ink">{c.question}</h3>
-              <div className="mt-1.5 flex items-center gap-2">
-                <Chip label={c.source} tone="neutral" />
-                <Chip label={`${c.confidence}% confident`} tone={confTone(c.confidence)} dot />
+          {rows.length === 0 ? (
+            <>
+              <p className="text-[13px] text-ink/70">The scan found no question and answer pairs in those sources.</p>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" onClick={() => setPhase("select")}>Pick different sources</Button>
+                <Button variant="default" onClick={onClose}>Cancel</Button>
               </div>
-              <Textarea short className="mt-2.5" defaultValue={c.draft} />
-              <div className="mt-2.5 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-moss"><CheckCircle2 size={15} /> Accepted</span>
-                <span className="flex-1" />
-                <Button compact>Skip</Button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-term text-[12px] text-ink/65">{`${accepted.length} of ${rows.length} accepted`}</span>
+                <Button
+                  compact
+                  onClick={() => setRows((prev) => prev.map((r) => (r.confidence >= HIGH_CONFIDENCE ? { ...r, accepted: true } : r)))}
+                >
+                  Accept all high confidence
+                </Button>
               </div>
-            </Card>
-          ))}
-          <div className="flex items-center gap-2"><Button variant="primary">{`Import ${candidates.length} drafts`}</Button><Button variant="default">Cancel</Button></div>
+              {rows.map((r, i) => (
+                <Card key={r.question} className={r.accepted ? undefined : "opacity-55"}>
+                  <h3 className="text-[13.5px] font-semibold text-ink">{r.question}</h3>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Chip label={r.source} tone="neutral" />
+                    <Chip label={`${r.confidence}% confident`} tone={confTone(r.confidence)} dot />
+                  </div>
+                  <Textarea
+                    short
+                    className="mt-2.5"
+                    value={r.draft}
+                    onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, draft: e.target.value } : x)))}
+                  />
+                  <div className="mt-2.5 flex items-center gap-2">
+                    {r.accepted && <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-moss"><CheckCircle2 size={15} /> Accepted</span>}
+                    <span className="flex-1" />
+                    <Button
+                      compact
+                      onClick={() => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, accepted: !x.accepted } : x)))}
+                    >
+                      {r.accepted ? "Skip" : "Accept"}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+              <div className="flex items-center gap-2">
+                <Button variant="primary" disabled={accepted.length === 0} onClick={() => void importDrafts()}>
+                  {accepted.length === 0 ? "Accept at least one" : `Import ${accepted.length} draft${accepted.length === 1 ? "" : "s"}`}
+                </Button>
+                <Button variant="default" onClick={onClose}>Cancel</Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {(phase === "importing" || phase === "done") && (
         <div className="mt-5 flex flex-col gap-4">
           <p className="text-[13px] text-ink/70">
-            {importing
-              ? `Saving ${candidates.length} draft answers…`
-              : `Imported ${candidates.length} draft answers. They're queued in the Drafts filter for approval.`}
+            {phase === "importing"
+              ? `Saving ${accepted.length} draft answers…`
+              : `Imported ${accepted.length} draft answers. They're queued in the Drafts filter for approval.`}
           </p>
           <ul className="flex flex-col gap-2">
-            {candidates.map((c, i) => {
-              const doneRow = !importing || i < candidates.length - 1;
-              const savingRow = importing && i === candidates.length - 1;
+            {accepted.map((r, i) => {
+              const saving = phase === "importing" && i === accepted.length - 1;
+              const done = phase === "done" || i < accepted.length - 1;
               return (
-                <li key={c.question} className="flex items-center gap-2.5 text-[13px] text-ink/80">
-                  {doneRow ? <CheckCircle2 size={16} className="shrink-0 text-moss" />
-                    : savingRow ? <Spinner size="sm" />
+                <li key={r.question} className="flex items-center gap-2.5 text-[13px] text-ink/80">
+                  {done ? <CheckCircle2 size={16} className="shrink-0 text-moss" />
+                    : saving ? <Spinner size="sm" />
                     : <Circle size={14} className="shrink-0 text-ink/30" />}
-                  <span className="min-w-0 flex-1 truncate">{c.question}</span>
+                  <span className="min-w-0 flex-1 truncate">{r.question}</span>
                   <span className="font-term text-[11px] shrink-0 text-ink/65">
-                    {doneRow ? "draft saved" : savingRow ? "saving…" : "queued"}
+                    {done ? "draft saved" : saving ? "saving…" : "queued"}
                   </span>
                 </li>
               );
             })}
           </ul>
           <div className="flex items-center gap-2">
-            <Button variant="primary" disabled={importing}>{importing ? "Saving…" : "Done"}</Button>
+            <Button variant="primary" disabled={phase === "importing"} onClick={onClose}>
+              {phase === "importing" ? "Saving…" : "Done"}
+            </Button>
           </div>
         </div>
       )}
@@ -362,12 +497,16 @@ function HarvestPreview({ harvest }: { harvest: Harvest }) {
   );
 }
 
-function Body({ data, error, actions, mobile, composing, onCompose, onCloseComposer }: {
+
+function Body({ data, error, actions, mobile, composing, onCompose, onCloseComposer, harvest, onCloseHarvest }: {
   data: AnswersData; error: string | null; actions?: AnswersActions; mobile: boolean;
   /** The question the composer opened on, or null when it is closed. */
   composing: string | null;
   onCompose: (question: string) => void;
   onCloseComposer: () => void;
+  /** The harvest wizard's starting point, or null when it is closed. */
+  harvest: Harvest | null;
+  onCloseHarvest: () => void;
 }) {
   const [filter, setFilter] = useState<AnswersFilter>(data.filter);
 
@@ -375,8 +514,8 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
 
   /* One main column + the standard 320px rail (§11) for every state, so the
      outer edges and the rail plumb line never move between states. */
-  const main = data.pane.kind === "harvest" ? (
-    <HarvestPreview harvest={data.pane.harvest} />
+  const main = harvest ? (
+    <HarvestWizard harvest={harvest} actions={actions} onClose={onCloseHarvest} />
   ) : isCoverage ? (
     <CoverageCard questions={data.coverage} error={error} extended onCompose={onCompose} />
   ) : (
@@ -428,13 +567,23 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
   /* The composer is a mode of this page, not a property of the library: it
      opens on "" for a blank answer, or on the text of a coverage gap. */
   const [composing, setComposing] = useState<string | null>(null);
+
+  /* The wizard is a mode of this page. `data.pane` can pin it open on a given
+     step (that is how the canvas reviews each one); otherwise the header
+     button opens it at the beginning. */
+  const pinned = data.pane.kind === "harvest" ? data.pane.harvest : null;
+  const [harvesting, setHarvesting] = useState<Harvest | null>(null);
+  const harvest = harvesting ?? pinned;
+
   const headerActions = (
     <>
-      {/* Harvest stays as it was: `scanAnswerCandidates` exists, but the wizard
-          is a static rendition of one step out of `data.pane`, with no local
-          accept/skip state to import from. Wiring it means making the wizard
-          interactive first, so no handler is claimed for it here. */}
-      <Button variant="default" compact><Sparkles size={15} /> Harvest questions</Button>
+      <Button
+        variant="default"
+        compact
+        onClick={() => setHarvesting({ phase: "select", sources: HARVEST_SOURCES, scanning: "Reading recent threads…", candidates: [] })}
+      >
+        <Sparkles size={15} /> Harvest questions
+      </Button>
       <Button variant="primary" compact onClick={() => setComposing("")}><Plus size={15} /> New answer</Button>
     </>
   );
@@ -460,6 +609,8 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
             composing={composing}
             onCompose={setComposing}
             onCloseComposer={() => setComposing(null)}
+            harvest={harvest}
+            onCloseHarvest={() => setHarvesting(null)}
           />
         </div>
       </div>

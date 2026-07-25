@@ -49,7 +49,10 @@ const STATES = [
 /** What the Flows page can DO. Every handler may throw and the control that
     called it shows the message. All optional: without actions every control
     keeps the local behaviour the library ships (the canvas has no server). */
-export type FlowsActions = FlowsListActions & FlowsRunActions;
+export type FlowsActions = FlowsListActions & FlowsRunActions & {
+  /** Open one flow's pipeline editor. */
+  openFlow?: (id: number) => void;
+};
 
 export type TriggerKind = "manual" | "schedule" | "document";
 
@@ -110,78 +113,6 @@ function Extras({ extras }: { extras: FlowsExtras }) {
   );
 }
 
-/* ── inline trigger editor ──────────────────────────────────────────────────
-   A static preview of the Trigger Drawer from FlowsList (which owns its own
-   open state and can't be pre-opened via props). Rebuilt here from catalog
-   primitives so each trigger kind shows as its own gallery state. */
-function TriggerEditorPreview({ trigger }: { trigger: FlowsTrigger }) {
-  const { kind } = trigger;
-  return (
-    <Drawer
-      open
-      variant="inline"
-      closable
-      onClose={() => {}}
-      title="Trigger"
-      subtitle={trigger.flow}
-      icon={<Bell size={16} className="text-ink/65" />}
-      footer={
-        <>
-          <Button variant="primary">Save trigger</Button>
-          <Button>Cancel</Button>
-        </>
-      }
-    >
-      <Field label="On">
-        <Select value={trigger.on} onChange={() => {}} className="w-full">
-          <option value="">Manual only</option>
-          <option value="document_added">Document added</option>
-          <option value="document_changed">Document changed</option>
-          <option value="schedule">Schedule</option>
-        </Select>
-      </Field>
-
-      {kind === "schedule" && (
-        <Field label="Every (minutes)">
-          <Input type="number" min={1} max={10080} value={10080} onChange={() => {}} className="w-full" />
-          <div className="mt-1.5 font-term text-[11px] text-ink/65">Every week · presets: 10 / 60 / 1440 / 10080</div>
-          <div className="mt-1 text-[11.5px] text-ink/65">
-            The scheduler checks twice a minute and never starts a run while the previous one is still going.
-          </div>
-        </Field>
-      )}
-
-      {kind === "document" && (
-        <>
-          <Field label="Source">
-            <Select value="1" onChange={() => {}} className="w-full">
-              <option value="">Any source</option>
-              <option value="1">GitHub · product-docs</option>
-              <option value="2">Slack · #support</option>
-            </Select>
-          </Field>
-          <Field label="Tag">
-            <Input value="customer-facing" onChange={() => {}} className="w-full" />
-          </Field>
-          <Field label="Path glob">
-            <Input value="docs/**" onChange={() => {}} className="w-full font-term" />
-          </Field>
-          <div className="pt-2 text-[11.5px] text-ink/65">Filters are optional and combine: a run fires only when all set filters match.</div>
-        </>
-      )}
-
-      {kind === "manual" && (
-        <div className="pt-2 text-[12.5px] text-ink/70">
-          <FileText size={13} className="mr-1 inline text-ink/65" />
-          Manual only: this flow runs when you press Run or Test run.
-        </div>
-      )}
-    </Drawer>
-  );
-}
-
-/** No automation in the workspace at all, on any surface. Derived from the
-    data, so it is true in the real app for the same reason it is true here. */
 function isEmpty(d: FlowsData): boolean {
   return !d.flows.length && !d.editor && !d.runPanel && !d.runHistory && !d.trigger && !d.extras;
 }
@@ -219,28 +150,24 @@ function Body({ data, error, actions, mobile }: {
     );
   }
 
-  const list = <FlowsList flows={data.flows} sources={data.sources} actions={actions} />;
+  /* The trigger editor is FlowsList's own drawer, opened through its props.
+     This page used to draw a second, inline copy of that drawer because the
+     real one "owns its own open state and can't be pre-opened" — so the copy's
+     Save and Cancel did nothing. Making the real one pre-openable is the
+     smaller change, and it is the drawer people actually use. */
+  const editTriggerFor = data.trigger
+    ? data.flows.find((f) => f.name === data.trigger!.flow)?.id ?? null
+    : null;
 
-  if (data.trigger) {
-    /* Standard 320px supporting rail beside the list on desktop (§11; §10: no
-       flex-col/lg:flex-row); on mobile the rail stacks under the list. */
-    if (mobile) {
-      return (
-        <div className="flex flex-col gap-5">
-          {list}
-          <TriggerEditorPreview trigger={data.trigger} />
-        </div>
-      );
-    }
-    return (
-      <div className={`items-start ${SPLIT[320]}`}>
-        <div className="min-w-0">{list}</div>
-        <div className="min-w-0"><TriggerEditorPreview trigger={data.trigger} /></div>
-      </div>
-    );
-  }
-
-  return list;
+  return (
+    <FlowsList
+      flows={data.flows}
+      sources={data.sources}
+      actions={actions}
+      editTriggerFor={editTriggerFor}
+      onOpenFlow={actions?.openFlow}
+    />
+  );
 }
 
 function FlowsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<FlowsData, FlowsActions>) {

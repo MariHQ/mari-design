@@ -92,7 +92,7 @@ export const FIXTURES: PageFixtures<SettingsApiKeysData> = {
     },
   },
   "revoke-confirm": { data: { ...BASE, phase: "revoke-confirm", confirmKeyId: 2 } },
-  revoked: { data: { ...BASE, phase: "plain-table", keys: MANY_KEYS } },
+  revoked: { data: { ...BASE, phase: "list", keys: MANY_KEYS } },
   overflow: { data: strained(false) },
   stress: { data: strained(true) },
 };

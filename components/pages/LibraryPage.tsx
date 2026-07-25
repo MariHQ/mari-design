@@ -155,7 +155,12 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
     );
   }
 
-  const headerActions = <Button variant="default">Setup guide</Button>;
+  /* The Library IS the editorial system; "Setup guide" is the walkthrough that
+     populates it, which is onboarding. Offered only where there is somewhere
+     to send you. */
+  const headerActions = chrome?.onNavigate
+    ? <Button variant="default" onClick={() => chrome.onNavigate!("welcome")}>Setup guide</Button>
+    : undefined;
 
   return (
     <PageFrame chrome={chrome} active={navFor("library")} title="Library" mobile={mobile}>
@@ -167,7 +172,7 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
           icon={<span className="text-moss"><BookOpen size={24} /></span>}
           actions={mobile ? undefined : headerActions}
         />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
+        {mobile && headerActions && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
         {body}
       </div>
     </PageFrame>

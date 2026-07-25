@@ -59,12 +59,19 @@ export type SettingsApiKeysProps = {
       "Create key" button, so it owns this. */
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
+  /** Pin one row's Revoke into its armed "Revoke?" step, and show a token as
+      if it had just been minted. Canvas only, and for the same reason
+      `createOpen` is controllable: a state worth reviewing has to be reachable
+      without clicking through to it. */
+  confirmRevokeId?: number | null;
+  revealToken?: string | null;
   loading?: boolean;
   className?: string;
 };
 
 export function SettingsApiKeys({
   keys: initialKeys, actions, createOpen, onCreateOpenChange,
+  confirmRevokeId = null, revealToken = null,
   loading = false, embedded = false, className = "",
 }: SettingsApiKeysProps) {
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
@@ -74,7 +81,7 @@ export function SettingsApiKeys({
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState("read");
   const [saving, setSaving] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(revealToken);
 
   /* Create and revoke both go through `write`: with no `actions` they are the
      local-state changes this panel has always made (which is what the design
@@ -198,7 +205,7 @@ export function SettingsApiKeys({
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDate(k.created)}</td>
                     <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{k.lastUsed ? fmtDate(k.lastUsed) : "Never"}</td>
                     <td className={tdPad}><Chip label={k.revoked ? "Revoked" : "Active"} tone={k.revoked ? "blocked" : "ok"} dot caps /></td>
-                    <td className={`${tdPad} whitespace-nowrap`}>{!k.revoked && <ConfirmButton compact confirmLabel="Revoke?" onConfirm={() => revoke(k.id)}>Revoke</ConfirmButton>}</td>
+                    <td className={`${tdPad} whitespace-nowrap`}>{!k.revoked && <ConfirmButton compact confirmLabel="Revoke?" defaultArmed={k.id === confirmRevokeId} onConfirm={() => revoke(k.id)}>Revoke</ConfirmButton>}</td>
                   </tr>
                 ))}
               </tbody>

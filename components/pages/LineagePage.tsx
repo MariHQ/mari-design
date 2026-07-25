@@ -122,8 +122,11 @@ export type LineageData = {
   /** Trail above the instrument. null = none. */
   crumbs: string[] | null;
   extras: LineageExtras | null;
-  /** The header's secondary action, e.g. the document being traced. */
-  action: string;
+  /** The document currently being traced, shown as the header's secondary
+      action. The label used to be a bare string ending in "↗" — an arrow
+      promising a destination that the button did not have. It carries the
+      document id now, so the promise is keepable. `null` = nothing in focus. */
+  action: { label: string; docId: number } | null;
 };
 
 /** A self-contained search-results dropdown, shown as if the toolbar typeahead
@@ -324,7 +327,13 @@ function Body({ data, error, actions, mobile }: {
 function LineagePage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<LineageData, LineageActions>) {
   /* `data.action` names the document being traced; an empty one is a workspace
      with nothing in focus, and there is nothing to offer then. */
-  const headerActions = data.action ? <Button variant="default">{data.action}</Button> : undefined;
+  const headerActions = data.action && actions?.openDocument
+    ? (
+      <Button variant="default" onClick={() => actions.openDocument!(data.action!.docId)}>
+        {data.action.label}
+      </Button>
+    )
+    : undefined;
   return (
     <PageFrame chrome={chrome} active={navFor("lineage")} title="Lineage" mobile={mobile}>
       {loading ? (

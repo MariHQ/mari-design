@@ -44,6 +44,10 @@ export type Claim = { token: string; name: string; email: string; password: stri
  *  still walk, which is what the design canvas renders. */
 export type SetupActions = {
   claimWorkspace?: (c: Claim) => void | Promise<void>;
+  /** Leave first-run setup. The workspace is claimed and the admin is signed
+      in by this point, so both exits are ordinary navigation — the screen just
+      names which one was chosen. */
+  finish?: (target: "overview" | "sources") => void;
 };
 
 /** Everything the Setup screen renders. */
@@ -170,7 +174,7 @@ function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
   );
 }
 
-function SuccessStep({ workspace }: { workspace: string }) {
+function SuccessStep({ workspace, actions }: { workspace: string; actions?: SetupActions }) {
   return (
     <div className="flex flex-col gap-3 py-2">
       <div className="flex items-start gap-3">
@@ -185,8 +189,8 @@ function SuccessStep({ workspace }: { workspace: string }) {
       </div>
       {/* Biggest action last, and bottom left (§1, §2). */}
       <div className={`mt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary">Go to Overview <ArrowRight size={14} /></Button>
-        <Button variant="link">Connect a source first</Button>
+        <Button variant="primary" onClick={() => actions?.finish?.("overview")}>Go to Overview <ArrowRight size={14} /></Button>
+        <Button variant="link" onClick={() => actions?.finish?.("sources")}>Connect a source first</Button>
       </div>
     </div>
   );
@@ -246,7 +250,7 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
           <div className="mb-5">
             <Stepper labels={["Token", "Admin account"]} current={step === "token" ? 0 : 1} ariaLabel="Setup steps" />
           </div>
-          {done ? <SuccessStep workspace={claim.workspace || data.workspace} />
+          {done ? <SuccessStep workspace={claim.workspace || data.workspace} actions={actions} />
             : step === "token" ? <TokenStep data={data} error={shown} claim={claim} set={set} onNext={() => setStep("admin")} />
             : <AdminStep error={shown} claim={claim} set={set} busy={busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
         </Card>

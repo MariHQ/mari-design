@@ -11,6 +11,12 @@ export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
                    check glyph so the affirmative path is unmistakable.
        "primary" — neutral next step. */
   confirmVariant?: "danger" | "success" | "primary";
+  /* Start already armed. Only the design canvas should pass this: it is how
+     the confirm step gets captured as a state without a click, which is what
+     the Settings pages used to fake by drawing a second, static copy of the
+     whole table beside the real one. No disarm timer runs until you actually
+     click, so the armed step holds still for a screenshot. */
+  defaultArmed?: boolean;
 };
 
 /* Two-step confirm, the one pattern for deletes/revokes and for any yes/no
@@ -21,9 +27,10 @@ export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
    Wherever this sits inline on a card or panel it belongs BOTTOM LEFT, ahead
    of any secondary action (CONVENTIONS.md §2). */
 export function ConfirmButton({
-  confirmLabel = "Really?", onConfirm, confirmVariant = "danger", children, onBlur, ...rest
+  confirmLabel = "Really?", onConfirm, confirmVariant = "danger", defaultArmed = false,
+  children, onBlur, ...rest
 }: ConfirmButtonProps) {
-  const [armed, setArmed] = useState(false);
+  const [armed, setArmed] = useState(defaultArmed);
   const timer = useRef<number>();
 
   useEffect(() => () => window.clearTimeout(timer.current), []);

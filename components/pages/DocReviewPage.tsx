@@ -79,6 +79,10 @@ export type DocReviewActions = ChangeQueueActions & RefineActions & FindingsActi
   save?: (args: { body: string }) => void | Promise<void>;
   /** Watch or unwatch this document. Resolves to the new watched state. */
   toggleWatch?: () => Promise<boolean>;
+  /** Hand this document's address to whoever is being shared with. The app
+      owns what sharing means — a copied link, a share sheet, an invite — so
+      the page only says that the reader asked to share. */
+  share?: () => void | Promise<void>;
 };
 
 /** Whatever the server said, or a floor when the failure carried no message. */
@@ -104,10 +108,11 @@ function isEmpty(d: DocReviewData): boolean {
     && !doc.changes.length && !doc.findings.length && !doc.claims.length;
 }
 
-function HeaderActions({ save, onSave, onWatch, watched }: {
+function HeaderActions({ save, onSave, onWatch, onShare, watched }: {
   save: SaveState;
   onSave?: () => void;
   onWatch?: () => void;
+  onShare?: () => void;
   watched: boolean;
 }) {
   const offlineDirty = save === "offline-dirty";
@@ -141,9 +146,13 @@ function HeaderActions({ save, onSave, onWatch, watched }: {
       <Button compact variant="default" onClick={onWatch}>
         <Eye size={15} /> {watched ? "Watching" : "Watch"}
       </Button>
-      <Button compact variant="default">
-        <Share2 size={15} /> Share
-      </Button>
+      {/* Only offered where sharing means something. A Share button that
+          cannot share is worse than a page with no Share button. */}
+      {onShare && (
+        <Button compact variant="default" onClick={onShare}>
+          <Share2 size={15} /> Share
+        </Button>
+      )}
     </>
   );
 }
@@ -332,6 +341,7 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
       watched={watched}
       onSave={actions?.save ? onSave : undefined}
       onWatch={actions?.toggleWatch ? onWatch : undefined}
+      onShare={actions?.share}
     />
   );
   return (

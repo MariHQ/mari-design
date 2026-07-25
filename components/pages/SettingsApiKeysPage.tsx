@@ -48,9 +48,17 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** Which lifecycle step of key management is on screen. */
+/** Which lifecycle step of key management is on screen.
+
+    Each of these used to render a static copy of the keys table and its
+    controls, built in this file beside the real SettingsApiKeys feature —
+    five buttons that looked like create, cancel and revoke and did none of
+    them. They now drive the real component through its own props.
+
+    "plain-table" is gone: it existed only to render the twin without any
+    lifecycle step on top, which is what "list" already is. */
 export type KeysPhase =
-  | "list" | "plain-table" | "create-key" | "key-created" | "revoke-confirm";
+  | "list" | "create-key" | "key-created" | "revoke-confirm";
 
 /** A key being created, before the server has minted it. */
 export type ApiKeyDraft = { name: string; scopes: string };
@@ -82,33 +90,6 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
       <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
     </div>
-  );
-}
-
-const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
-
-function KeysTable({ keys, confirmId = null }: { keys: ApiKey[]; confirmId?: number | null }) {
-  return (
-    <Card variant="flush" title="Keys" hint="Rate-limited per key. Revocation is immediate.">
-      <Scrollable>
-        <table className="w-full text-left border-collapse" style={{ minWidth: 780 }}>
-          <thead><tr>{["Name", "Key", "Scopes", "Created", "Last used", "Status", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 6 ? { width: 110 } : undefined}>{h}</th>)}</tr></thead>
-          <tbody>
-            {keys.map((k) => (
-              <tr key={k.id} className={`border-b border-ink/10 last:border-0 ${k.revoked ? "opacity-45" : ""}`}>
-                <td className="px-4 py-3 text-[13px] font-medium text-ink">{k.name}</td>
-                <td className="px-4 py-3 font-term text-[12px] text-ink/70">{k.prefix}</td>
-                <td className="px-4 py-3 font-term text-[12px] text-ink/60">{k.scopes}</td>
-                <td className="px-4 py-3 font-term text-[12px] text-ink/60">{fmtDate(k.created)}</td>
-                <td className="px-4 py-3 font-term text-[12px] text-ink/60">{k.lastUsed ? fmtDate(k.lastUsed) : "never"}</td>
-                <td className="px-4 py-3"><Chip label={k.revoked ? "Revoked" : "Active"} tone={k.revoked ? "blocked" : "ok"} dot caps /></td>
-                <td className="px-4 py-3">{!k.revoked && <Button compact variant={confirmId === k.id ? "danger" : "default"}>{confirmId === k.id ? "Revoke?" : "Revoke"}</Button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Scrollable>
-    </Card>
   );
 }
 
@@ -154,50 +135,16 @@ function Body({ data, error, actions, createOpen, onCreateOpenChange }: {
       </EmptyState>
     );
   }
-  if (data.phase === "plain-table") return <KeysTable keys={data.keys} />;
-
-  if (data.phase === "create-key") {
-    return (
-      <>
-        <Card title="New key" hint="Scopes are space-separated, e.g. search:read ingest:write">
-          <div className={FORM_GRID}>
-            <Field label="Name"><Input defaultValue={data.draft.name} placeholder="CI pipeline" className="w-full" /></Field>
-            <Field label="Scopes"><Input defaultValue={data.draft.scopes} className="w-full font-term" /></Field>
-          </div>
-          <div className="mt-5 flex items-center gap-2 border-t border-ink/10 pt-4">
-            <Button variant="primary"><Plus size={15} /> Create key</Button>
-            <Button>Cancel</Button>
-          </div>
-        </Card>
-        <KeysTable keys={data.keys} />
-      </>
-    );
-  }
-  if (data.phase === "key-created" && data.newSecret) {
-    return (
-      <>
-        <TokenReveal token={data.newSecret} title="Your new key" masked={false} onDismiss={() => {}} />
-        <KeysTable keys={data.keys} />
-      </>
-    );
-  }
-  if (data.phase === "revoke-confirm" && data.confirmKeyId !== null) {
-    const target = data.keys.find((k) => k.id === data.confirmKeyId);
-    return (
-      <>
-        <Alert tone="attention" title={`Revoke ${target ? target.name : "this key"}?`} action={<span className="inline-flex gap-2"><Button compact variant="danger">Revoke now</Button><Button compact>Cancel</Button></span>}>
-          Revocation is immediate and cannot be undone. Any service using this key will start receiving 401s.
-        </Alert>
-        <KeysTable keys={data.keys} confirmId={data.confirmKeyId} />
-      </>
-    );
-  }
   return (
     <SettingsApiKeys
       embedded
       keys={data.keys}
       actions={actions}
-      createOpen={createOpen}
+      /* The form opens from the page header, or because the state under review
+         says it is open. */
+      createOpen={createOpen || data.phase === "create-key"}
+      confirmRevokeId={data.phase === "revoke-confirm" ? data.confirmKeyId : null}
+      revealToken={data.phase === "key-created" ? data.newSecret : null}
       onCreateOpenChange={onCreateOpenChange}
     />
   );

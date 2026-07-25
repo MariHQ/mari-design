@@ -36,12 +36,15 @@ export type WelcomeGuideStepProps = {
   saving?: boolean;
   loading?: boolean;
   onPick?: (id: string) => void;
+  /** Leave onboarding for the Library, where style guides are authored. The
+      empty state's whole point is that there is nothing to pick yet. */
+  onOpenLibrary?: () => void;
   packs: GuidePack[];
   className?: string;
 };
 
 export function WelcomeGuideStep({
-  guide, saving = false, loading = false, onPick, packs, className = "",
+  guide, saving = false, loading = false, onPick, onOpenLibrary, packs, className = "",
 }: WelcomeGuideStepProps) {
   const [selected, setSelected] = useState<string | null>(guide ?? "plain");
   const pick = (id: string) => { setSelected(id); onPick?.(id); };
@@ -67,7 +70,7 @@ export function WelcomeGuideStep({
   if (packs.length === 0) {
     return (
       <div className={`${card} ${className}`.trim()}>
-        <EmptyState icon={<Feather size={26} />} title="No style guides yet" action={<Button compact>Open Library</Button>}>
+        <EmptyState icon={<Feather size={26} />} title="No style guides yet" action={onOpenLibrary ? <Button compact onClick={onOpenLibrary}>Open Library</Button> : undefined}>
           Add a style guide in the Library to use it as your project default.
         </EmptyState>
       </div>

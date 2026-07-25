@@ -83,7 +83,6 @@ export const FIXTURES: PageFixtures<SettingsMembersData> = {
   single: { data: { ...BASE, members: [ROSTER[0]] } },
   many: { data: { ...BASE, members: MANY } },
   "invite-open": { data: { ...BASE, interaction: "invite-open" } },
-  "role-change": { data: { ...BASE, interaction: "role-change", focusMemberId: 2 } },
   pending: { data: { ...BASE, interaction: "pending" } },
   "invite-sent": { data: { ...BASE, interaction: "invite-sent" } },
   "remove-confirm": { data: { ...BASE, interaction: "remove-confirm", focusMemberId: 3 } },

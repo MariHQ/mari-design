@@ -543,81 +543,6 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
   );
 }
 
-/* ── MCP add / token states ────────────────────────────────────────────────*/
-function McpAddServer({ draft, serverCount }: { draft: McpDraft; serverCount: number }) {
-  return (
-    <div className="flex flex-col gap-5">
-      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents: per-project, capability-scoped."
-        actions={<><CountChip count={serverCount} /><Button variant="primary"><Plus size={15} /> New server</Button></>} />
-      <Card title="New MCP server">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5"><SectionLabel>Name</SectionLabel><Input className="w-full" readOnly value={draft.name} /></label>
-          {/* Scope is granular: teams routinely run one server per product. */}
-          <label className="flex flex-col gap-1.5">
-            <SectionLabel>Scope</SectionLabel>
-            <Select className="w-full" defaultValue={draft.scope}>
-              <option value="workspace">Whole workspace</option>
-              <option value="org">Organization</option>
-              <option value="product">Product</option>
-              <option value="project">Project</option>
-              <option value="team">Team</option>
-              <option value="tag">Single tag</option>
-            </Select>
-          </label>
-        </div>
-        <p className="mt-1.5 text-[12px] text-ink/70">
-          Scope decides which documents the server can read. Narrower scopes let you run one server per product without leaking the rest of the knowledge base.
-        </p>
-        <div className="mt-4">
-          <SectionLabel>Capabilities: {draft.toolCount} tools selected</SectionLabel>
-          <div className="mt-1.5 grid gap-1.5">
-            {draft.capabilities.map((c) => (
-              <div key={c.key} className={`flex items-start gap-2.5 p-2.5 rounded-[5px] border ${c.on ? "border-biscay-2 bg-biscay-2/[0.04]" : "border-ink/15"}`}>
-                <span className={`mt-0.5 grid place-items-center w-4 h-4 rounded-[3px] border text-[10px] text-white ${c.on ? "bg-biscay border-biscay" : "border-ink/30"}`}>{c.on ? "✓" : ""}</span>
-                <span className="min-w-0">
-                  <span className="text-[13px] font-semibold text-ink">{c.key}</span>
-                  <span className="font-term text-[11.5px] text-ink/65"> · {c.tools} tools</span>
-                  <span className="block text-[12px] text-ink/65">{c.desc}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Button variant="primary">Create server</Button>
-          <Button>Cancel</Button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function McpTokenCreated({ created, serverCount }: { created: McpCreated; serverCount: number }) {
-  return (
-    <div className="flex flex-col gap-5">
-      <PageHeader title="MCP servers" description="Expose your curated knowledge to Claude and other agents: per-project, capability-scoped."
-        actions={<><CountChip count={serverCount} /><Button variant="primary"><Plus size={15} /> New server</Button></>} />
-      <TokenReveal token={created.token} title={`${created.name} is live: here's your bearer token`} />
-      <Card>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Chip label="Connected" tone="ok" dot caps />
-          <span className="text-[14px] font-semibold text-ink">{created.name}</span>
-          <Chip label={created.scopeLabel} tone="neutral" caps />
-          <span className="font-term text-[11.5px] text-ink/65">{created.toolCount} tools</span>
-        </div>
-        <div className="mt-3">
-          <SectionLabel>Connect from claude-code</SectionLabel>
-          <div className="mt-1.5"><CodeBlock language="bash" code={created.snippet} wrap /></div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/* ── Page ──────────────────────────────────────────────────────────────────*/
-
-/** A workspace that publishes nothing at all: no doc site, no MCP server.
-    Derived from the data, not from a flag. */
 function isEmpty(d: PublishData): boolean {
   return d.site === null && d.servers.length === 0;
 }
@@ -629,9 +554,15 @@ function Body({ data, error, mobile, actions }: { data: PublishData; error: stri
   if (isEmpty(data)) return <EmptyState title="No sites yet">Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.</EmptyState>;
 
   switch (data.view) {
-    case "mcp-add": return <McpAddServer draft={data.draft} serverCount={data.serverCount} />;
-    case "mcp-token": return <McpTokenCreated created={data.created} serverCount={data.serverCount} />;
-    case "mcp-list": return <PublishMcpServers servers={data.servers} actions={actions} />;
+    /* All three MCP screens are the same component. They used to be two static
+       copies of it plus the real one, so "Create server", "Cancel" and both
+       "New server" buttons were decoration. */
+    case "mcp-add":
+      return <PublishMcpServers servers={data.servers} actions={actions} createOpen />;
+    case "mcp-token":
+      return <PublishMcpServers servers={data.servers} actions={actions} revealServer={{ name: data.created.name, token: data.created.token }} />;
+    case "mcp-list":
+      return <PublishMcpServers servers={data.servers} actions={actions} />;
     case "publish-flow":
       return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} actions={actions} /> : null;
     case "site-editor":
