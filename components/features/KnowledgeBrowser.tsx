@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, X, Bookmark, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta } from "../layout/CardShell";
@@ -126,6 +126,25 @@ const TYPE_ROWS: { label: string; match: (r: KnowledgeResult) => boolean }[] = [
 ];
 /* Sentence case, like every other filter label (CONVENTIONS.md §3/§5) — the
    raw tag keys ("needs-review") were the only lower-case strings in the rail. */
+/* Freshness was a radio group that set a variable nothing read: picking "Past
+   week" moved a dot and left the same rows on screen, and every row's count was
+   the whole result list. It filters on the result's own date now, which is the
+   only date this component has. */
+const FRESH_ROWS: { label: string; days: number | null }[] = [
+  { label: "Any time", days: null },
+  { label: "Past week", days: 7 },
+  { label: "Past month", days: 30 },
+];
+
+/** Within `days` of now. A result whose date does not parse is never excluded
+    by a freshness filter — an unreadable date is not evidence of age. */
+function fresherThan(date: string, days: number | null): boolean {
+  if (days === null) return true;
+  const t = Date.parse(date);
+  if (!Number.isFinite(t)) return true;
+  return Date.now() - t <= days * 86_400_000;
+}
+
 const STATUS_ROWS: { key: string; label: string }[] = [
   { key: "canonical", label: "Canonical" },
   { key: "verified", label: "Verified" },
@@ -149,6 +168,30 @@ export type KnowledgeBrowserProps = {
   /** A result was picked. Emitted for every pick, controlled or not, so a page
       can fill an inspector beside the feed. */
   onSelect?: (id: string) => void;
+  /** The search text. Same contract as `selectedId`: pass it to CONTROL the
+      box, and the query becomes the owner's — it can go in the URL, be shared,
+      and above all be handed to a search backend.
+
+      Controlled also means `results` are ALREADY the answer to this query, so
+      the browser stops re-filtering them by substring: a hybrid-search hit that
+      matched semantically has no literal substring to find, and filtering it
+      out locally would delete the best result on the page.
+
+      Undefined keeps the box local, which is what the design canvas renders. */
+  query?: string;
+  /** The search text changed. Debouncing and requerying belong to the owner. */
+  onQueryChange?: (query: string) => void;
+  /** How many documents match this search corpus-wide. Pass it when `results`
+      is one PAGE of a larger answer: the count line then describes the corpus
+      instead of claiming the loaded page is all there is, and the facet rail
+      says which rows its counts cover.
+
+      Undefined means `results` is the whole answer and the browser pages it
+      locally, as before. */
+  total?: number;
+  /** Fetch the next page of results. Without it the feed shows what it has and
+      offers no control it cannot honour. */
+  onShowMore?: () => void;
   className?: string;
 };
 
@@ -195,14 +238,39 @@ function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked
 }
 
 export function KnowledgeBrowser({
-  results, loading = false, stacked = false, selectedId, onSelect, className = "",
+  results, loading = false, stacked = false, selectedId, onSelect,
+  query, onQueryChange, total, onShowMore, className = "",
 }: KnowledgeBrowserProps) {
-  const [q, setQ] = useState("");
+  /* Same fallback idiom as `selectedId`: the owner's query wins when there is
+     one, and the local box still works when nobody is listening. */
+  const [localQ, setLocalQ] = useState("");
+  const served = query !== undefined;
+  const q = served ? query : localQ;
+
+  /* The box keeps its own draft so typing stays instant, and the query is
+     COMMITTED on a pause. Without the debounce a controlled owner runs one
+     search — and, if it keeps the query in the URL, one navigation — per
+     keystroke. `seen` resyncs the draft when the query changes from outside
+     (the back button, a cleared search). */
+  const [draft, setDraft] = useState(q);
+  const [seenQuery, setSeenQuery] = useState(q);
+  if (seenQuery !== q) { setSeenQuery(q); setDraft(q); }
+
+  // Held in a ref so a parent that passes a fresh arrow every render cannot
+  // restart the timer and stop the commit from ever firing.
+  const emit = useRef(onQueryChange);
+  emit.current = onQueryChange;
+  useEffect(() => {
+    if (draft === q) return;
+    const t = setTimeout(() => { setLocalQ(draft); emit.current?.(draft); }, 220);
+    return () => clearTimeout(t);
+  }, [draft, q]);
   const [srcSel, setSrcSel] = useState<Set<string>>(new Set());
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
   const [ownerSel, setOwnerSel] = useState<Set<string>>(new Set());
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set());
-  const [fresh, setFresh] = useState("Any time");
+  const [fresh, setFresh] = useState(FRESH_ROWS[0].label);
+  const freshDays = FRESH_ROWS.find((f) => f.label === fresh)?.days ?? null;
   const [tab, setTab] = useState("all");
   const [sort, setSort] = useState("best");
   /* The selection used to be this state alone, seeded with a fixture's id —
@@ -223,7 +291,9 @@ export function KnowledgeBrowser({
   const count = (pred: (r: KnowledgeResult) => boolean) => results.filter(pred).length;
 
   const baseFiltered = useMemo(() => results.filter((r) => {
-    if (q && !`${r.title} ${r.snippet} ${r.author}`.toLowerCase().includes(q.toLowerCase())) return false;
+    // Only when the box is local: a controlled query has already been answered
+    // by whoever owns it (see `query`), and re-filtering would drop its hits.
+    if (!served && q && !`${r.title} ${r.snippet} ${r.author}`.toLowerCase().includes(q.toLowerCase())) return false;
     if (srcSel.size && !srcSel.has(r.source)) return false;
     if (typeSel.size) {
       const t = r.kind === "page" ? "Documents" : r.kind === "thread" ? "Conversations" : "Pull requests";
@@ -234,8 +304,9 @@ export function KnowledgeBrowser({
       if (!ownerSel.has(owner)) return false;
     }
     if (statusSel.size && !(r.status && statusSel.has(r.status))) return false;
+    if (!fresherThan(r.date, freshDays)) return false;
     return true;
-  }), [results, q, srcSel, typeSel, ownerSel, statusSel]);
+  }), [results, served, q, srcSel, typeSel, ownerSel, statusSel, freshDays]);
 
   const tabMatch = (r: KnowledgeResult) => tab === "all"
     || (tab === "docs" && r.kind === "page")
@@ -252,7 +323,19 @@ export function KnowledgeBrowser({
 
   const owners = [...KNOWN_OWNERS, "Other people"];
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Best match";
-  const visible = sorted.slice(0, limit);
+  /* Who is paging. With a `total` the owner fetched this page and holds the
+     rest, so everything handed in is shown and "show more" asks for the next
+     page; without one the whole answer is here and the feed pages it itself. */
+  const paged = total !== undefined;
+  const visible = paged ? sorted : sorted.slice(0, limit);
+  const loaded = results.length;
+  /* Facet and tab counts are computed over `results`. When that is one page of
+     a larger corpus they describe the loaded rows and nothing more — a source
+     with thousands of documents can read 0 here because none of its documents
+     came back on THIS page. The rail says so rather than passing the number off
+     as a corpus count; making it a real count needs faceted counts from the
+     search backend, which this component has no prop for. */
+  const partial = paged && total! > loaded;
 
   if (loading) return <KnowledgeBrowserSkeleton stacked={stacked} className={className} />;
 
@@ -260,16 +343,21 @@ export function KnowledgeBrowser({
     <div className={shell(stacked, className)}>
       {/* Filter rail */}
       <Card className="flex flex-col gap-4">
+        {partial && (
+          <p className="font-term text-[11px] leading-snug text-ink/65">
+            Counts cover the {loaded.toLocaleString()} results loaded so far, not all {total!.toLocaleString()}.
+          </p>
+        )}
         <FacetGroup name="Source" rows={SOURCE_LABELS.map((s) => ({ label: s.label, icon: <SourceMark provider={s.key} size={15} />, count: count((r) => r.source === s.key), active: srcSel.has(s.key), onToggle: () => toggle(srcSel, setSrcSel, s.key) }))} />
         <FacetGroup name="Content type" rows={TYPE_ROWS.map((t) => ({ label: t.label, count: count(t.match), active: typeSel.has(t.label), onToggle: () => toggle(typeSel, setTypeSel, t.label) }))} />
         <FacetGroup name="Owner" rows={owners.map((o) => ({ label: o, count: count((r) => (o === "Other people" ? !KNOWN_OWNERS.includes(r.author) : r.author === o)), active: ownerSel.has(o), onToggle: () => toggle(ownerSel, setOwnerSel, o) }))} />
-        <FacetGroup name="Freshness" rows={["Any time", "Past week", "Past month"].map((f) => ({ label: f, single: true, count: results.length, active: fresh === f, onToggle: () => setFresh(f) }))} />
+        <FacetGroup name="Freshness" rows={FRESH_ROWS.map((f) => ({ label: f.label, single: true, count: count((r) => fresherThan(r.date, f.days)), active: fresh === f.label, onToggle: () => setFresh(f.label) }))} />
         <FacetGroup name="Status" rows={STATUS_ROWS.map((s) => ({ label: s.label, count: count((r) => r.status === s.key), active: statusSel.has(s.key), onToggle: () => toggle(statusSel, setStatusSel, s.key) }))} />
       </Card>
 
       {/* Results column */}
       <div className="flex flex-col gap-3">
-        <SearchBox value={q} onChange={setQ} />
+        <SearchBox value={draft} onChange={setDraft} />
 
         <div className="flex items-start gap-2.5 rounded-md border border-biscay-2/25 bg-biscay-2/[0.04] px-3 py-2 text-[12px] text-ink/70">
           Slack results are conversation-aware. A thread that records a decision is grouped into a single
@@ -317,17 +405,15 @@ export function KnowledgeBrowser({
         <Card variant="plain">
           {/* gap-y keeps the stats off the live-ingestion line when the strip
               wraps; without it the wrapped row sat on top of the labels. */}
+          {/* Only what this component was given. The strip used to sit three
+              hardcoded figures beside the real one — "1,284 verified facts",
+              "87% fresh", "6 sources" — which read as workspace measurements
+              and belonged to no workspace. A stat with no source is not shown. */}
           <div className="flex items-center gap-x-8 gap-y-3 flex-wrap">
-            <FooterStat value={results.length.toLocaleString()} label="documents" />
-            <FooterStat value="1,284" label="verified facts" />
-            <FooterStat value="87%" label="fresh" />
-            <span className="ml-auto inline-flex items-center gap-2 font-term text-[11.5px] text-ink/60">
-              <span className="relative inline-flex w-2 h-2">
-                <span className="absolute inline-flex w-full h-full rounded-full bg-moss opacity-60 animate-ping" />
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-moss" />
-              </span>
-              Live ingestion · 6 sources
-            </span>
+            <FooterStat
+              value={(total ?? results.length).toLocaleString()}
+              label={paged ? "documents match" : "documents"}
+            />
           </div>
         </Card>
 
@@ -338,18 +424,35 @@ export function KnowledgeBrowser({
           <span className="font-term text-[11.5px] text-ink/65">
             {sorted.length === 0
               ? "No results"
-              : visible.length < sorted.length
-                ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} results`
-                : `Showing all ${sorted.length.toLocaleString()} result${sorted.length === 1 ? "" : "s"}`}
+              : paged
+                /* Two different numbers, never conflated: how many of the
+                   loaded rows the filters left, and how many the search
+                   matched corpus-wide. */
+                ? sorted.length < loaded
+                  ? `Showing ${sorted.length.toLocaleString()} of ${loaded.toLocaleString()} loaded · ${total!.toLocaleString()} match this search`
+                  : `Showing ${loaded.toLocaleString()} of ${total!.toLocaleString()} result${total === 1 ? "" : "s"}`
+                : visible.length < sorted.length
+                  ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} results`
+                  : `Showing all ${sorted.length.toLocaleString()} result${sorted.length === 1 ? "" : "s"}`}
           </span>
-          {visible.length < sorted.length && (
-            <Button variant="link" onClick={() => setLimit((n) => n + PAGE)}>
-              Show {Math.min(PAGE, sorted.length - visible.length)} more
-            </Button>
-          )}
-          {limit > PAGE && (
-            <Button variant="link" onClick={() => setLimit(PAGE)}>Show fewer</Button>
-          )}
+          {paged
+            ? loaded < total! && onShowMore && (
+              <Button variant="link" onClick={onShowMore}>
+                Show {Math.min(PAGE, total! - loaded)} more
+              </Button>
+            )
+            : (
+              <>
+                {visible.length < sorted.length && (
+                  <Button variant="link" onClick={() => setLimit((n) => n + PAGE)}>
+                    Show {Math.min(PAGE, sorted.length - visible.length)} more
+                  </Button>
+                )}
+                {limit > PAGE && (
+                  <Button variant="link" onClick={() => setLimit(PAGE)}>Show fewer</Button>
+                )}
+              </>
+            )}
         </div>
 
         {sorted.length === 0 ? (

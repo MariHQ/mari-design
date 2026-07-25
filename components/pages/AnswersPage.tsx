@@ -4,6 +4,7 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
+import { MarkdownEditor } from "../data-display/MarkdownEditor";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { FieldError } from "../feedback/ErrorMessage";
 import { WriteError } from "../feedback/WriteError";
@@ -108,6 +109,12 @@ export type AnswersData = {
   answers: Answer[];
   /** Questions people ask that no approved answer covers yet. */
   coverage: string[];
+  /** The sources this workspace can harvest from, in the order to offer them.
+      This was a three-item list hardcoded in the library, so a workspace with
+      Notion, Jira or Zendesk connected could not harvest from any of them, and
+      one with no Slack was offered Slack anyway. Empty or omitted means there
+      is nothing to scan, and no "Harvest questions" button is drawn (§2). */
+  harvestSources?: HarvestSource[];
   pane: AnswersPane;
 };
 
@@ -127,18 +134,6 @@ const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
   docs: <FileText size={18} />,
   history: <Sparkles size={18} />,
 };
-
-/* What the wizard offers to scan when the page opens it fresh. This is
-   product structure rather than demo content — the same three places a
-   harvest can read from, in the same order, wherever the wizard is opened —
-   so it lives beside the icon map that already enumerates them. An app that
-   knows which sources a workspace actually has can override the whole list by
-   pinning `data.pane`. */
-const HARVEST_SOURCES: HarvestSource[] = [
-  { key: "slack", label: "Slack threads", desc: "Questions asked in channels Mari can read.", on: true },
-  { key: "docs", label: "Documents", desc: "FAQ sections and Q&A headings in the knowledge base.", on: true },
-  { key: "history", label: "Ask history", desc: "What people have asked Mari that had no approved answer.", on: false },
-];
 
 /** `data` is the whole page's answers — what "nothing curated at all" is judged
     against — while `answers` is only the selected tab's slice. Judging both off
@@ -185,13 +180,32 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
   );
 }
 
+/* The rail used to slice to two questions and say nothing about the rest, and
+   the `coverage` pane that shows all of them had nothing pointing at it. The
+   count is now above the list it describes (§13) and "See all" is what reaches
+   the pane. */
 function CoverageCard({
-  questions, error, extended = false, onCompose,
-}: { questions: string[]; error: string | null; extended?: boolean; onCompose: (question: string) => void }) {
-  const qs = extended ? questions : questions.slice(0, 2);
+  questions, error, extended = false, onCompose, onSeeAll,
+}: {
+  questions: string[]; error: string | null; extended?: boolean;
+  onCompose: (question: string) => void;
+  onSeeAll?: () => void;
+}) {
+  const RAIL = 2;
+  const qs = extended ? questions : questions.slice(0, RAIL);
+  const hidden = questions.length - qs.length;
   return (
     <Card>
-      <div className="mb-2 text-[14px] font-semibold text-ink">Coverage</div>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-[14px] font-semibold text-ink">Coverage</span>
+        {!error && questions.length > 0 && (
+          <span className="font-term text-[11.5px] text-ink/65">
+            {extended
+              ? `${questions.length.toLocaleString("en-US")} uncovered`
+              : `${qs.length} of ${questions.length.toLocaleString("en-US")} uncovered`}
+          </span>
+        )}
+      </div>
       {error ? (
         <EmptyState title="API offline">Coverage unavailable.</EmptyState>
       ) : questions.length === 0 ? (
@@ -207,6 +221,11 @@ function CoverageCard({
               <Button variant="link" compact className="mt-1.5" onClick={() => onCompose(q)}>Draft answer</Button>
             </div>
           ))}
+          {hidden > 0 && onSeeAll && (
+            <Button variant="link" compact onClick={onSeeAll}>
+              See all {questions.length.toLocaleString("en-US")} uncovered questions
+            </Button>
+          )}
         </div>
       )}
     </Card>
@@ -229,13 +248,41 @@ function HowServingWorks() {
 /* The rail. Every card in it shares the rail's left and right edge (§11), so
    no card carries its own max-width. */
 function CoverageRail({
-  questions, error, withCoverage, onCompose,
-}: { questions: string[]; error: string | null; withCoverage: boolean; onCompose: (question: string) => void }) {
+  questions, error, withCoverage, onCompose, onSeeAll,
+}: {
+  questions: string[]; error: string | null; withCoverage: boolean;
+  onCompose: (question: string) => void; onSeeAll: () => void;
+}) {
   return (
     <div className="flex flex-col gap-5">
-      {withCoverage && <CoverageCard questions={questions} error={error} onCompose={onCompose} />}
+      {withCoverage && <CoverageCard questions={questions} error={error} onCompose={onCompose} onSeeAll={onSeeAll} />}
       <HowServingWorks />
     </div>
+  );
+}
+
+/* ── Answer body ───────────────────────────────────────────────────────────
+   Bots serve this text VERBATIM, so what the writer sees while typing has to
+   be what the reader gets. It used to be a bare <Textarea>: no way to see how
+   a list or a link would land, and no sense of length until it turned up in
+   Slack. The composer and the card's inline edit now share one editor
+   (data-display/MarkdownEditor: source pane + live preview) and one length
+   readout. */
+
+/** Roughly the longest answer a chat client shows without a "see more" fold.
+    A ceiling for guidance, never a hard limit: a long answer is still saved. */
+const LONG_ANSWER = 600;
+
+function AnswerLength({ value }: { value: string }) {
+  const n = value.trim().length;
+  const long = n > LONG_ANSWER;
+  return (
+    <p className={`font-term text-[11.5px] ${long ? "text-clay" : "text-ink/65"}`}>
+      {n.toLocaleString("en-US")} characters
+      {long
+        ? `. Over ${LONG_ANSWER} characters, most chat clients fold the answer behind "see more".`
+        : ""}
+    </p>
   );
 }
 
@@ -281,7 +328,13 @@ function NewAnswer({ question: initial, actions, onClose }: {
       ) : (
         <div className="flex flex-col gap-2.5">
           <Input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Question people ask" />
-          <Textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="The wording to serve, verbatim" />
+          <MarkdownEditor
+            value={answer}
+            onChange={setAnswer}
+            defaultMode="split"
+            placeholder="The wording to serve, verbatim"
+          />
+          <AnswerLength value={answer} />
           <FieldError>{failed}</FieldError>
           <div className="flex items-center gap-2">
             <Button variant="primary" compact disabled={busy || !question.trim() || !answer.trim()} onClick={save}>
@@ -318,8 +371,17 @@ function confTone(c: number): ComponentProps<typeof Chip>["tone"] {
 const HIGH_CONFIDENCE = 75;
 
 /** A candidate plus what the reviewer has done to it. `draft` is separate from
-    the proposal so editing the wording never loses what was suggested. */
-type Reviewed = HarvestCandidate & { accepted: boolean; draft: string };
+    the proposal so editing the wording never loses what was suggested.
+
+    `key` is the row's identity for React. A scan legitimately returns the same
+    question twice (asked in two channels, answered differently), and keying the
+    rows by `r.question` collapsed those two into one: the second candidate
+    silently vanished from the review, along with any chance of importing it. */
+type Reviewed = HarvestCandidate & { key: string; accepted: boolean; draft: string };
+
+/** Stable per-scan identity: the position in the result the server returned. */
+const reviewed = (c: HarvestCandidate, i: number, accepted: boolean): Reviewed =>
+  ({ ...c, key: `${i}:${c.question}`, accepted, draft: c.draft });
 
 function HarvestWizard({ harvest, actions, onClose }: {
   harvest: Harvest;
@@ -329,7 +391,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
   const [phase, setPhase] = useState<Harvest["phase"]>(harvest.phase);
   const [sources, setSources] = useState<HarvestSource[]>(harvest.sources);
   const [rows, setRows] = useState<Reviewed[]>(
-    () => harvest.candidates.map((c) => ({ ...c, accepted: true, draft: c.draft })),
+    () => harvest.candidates.map((c, i) => reviewed(c, i, true)),
   );
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -337,8 +399,10 @@ function HarvestWizard({ harvest, actions, onClose }: {
   const accepted = rows.filter((r) => r.accepted);
   const step = HARVEST_STEP[phase];
 
-  const toggleSource = (label: string) =>
-    setSources((prev) => prev.map((s) => (s.label === label ? { ...s, on: !s.on } : s)));
+  /* By key, not by label: two sources can share a display name, and toggling
+     one would have toggled both. */
+  const toggleSource = (key: HarvestSource["key"]) =>
+    setSources((prev) => prev.map((s) => (s.key === key ? { ...s, on: !s.on } : s)));
 
   const scan = async () => {
     setFailed(null);
@@ -349,7 +413,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
       const found = actions?.harvest
         ? await actions.harvest(selected.map((s) => s.key))
         : harvest.candidates;
-      setRows(found.map((c) => ({ ...c, accepted: c.confidence >= HIGH_CONFIDENCE, draft: c.draft })));
+      setRows(found.map((c, i) => reviewed(c, i, c.confidence >= HIGH_CONFIDENCE)));
       setPhase("review");
     } catch (e) {
       setFailed(e instanceof Error ? e.message : "The scan could not finish.");
@@ -385,14 +449,14 @@ function HarvestWizard({ harvest, actions, onClose }: {
           <p className="text-[13px] text-ink/70">Pick the sources Mari should scan for question and answer candidates. Nothing is saved until you import.</p>
           {sources.map((s) => (
             <label
-              key={s.label}
+              key={s.key}
               className={`flex cursor-pointer items-start gap-3 rounded-[5px] border px-3.5 py-3 ${s.on ? "border-biscay-2/60 bg-biscay-2/[0.04] ring-1 ring-biscay-2/40" : "border-ink/15"}`}
             >
               <input
                 type="checkbox"
                 className="sr-only"
                 checked={s.on}
-                onChange={() => toggleSource(s.label)}
+                onChange={() => toggleSource(s.key)}
               />
               <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{SOURCE_ICON[s.key]}</span>
               <span className="min-w-0">
@@ -440,7 +504,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
                 </Button>
               </div>
               {rows.map((r, i) => (
-                <Card key={r.question} className={r.accepted ? undefined : "opacity-55"}>
+                <Card key={r.key} className={r.accepted ? undefined : "opacity-55"}>
                   <h3 className="text-[13.5px] font-semibold text-ink">{r.question}</h3>
                   <div className="mt-1.5 flex items-center gap-2">
                     <Chip label={r.source} tone="neutral" />
@@ -487,7 +551,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
               const saving = phase === "importing" && i === accepted.length - 1;
               const done = phase === "done" || i < accepted.length - 1;
               return (
-                <li key={r.question} className="flex items-center gap-2.5 text-[13px] text-ink/80">
+                <li key={r.key} className="flex items-center gap-2.5 text-[13px] text-ink/80">
                   {done ? <CheckCircle2 size={16} className="shrink-0 text-moss" />
                     : saving ? <Spinner size="sm" />
                     : <Circle size={14} className="shrink-0 text-ink/30" />}
@@ -511,7 +575,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
 }
 
 
-function Body({ data, error, actions, mobile, composing, onCompose, onCloseComposer, harvest, onCloseHarvest }: {
+function Body({ data, error, actions, mobile, composing, onCompose, onCloseComposer, harvest, onCloseHarvest, isCoverage, onSeeAllCoverage, onCloseCoverage }: {
   data: AnswersData; error: string | null; actions?: AnswersActions; mobile: boolean;
   /** The question the composer opened on, or null when it is closed. */
   composing: string | null;
@@ -520,21 +584,35 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
   /** The harvest wizard's starting point, or null when it is closed. */
   harvest: Harvest | null;
   onCloseHarvest: () => void;
+  /** The coverage pane has taken over the main column. */
+  isCoverage: boolean;
+  onSeeAllCoverage: () => void;
+  /** Leave the coverage pane. Absent when the pane IS the route. */
+  onCloseCoverage?: () => void;
 }) {
   /* The strip filters the answers the page was given; `data.filter` only says
      which tab opens selected. The state fed nothing but the empty-state copy
-     before, so every tab drew the same list. */
-  const [filter, setFilter] = useState<AnswersFilter>(data.filter);
-  const shown = inFilter(data.answers, filter);
+     before, so every tab drew the same list.
 
-  const isCoverage = data.pane.kind === "coverage";
+     Seeded from `data`, so it resyncs when `data` changes: without the
+     sentinel a refetch that lands on a different tab kept rendering the tab
+     from the first response (C1). */
+  const [filter, setFilter] = useState<AnswersFilter>(data.filter);
+  const [seenFilter, setSeenFilter] = useState(data.filter);
+  if (seenFilter !== data.filter) { setSeenFilter(data.filter); setFilter(data.filter); }
+  const shown = inFilter(data.answers, filter);
 
   /* One main column + the standard 320px rail (§11) for every state, so the
      outer edges and the rail plumb line never move between states. */
   const main = harvest ? (
     <HarvestWizard harvest={harvest} actions={actions} onClose={onCloseHarvest} />
   ) : isCoverage ? (
-    <CoverageCard questions={data.coverage} error={error} extended onCompose={onCompose} />
+    <div className="flex flex-col gap-2.5">
+      <CoverageCard questions={data.coverage} error={error} extended onCompose={onCompose} />
+      {onCloseCoverage && (
+        <div><Button compact onClick={onCloseCoverage}>Back to answers</Button></div>
+      )}
+    </div>
   ) : (
     <div className="flex flex-col gap-5">
       <Tabs
@@ -575,7 +653,7 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
           {main}
         </div>
         <div className="min-w-0">
-          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} onCompose={onCompose} />
+          <CoverageRail questions={data.coverage} error={error} withCoverage={!isCoverage} onCompose={onCompose} onSeeAll={onSeeAllCoverage} />
         </div>
       </div>
     </div>
@@ -594,15 +672,35 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
   const [harvesting, setHarvesting] = useState<Harvest | null>(null);
   const harvest = harvesting ?? pinned;
 
+  /* Same shape for the coverage pane: `data.pane` can route straight to it,
+     and the rail's "See all" reaches it from inside the page. It used to be
+     reachable only by routing, which nothing did. */
+  const [seeAllCoverage, setSeeAllCoverage] = useState(false);
+  const [seenPane, setSeenPane] = useState(data.pane);
+  if (seenPane !== data.pane) { setSeenPane(data.pane); setSeeAllCoverage(false); setHarvesting(null); }
+  const isCoverage = seeAllCoverage || data.pane.kind === "coverage";
+
+  /* Harvest is offered only where there is something to scan. The source list
+     used to be a constant in this file, so the button was always drawn and
+     always offered the same three places (§2). */
+  const harvestSources = data.harvestSources ?? [];
+
   const headerActions = (
     <>
-      <Button
-        variant="default"
-        compact
-        onClick={() => setHarvesting({ phase: "select", sources: HARVEST_SOURCES, scanning: "Reading recent threads…", candidates: [] })}
-      >
-        <Sparkles size={15} /> Harvest questions
-      </Button>
+      {harvestSources.length > 0 && (
+        <Button
+          variant="default"
+          compact
+          onClick={() => setHarvesting({
+            phase: "select",
+            sources: harvestSources,
+            scanning: "Reading recent threads…",
+            candidates: [],
+          })}
+        >
+          <Sparkles size={15} /> Harvest questions
+        </Button>
+      )}
       <Button variant="primary" compact onClick={() => setComposing("")}><Plus size={15} /> New answer</Button>
     </>
   );
@@ -630,6 +728,9 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
             onCloseComposer={() => setComposing(null)}
             harvest={harvest}
             onCloseHarvest={() => setHarvesting(null)}
+            isCoverage={isCoverage}
+            onSeeAllCoverage={() => setSeeAllCoverage(true)}
+            onCloseCoverage={seeAllCoverage ? () => setSeeAllCoverage(false) : undefined}
           />
         </div>
       </div>

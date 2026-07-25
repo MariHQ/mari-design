@@ -1,15 +1,9 @@
-import { useState, type ReactNode } from "react";
-import { Layers, Sparkles, KeyRound, Eye, EyeOff } from "lucide-react";
+import { type ReactNode } from "react";
+import { Layers } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Card } from "../layout/Card";
-import { Button } from "../actions/Button";
-import { Input } from "../forms/Input";
-import { Select } from "../forms/Select";
-import { Field } from "../forms/Field";
-import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { Spinner } from "../data-display/Spinner";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -23,11 +17,10 @@ import {
 export type { SettingsModelsActions };
 
 /* Settings → Models (pages/settings-models.md). Configure the embedding model,
-   LLM provider + keys, connection test, and per-source chunking. The default
-   view renders the SettingsModelsConfig feature; the editing / test-connection
-   / saved variants render inline cards so each lifecycle step (edit embedding,
-   edit LLM, test idle/testing/ok/fail, saved) is captured directly. Under the
-   shared settings tab strip.
+   LLM provider + keys, connection test, and per-source chunking. Every state,
+   including the editing / test-connection / saved steps, is the
+   SettingsModelsConfig feature driven through its own props. Under the shared
+   settings tab strip.
 
    Pure presenter: the model selection, the provider keys, the chunking table
    and the rail summary all arrive in `data`. "Not configured" is derived from
@@ -49,7 +42,8 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** Which lifecycle step of the model form is on screen. */
+/** Which lifecycle step of the model form is on screen. Each one is the real
+    panel put into that step, not a picture of it. */
 export type ModelsPhase =
   | "config" | "editing-embedding" | "editing-llm"
   | "test-idle" | "test-testing" | "test-ok" | "test-fail" | "saved";
@@ -80,9 +74,8 @@ export type SettingsModelsData = {
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
-   main/rail split, one form-field grid. */
+   main/rail split. The form-field grid lives with the forms, in the feature. */
 const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
-const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
   return (
@@ -90,127 +83,6 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
       <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
     </div>
-  );
-}
-
-function SavedNote() {
-  return <span className="font-term text-[11.5px] text-moss">✓ Saved</span>;
-}
-
-/* A provider key plus its show/hide toggle.
-
-   The two key fields used to be hardcoded into opposite states — one
-   `type="password"` next to an Eye, one `type="text"` next to an EyeOff — so
-   the page depicted both halves of a toggle that neither field actually had.
-   One component with one piece of state gives both fields the real behaviour.
-
-   What comes back from the server is already masked (`••••…last4`), so
-   revealing shows the mask, not the secret. That is the point: the plaintext
-   key is write-only and never leaves the server again. */
-function SecretField({ label, value }: { label: string; value: string }) {
-  const [shown, setShown] = useState(false);
-  const [draft, setDraft] = useState(value);
-  return (
-    <Field label={label}>
-      <div className="flex items-center gap-1.5">
-        <Input
-          type={shown ? "text" : "password"}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="w-full font-term"
-        />
-        <Button
-          icon
-          compact
-          aria-label={shown ? "Hide key" : "Reveal key"}
-          aria-pressed={shown}
-          onClick={() => setShown((v) => !v)}
-        >
-          {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-        </Button>
-      </div>
-    </Field>
-  );
-}
-
-function TestResult({ data }: { data: SettingsModelsData }) {
-  if (data.phase === "test-testing") {
-    return <span className="inline-flex items-center gap-2 text-[11.5px] text-ink/60"><Spinner size="sm" /> Contacting provider…</span>;
-  }
-  if (data.phase === "test-ok") {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <Chip label="Connected" tone="ok" dot caps />
-        <span className="font-term text-[11.5px] text-ink/60">{data.testOk}</span>
-      </span>
-    );
-  }
-  if (data.phase === "test-fail") {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <Chip label="Unreachable" tone="blocked" dot caps />
-        <span className="font-term text-[11.5px] text-espelette">{data.testError}</span>
-      </span>
-    );
-  }
-  return null;
-}
-
-function ModelsInline({ data }: { data: SettingsModelsData }) {
-  const variant = data.phase;
-  const embDirty = variant === "editing-embedding";
-  const llmDirty = variant === "editing-llm";
-  return (
-    <>
-      <Card icon={<Layers size={16} className="text-biscay-2" />} title="Models" hint="Embedding + generation">
-        <div className={FORM_GRID}>
-          <Field label="Embedding model">
-            <Select
-              defaultValue={data.embedding}
-              className={`w-full ${embDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
-            >
-              {data.embeddingOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-            {embDirty && <p className="mt-1 text-[11.5px] text-ink/65">Re-indexes all documents</p>}
-          </Field>
-          <Field label="LLM provider">
-            <Select
-              defaultValue={data.llm}
-              className={`w-full ${llmDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
-            >
-              {data.llmOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-            {llmDirty && <p className="mt-1 text-[11.5px] text-ink/65">Unsaved changes</p>}
-          </Field>
-          <Field label="Embedding dimensions">
-            <Select defaultValue={String(data.dims)} className="w-full">
-              <option value="768">768</option>
-              <option value="1536">1536</option>
-              <option value="3072">3072</option>
-            </Select>
-          </Field>
-        </div>
-        <div className="mt-5 flex items-center gap-3 border-t border-ink/10 pt-4">
-          <Button variant="primary" disabled={!embDirty && !llmDirty}>Save changes</Button>
-          {variant === "saved" && <SavedNote />}
-        </div>
-      </Card>
-
-      <Card icon={<KeyRound size={16} className="text-clay" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
-        <div className={FORM_GRID}>
-          <SecretField label="OpenAI (sk-…)" value={data.keys.openai} />
-          <SecretField label="Anthropic (sk-ant-…)" value={data.keys.anthropic} />
-        </div>
-        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-ink/10 pt-4">
-          <Button variant="primary" disabled={variant === "saved"}>Save changes</Button>
-          <Button disabled={variant === "test-testing"}>
-            {variant === "test-testing" ? "Testing…" : "Test connection"}
-          </Button>
-          <TestResult data={data} />
-          {variant === "saved" && <SavedNote />}
-        </div>
-      </Card>
-    </>
   );
 }
 
@@ -248,19 +120,37 @@ function Body({ data, error, actions }: { data: SettingsModelsData; error: strin
       </EmptyState>
     );
   }
-  if (data.phase !== "config") return <ModelsInline data={data} />;
+  /* Every lifecycle step is the REAL panel, put into that state through its
+     own props. It used to be a second, hand-drawn copy of the form built in
+     this file: `defaultValue` selects with no `onChange`, three buttons with
+     no `onClick`, and a key field whose draft nothing read — so any phase but
+     "config" rendered a form that could not do anything (P-SD-1). The
+     API-keys and Members pages were fixed the same way. */
   return (
     <SettingsModelsConfig
       embedded
       embedding={data.embedding}
       llm={data.llm}
       dims={data.dims}
+      embeddingOptions={data.embeddingOptions}
+      llmOptions={data.llmOptions}
       chunking={data.chunking}
       keys={data.keys}
       actions={actions}
       indexSummary={data.indexSummary}
+      unsaved={data.phase === "editing-embedding" ? "embedding" : data.phase === "editing-llm" ? "llm" : null}
+      testStatus={testStatusOf(data)}
+      savedFlash={data.phase === "saved"}
     />
   );
+}
+
+/** The connection test's step, as the page's phase describes it. */
+function testStatusOf(d: SettingsModelsData): { status: "testing" | "ok" | "fail"; text: string } | null {
+  if (d.phase === "test-testing") return { status: "testing", text: "" };
+  if (d.phase === "test-ok") return { status: "ok", text: d.testOk };
+  if (d.phase === "test-fail") return { status: "fail", text: d.testError };
+  return null;
 }
 
 function SettingsModelsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsModelsData, SettingsModelsActions>) {

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { card } from "../tokens/card";
 import { Scrubber as ScrubberControl } from "../data-display/Scrubber";
 import { fmtDate } from "../tokens/format";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
+import { useLineageControls } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Lineage time scrubber (feature: lineage-time-scrubber)
@@ -25,7 +26,8 @@ export type LineageTimeScrubberProps = {
   dates: string[];
   /** Events per date, for the density track. */
   activity: { date: string; count: number }[];
-  /** Initial selected index, or null = all time / live. */
+  /** Selected index, or null = all time / live. Seeds the control and re-seeds
+      it whenever it changes; the reader owns it in between. */
   value?: number | null;
   /** Render a content-shaped skeleton silhouette instead of the scrubber. */
   loading?: boolean;
@@ -35,10 +37,27 @@ export type LineageTimeScrubberProps = {
 export function LineageTimeScrubber({
   dates, activity, value = null, loading = false, className = "",
 }: LineageTimeScrubberProps) {
+  const [, setControls] = useLineageControls();
+
+  /* Seeded from the prop, and re-seeded when the prop moves: a refetch that
+     changes the as-of position has to move the control, not be swallowed by
+     the state it initialised once. */
   const [idx, setIdx] = useState<number | null>(value);
+  const [seen, setSeen] = useState<number | null>(value);
+  if (seen !== value) { setSeen(value); setIdx(value); }
+
   const lastIdx = Math.max(0, dates.length - 1);
   const effIdx = idx == null ? lastIdx : Math.min(Math.max(0, idx), lastIdx);
-  const effAsof = idx == null ? null : dates[effIdx];
+  const effAsof = idx == null ? null : dates[effIdx] ?? null;
+
+  /* The scrubber used to keep `idx` entirely to itself, which made the caption
+     below a claim about behaviour that did not exist. The chosen date goes
+     into the shared control store instead, and the canvas hides and dashes
+     against it — the same store the toolbar writes to. */
+  useEffect(() => { setControls({ asOf: effAsof }); }, [effAsof, setControls]);
+  /* Leaving the page leaves time travel: the store outlives this component, so
+     an as-of left behind would silently hide documents on the next visit. */
+  useEffect(() => () => setControls({ asOf: null }), [setControls]);
 
   const rangeLabel = useMemo(
     () => (dates.length ? `${fmtDate(dates[0])} to ${fmtDate(dates[lastIdx])}` : "No events"),
@@ -86,7 +105,7 @@ export function LineageTimeScrubber({
 
       <div className="mt-2 font-term text-[11px] text-ink/65">
         {effAsof
-          ? "Nodes created after this date are hidden; edits after it show dashed."
+          ? "Documents and links made after this date are hidden. A document edited after it is drawn with a dashed border."
           : "Showing the live graph. Drag or step back to travel in time."}
       </div>
     </div>

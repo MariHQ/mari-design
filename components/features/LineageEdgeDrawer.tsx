@@ -14,7 +14,7 @@ import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList 
 import {
   REL, EdgeSwatch, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
   LgAuthor, LgOwners, LgSourceChip,
-  nodeById,
+  nodeById, downloadText,
   type LNode, type LEdge,
 } from "./LineageDataModel";
 
@@ -123,10 +123,18 @@ export function LineageEdgeDrawer({
                 <Button
                   compact
                   className={result ? lgToggleOn : ""}
-                  onClick={() => setResult({
-                    title: "Exported 1 relationship",
-                    body: `${s.code.toLowerCase()}-${edge.id}.csv is ready to download.`,
-                  })}
+                  /* The file is written now. The button used to announce a CSV
+                     that was "ready to download" and never produce one. */
+                  onClick={() => {
+                    const name = `${s.code.toLowerCase()}-${edge.id}.csv`;
+                    const csv = [
+                      "relation,from,to,date,status",
+                      [s.code, from?.title ?? edge.from, to?.title ?? edge.to, edge.date ?? "", statusLabel]
+                        .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","),
+                    ].join("\n");
+                    downloadText(name, csv, "text/csv");
+                    setResult({ title: "Exported 1 relationship", body: `Downloaded as ${name}.` });
+                  }}
                 >
                   <Download size={13} /> {result ? "Exported" : "Export"}
                 </Button>

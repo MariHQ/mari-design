@@ -14,7 +14,8 @@ import { TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
   useLineageControls, clamp, nodeById, tracePath,
-  type LEdge, type LNode, type Lens, type LayoutMode, type RelKey, type StatusFilter,
+  type GraphView, type LEdge, type LineageControlState, type LNode, type Lens,
+  type LayoutMode, type RelKey, type StatusFilter,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -37,6 +38,33 @@ type SearchResult = { id: string; node: LNode };
 /** Source rows a menu shows before it becomes a bounded scroll region. */
 const SOURCE_MENU_ROWS = 9;
 
+/** Which control keys a saved view restores. `path` is a live pick on the
+    canvas and `asOf` belongs to the scrubber below the graph, which owns its
+    own position — writing either back here would be undone on the next
+    render, so neither is saved and neither is restored. */
+const VIEW_KEYS = ["query", "sources", "rels", "status", "lens", "layout", "scope", "zoom"] as const;
+
+/** A saved view's state is JSON the server round-trips verbatim, so by the
+    time it comes back it may be anything. Read only the control keys, and
+    report a state that will not parse rather than half-applying it. */
+function parseViewState(state: string): Partial<LineageControlState> | null {
+  try {
+    const raw: unknown = JSON.parse(state);
+    if (!raw || typeof raw !== "object") return null;
+    const src = raw as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of VIEW_KEYS) if (k in src) out[k] = src[k];
+    return out as Partial<LineageControlState>;
+  } catch {
+    return null;
+  }
+}
+
+/** Only the keys a view restores are written, so a saved view never carries a
+    stale as-of or a half-finished path pick. */
+const viewStateOf = (c: LineageControlState): string =>
+  JSON.stringify(Object.fromEntries(VIEW_KEYS.map((k) => [k, c[k]])));
+
 export type LineageToolbarProps = {
   /** The graph the source/owner filters are built from. */
   nodes: LNode[];
@@ -44,10 +72,19 @@ export type LineageToolbarProps = {
       rendered without them can arm path mode but has nothing to route over. */
   edges?: LEdge[];
   /** Ask Mari to propose new edges across the corpus. Long-running: the button
-      says it is reading. May throw; the toolbar shows the message. */
-  onDeriveLinks?: () => void | Promise<void>;
-  /** Persist the current filter/view state under a name. */
+      says it is reading. May throw; the toolbar shows the message. Return how
+      many links were proposed and the toolbar reports that number; return
+      nothing and it says only that the run finished, because a count it was
+      not given is a count it must not print. Omitted entirely = no Derive
+      links button, since there is nothing for it to run (§2). */
+  onDeriveLinks?: () => void | number | Promise<void | number>;
+  /** Persist the current filter/view state under a name. Omitted = the Views
+      menu offers no "Save current view", because nothing would receive it. */
   onSaveView?: (args: { name: string; state: string }) => void | Promise<void>;
+  /** The views already saved for this workspace, listed in the Views menu.
+      Without them "Save view" wrote into a void: nothing ever read a saved
+      view back. */
+  views?: GraphView[];
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
   className?: string;
@@ -90,7 +127,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 }
 
 export function LineageToolbar({
-  nodes, edges = [], onDeriveLinks, onSaveView, loading = false, className = "",
+  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
@@ -98,13 +135,24 @@ export function LineageToolbar({
   const [controls, setControls] = useLineageControls();
   const [view, setView] = useState<string>("All documents");
   const [deriving, setDeriving] = useState(false);
-  const [derived, setDerived] = useState(0);
+  /** What the last derive run reported. `null` = it has not been run. A number
+      only ever comes from the handler; the run itself never counts anything. */
+  const [derived, setDerived] = useState<{ count: number | null } | null>(null);
   const [assertOpen, setAssertOpen] = useState(false);
   const [deriveErr, setDeriveErr] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAs, setSavedAs] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [locallySaved, setLocallySaved] = useState<GraphView[]>([]);
+
+  /* The workspace's saved views, plus anything saved in this session that the
+     server has not handed back yet. Same name = one row, newest wins. */
+  const savedViews = useMemo(() => {
+    const byName = new Map<string, GraphView>();
+    for (const v of [...(views ?? []), ...locallySaved]) byName.set(v.name, v);
+    return [...byName.values()];
+  }, [views, locallySaved]);
 
   const onSources = controls.sources ?? sources;
   const onRels = controls.rels ?? REL_ORDER;
@@ -163,15 +211,18 @@ export function LineageToolbar({
   };
 
   /* Mari reads the whole corpus to propose edges, so the button has to say it
-     is working rather than sit there looking clicked. */
+     is working rather than sit there looking clicked.
+
+     It reports only what the handler hands back. This used to wait 1600ms with
+     nothing wired and then announce "3 links proposed" — three links that no
+     one had proposed, printed by a button that had done nothing at all. */
   const derive = async () => {
-    if (deriving) return;
+    if (deriving || !onDeriveLinks) return;
     setDeriving(true);
     setDeriveErr(null);
     try {
-      if (onDeriveLinks) await onDeriveLinks();
-      else await new Promise((r) => setTimeout(r, 1600));
-      setDerived((d) => d + 3);
+      const count = await onDeriveLinks();
+      setDerived({ count: typeof count === "number" ? count : null });
     } catch (err) {
       setDeriveErr(err instanceof Error ? err.message : "Mari could not read the graph.");
     } finally {
@@ -182,10 +233,16 @@ export function LineageToolbar({
   /* Saving a view needs a name, so the menu item opens a name field rather
      than silently writing "Saved view" over the last one. */
   const saveView = async (name: string) => {
+    if (!onSaveView) return;
     setSaving(true);
     setSaveErr(null);
+    const state = viewStateOf(controls);
     try {
-      await onSaveView?.({ name, state: JSON.stringify(controls) });
+      await onSaveView({ name, state });
+      /* A saved view has to appear in the menu it was saved from, before any
+         refetch brings it back from the server. Negative ids mark the rows
+         this session added; the server's copy replaces them by name. */
+      setLocallySaved((rows) => [...rows.filter((r) => r.name !== name), { id: -(rows.length + 1), name, state }]);
       setSavedAs(name);
       setSaveName(null);
       setView(name);
@@ -194,6 +251,19 @@ export function LineageToolbar({
     } finally {
       setSaving(false);
     }
+  };
+
+  /* Applying one. Without this the Views menu listed four hardcoded presets
+     and nothing else, so "Save current view" wrote somewhere no control ever
+     read back. */
+  const applySaved = (v: GraphView) => {
+    const patch = parseViewState(v.state);
+    if (!patch) {
+      setSaveErr(`“${v.name}” could not be read, so nothing was applied.`);
+      return;
+    }
+    setSaveErr(null);
+    applyView(v.name, patch);
   };
 
   const sourceValue = controls.sources === null
@@ -381,10 +451,29 @@ export function LineageToolbar({
           <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("Contradictions", { sources: null, status: "all", rels: ["contradicts"] })}>
             Contradictions only
           </MenuItem>
-          <MenuSeparator />
-          <MenuItem icon={<Plus size={14} />} onSelect={() => { setSaveName(view === "Custom" ? "" : view); setSaveErr(null); }}>
-            Save current view
-          </MenuItem>
+          {savedViews.length > 0 && (
+            <>
+              <MenuSeparator />
+              {/* Saved views, read back from the same store "Save view" writes
+                  to. A workspace with dozens of them scrolls (§20). */}
+              <Scrollable axis="y" className={savedViews.length > SOURCE_MENU_ROWS ? "max-h-[264px] w-[228px]" : ""}>
+                {savedViews.map((v) => (
+                  <MenuItem key={v.id} icon={<Bookmark size={14} />} onSelect={() => applySaved(v)}>
+                    <TruncateInline>{v.name}</TruncateInline>
+                  </MenuItem>
+                ))}
+              </Scrollable>
+            </>
+          )}
+          {/* Offered only when something can receive it (§2). */}
+          {onSaveView && (
+            <>
+              <MenuSeparator />
+              <MenuItem icon={<Plus size={14} />} onSelect={() => { setSaveName(view === "Custom" ? "" : view); setSaveErr(null); }}>
+                Save current view
+              </MenuItem>
+            </>
+          )}
         </Menu>
       </Row>
 
@@ -402,11 +491,20 @@ export function LineageToolbar({
         >
           <GitFork size={14} /> {pathLabel}
         </Button>
-        <Button onClick={() => void derive()} disabled={deriving}>
-          <Sparkles size={14} /> {deriving ? "Mari is reading" : "Derive links"}
-        </Button>
-        {derived > 0 && !deriving && (
-          <Badge tone="ok" label={`${derived} links proposed`} />
+        {/* No handler, no button: there is nothing for it to run, and a button
+            that only pretends to run is worse than one that is not there. */}
+        {onDeriveLinks && (
+          <Button onClick={() => void derive()} disabled={deriving}>
+            <Sparkles size={14} /> {deriving ? "Mari is reading" : "Derive links"}
+          </Button>
+        )}
+        {derived && !deriving && (
+          <Badge
+            tone="ok"
+            label={derived.count === null
+              ? "Mari finished reading the graph"
+              : `${derived.count} link${derived.count === 1 ? "" : "s"} proposed`}
+          />
         )}
         {assertOpen && <Badge tone="info" label="Impact analysis open" />}
         {savedAs && !saveName && <Badge tone="ok" label={`Saved as ${savedAs}`} />}
@@ -445,7 +543,7 @@ export function LineageToolbar({
             <span className="min-w-0 font-term text-[11px] text-ink/65">
               {picked.length === 0
                 ? "Click a node on the canvas to start."
-                : `From “${titleOf(picked[0])}” — click the other end.`}
+                : `From “${titleOf(picked[0])}”. Click the other end.`}
             </span>
           ) : path ? (
             <>

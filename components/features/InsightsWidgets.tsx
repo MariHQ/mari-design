@@ -14,6 +14,7 @@ import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-disp
 import { Scrollable } from "../data-display/Scrollable";
 import { PageHeader } from "../layout/PageHeader";
 import { SourceMark } from "../icons/marks";
+import { focusRing } from "../tokens/focusRing";
 import { fmtDate } from "../tokens/format";
 
 /* Insights widgets — the four non-chart widgets on Insights: a headline stat
@@ -74,6 +75,11 @@ export type InsightsWidgetsActions = {
   harvestGlossary?: () => void | Promise<void>;
   /** Accept a candidate term into the glossary, or dismiss it. */
   resolveGlossaryTerm?: (args: { id: number; accept: boolean }) => void | Promise<void>;
+  /** Open the document behind a row. Insights had no drill-through at all: it
+      reported a grade on a document and gave you no way to reach it. Without
+      this handler the title stays plain text — a link that goes nowhere is
+      worse than no link (§2). */
+  openDoc?: (id: number) => void;
 };
 
 export type InsightsWidgetsProps = {
@@ -83,6 +89,11 @@ export type InsightsWidgetsProps = {
   activity: InsightsActivity[];
   /** ISO date the counts are measured from. Shown in the page header. */
   since: string;
+  /** Controls the page owns (date range, export) rendered in the shared page
+      header, so Insights has ONE header rather than a second toolbar row. */
+  headerActions?: ReactNode;
+  /** Overrides the "counting since …" line when the page owns the window. */
+  periodLabel?: string;
   /** Side effects the widgets offer. Omitted = local echo only. */
   actions?: InsightsWidgetsActions;
   /** Render a content-shaped skeleton silhouette instead of the widgets. */
@@ -91,7 +102,8 @@ export type InsightsWidgetsProps = {
 };
 
 export function InsightsWidgets({
-  stats, readability, glossary, activity, since, actions, loading = false, className = "",
+  stats, readability, glossary, activity, since, headerActions, periodLabel,
+  actions, loading = false, className = "",
 }: InsightsWidgetsProps) {
   const [scoring, setScoring] = useState(false);
   const [harvesting, setHarvesting] = useState(false);
@@ -186,7 +198,12 @@ export function InsightsWidgets({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`}>
-      <PageHeader eyebrow="Insights" title="Insights" description={`Usage, quality, and coverage, counting since ${fmtDate(since)}.`} />
+      <PageHeader
+        eyebrow="Insights"
+        title="Insights"
+        description={periodLabel ?? `Usage, quality, and coverage, counting since ${fmtDate(since)}.`}
+        actions={headerActions}
+      />
 
       {/* 1. Stat row. Auto-fill, not `lg:grid-cols-4` (§11): four fixed columns
           held even when the column could not afford them, and the tiles pushed
@@ -236,7 +253,21 @@ export function InsightsWidgets({
                 <tbody>
                   {readRows.map((r) => (
                     <tr key={r.id} className="hover:bg-flysch/50">
-                      <td className={`${td} max-w-[260px] truncate font-medium text-ink`}>{r.title}</td>
+                      <td className={`${td} max-w-[260px] font-medium text-ink`}>
+                        {/* Drill-through, only where there is somewhere to go. */}
+                        {actions?.openDoc ? (
+                          <button
+                            type="button"
+                            onClick={() => actions.openDoc!(r.id)}
+                            className={`block max-w-full truncate text-left hover:underline ${focusRing} rounded-[3px]`}
+                            title={r.title}
+                          >
+                            {r.title}
+                          </button>
+                        ) : (
+                          <Truncate>{r.title}</Truncate>
+                        )}
+                      </td>
                       <td className={`${td} whitespace-nowrap`}><span className="inline-flex items-center gap-1.5"><SourceMark provider={r.source} size={15} /> <span className="capitalize">{r.source}</span></span></td>
                       <td className={`${td} text-center`}><GradeChip grade={r.grade} /></td>
                       <td className={`${td} max-w-[300px] truncate text-ink/70`}>{r.note || "No notes"}</td>

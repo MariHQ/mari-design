@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "../navigation/Link";
 import { docHref } from "../tokens/routes";
 import { ExternalLink, Eye, ClipboardCheck, Target, Pin, Link2, Plus } from "lucide-react";
@@ -17,7 +17,7 @@ import { fmtDate } from "../tokens/format";
 import {
   REL, staleColor, NodeGlyph, LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow,
   LgSourceChip, LgNodeStatusChip, LgAuthor, LgOwners,
-  nodeById,
+  nodeById, downloadText,
   type LNode, type LEdge, type DocHistoryRow,
 } from "./LineageDataModel";
 
@@ -44,8 +44,15 @@ export type LineageNodeDrawerProps = {
   edges: LEdge[];
   /** Which node to open. */
   nodeId: string;
-  /** The document's revision history, newest first. */
-  history: DocHistoryRow[];
+  /** `nodeId`'s revision history, newest first. `null` = not loaded, which is
+      not the same thing as "no revisions" and must not be drawn as one. The
+      drawer also walks to other nodes, and their history is `onLoadHistory`'s
+      job, not this prop's. */
+  history: DocHistoryRow[] | null;
+  /** Fetch one document's revision history. Without it the History tab says
+      plainly that history has not been loaded, rather than showing an empty
+      timeline that reads as "nothing ever happened to this document". */
+  onLoadHistory?: (docId: number) => DocHistoryRow[] | Promise<DocHistoryRow[]>;
   /** Persist this node's current graph position. */
   onPin?: (args: { docId: number; x: number; y: number }) => void | Promise<void>;
   /** Let the auto-layout place this node again. */
@@ -64,8 +71,8 @@ export type LineageNodeDrawerProps = {
 };
 
 export function LineageNodeDrawer({
-  nodes, edges, nodeId, history, onPin, onUnpin, onWatch, onOpenDocument, onCreateReviewTask,
-  onClose, loading = false, className = "",
+  nodes, edges, nodeId, history, onLoadHistory, onPin, onUnpin, onWatch, onOpenDocument,
+  onCreateReviewTask, onClose, loading = false, className = "",
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
@@ -86,6 +93,41 @@ export function LineageNodeDrawer({
      no rows yet, threw a TypeError and blanked the drawer. `loading` with an
      empty graph is the normal first render, not an edge case. */
   const node: LNode | null = byId[openId] ?? nodes[0] ?? null;
+
+  /* Revision history for whichever node is open. `rows === null` means nobody
+     has told us, and the tab says so; an empty array is a real answer. The
+     page used to hand `history: []` to every node it did not have history for,
+     so opening any node showed a timeline that was permanently, silently
+     empty. */
+  const [histRows, setHistRows] = useState<DocHistoryRow[] | null>(openId === nodeId ? history : null);
+  const [histBusy, setHistBusy] = useState(false);
+  const [histErr, setHistErr] = useState<string | null>(null);
+
+  /* Held in a ref, not a dependency: a page that rebuilds its `actions` object
+     each render would otherwise re-fetch on every render, forever. */
+  const loadRef = useRef(onLoadHistory);
+  loadRef.current = onLoadHistory;
+  const openDocId = byId[openId]?.docId ?? null;
+
+  useEffect(() => {
+    if (openId === nodeId) { setHistRows(history); setHistErr(null); return; }
+    const load = loadRef.current;
+    if (!load || openDocId == null) { setHistRows(null); setHistErr(null); return; }
+    let live = true;
+    setHistBusy(true);
+    setHistErr(null);
+    void (async () => {
+      try {
+        const next = await load(openDocId);
+        if (live) setHistRows(next);
+      } catch (err) {
+        if (live) setHistErr(err instanceof Error ? err.message : "That history could not be loaded.");
+      } finally {
+        if (live) setHistBusy(false);
+      }
+    })();
+    return () => { live = false; };
+  }, [openId, nodeId, history, openDocId]);
 
   const connections = useMemo(() => {
     const rows: { rel: keyof typeof REL; dir: "out" | "in"; other: LNode; edge: LEdge }[] = [];
@@ -109,13 +151,13 @@ export function LineageNodeDrawer({
   /* Owners block: the document owner plus whoever last approved it. Derived,
      never invented — an unowned document says so. */
   const owners = useMemo(() => {
-    const rows: { name: string; role: string }[] = [];
-    if (!node) return rows;
-    if (node.owner) rows.push({ name: node.owner, role: "Owner" });
-    const approver = history.find((h) => h.verb === "reviewed")?.actor;
-    if (approver && approver !== node.owner) rows.push({ name: approver, role: "Approver" });
-    return rows;
-  }, [node?.owner]);
+    const out: { name: string; role: string }[] = [];
+    if (!node) return out;
+    if (node.owner) out.push({ name: node.owner, role: "Owner" });
+    const approver = histRows?.find((h) => h.verb === "reviewed")?.actor;
+    if (approver && approver !== node.owner) out.push({ name: approver, role: "Approver" });
+    return out;
+  }, [node?.owner, histRows]);
 
   const metaParts = node ? node.meta.split("·").map((s) => s.trim()).filter(Boolean) : [];
 
@@ -168,8 +210,10 @@ export function LineageNodeDrawer({
     void run(
       () => setTaskMade(true),
       () => setTaskMade(false),
+      // Assignee is the document's owner, or empty for the server to route:
+      // this used to fall back to a person's name that was simply made up.
       onCreateReviewTask
-        ? () => onCreateReviewTask({ title: `Review: ${node.title}`, assignee: node.owner || "Daniel H." })
+        ? () => onCreateReviewTask({ title: `Review: ${node.title}`, assignee: node.owner ?? "" })
         : undefined,
     );
   };
@@ -344,12 +388,10 @@ export function LineageNodeDrawer({
             <LgOwners owners={owners} />
           </CardSection>
 
-          <CardSection label="Verified facts" count={1}>
-            <div className="rounded-[4px] border border-ink/10 bg-flysch/50 px-3 py-2 text-[12.5px] text-ink/70">
-              “Free-tier limits are enforced per workspace, not per user.”
-              <span className="text-ink/65"> Verified, pricing.</span>
-            </div>
-          </CardSection>
+          {/* No "Verified facts" section: the one that stood here printed a
+              hardcoded claim about free-tier limits on every document in every
+              workspace. Nothing in the lineage graph carries facts, so there
+              is nothing honest to render until something does. */}
 
           <CardSection label="Staleness">
             <span className="inline-flex items-center gap-2 text-[13px] text-ink">
@@ -405,14 +447,30 @@ export function LineageNodeDrawer({
       )}
 
       {tab === "history" && (
-        <Timeline
-          items={history.map((h) => ({
-            title: <span><span className="font-semibold text-ink">{h.actor}</span> {h.verb}</span>,
-            description: h.detail,
-            time: fmtDate(h.at),
-            tone: "neutral" as const,
-          }))}
-        />
+        histBusy ? (
+          <SkeletonList rows={4} />
+        ) : histErr ? (
+          <FieldError>{histErr}</FieldError>
+        ) : histRows === null ? (
+          /* Not loaded is not the same as nothing happened, and saying the
+             wrong one of those is a claim about the document. */
+          <EmptyState title="History not loaded">
+            This graph does not carry revisions for {node.title}. Open the document to read its full history.
+          </EmptyState>
+        ) : histRows.length === 0 ? (
+          <EmptyState title="No revisions recorded">
+            Nothing has been recorded against this document since it was indexed.
+          </EmptyState>
+        ) : (
+          <Timeline
+            items={histRows.map((h) => ({
+              title: <span><span className="font-semibold text-ink">{h.actor}</span> {h.verb}</span>,
+              description: h.detail,
+              time: fmtDate(h.at),
+              tone: "neutral" as const,
+            }))}
+          />
+        )
       )}
 
       {tab === "impact" && (
@@ -455,10 +513,18 @@ export function LineageNodeDrawer({
               compact
               disabled={downstream + upstream === 0}
               className={result?.title.startsWith("Exported") ? lgToggleOn : ""}
-              onClick={() => setResult({
-                title: `Exported ${connections.length} rows`,
-                body: `${node.title.replace(/,/g, "")}-closure.csv is ready to download.`,
-              })}
+              /* The file is actually written now. It used to announce a CSV
+                 that was "ready to download" and never produce one. */
+              onClick={() => {
+                const name = `${node.title.replace(/[^\w.-]+/g, "-").slice(0, 60)}-closure.csv`;
+                const csv = [
+                  "relation,direction,document,owner",
+                  ...connections.map((c) => [REL[c.rel].code, c.dir, c.other.title, c.other.owner ?? ""]
+                    .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")),
+                ].join("\n");
+                downloadText(name, csv, "text/csv");
+                setResult({ title: `Exported ${connections.length} rows`, body: `Downloaded as ${name}.` });
+              }}
             >
               <Plus size={13} /> Export CSV
             </Button>

@@ -65,7 +65,14 @@ export { PropertyList, type PropertyItem } from "./data-display/PropertyList";
 // Markdown
 export { MarkdownView, type MarkdownViewProps } from "./data-display/MarkdownView";
 export { MarkdownEditor, type MarkdownEditorProps } from "./data-display/MarkdownEditor";
-export { parseMarkdown, mdInline, escapeHtml, type Block, type BlockType } from "./data-display/markdown";
+/* The round trip is the contract: `serializeBlocks(parseMarkdown(md))` is what
+   Doc Review writes back, and a consumer that parses without it loses every
+   construct the editor holds opaquely (tables, blockquotes, front matter,
+   h4-h6). `RawKind` says which construct a block is holding verbatim. */
+export {
+  parseMarkdown, serializeBlocks, blockToMarkdown, mdInline, escapeHtml,
+  type Block, type BlockType, type RawKind,
+} from "./data-display/markdown";
 
 // Cards & panels
 export { ImpactPanel, type ImpactDoc, type ImpactPanelProps } from "./data-display/ImpactPanel";
@@ -154,5 +161,11 @@ export { ERRORS, ERROR_LIST, type ErrorId, type ErrorSpec, type ErrorTone } from
 export { ErrorMessage, FieldError } from "./feedback/ErrorMessage";
 // Canonical server/region vocabulary.
 export { REGIONS, REGION_OPTIONS, regionLabel, regionShort, type RegionCode } from "./tokens/regions";
+/* Canonical timezone vocabulary — one list, shared by Preferences and Settings
+   → General, which used to offer different ids for the same account. */
+export {
+  TIMEZONES, TIMEZONE_OPTIONS, timezoneOptions, timezoneLabel, normalizeTimezone,
+  type TimezoneOption,
+} from "./tokens/timezones";
 // Disabled-state token for hand-rolled buttons.
 export { btnDisabled } from "./actions/buttons";

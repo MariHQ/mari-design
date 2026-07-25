@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { UserRound, KeyRound, Bell, IdCard } from "lucide-react";
+import { UserRound, KeyRound, Bell, IdCard, AlertTriangle, Trash2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
 import { FormField } from "../forms/FormField";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
+import { Combobox } from "../forms/Combobox";
 import { Switch } from "../forms/Switch";
+import { normalizeTimezone, timezoneOptions } from "../tokens/timezones";
 import { Avatar } from "../data-display/Avatar";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
@@ -63,8 +66,12 @@ export type PreferencesProfile = {
   name: string;
   email: string;
   initials: string;
-  /** IANA zone id, matching the option values below. */
+  /** IANA zone id, from tokens/timezones.ts. */
   timezone: string;
+  /** UI language, as a BCP 47 tag ("en", "es", "de"). Absent means the server
+      does not store one, and the control is not drawn: a language select that
+      cannot persist is a control that does nothing (§2). */
+  language?: string;
 };
 
 export type PreferencesData = {
@@ -77,23 +84,33 @@ export type PreferencesData = {
 };
 
 export type PreferencesActions = {
-  saveProfile?: (p: { name: string; timezone: string }) => void | Promise<void>;
+  /** `language` is only sent when the account has one to change. */
+  saveProfile?: (p: { name: string; timezone: string; language?: string }) => void | Promise<void>;
   changePassword?: (p: { current: string; next: string }) => void | Promise<void>;
   setNotification?: (key: keyof NotificationPrefs, on: boolean) => void | Promise<void>;
+  /** Close the account for good. Destructive and final, so it goes through
+      <ConfirmButton> and only ever runs on the second click. The card is drawn
+      ONLY when this handler exists: an app with no way to close an account
+      must not show a button that says it can. */
+  deleteAccount?: () => void | Promise<void>;
 };
 
 const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
 const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2";
 
-const TIMEZONES: { value: string; label: string }[] = [
-  { value: "UTC", label: "UTC" },
-  { value: "America/Los_Angeles", label: "Pacific — Los Angeles" },
-  { value: "America/Denver", label: "Mountain — Denver" },
-  { value: "America/Chicago", label: "Central — Chicago" },
-  { value: "America/New_York", label: "Eastern — New York" },
-  { value: "Europe/London", label: "London" },
-  { value: "Europe/Paris", label: "Paris" },
-  { value: "Asia/Tokyo", label: "Tokyo" },
+/* Timezones come from tokens/timezones.ts. The list used to live here: eight
+   zones, labelled with em dashes ("Pacific — Los Angeles") that §5 forbids in
+   user-visible copy, and disagreeing with the three ids Settings → General
+   offered for the same account (C8, C9). */
+
+/* Languages the console is translated into. Sentence case, in the language
+   itself, which is how a person finds their own. */
+const LANGUAGES: { value: string; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "de", label: "Deutsch" },
+  { value: "fr", label: "Français" },
+  { value: "ja", label: "日本語" },
 ];
 
 const PROVIDER_LABEL: Record<AuthProvider, string> = {
@@ -103,21 +120,35 @@ const PROVIDER_LABEL: Record<AuthProvider, string> = {
 };
 
 function ProfileCard({ data, actions }: { data: PreferencesData; actions?: PreferencesActions }) {
+  const zoneOf = (p: PreferencesProfile) => normalizeTimezone(p.timezone);
   const [name, setName] = useState(data.profile.name);
-  const [timezone, setTimezone] = useState(data.profile.timezone);
+  const [timezone, setTimezone] = useState(zoneOf(data.profile));
+  const [language, setLanguage] = useState(data.profile.language ?? "");
   const [saved, setSaved] = useState(false);
   const { busy, failed, run } = useWrite();
 
-  const dirty = name !== data.profile.name || timezone !== data.profile.timezone;
+  /* `useState` reads its seed once, so after a refetch this buffer kept
+     rendering the first response and would have written it back (C1). */
+  const [seen, setSeen] = useState(data.profile);
+  if (seen !== data.profile) {
+    setSeen(data.profile);
+    setName(data.profile.name);
+    setTimezone(zoneOf(data.profile));
+    setLanguage(data.profile.language ?? "");
+    setSaved(false);
+  }
+
+  const hasLanguage = data.profile.language !== undefined;
+  const dirty = name !== data.profile.name
+    || timezone !== zoneOf(data.profile)
+    || (hasLanguage && language !== data.profile.language);
   // A blank display name is not a save the server should have to reject.
   const valid = name.trim().length > 0;
 
-  // The zone the account is on may not be one of the eight offered. Showing it
-  // rather than silently snapping the select to UTC — which would rewrite the
-  // setting on the next save without anyone asking.
-  const zones = TIMEZONES.some((t) => t.value === timezone)
-    ? TIMEZONES
-    : [{ value: timezone, label: timezone }, ...TIMEZONES];
+  // The zone the account is on may not be one this build has a label for.
+  // Showing it rather than silently snapping the picker to UTC, which would
+  // rewrite the setting on the next save without anyone asking.
+  const zones = timezoneOptions(timezone);
 
   return (
     <Card title="Profile" icon={<UserRound size={18} />}>
@@ -133,10 +164,27 @@ function ProfileCard({ data, actions }: { data: PreferencesData; actions?: Prefe
           <Input value={name} onChange={(e) => { setName(e.target.value); setSaved(false); }} />
         </FormField>
         <FormField label="Time zone" hint="Dates and digest delivery times use this.">
-          <Select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}>
-            {zones.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </Select>
+          {/* The canonical list is long enough that scanning a native select
+              is not practical, so this is the searchable Combobox (§7). */}
+          <Combobox
+            ariaLabel="Time zone"
+            value={timezone}
+            onChange={(v) => { setTimezone(v); setSaved(false); }}
+            options={zones}
+            placeholder="Select a time zone"
+            searchPlaceholder="Search time zones…"
+          />
         </FormField>
+        {/* Drawn only when the account HAS a language the server stores.
+            Otherwise this would be a select that saves nothing (§2). */}
+        {hasLanguage && (
+          <FormField label="Language" hint="The console's own labels and buttons.">
+            <Select value={language} onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}>
+              {(LANGUAGES.some((l) => l.value === language) ? LANGUAGES : [{ value: language, label: language }, ...LANGUAGES])
+                .map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </Select>
+          </FormField>
+        )}
       </div>
       {/* Email is read-only here on purpose. It is the account identifier and
           the OAuth join key, so changing it is a verification flow, not a text
@@ -155,7 +203,7 @@ function ProfileCard({ data, actions }: { data: PreferencesData; actions?: Prefe
           variant="primary"
           disabled={!dirty || !valid || busy}
           onClick={() => run(
-            () => actions?.saveProfile?.({ name: name.trim(), timezone }),
+            () => actions?.saveProfile?.({ name: name.trim(), timezone, ...(hasLanguage ? { language } : {}) }),
             () => setSaved(true),
           )}
         >
@@ -164,7 +212,7 @@ function ProfileCard({ data, actions }: { data: PreferencesData; actions?: Prefe
         {dirty && !busy && (
           <Button
             variant="link"
-            onClick={() => { setName(data.profile.name); setTimezone(data.profile.timezone); setSaved(false); }}
+            onClick={() => { setName(data.profile.name); setTimezone(zoneOf(data.profile)); setLanguage(data.profile.language ?? ""); setSaved(false); }}
           >
             Discard
           </Button>
@@ -245,6 +293,14 @@ function NotificationsCard({ data, actions }: { data: PreferencesData; actions?:
   // Local echo so a switch moves under the finger; `useWrite` only keeps it
   // moved once the server has taken the change.
   const [local, setLocal] = useState(data.notifications);
+  /* The echo used to be seeded once and never again, so a preference changed
+     on another device (or rejected here and refetched) kept showing this tab's
+     stale switch position forever (P-PR-4, C1). */
+  const [seen, setSeen] = useState(data.notifications);
+  if (seen !== data.notifications) {
+    setSeen(data.notifications);
+    setLocal(data.notifications);
+  }
   const { failed, run } = useWrite();
 
   return (
@@ -272,6 +328,36 @@ function NotificationsCard({ data, actions }: { data: PreferencesData; actions?:
   );
 }
 
+/* Closing your own account. Drawn only when there is a handler to close it
+   with, the way Settings → General gates its danger zone: a danger heading
+   over a button that does nothing is worse than no heading at all (§2). */
+function AccountDangerZone({ actions }: { actions?: PreferencesActions }) {
+  const close = actions?.deleteAccount;
+  const { busy, failed, run } = useWrite();
+  if (!close) return null;
+  return (
+    <Card className="border-espelette/30">
+      <div className="flex items-center gap-2 text-espelette">
+        <AlertTriangle size={16} />
+        <h3 className="text-[14px] font-semibold">Danger zone</h3>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-medium text-ink">Close this account</div>
+          <p className="mt-0.5 text-[12.5px] text-ink/70">
+            You lose access to every workspace you are a member of. Documents you wrote stay with the workspace. This
+            cannot be undone.
+          </p>
+        </div>
+        <ConfirmButton compact disabled={busy} confirmLabel="Close forever?" onConfirm={() => void run(() => close())}>
+          <Trash2 size={14} /> Close account
+        </ConfirmButton>
+      </div>
+      <WriteError>{failed}</WriteError>
+    </Card>
+  );
+}
+
 function Body({ data, error, actions }: { data: PreferencesData; error: string | null; actions?: PreferencesActions }) {
   if (error) return <EmptyState icon={<UserRound size={22} />} title="API offline">{error}</EmptyState>;
   return (
@@ -279,6 +365,7 @@ function Body({ data, error, actions }: { data: PreferencesData; error: string |
       <ProfileCard data={data} actions={actions} />
       <PasswordCard data={data} actions={actions} />
       <NotificationsCard data={data} actions={actions} />
+      <AccountDangerZone actions={actions} />
     </>
   );
 }

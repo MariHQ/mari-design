@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Truncate } from "../data-display/Truncate";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Send, ExternalLink, FileText, Check, Plus, GripVertical } from "lucide-react";
+import { Send, ExternalLink, FileText, Check, Plus, ArrowUp, ArrowDown, X } from "lucide-react";
 import { Drawer } from "../layout/Drawer";
 import { Field } from "../forms/Field";
-import { SortHeader, tdPad } from "../data-display/sortable";
+import { SortHeader, useSort, tdPad } from "../data-display/sortable";
+import { ResultCount, PagerBar, usePaged } from "../data-display/Pagination";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { PageHeader } from "../layout/PageHeader";
@@ -13,15 +14,12 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
-import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Chip, CountChip } from "../data-display/Chip";
+import { Chip } from "../data-display/Chip";
 import { Swatch } from "../data-display/Swatch";
 import { Stepper } from "../data-display/Stepper";
-import { Progress } from "../data-display/Progress";
+import { Spinner } from "../data-display/Spinner";
 import { TagChip } from "../data-display/TagChip";
-import { CodeBlock } from "../data-display/CodeBlock";
-import { TokenReveal } from "../data-display/TokenReveal";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
@@ -137,9 +135,9 @@ export type McpCreated = {
     `rollbackRelease` is keyed by the version string the release log shows, for
     the same reason.
 
-    There is no `addNavSection` / `removeNavSection`: the navigation tree has
-    no mutation of its own (a build rewrites it), so those two buttons keep
-    their local behaviour rather than pretending to persist. */
+    `setSiteNav` takes the whole tree because that is what the nav editor
+    edits: adding, removing and reordering a section are all one write of the
+    new order. Without it the tree keeps its local echo (the canvas). */
 export type PublishActions = PublishMcpActions & {
   /** Leave the site editor and go back to the list of sites. Which view is on
       screen lives in `data`, so the page cannot go back on its own. */
@@ -150,10 +148,16 @@ export type PublishActions = PublishMcpActions & {
       the site is allowed to publish, and they are set here because the editor
       treats them as fixed ("Sources are set at creation"). */
   createSite?: (args: { name: string; domain: string; sourceTags: string[] }) => void | Promise<void>;
+  /** Destructive: takes the site, and anything it serves, away. Rendered as a
+      <ConfirmButton> on the site's row. Keyed by id because the list is where
+      it is offered, and that row is not the site the editor is open on. */
+  deleteSite?: (id: number) => void | Promise<void>;
   deploySite?: () => void | Promise<void>;
   buildSite?: () => void | Promise<void>;
   rollbackRelease?: (version: string) => void | Promise<void>;
   setSiteFeature?: (key: string, on: boolean) => void | Promise<void>;
+  /** Store the site's navigation tree, in the order the editor shows it. */
+  setSiteNav?: (nav: NavSection[]) => void | Promise<void>;
   setSiteTheme?: (theme: { preset?: string; accent?: string }) => void | Promise<void>;
   saveDeployConfig?: (cfg: { bucket: string; region: string }) => void | Promise<void>;
 };
@@ -200,29 +204,58 @@ const STATES = [
 ] as const;
 
 /* ── Inline site-editor tab bodies ─────────────────────────────────────────*/
-function EditorTabs({ active }: { active: EditorTab }) {
-  const tabs: { id: EditorTab; label: string }[] = [
-    { id: "content", label: "Content" }, { id: "theme", label: "Theme" }, { id: "preview", label: "Preview" }, { id: "domains", label: "Domains" },
-  ];
-  return (
-    <div className="flex items-center gap-5 border-b border-ink/15 mb-4">
-      {tabs.map((t) => (
-        <span key={t.id} aria-current={t.id === active ? "page" : undefined}
-          className={`pb-2 text-[13px] font-medium border-b-2 -mb-px ${t.id === active ? "text-ink border-biscay-2" : "text-ink/65 border-transparent"}`}>{t.label}</span>
-      ))}
-    </div>
-  );
-}
+/* The four editor tabs used to be <span>s: Content / Theme / Preview /
+   Domains could only be reached by the caller changing `data.editorTab`, so
+   inside the app three quarters of the site editor was unreachable by
+   clicking. They are the one standard selection bar now (§13, same component
+   as the Knowledge tab row), and the editor owns which one is open. */
+const EDITOR_TAB_OPTIONS: TabOption<EditorTab>[] = [
+  { id: "content", label: "Content" },
+  { id: "theme", label: "Theme" },
+  { id: "preview", label: "Preview" },
+  { id: "domains", label: "Domains" },
+];
 
 /* mkdocs-style site-builder controls: an editable nav tree plus the feature
    switches a static-site generator exposes. Every control is wired to local
    state so nothing here is inert (§2). */
 function ContentBody({ site, actions }: { site: DocSite; actions?: PublishActions }) {
   const [nav, setNav] = useState<NavSection[]>(site.nav);
+  const [newSection, setNewSection] = useState("");
   const [features, setFeatures] = useState<Record<string, boolean>>(
     Object.fromEntries(site.features.map((f) => [f.key, f.on])),
   );
+  /* A refetch replaces the site under this panel; without the resync the
+     editor kept rendering the nav and switches it mounted with (C1). */
+  const [seen, setSeen] = useState(site);
+  if (seen !== site) {
+    setSeen(site);
+    setNav(site.nav);
+    setFeatures(Object.fromEntries(site.features.map((f) => [f.key, f.on])));
+  }
   const write = useWrite();
+
+  /* One path for every nav edit: the server takes the whole tree, and the row
+     order the user sees is the order it stored. */
+  const commitNav = (next: NavSection[]) => write.run(
+    actions?.setSiteNav && (() => actions.setSiteNav!(next)),
+    () => setNav(next),
+  );
+  const moveNav = (i: number, delta: number) => {
+    const j = i + delta;
+    if (j < 0 || j >= nav.length) return Promise.resolve(false);
+    const next = [...nav];
+    [next[i], next[j]] = [next[j], next[i]];
+    return commitNav(next);
+  };
+  const addSection = async () => {
+    const label = newSection.trim();
+    if (!label) return;
+    // A section the build has not run over holds no documents yet, which is
+    // what 0 says — it is not a count this page invented.
+    const ok = await commitNav([...nav, { label, docs: 0 }]);
+    if (ok) setNewSection("");
+  };
 
   /* A switch only moves once the generator has taken the change, so it can
      never sit in a position the built site does not honour. */
@@ -242,29 +275,47 @@ function ContentBody({ site, actions }: { site: DocSite; actions?: PublishAction
       <div className="flex items-center gap-2">
         <FileText size={15} className="text-ink/65" />
         <span className="text-[13px] text-ink/80">{site.docsMatched} docs match</span>
-        <Chip label={site.warnings} tone="attention" dot />
+        {/* No warnings means no chip: an empty attention chip is a badge with
+            nothing in it. */}
+        {site.warnings && <Chip label={site.warnings} tone="attention" dot />}
       </div>
 
       <div>
         <SectionLabel>Navigation</SectionLabel>
+        {/* The tree used to draw a GripVertical handle with no drag behind it,
+            and Add/Remove only ever touched local state — an editor that could
+            not edit (§2). The handle is gone (nothing dragged), reordering is
+            two real buttons, and every change is written through
+            `setSiteNav`; with no handler it stays the local echo the canvas
+            renders. */}
         <ul className="mt-1.5 flex flex-col divide-y divide-ink/10 rounded-[5px] border border-ink/15">
           {nav.map((n, i) => (
             <li key={`${n.label}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
-              <GripVertical size={14} className="shrink-0 text-ink/65" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{n.label}</span>
+              <Truncate className="min-w-0 flex-1 text-[13px] text-ink">{n.label}</Truncate>
               <span className="shrink-0 font-term text-[11.5px] text-ink/65">{n.docs} docs</span>
+              <span className="flex shrink-0 items-center gap-1">
+                <Button icon compact aria-label={`Move ${n.label} up`} disabled={i === 0 || write.busy} onClick={() => void moveNav(i, -1)}><ArrowUp size={13} /></Button>
+                <Button icon compact aria-label={`Move ${n.label} down`} disabled={i === nav.length - 1 || write.busy} onClick={() => void moveNav(i, 1)}><ArrowDown size={13} /></Button>
+                <ConfirmButton compact confirmLabel="Remove?" disabled={write.busy} onConfirm={() => void commitNav(nav.filter((_, j) => j !== i))}>
+                  <X size={13} /> Remove
+                </ConfirmButton>
+              </span>
             </li>
           ))}
         </ul>
+        {/* A section the user names, not "Section 3": the label is what the
+            built site puts in its sidebar. */}
         <div className="mt-2 flex items-center gap-2">
-          <Button
-            compact
-            onClick={() => setNav((ns) => [...ns, { label: `Section ${ns.length + 1}`, docs: 0 }])}
-          >
+          <Input
+            className="w-[220px]"
+            aria-label="New section name"
+            placeholder="Guides"
+            value={newSection}
+            onChange={(e) => setNewSection(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSection(); } }}
+          />
+          <Button compact disabled={!newSection.trim() || write.busy} onClick={() => void addSection()}>
             <Plus size={13} /> Add section
-          </Button>
-          <Button compact disabled={nav.length <= 1} onClick={() => setNav((ns) => ns.slice(0, -1))}>
-            Remove last
           </Button>
         </div>
       </div>
@@ -310,20 +361,27 @@ function ContentBody({ site, actions }: { site: DocSite; actions?: PublishAction
   );
 }
 
-function ThemeBody({ site, actions }: { site: DocSite; actions?: PublishActions }) {
+function ThemeBody({ site, theme, onTheme, actions }: {
+  site: DocSite;
+  /* The theme the user is looking at. It lives on the editor, not here, so
+     the live preview beside this panel repaints with the pick — it used to
+     read `site.accents[0]` and never moved. */
+  theme: { preset: string; accent: string };
+  onTheme: (next: { preset: string; accent: string }) => void;
+  actions?: PublishActions;
+}) {
   /* Presets and accents used to be a picture: the first row was hard-coded as
      the selected one and nothing was clickable. They are controls now, and
      with a handler each pick is written to the site's theme (§2). */
-  const [preset, setPreset] = useState(site.themes[0]?.key ?? "");
-  const [accent, setAccent] = useState(site.accents[0] ?? "");
+  const { preset, accent } = theme;
   const write = useWrite();
   const pickPreset = (key: string) => write.run(
     actions?.setSiteTheme && (() => actions.setSiteTheme!({ preset: key, accent })),
-    () => setPreset(key),
+    () => onTheme({ preset: key, accent }),
   );
   const pickAccent = (color: string) => write.run(
     actions?.setSiteTheme && (() => actions.setSiteTheme!({ preset, accent: color })),
-    () => setAccent(color),
+    () => onTheme({ preset, accent: color }),
   );
 
   return (
@@ -355,20 +413,18 @@ function ThemeBody({ site, actions }: { site: DocSite; actions?: PublishActions 
           ))}
         </div>
       </div>
-      <div>
-        <SectionLabel>Density</SectionLabel>
-        <div className="mt-1.5 inline-flex rounded-[4px] border border-ink/15 overflow-hidden">
-          {["Comfortable", "Compact", "Dense"].map((o, i) => (
-            <span key={o} className={`px-2.5 h-7 grid place-items-center text-[12px] font-medium border-r border-ink/10 last:border-0 ${i === 0 ? "bg-biscay text-white" : "bg-paper text-ink/65"}`}>{o}</span>
-          ))}
-        </div>
-      </div>
+      {/* "Density" was three <span>s with the first hard-coded selected: no
+          state, no handler, and no density field on the site for it to seed
+          from or write to. A control that cannot do anything is not drawn
+          (§2), so it is gone rather than mocked. */}
     </div>
   );
 }
 
-function PreviewBody({ site }: { site: DocSite }) {
-  const accent = site.accents[0];
+/* The preview repaints from the accent the editor is holding, which is the
+   one the user just picked. Reading `site.accents[0]` meant a theme change
+   never showed up in the panel that exists to show it. */
+function PreviewBody({ site, accent }: { site: DocSite; accent: string }) {
   return (
     <div className="rounded-md border border-ink/15 overflow-hidden" style={{ background: "#fcf9f1" }}>
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink/10 bg-black/[0.02]">
@@ -432,9 +488,23 @@ function DomainsBody({ site, actions }: { site: DocSite; actions?: PublishAction
   );
 }
 
-function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site: DocSite; mobile: boolean; actions?: PublishActions }) {
+function SiteEditorInline({ initialTab, site, mobile, actions }: { initialTab: EditorTab; site: DocSite; mobile: boolean; actions?: PublishActions }) {
   const write = useWrite();
   const [deployed, setDeployed] = useState(false);
+  /* `data.editorTab` seeds which tab opens (so a caller can deep-link one);
+     the editor owns it from then on, because the tab row is a control the
+     user clicks, not a read-out of the route. */
+  const [tab, setTab] = useState<EditorTab>(initialTab);
+  const [seenTab, setSeenTab] = useState(initialTab);
+  if (seenTab !== initialTab) { setSeenTab(initialTab); setTab(initialTab); }
+  /* The theme being previewed lives here so the Theme tab and the live
+     preview beside it are the same value (P-PU-3). */
+  const [theme, setTheme] = useState({ preset: site.themes[0]?.key ?? "", accent: site.accents[0] ?? "" });
+  const [seenSite, setSeenSite] = useState(site);
+  if (seenSite !== site) {
+    setSeenSite(site);
+    setTheme({ preset: site.themes[0]?.key ?? "", accent: site.accents[0] ?? "" });
+  }
   const deploy = () => write.run(
     actions?.deploySite && (() => actions.deploySite!()),
     () => { setDeployed(true); window.setTimeout(() => setDeployed(false), 2400); },
@@ -475,10 +545,12 @@ function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site
         }
       >
         <Card>
-          <EditorTabs active={tab} />
+          <div className="mb-4">
+            <Tabs<EditorTab> ariaLabel="Site editor sections" variant="underline" options={EDITOR_TAB_OPTIONS} value={tab} onChange={setTab} />
+          </div>
           {tab === "content" && <ContentBody site={site} actions={actions} />}
-          {tab === "theme" && <ThemeBody site={site} actions={actions} />}
-          {tab === "preview" && <PreviewBody site={site} />}
+          {tab === "theme" && <ThemeBody site={site} theme={theme} onTheme={setTheme} actions={actions} />}
+          {tab === "preview" && <PreviewBody site={site} accent={theme.accent} />}
           {tab === "domains" && <DomainsBody site={site} actions={actions} />}
         </Card>
         {tab !== "preview" && (
@@ -486,7 +558,7 @@ function SiteEditorInline({ tab, site, mobile, actions }: { tab: EditorTab; site
             icon={<span className="relative inline-flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full bg-moss opacity-60 animate-ping" /><span className="relative inline-flex h-2 w-2 rounded-full bg-moss" /></span>}
             title="Live preview" hint={site.domain}
           >
-            <PreviewBody site={site} />
+            <PreviewBody site={site} accent={theme.accent} />
           </Card>
         )}
       </div>
@@ -524,6 +596,23 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
     if (ok) setCreating(false);
   };
 
+  /* Deleting a site takes the published site down with it, so it is a
+     ConfirmButton and never fires on a first click (§2). */
+  const remove = (id: number) => write.run(
+    actions?.deleteSite && (() => actions.deleteSite!(id)),
+    () => setRows((rs) => rs.filter((r) => r.id !== id)),
+  );
+
+  /* §3: every column sorts. They were all `sortable={false}`, so a workspace
+     with fifty sites could not find one. Long lists page rather than growing
+     the card (§13). */
+  const { sort, onSort, sorted } = useSort(rows, {
+    name: (r) => r.name.toLowerCase(),
+    status: (r) => r.status,
+    docs: (r) => r.docs,
+  }, { key: "name", dir: "asc" });
+  const pager = usePaged(sorted, 25);
+
   return (
     <div className="flex flex-col gap-4">
       <div className={`${card} overflow-hidden`}>
@@ -542,17 +631,22 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
             Pick source tags, build a static site, and deploy it to an S3 bucket you map a domain to.
           </EmptyState>
         ) : (
+          <>
+          {/* Count strip above the rows it describes (§13). */}
+          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="doc sites" className="mt-2" />
           <table className="w-full border-collapse text-left">
             <thead>
               <tr>
-                <SortHeader label="Site" sortable={false} />
-                <SortHeader label="Status" sortable={false} />
-                <SortHeader label="Docs" sortable={false} align="right" />
+                <SortHeader label="Site" sortKey="name" sort={sort} onSort={onSort} />
+                <SortHeader label="Docs" sortKey="docs" sort={sort} onSort={onSort} align="right" />
+                {/* §3: a row with a clickable action puts status second to
+                    last. */}
+                <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
                 <SortHeader label="Actions" sortable={false} align="right" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((s) => (
+              {pager.pageRows.map((s) => (
                 <tr key={s.id}>
                   <td className={`${tdPad} max-w-[320px] border-b border-ink/[0.06] align-middle`}>
                     {/* Opening a site is the app's route, so the name is a
@@ -570,19 +664,30 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
                     )}
                     <div className="truncate font-term text-[11.5px] text-ink/65">{s.domain}</div>
                   </td>
-                  <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] align-middle`}>
-                    <Chip label={s.status === "live" ? "Live" : "Draft"} tone={s.status === "live" ? "ok" : "neutral"} dot pulse={s.status === "live"} caps />
-                  </td>
                   <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] text-right align-middle font-term text-[12px] text-ink/70`}>
                     {s.docs.toLocaleString()}
                   </td>
+                  <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] align-middle`}>
+                    <Chip label={s.status === "live" ? "Live" : "Draft"} tone={s.status === "live" ? "ok" : "neutral"} dot pulse={s.status === "live"} caps />
+                  </td>
                   <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] text-right align-middle`}>
-                    {actions?.openSite && <Button compact onClick={() => actions.openSite!(s.id)}>Open</Button>}
+                    <span className="inline-flex items-center gap-1.5">
+                      {actions?.openSite && <Button compact onClick={() => actions.openSite!(s.id)}>Open</Button>}
+                      {/* Publish had no way to delete a site anywhere, so a
+                          mistyped domain was permanent. */}
+                      {actions?.deleteSite && (
+                        <ConfirmButton compact disabled={write.busy} confirmLabel={`Delete ${s.name}?`} onConfirm={() => void remove(s.id)}>
+                          Delete
+                        </ConfirmButton>
+                      )}
+                    </span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
+          </>
         )}
         {write.failed && <div className="border-t border-ink/10 px-4 py-2.5"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
       </div>
@@ -697,8 +802,15 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
           {statusChip}
         </div>
         <Stepper labels={["Build", "Upload", "Release"]} current={step} />
+        {/* A deploy reports no percentage: nothing on this page knows how far
+            the upload has got. `Progress value={62}` was a number this file
+            made up and drew as fact, so the honest read-out is an
+            indeterminate one. */}
         {phase === "publishing" && (
-          <div className="mt-4"><Progress value={62} tone="info" label={`Uploading to ${site.bucket}`} /></div>
+          <p className="mt-4 inline-flex items-center gap-2 text-[13px] text-ink/70">
+            <Spinner size="sm" />
+            {site.bucket ? `Uploading to ${site.bucket}. This keeps running on the server.` : "Building and uploading. This keeps running on the server."}
+          </p>
         )}
         {phase === "published" && (
           <p className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-moss"><Check size={15} /> {site.releasedNote}</p>
@@ -765,7 +877,7 @@ function Body({ data, error, mobile, actions }: { data: PublishData; error: stri
     case "site-editor":
       /* No site on an editor route means the row is gone (or has not arrived).
          The list is the honest fallback — a blank panel is not. */
-      return data.site ? <SiteEditorInline tab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : siteList;
+      return data.site ? <SiteEditorInline initialTab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : siteList;
     case "site-list":
     case "site-new":
     default:

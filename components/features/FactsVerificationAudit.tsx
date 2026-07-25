@@ -32,6 +32,16 @@ export type Fact = {
   verified?: DateInput | null;
 };
 
+/** A ledger status reduced to one comparable token: case, spacing and
+    underscores are the API's business, not the console's. Every status test in
+    the fact views goes through this, because the audit used to compare against
+    the literal English string "Verified" and quietly dropped every row a
+    workspace spelled "verified" or "VERIFIED" (P-FA-1). */
+export const factStatusKey = (status: string) => status.trim().toLowerCase().replace(/[\s_]+/g, "-");
+
+/** Is this claim verified, however its ledger spells the word? */
+export const isVerifiedFact = (f: Pick<Fact, "status">) => factStatusKey(f.status) === "verified";
+
 type TaskState = "idle" | "creating" | "done" | "error";
 
 function toDate(input: DateInput): Date { return input instanceof Date ? input : new Date(input); }
@@ -64,7 +74,7 @@ export function FactsVerificationAudit({
   const [failed, setFailed] = useState<Record<number, string>>({});
 
   const auditRows = useMemo(() => {
-    const verified = facts.filter((f) => f.status === "Verified");
+    const verified = facts.filter(isVerifiedFact);
     const anchor = verified.reduce((max, f) => {
       const t = f.verified != null ? toDate(f.verified).getTime() : NaN;
       return Number.isNaN(t) ? max : Math.max(max, t);

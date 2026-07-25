@@ -6,10 +6,14 @@ import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
+import { SearchField } from "../navigation/SearchField";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { LibraryTagsPanel, type TagDef, type LibraryTagsActions } from "../features/LibraryTagsPanel";
-import { LibraryRulesPanel, type CheckerDoc } from "../features/LibraryRulesPanel";
+import {
+  LibraryRulesPanel, RULE_COUNT, rulesMatching,
+  type CheckerDoc, type LibraryRulesActions,
+} from "../features/LibraryRulesPanel";
 import { LibraryGlossaryPanel, type Term, type LibraryGlossaryActions } from "../features/LibraryGlossaryPanel";
 import { LibraryGuidesPanel, type Guide, type VoiceLayer, type LibraryGuidesActions } from "../features/LibraryGuidesPanel";
 import { LibraryTemplatesPanel, type Template, type LibraryTemplatesActions } from "../features/LibraryTemplatesPanel";
@@ -29,11 +33,13 @@ export type LibraryTab = "tags" | "rules" | "glossary" | "guides" | "templates";
 
 /** What the Library can DO: the union of what its five panels offer.
 
-    The Rules tab contributes nothing, and that is deliberate: its registry is
-    compiled into LibraryRulesPanel as live RegExps, there is no rule row on
-    the server to write, and the checker runs entirely in the browser. */
+    The Rules tab contributes only `saveRuleConfig`, and only that: the rule
+    registry is compiled into LibraryRulesPanel as live RegExps, so there is no
+    rule row on the server to add, edit, or scope. The panel says so on screen
+    rather than drawing controls for writes that cannot happen. */
 export type LibraryActions =
-  LibraryTagsActions & LibraryGlossaryActions & LibraryGuidesActions & LibraryTemplatesActions;
+  LibraryTagsActions & LibraryGlossaryActions & LibraryGuidesActions
+  & LibraryTemplatesActions & LibraryRulesActions;
 
 /** Everything the Library renders, one collection per tab. */
 export type LibraryData = {
@@ -53,7 +59,12 @@ export type LibraryData = {
   /** The workspace's own voice layer, stacked on the pack. */
   voice: VoiceLayer;
   templates: Template[];
-  /** Counts on the tab strip. */
+  /** @deprecated No longer read. The tab strip counts the very collections it
+      is about to render (`countsOf`), because a separate count record and the
+      panels below it could disagree — and did: a tab could badge 40 and draw
+      12, and a search narrowing the rows left the badge stale. The field stays
+      in the type only so existing adapters keep compiling; drop it from
+      `web/src/data/library.ts` and from this type together. */
   counts: Record<LibraryTab, number>;
 };
 
@@ -82,18 +93,66 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** Render the active tab from the data it was given. A tab with nothing in it
-    renders its panel's own empty state, because the collection is empty. */
-function Panel({ tab, data, mobile, actions }: { tab: LibraryTab; data: LibraryData; mobile: boolean; actions?: LibraryActions }) {
+/* ── Cross-tab search ──────────────────────────────────────────────────────
+   The Library was five tabs each with its own filter and no way to ask "where
+   does this word appear in our editorial system?" — the one question that
+   spans tags, rules, glossary, guides, and templates. One field above the tab
+   strip narrows every collection at once; the tab counts then say where the
+   matches are, so the search doubles as the navigation to them. */
+
+const hit = (q: string, ...fields: (string | undefined | null)[]) =>
+  !q || fields.some((f) => (f ?? "").toLowerCase().includes(q));
+
+/** The collections, narrowed to `query`. Rules filter inside their own panel
+    (the registry lives there), so their count comes back separately. */
+function searchLibrary(d: LibraryData, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return {
+      tags: d.tags, terms: d.terms, guides: d.guides, templates: d.templates,
+      rules: RULE_COUNT,
+    };
+  }
+  return {
+    tags: d.tags.filter((t) => hit(q, t.name, t.description, t.evidence)),
+    terms: d.terms.filter((t) => hit(q, t.term, t.definition, t.owner)),
+    guides: d.guides.filter((g) => hit(q, g.name, g.description)),
+    templates: d.templates.filter((t) => hit(q, t.name, t.category, t.description)),
+    rules: rulesMatching(q),
+  };
+}
+
+type Narrowed = ReturnType<typeof searchLibrary>;
+
+/** Tab counts come off the very collections the panels are about to render.
+    They used to come from a separate `data.counts` record, which could — and
+    did — disagree with what the tab then drew. */
+function countsOf(n: Narrowed): Record<LibraryTab, number> {
+  return {
+    tags: n.tags.length,
+    rules: n.rules,
+    glossary: n.terms.length,
+    guides: n.guides.length,
+    templates: n.templates.length,
+  };
+}
+
+/** Render the active tab from the data it was given, narrowed to the search.
+    A tab with nothing in it renders its panel's own empty state, because the
+    collection is empty. */
+function Panel({ tab, data, narrowed, query, mobile, actions }: {
+  tab: LibraryTab; data: LibraryData; narrowed: Narrowed; query: string;
+  mobile: boolean; actions?: LibraryActions;
+}) {
   switch (tab) {
     case "rules":
-      return <LibraryRulesPanel workspace={data.workspace} docs={data.checkerDocs} />;
+      return <LibraryRulesPanel workspace={data.workspace} docs={data.checkerDocs} query={query} actions={actions} />;
     case "glossary":
-      return <LibraryGlossaryPanel terms={data.terms} actions={actions} />;
+      return <LibraryGlossaryPanel terms={narrowed.terms} actions={actions} />;
     case "guides":
       return (
         <LibraryGuidesPanel
-          guides={data.guides}
+          guides={narrowed.guides}
           workspace={data.workspace}
           defaultPack={data.defaultPack}
           layer={data.voice}
@@ -101,10 +160,10 @@ function Panel({ tab, data, mobile, actions }: { tab: LibraryTab; data: LibraryD
         />
       );
     case "templates":
-      return <LibraryTemplatesPanel compact={mobile} templates={data.templates} actions={actions} />;
+      return <LibraryTemplatesPanel compact={mobile} templates={narrowed.templates} actions={actions} />;
     case "tags":
     default:
-      return <LibraryTagsPanel compact={mobile} tags={data.tags} totalDocs={data.totalDocs} actions={actions} />;
+      return <LibraryTagsPanel compact={mobile} tags={narrowed.tags} totalDocs={data.totalDocs} actions={actions} />;
   }
 }
 
@@ -117,6 +176,12 @@ function isEmpty(d: LibraryData): boolean {
 
 function LibraryPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<LibraryData, LibraryActions>) {
   const [tab, setTab] = useState<LibraryTab>(data.tab);
+  const [query, setQuery] = useState("");
+
+  /* Seeded from `data`, so a refetch that lands on a different tab is adopted
+     rather than ignored (C1). */
+  const [seenTab, setSeenTab] = useState(data.tab);
+  if (seenTab !== data.tab) { setSeenTab(data.tab); setTab(data.tab); }
 
   if (loading) {
     return (
@@ -126,8 +191,12 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
     );
   }
 
+  const narrowed = searchLibrary(data, query);
+  const counts = countsOf(narrowed);
   const tabOptions: TabOption<LibraryTab>[] =
-    TAB_LABELS.map((t) => ({ ...t, count: data.counts[t.id] }));
+    TAB_LABELS.map((t) => ({ ...t, count: counts[t.id] }));
+  const matches = TAB_LABELS.reduce((n, t) => n + counts[t.id], 0);
+  const matchedTabs = TAB_LABELS.filter((t) => counts[t.id] > 0);
 
   let body;
   if (error) {
@@ -149,8 +218,24 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
   } else {
     body = (
       <div className="mt-6 flex flex-col gap-5">
+        {/* Search above the tab strip, count strip under it and above the
+            panel it describes (§13). */}
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search tags, rules, terms, guides, and templates"
+          shortcut=""
+          className={mobile ? "w-full" : "w-[420px]"}
+        />
         <Tabs<LibraryTab> ariaLabel="Library sections" variant="underline" options={tabOptions} value={tab} onChange={setTab} />
-        <Panel tab={tab} data={data} mobile={mobile} actions={actions} />
+        {query.trim() && (
+          <p className="font-term text-[11.5px] text-ink/65">
+            {matches === 0
+              ? `No matches for "${query.trim()}".`
+              : `${matches.toLocaleString("en-US")} match${matches === 1 ? "" : "es"} across ${matchedTabs.length} tab${matchedTabs.length === 1 ? "" : "s"}: ${matchedTabs.map((t) => t.label.toLowerCase()).join(", ")}.`}
+          </p>
+        )}
+        <Panel tab={tab} data={data} narrowed={narrowed} query={query} mobile={mobile} actions={actions} />
       </div>
     );
   }

@@ -6,12 +6,14 @@ import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
 import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
+import { Scrollable } from "../data-display/Scrollable";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { FieldError } from "../feedback/ErrorMessage";
+import { fmtDate } from "../tokens/format";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
-  nodeById, tracePath,
+  nodeById, tracePath, nodeEditedAfter, edgeCreatedAfter, nodeStatusKey,
   type LNode, type LEdge, type Lens, type LayoutMode,
 } from "./LineageDataModel";
 
@@ -41,7 +43,11 @@ const VB_H = 560;
 export type LineageGraphProps = {
   nodes: LNode[];
   edges: LEdge[];
+  /** Seeds the shared control store's layout. The store is the single source
+      of truth after that, so the toolbar's own Layout control keeps working;
+      passing this again with the same value does not undo a reader's choice. */
   layout?: LayoutMode;
+  /** Seeds the shared control store's lens. Same contract as `layout`. */
   lens?: Lens;
   /** Initially selected / focal node id. */
   focalId?: string | null;
@@ -180,11 +186,17 @@ export function LineageGraph({
   const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>({});
   const [pinErr, setPinErr] = useState<string | null>(null);
 
-  // An explicit prop wins, and is pushed into the shared store so the toolbar
-  // and the canvas never disagree about which lens/layout is showing.
+  /* ONE source of truth for lens/layout: the shared control store. The props
+     only seed it, and only when they change — the page used to both pass them
+     and remount this component on every change, which threw away pan, drag
+     positions and selection, and reset a reader's "Color by" choice back to
+     whatever the data shipped. */
   useEffect(() => { if (lens) setControls({ lens }); }, [lens, setControls]);
   useEffect(() => { if (layout) setControls({ layout }); }, [layout, setControls]);
   useEffect(() => { setTrace(traceProp); }, [traceProp]);
+  // Selection follows the focal node when the page moves it. This used to
+  // arrive via a remount, which is why it cost the whole canvas state.
+  useEffect(() => { if (focalId) setSel({ kind: "node", id: focalId }); }, [focalId]);
 
   // Read from the store, not the prop: the prop seeds the store above, and the
   // toolbar can then change it. Reading the prop directly would make the
@@ -250,8 +262,11 @@ export function LineageGraph({
   const visibleEdges = useMemo(
     () => edges.filter((e) =>
       visibleIds.has(e.from) && visibleIds.has(e.to) &&
-      (!controls.rels || controls.rels.includes(e.rel))),
-    [edges, visibleIds, controls.rels],
+      (!controls.rels || controls.rels.includes(e.rel)) &&
+      // Time travel: a link that had not been made yet on the as-of date is
+      // not drawn, which is half of what the scrubber's caption promises.
+      !edgeCreatedAfter(e, controls.asOf)),
+    [edges, visibleIds, controls.rels, controls.asOf],
   );
 
   const basePos = (n: LNode) => (effLayout === "timeline" ? timeline[n.id] ?? { x: n.x, y: n.y } : { x: n.x, y: n.y });
@@ -350,6 +365,49 @@ export function LineageGraph({
 
   const setZoom = (z: number) => setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
 
+  /* ── keyboard traversal ─────────────────────────────────────────────────
+     The canvas was mouse-only: pointer handlers everywhere and no way to walk
+     the graph without one. Every node card is a real button (so Tab reaches
+     them in reading order and Enter opens one), and the arrow keys move focus
+     to the nearest card in that direction, which is how a reader follows a
+     lineage without dragging. */
+  const nodeRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const ARROWS: Record<string, "left" | "right" | "up" | "down"> = {
+    ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down",
+  };
+
+  const moveFocus = (from: LNode, dir: "left" | "right" | "up" | "down") => {
+    const p = posOf(from);
+    const horizontal = dir === "left" || dir === "right";
+    const best = visibleNodes
+      .filter((n) => n.id !== from.id)
+      .map((n) => ({ n, q: posOf(n) }))
+      .filter(({ q }) =>
+        dir === "left" ? q.x < p.x : dir === "right" ? q.x > p.x : dir === "up" ? q.y < p.y : q.y > p.y)
+      // Distance along the travel axis counts double against distance across
+      // it, so "right" lands on the next card over rather than the far corner.
+      .sort((a, b) => {
+        const cost = (q: { x: number; y: number }) => (horizontal
+          ? Math.abs(q.x - p.x) + 2 * Math.abs(q.y - p.y)
+          : Math.abs(q.y - p.y) + 2 * Math.abs(q.x - p.x));
+        return cost(a.q) - cost(b.q);
+      })[0];
+    if (!best) return;
+    nodeRefs.current[best.n.id]?.focus();
+  };
+
+  /** What a screen reader is told about one card: everything the card's own
+      colors and glyphs say, in words. */
+  const nodeLabel = (n: LNode, editedAfter: boolean) => [
+    n.title,
+    n.macro ? `${n.count ?? 0} rolled-up documents from ${n.repo ?? "a repository"}` : SOURCE_LABELS[n.source] ?? n.source,
+    n.macro ? null : n.owner ? `owned by ${n.owner}` : "unowned",
+    n.macro ? null : nodeStatusKey(n) === "warning" ? "needs attention" : nodeStatusKey(n) === "review" ? "needs review" : "verified",
+    typeof n.staleDays === "number" ? `${n.staleDays} days since the last update` : null,
+    editedAfter ? "edited after the as-of date" : null,
+  ].filter(Boolean).join(", ");
+
   if (loading) {
     return (
       <div className={`${card} min-w-[560px] overflow-hidden ${className}`.trim()} aria-hidden="true">
@@ -405,6 +463,11 @@ export function LineageGraph({
       {/* canvas */}
       <div
         ref={canvasRef}
+        role="group"
+        // The whole page is this canvas, so it needs to describe itself: what
+        // it is, how big it is, and what state it is in. Nothing else on the
+        // page tells a reader who cannot see it what is on screen.
+        aria-label={`Lineage graph${controls.asOf ? ` as of ${fmtDate(controls.asOf)}` : ""}: ${visibleNodes.length} documents, ${visibleEdges.length} links, colored by ${effLens}`}
         className="relative touch-none select-none"
         style={{ aspectRatio: `${VB_W} / ${VB_H}`, cursor: "grab" }}
         onPointerDown={startPan}
@@ -484,7 +547,7 @@ export function LineageGraph({
           </svg>
 
           {/* nodes */}
-          <div className="absolute inset-0">
+          <div className="absolute inset-0" role="group" aria-label="Documents. Use the arrow keys to move between them.">
             {visibleNodes.map((n) => {
               const p = posOf(n);
               const isSel = sel?.kind === "node" && sel.id === n.id;
@@ -497,15 +560,30 @@ export function LineageGraph({
               // path finder is armed, "which two did I click" is the question.
               const isPick = controls.path?.includes(n.id) ?? false;
               const ring = isPick ? "#1E6FA8" : isSel && !pathMode ? "#35549d" : isFocal ? "#c8502e" : null;
+              // Time travel: this document existed on the as-of date but its
+              // latest edit is still in the future, so it is drawn dashed —
+              // the other half of the scrubber caption's promise.
+              const editedAfter = nodeEditedAfter(n, controls.asOf);
               return (
                 <button
                   key={n.id}
+                  ref={(el) => { nodeRefs.current[n.id] = el; }}
                   type="button"
+                  aria-label={nodeLabel(n, editedAfter)}
+                  aria-pressed={isSel && !pathMode}
                   onPointerDown={(e) => startNode(e, n)}
                   onPointerMove={onMove}
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
                   onClick={() => selectNode(n.id)}
+                  onKeyDown={(e) => {
+                    const dir = ARROWS[e.key];
+                    if (!dir) return;
+                    e.preventDefault();
+                    moveFocus(n, dir);
+                  }}
+                  onFocus={() => setHover(n.id)}
+                  onBlur={() => setHover((h) => (h === n.id ? null : h))}
                   onMouseEnter={() => setHover(n.id)}
                   onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
                   style={{
@@ -519,6 +597,7 @@ export function LineageGraph({
                     opacity: dim ? 0.22 : 1,
                     backgroundColor: NODE_CREAM,
                     borderColor: ring ?? "rgba(16,38,59,0.22)",
+                    borderStyle: editedAfter ? "dashed" : undefined,
                     boxShadow: ring ? `0 0 0 2px ${ring}` : undefined,
                     cursor: "grab",
                   }}
@@ -561,6 +640,34 @@ export function LineageGraph({
             })}
           </div>
         </div>
+
+        {/* Edges are SVG paths with a click handler, which no keyboard and no
+            screen reader can reach. The same links are offered here as real
+            buttons: off-screen until one takes focus, then a plain panel, so a
+            reader tabbing through never lands on something invisible. */}
+        {visibleEdges.length > 0 && (
+          <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:inset-x-3 focus-within:bottom-12 focus-within:z-30 focus-within:rounded-[5px] focus-within:border focus-within:border-ink/20 focus-within:bg-paper/95 focus-within:p-2 focus-within:backdrop-blur">
+            <div className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">
+              Links, {visibleEdges.length}
+            </div>
+            {/* Bounded and visibly scrolling once it overflows (§20). */}
+            <Scrollable axis="y" className="max-h-[152px]">
+              <ul>
+                {visibleEdges.map((e) => (
+                  <li key={e.id}>
+                    <button
+                      type="button"
+                      onClick={() => { setSel({ kind: "edge", id: e.id }); onSelectEdge?.(e.id); }}
+                      className={`block w-full truncate rounded-[3px] px-1.5 py-1 text-left text-[12.5px] text-ink/85 hover:bg-flysch ${focusRing}`}
+                    >
+                      {`${byId[e.from]?.title ?? e.from} ${REL[e.rel].out.toLowerCase()} ${byId[e.to]?.title ?? e.to}`}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Scrollable>
+          </div>
+        )}
 
         {/* nothing to draw: say so rather than showing blank paper */}
         {visibleNodes.length === 0 && (
@@ -645,11 +752,14 @@ export function LineageGraph({
           </div>
         )}
 
-        {/* filter readout — proves the toolbar reached the canvas */}
-        {(hiddenCount > 0 || controls.query.trim()) && (
+        {/* filter readout — proves the toolbar and the scrubber reached the canvas */}
+        {(hiddenCount > 0 || controls.query.trim() || controls.asOf) && (
           <div className="absolute left-3 top-3 z-20 max-w-[260px] truncate rounded-[4px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 font-term text-[11px] text-ink/70 backdrop-blur">
-            {hiddenCount > 0 ? `${hiddenCount} node${hiddenCount === 1 ? "" : "s"} filtered out` : "Filtered"}
-            {controls.query.trim() && ` · matching “${controls.query.trim()}”`}
+            {[
+              controls.asOf ? `As of ${fmtDate(controls.asOf)}` : null,
+              hiddenCount > 0 ? `${hiddenCount} node${hiddenCount === 1 ? "" : "s"} hidden` : null,
+              controls.query.trim() ? `matching “${controls.query.trim()}”` : null,
+            ].filter(Boolean).join(" · ")}
           </div>
         )}
 
@@ -662,7 +772,7 @@ export function LineageGraph({
 
         {/* drag hint */}
         <div className="pointer-events-none absolute bottom-3 right-3 z-20 inline-flex items-center gap-1.5 rounded-[4px] border border-ink/15 bg-paper/90 px-2 py-1 font-term text-[10.5px] text-ink/65 backdrop-blur">
-          <Move size={12} /> Drag to pan · drag a node to move it · click to {pathMode ? "pick" : "open"}
+          <Move size={12} /> Drag to pan · arrow keys walk the graph · click to {pathMode ? "pick" : "open"}
         </div>
 
         {/* zoom controls */}

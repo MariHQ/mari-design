@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Network } from "lucide-react";
@@ -11,12 +11,12 @@ import { LineageEdgeDrawer } from "../features/LineageEdgeDrawer";
 import { LineageGroupDrawer } from "../features/LineageGroupDrawer";
 import { LineageAssertDrawer } from "../features/LineageAssertDrawer";
 import {
-  NodeGlyph, SOURCE_LABELS,
-  type DocHistoryRow, type ImpactResult, type LEdge, type LNode, type LayoutMode, type Lens,
+  setLineageControls,
+  type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
+  type LayoutMode, type Lens,
 } from "../features/LineageDataModel";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
-import { card } from "../tokens/card";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
@@ -68,10 +68,18 @@ export type LineageActions = {
   openDocument?: (docId: number) => void;
   /** Open a review task on a document. */
   createReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
-  /** Ask Mari to propose new edges across the corpus. Long-running. */
-  deriveLinks?: () => void | Promise<void>;
-  /** Save the current filter/view state under a name. */
+  /** Ask Mari to propose new edges across the corpus. Long-running. Return the
+      number of links proposed and the toolbar says so; return nothing and it
+      only reports that the run finished. Omitted = no Derive links button. */
+  deriveLinks?: () => void | number | Promise<void | number>;
+  /** Save the current filter/view state under a name. Omitted = the Views menu
+      offers no "Save current view". Pair it with `data.views`, which is what
+      reads the saved views back. */
   saveView?: (args: { name: string; state: string }) => void | Promise<void>;
+  /** Fetch one document's revision history, for whichever node the drawer is
+      showing. Without it the History tab says history was not loaded rather
+      than drawing an empty timeline. */
+  loadDocHistory?: (docId: number) => DocHistoryRow[] | Promise<DocHistoryRow[]>;
   /** Trace an assertion's blast radius. Long-running, and it is the one
       handler that answers: the drawer renders what it returns. */
   analyzeImpact?: (claim: string) => ImpactResult | Promise<ImpactResult>;
@@ -80,7 +88,9 @@ export type LineageActions = {
 /** Which drawer is open, and everything that drawer needs. Exactly one at a
     time, which is why this is a tagged union rather than four nullable slots. */
 export type LineageDrawer =
-  | { kind: "node"; nodeId: string; history: DocHistoryRow[] }
+  /** `history: null` = this page does not carry that node's revisions, which
+      the drawer reports as such instead of as an empty timeline. */
+  | { kind: "node"; nodeId: string; history: DocHistoryRow[] | null }
   | { kind: "edge"; edgeId: string }
   | { kind: "group"; groupId: string; totalMembers: number; members: LNode[] }
   | {
@@ -115,10 +125,17 @@ export type LineageData = {
   layout: LayoutMode;
   focalId: string | null;
   trace: { originId: string; direction: "down" | "up" } | null;
-  /** Scrubber position (index into `dates`); null = live / all time. */
+  /** Scrubber position (index into `dates`); null = live / all time. The
+      scrubber writes the date it lands on into the shared control store, and
+      the canvas hides and dashes against it. */
   asOf: number | null;
-  /** The toolbar typeahead, open on a query. null = closed. */
+  /** A query to open the graph on, e.g. from a deep link. It seeds the
+      toolbar's own typeahead: there is one search on this page, in the
+      toolbar, and this is how the data reaches it. null = no query. */
   search: { query: string } | null;
+  /** Saved views for this workspace, listed in the toolbar's Views menu.
+      Omitted = only the built-in presets. */
+  views?: GraphView[];
   drawer: LineageDrawer | null;
   /** Trail above the instrument. null = none. */
   crumbs: string[] | null;
@@ -130,34 +147,12 @@ export type LineageData = {
   action: { label: string; docId: number } | null;
 };
 
-/** A self-contained search-results dropdown, shown as if the toolbar typeahead
-    is active. Composes the shared node glyph + source labels. */
-function SearchResults({ nodes, query }: { nodes: LNode[]; query: string }) {
-  const q = query.toLowerCase();
-  const hits = nodes.filter(
-    (n) => !n.macro &&
-      (n.title.toLowerCase().includes(q) ||
-        (n.tags ?? []).some((t) => t.includes("customer")) ||
-        n.docKind === "decision"),
-  ).slice(0, 6);
-  return (
-    <div className={`${card} absolute left-2 top-[52px] z-30 w-[320px] p-1 shadow-lg`}>
-      <div className="px-2.5 py-1.5 font-term text-[11px] text-ink/65">{hits.length} results for “{query}”</div>
-      {hits.map((n) => (
-        <div key={n.id} className="flex items-center gap-2.5 rounded-[3px] px-2 py-1.5 hover:bg-flysch">
-          <span className="shrink-0 text-ink/70"><NodeGlyph node={n} size={16} /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-medium text-ink">{n.title}</span>
-            <span className="block truncate font-term text-[11px] text-ink/65">
-              {[n.owner, SOURCE_LABELS[n.source] ?? n.source, n.date].filter(Boolean).join(" · ")}
-            </span>
-          </span>
-          <span className="shrink-0 font-term text-[11px] text-ink/65">{n.inbound ?? 0}↩</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+/* There is no page-level search dropdown any more. This page used to render
+   its own results panel at `left-2 top-[52px]`, directly on top of the
+   toolbar's working typeahead, and it matched on `tags.includes("customer")`
+   or `docKind === "decision"` as well as the query — so it listed documents
+   that did not match what was typed. One search, in the toolbar; `data.search`
+   seeds it (see `Body`). */
 
 /* Which §11 rail width the open drawer takes: standard lineage drawer 420px,
    impact analysis 460px. `null` = no drawer, canvas runs the full container. */
@@ -173,6 +168,9 @@ function Drawer({ data, drawer, actions, onClose }: {
 }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
+  // Every drawer gets the close handler. All four shells have always drawn an
+  // ✕, and none of them were given anything to call: once a node was clicked
+  // the rail was stuck until another one was.
   const d = drawer;
   if (!d) return null;
   if (d.kind === "node") {
@@ -182,16 +180,26 @@ function Drawer({ data, drawer, actions, onClose }: {
         edges={data.edges}
         nodeId={d.nodeId}
         history={d.history}
+        onLoadHistory={actions?.loadDocHistory}
         onPin={actions?.pinNode}
         onUnpin={actions?.unpinNode}
         onWatch={actions?.watchDocument}
         onOpenDocument={actions?.openDocument}
         onCreateReviewTask={actions?.createReviewTask}
+        onClose={onClose}
       />
     );
   }
   if (d.kind === "edge") {
-    return <LineageEdgeDrawer nodes={data.nodes} edges={data.edges} edgeId={d.edgeId} onOpenDocument={actions?.openDocument} />;
+    return (
+      <LineageEdgeDrawer
+        nodes={data.nodes}
+        edges={data.edges}
+        edgeId={d.edgeId}
+        onOpenDocument={actions?.openDocument}
+        onClose={onClose}
+      />
+    );
   }
   if (d.kind === "group") {
     return (
@@ -201,6 +209,7 @@ function Drawer({ data, drawer, actions, onClose }: {
         members={d.members}
         nodes={data.nodes}
         edges={data.edges}
+        onClose={onClose}
       />
     );
   }
@@ -212,6 +221,7 @@ function Drawer({ data, drawer, actions, onClose }: {
       owners={d.owners}
       people={d.people}
       onAnalyze={actions?.analyzeImpact}
+      onClose={onClose}
     />
   );
 }
@@ -278,8 +288,26 @@ function Body({ data, error, actions, mobile }: {
      graph was a picture: LineageGraph has emitted `onSelectNode`/`onSelectEdge`
      all along, this page just never listened, so clicking a node did nothing
      and the drawer beside it could only ever show what the data pinned. */
-  const [picked, setPicked] = useState<LineageDrawer | null>(null);
-  const drawerFor = picked ?? data.drawer;
+  /* Three states, not two: `undefined` follows `data.drawer`, a drawer is the
+     reader's own selection, and `null` is "the reader closed it". Without the
+     third, Close set `null` and fell straight back through to `data.drawer`,
+     so a deep-linked drawer could never be dismissed. */
+  const [picked, setPicked] = useState<LineageDrawer | null | undefined>(undefined);
+  const [seenDrawer, setSeenDrawer] = useState(data.drawer);
+  if (seenDrawer !== data.drawer) { setSeenDrawer(data.drawer); setPicked(undefined); }
+  const drawerFor = picked === undefined ? data.drawer : picked;
+
+  /* One search on this page, and it lives in the toolbar. `data.search` seeds
+     the shared control store the toolbar reads, so a deep-linked query still
+     arrives, and re-seeds only when the data's query changes rather than
+     fighting whatever the reader is typing. */
+  const seededQuery = useRef<string | null | undefined>(undefined);
+  const dataQuery = data.search?.query ?? null;
+  useEffect(() => {
+    if (seededQuery.current === dataQuery) return;
+    seededQuery.current = dataQuery;
+    if (dataQuery !== null) setLineageControls({ query: dataQuery });
+  }, [dataQuery]);
 
   const openNode = (id: string) => {
     const n = data.nodes.find((x) => x.id === id);
@@ -289,10 +317,15 @@ function Body({ data, error, actions, mobile }: {
       setPicked({ kind: "group", groupId: n.group, totalMembers: n.count ?? members.length, members });
       return;
     }
-    // History belongs to the document and this page does not carry it per
-    // node; the drawer renders an empty timeline rather than another
-    // document's revisions.
-    setPicked({ kind: "node", nodeId: id, history: data.drawer?.kind === "node" && data.drawer.nodeId === id ? data.drawer.history : [] });
+    /* History belongs to the document, and this page only carries it for the
+       node `data.drawer` named. `null` for anything else, so the drawer either
+       loads it (`actions.loadDocHistory`) or says it does not have it — it
+       used to be handed `[]`, which reads as "this document has no history". */
+    setPicked({
+      kind: "node",
+      nodeId: id,
+      history: data.drawer?.kind === "node" && data.drawer.nodeId === id ? data.drawer.history : null,
+    });
   };
 
   if (error) {
@@ -329,10 +362,19 @@ function Body({ data, error, actions, mobile }: {
         rail={rail}
         canvas={(
           <>
-            <LineageToolbar nodes={data.nodes} edges={data.edges} onDeriveLinks={actions?.deriveLinks} onSaveView={actions?.saveView} />
-            {data.search && <SearchResults nodes={data.nodes} query={data.search.query} />}
+            <LineageToolbar
+              nodes={data.nodes}
+              edges={data.edges}
+              views={data.views}
+              onDeriveLinks={actions?.deriveLinks}
+              onSaveView={actions?.saveView}
+            />
+            {/* No `key` here. It used to be rebuilt from lens/layout/focal/
+                trace, which remounted the canvas on every one of those changes
+                and threw away pan, zoom, dragged positions and the selection.
+                The graph takes them as props and seeds the shared control
+                store from them instead, which is the one source of truth. */}
             <LineageGraph
-              key={`${data.lens}-${data.layout}-${data.focalId}-${data.trace?.direction ?? "none"}`}
               nodes={data.nodes}
               edges={data.edges}
               lens={data.lens}

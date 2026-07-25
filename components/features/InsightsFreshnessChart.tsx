@@ -4,6 +4,7 @@ import { IconRing } from "../data-display/IconRing";
 import { EmptyState } from "../data-display/EmptyState";
 import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
+import { focusRing } from "../tokens/focusRing";
 
 /* Insights freshness chart — a per-source stacked bar of document freshness
    (Fresh / Aging / Stale), one row per connected source with a source icon, a
@@ -18,18 +19,19 @@ import { SourceMark } from "../icons/marks";
    one, and the legend swatches carry the same three textures, so the legend can
    be matched to the bar by pattern alone. */
 
-export type Freshness = { source: string; fresh: number; aging: number; stale: number };
+/** One source's document freshness. `label` is the source's real display name;
+    omitted, the row shows the provider key it was given.
 
-const SOURCE_NAMES: Record<string, string> = {
-  github: "GitHub · product-docs",
-  slack: "Slack · #support",
-  gdocs: "Google Drive · Handbook",
-  notion: "Notion · Wiki",
-  docs: "Uploaded docs",
-  website: "Marketing site",
+    There used to be a `SOURCE_NAMES` table in this file that turned the key
+    "github" into "GitHub · product-docs" and "slack" into "Slack · #support" —
+    repository and channel names this component had no way of knowing. A chart
+    row now names the source the caller named, or nothing. */
+export type Freshness = {
+  source: string; label?: string;
+  fresh: number; aging: number; stale: number;
 };
 
-type BandKey = "fresh" | "aging" | "stale";
+export type BandKey = "fresh" | "aging" | "stale";
 
 /* One band = one colour AND one texture. The texture is drawn with CSS
    gradients so it needs no asset and survives any bar height. */
@@ -79,34 +81,49 @@ function PatternLegend() {
   );
 }
 
-/** The segmented freshness bar: colour plus texture plus white separators. */
-function FreshnessBar({ row, height = 14 }: { row: Freshness; height?: number }) {
+/** The segmented freshness bar: colour plus texture plus white separators.
+
+    Each band is a drill-through to the documents it counts when the caller can
+    open them, and inert decoration otherwise (§2) — Insights reported "38 stale
+    documents" with no way to see which 38. */
+function FreshnessBar({ row, height = 14, onOpen }: {
+  row: Freshness; height?: number;
+  onOpen?: (args: { source: string; band: BandKey }) => void;
+}) {
   const total = row.fresh + row.aging + row.stale;
   const parts = BAND_ORDER.map((k) => ({ key: k, value: row[k] })).filter((p) => p.value > 0);
+  const name = row.label ?? row.source;
 
   return (
     <span
-      role="img"
+      role={onOpen ? "group" : "img"}
       aria-label={BAND_ORDER.map((k) => `${BAND[k].label}: ${row[k]}`).join(", ")}
       className="flex w-full overflow-hidden rounded-[3px] bg-ink/[0.06] ring-1 ring-inset ring-ink/15"
       style={{ height }}
     >
       {parts.map((p, i) => {
         const b = BAND[p.key];
-        return (
-          <span
+        const style = {
+          width: `${(p.value / total) * 100}%`,
+          backgroundColor: b.color,
+          backgroundImage: b.pattern,
+          backgroundSize: b.size,
+          // A white hairline keeps adjacent bands legible even in greyscale.
+          boxShadow: i > 0 ? "inset 1.5px 0 0 #FFFFFF" : undefined,
+        };
+        const label = `${b.label}: ${p.value} of ${total}`;
+        return onOpen ? (
+          <button
             key={p.key}
-            title={`${b.label}: ${p.value} of ${total}`}
-            className="h-full"
-            style={{
-              width: `${(p.value / total) * 100}%`,
-              backgroundColor: b.color,
-              backgroundImage: b.pattern,
-              backgroundSize: b.size,
-              // A white hairline keeps adjacent bands legible even in greyscale.
-              boxShadow: i > 0 ? "inset 1.5px 0 0 #FFFFFF" : undefined,
-            }}
+            type="button"
+            title={`${label}. Open these documents.`}
+            aria-label={`${name}, ${label}. Open these documents.`}
+            onClick={() => onOpen({ source: row.source, band: p.key })}
+            className={`h-full cursor-pointer ${focusRing}`}
+            style={style}
           />
+        ) : (
+          <span key={p.key} title={label} className="h-full" style={style} />
         );
       })}
     </span>
@@ -115,12 +132,14 @@ function FreshnessBar({ row, height = 14 }: { row: Freshness; height?: number })
 
 export type InsightsFreshnessChartProps = {
   freshness: Freshness[];
+  /** Open the documents behind one band of one source. Omitted = a plain bar. */
+  onOpenBand?: (args: { source: string; band: BandKey }) => void;
   /** Render a content-shaped skeleton silhouette instead of the chart. */
   loading?: boolean;
   className?: string;
 };
 
-export function InsightsFreshnessChart({ freshness, loading = false, className = "" }: InsightsFreshnessChartProps) {
+export function InsightsFreshnessChart({ freshness, onOpenBand, loading = false, className = "" }: InsightsFreshnessChartProps) {
   const grandTotal = freshness.reduce((n, r) => n + r.fresh + r.aging + r.stale, 0);
 
   if (loading) {
@@ -162,10 +181,10 @@ export function InsightsFreshnessChart({ freshness, loading = false, className =
                 <div key={row.source} className="grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)_auto] items-center gap-3">
                   <span className="flex min-w-0 items-center gap-2">
                     <SourceMark provider={row.source} size={16} />
-                    <span className="truncate text-[12.5px] text-ink/75">{SOURCE_NAMES[row.source] ?? row.source}</span>
+                    <span className="truncate text-[12.5px] text-ink/75" title={row.label ?? row.source}>{row.label ?? row.source}</span>
                   </span>
                   {total > 0 ? (
-                    <FreshnessBar row={row} />
+                    <FreshnessBar row={row} onOpen={onOpenBand} />
                   ) : (
                     <span aria-label="No documents" className="block h-[14px] w-full rounded-[3px] border border-dashed border-ink/25" />
                   )}

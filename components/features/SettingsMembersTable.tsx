@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { UserPlus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { UserPlus, Search } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -77,6 +77,10 @@ export type SettingsMembersTableProps = {
       same reason `inviteOpen` is controllable: a state worth reviewing has to
       be reachable without a click. */
   confirmRemoveId?: number | null;
+  /** Fired once the server has taken an invitation, so the host page can say
+      so where its own header can see it. The page used to depend on the
+      adapter setting an `interaction` field it never set (P-SM-2). */
+  onInvited?: (invite: { name: string; email: string; role: string }) => void;
   loading?: boolean;
   className?: string;
 };
@@ -89,6 +93,7 @@ export function SettingsMembersTable({
   inviteOpen,
   onInviteOpenChange,
   confirmRemoveId = null,
+  onInvited,
   loading = false,
   embedded = false,
   className = "",
@@ -106,6 +111,11 @@ export function SettingsMembersTable({
   const [nameDraft, setNameDraft] = useState(workspaceName);
   const [editingName, setEditingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
+
+  /* The roster is seeded from a prop and `useState` reads its seed once, so
+     after a refetch this table kept rendering the first response (C1). */
+  const [seenMembers, setSeenMembers] = useState(initialMembers);
+  if (seenMembers !== initialMembers) { setSeenMembers(initialMembers); setMembers(initialMembers); }
 
   const [gh, setGh] = useState(githubTeam);
   const [ghDraft, setGhDraft] = useState(githubTeam.team);
@@ -130,7 +140,10 @@ export function SettingsMembersTable({
       },
     );
     setSending(false);
-    if (ok) { setInvName(""); setInvEmail(""); setInvRole("user"); setInviting(false); }
+    if (ok) {
+      onInvited?.({ name, email, role: String(invRole) });
+      setInvName(""); setInvEmail(""); setInvRole("user"); setInviting(false);
+    }
   };
 
   const changeRole = (id: number, role: Role) => write.run(
@@ -169,7 +182,21 @@ export function SettingsMembersTable({
 
   const roleOptions = (r: Role): Role[] => (ROLES.includes(r as never) ? [...ROLES] : [r, ...ROLES]);
 
-  const { sort, onSort, sorted } = useSort(members, {
+  /* A workspace with hundreds of members needs a way to find one. The table
+     declared a "many" state and shipped nothing to manage it (P-SM-1): the
+     pager below was the only volume control, so reaching one person meant
+     paging through everyone. Filter options are sentence case (§3). */
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return members.filter((m) =>
+      (!q || `${m.name} ${m.email}`.toLowerCase().includes(q))
+      && (!roleFilter || String(m.role) === roleFilter));
+  }, [members, query, roleFilter]);
+  const narrowed = query.trim().length > 0 || roleFilter !== "";
+
+  const { sort, onSort, sorted } = useSort(shown, {
     member: (m) => m.name,
     email: (m) => m.email,
     role: (m) => roleLabel(m.role),
@@ -239,16 +266,36 @@ export function SettingsMembersTable({
 
       {/* The row count lives in the result strip below the header, once
           (CONVENTIONS §13), so the hint describes instead of counting. */}
-      <Card variant="flush" title="Members" hint="Everyone who can reach this workspace">
+      <Card variant="flush" title="Members" hint="Everyone who can reach this workspace" actions={
+        <>
+          <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
+            <Search size={13} className="text-ink/65" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search members…"
+              aria-label="Search members"
+              className="w-[160px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none"
+            />
+          </div>
+          <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label="Filter by role" className="h-8">
+            <option value="">All roles</option>
+            {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+          </Select>
+        </>
+      }>
         {members.length === 0 ? (
           <EmptyState title="No members yet">Send the first invite to bring someone into this workspace.</EmptyState>
+        ) : shown.length === 0 ? (
+          <EmptyState title="No matches">No member matches that search or role.</EmptyState>
         ) : (
           /* table-fixed so the colgroup widths are binding: with auto layout a
              single unbreakable email collapsed the address column to ~80px and
              stacked it a character at a time. The table keeps its 760px floor
              and scrolls inside this card instead. */
           <>
-          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="members" />
+          <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="members"
+            note={narrowed ? `filtered from ${members.length.toLocaleString("en-US")}` : undefined} />
           <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>

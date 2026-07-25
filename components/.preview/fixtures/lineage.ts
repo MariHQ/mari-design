@@ -8,7 +8,7 @@
    by a consuming app. */
 
 import {
-  eventDates, type DocHistoryRow, type ImpactResult, type LEdge, type LNode,
+  eventDates, type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
 } from "../../features/LineageDataModel";
 import type { LineageData, LineageDrawer, LineageExtras } from "../../pages/LineagePage";
 import type { PageFixtures } from "./types";
@@ -100,6 +100,18 @@ const IMPACT_OWNERS = [
 
 const IMPACT_PEOPLE = ["AK", "SL", "MM", "DR", "JS"];
 
+/** Saved views, as the toolbar's Views menu reads them back. `state` is JSON
+    the server round-trips verbatim, so these are written in exactly the shape
+    `parseViewState` accepts — one deliberately unreadable row included,
+    because the menu has to report a view it cannot apply rather than half-
+    applying it. */
+const VIEWS: GraphView[] = [
+  { id: 1, name: "Customer-facing only", state: JSON.stringify({ sources: ["docs", "docsite"], status: "all", lens: "source", layout: "flow", scope: "all", zoom: 1, query: "" }) },
+  { id: 2, name: "Warnings, timeline", state: JSON.stringify({ status: "warnings", lens: "health", layout: "timeline", scope: "all", zoom: 0.8, query: "" }) },
+  { id: 3, name: "Pricing closure", state: JSON.stringify({ query: "pricing", scope: "focus", lens: "owner", layout: "flow", zoom: 1.2 }) },
+  { id: 4, name: "Unreadable view", state: "{not json" },
+];
+
 const DRAWERS: Record<string, LineageDrawer> = {
   node: { kind: "node", nodeId: "n4", history: NODE_HISTORY },
   edge: { kind: "edge", edgeId: "e3" },
@@ -154,6 +166,7 @@ const BASE: LineageData = {
   trace: null,
   asOf: null,
   search: null,
+  views: VIEWS,
   drawer: null,
   crumbs: null,
   extras: null,
@@ -164,7 +177,7 @@ const view = (over: Partial<LineageData>): LineageData => ({ ...BASE, ...over })
 
 /** A workspace with no graph at all: the page's own `isEmpty` check fires
     because there is genuinely nothing to draw. */
-const EMPTY: LineageData = view({ nodes: [], edges: [], dates: [], activity: [], focalId: null });
+const EMPTY: LineageData = view({ nodes: [], edges: [], dates: [], activity: [], focalId: null, views: [] });
 
 const strained = (extreme: boolean): LineageData => view({
   nodes: strainedNodes(extreme),

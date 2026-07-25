@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Stepper } from "../data-display/Stepper";
-import { Scrollable } from "../data-display/Scrollable";
 import { Button } from "../actions/Button";
 import { Logo, Brandmark } from "../shell/Logo";
 import { Card } from "../layout/Card";
@@ -98,6 +97,11 @@ export type WelcomeActions = {
       reload, loses the SPA's session state, and bakes one app's URL scheme
       into a library component. */
   navigate?: (href: string) => void;
+  /** Open the provider's own credential documentation. "Where do I get these?"
+      with a ↗ was a <span>: it promised a destination and had none, on the one
+      question every connector step actually gets asked (P-WE-4). The APP owns
+      the URL, the same way it owns routing. */
+  openDocs?: (provider: string) => void;
   /** Create a GitHub source from a repo the token can see, and start syncing. */
   connectGithubRepo?: (v: { repo: string; paths: string }) => void | Promise<void>;
   /** Create any catalog connector from its credential fields. */
@@ -173,14 +177,25 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
 
 /* ── Step 0: hero ─────────────────────────────────────────────────────── */
 
-function Hero() {
+function Hero({ data }: { data: WelcomeData }) {
   const promises = [
     "Connect your real sources: no fake OAuth, no “coming soon”.",
     "Curate a style guide that becomes your Library default.",
     "Seed a glossary from documents you already have.",
   ];
+  /* What sat on the right was a dashed box captioned "Onboarding journey": a
+     layout placeholder that shipped as product (P-WE-5). It is replaced by the
+     only thing this step honestly knows, which is what the workspace already
+     has waiting. A count with nothing behind it is dropped rather than drawn
+     as a zero, and when none survive the hero is simply one column. */
+  const connected = data.tiles.filter((t) => t.connected).length;
+  const facts: { n: number; label: string }[] = [];
+  if (connected > 0) facts.push({ n: connected, label: connected === 1 ? "source already connected" : "sources already connected" });
+  if (data.connectorCount > 0) facts.push({ n: data.connectorCount, label: "connectors you can import from" });
+  if (data.packs.length > 0) facts.push({ n: data.packs.length, label: data.packs.length === 1 ? "style guide to start from" : "style guides to start from" });
+
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+    <div className={facts.length ? "grid grid-cols-1 gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center" : ""}>
       <div>
         <h2 className="font-display text-[20px] font-semibold text-ink">Let’s set up your workspace</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-ink/70">
@@ -196,12 +211,19 @@ function Hero() {
           ))}
         </ul>
       </div>
-      <div className="grid aspect-[4/3] place-items-center rounded-[8px] border border-dashed border-ink/20 bg-flysch/60 text-center">
-        <div className="px-6">
-          <span className="text-biscay"><Logo size={30} /></span>
-          <p className="mt-3 font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">Onboarding journey</p>
+      {facts.length > 0 && (
+        <div className="rounded-[8px] border border-ink/15 bg-flysch/60 p-5">
+          <p className="font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">In this workspace</p>
+          <ul className="mt-3 space-y-3.5">
+            {facts.map((f) => (
+              <li key={f.label}>
+                <div className="font-display text-[24px] font-bold leading-none tabular-nums text-biscay">{f.n}</div>
+                <div className="mt-1 text-[12.5px] leading-snug text-ink/70">{f.label}</div>
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -262,8 +284,10 @@ function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]
 
 /* ── Step 1: inline connector setup (provider header + fields + progress) ─ */
 
-function ConnectorHeader({ provider, name, blurb, docs }: {
-  provider: string; name: string; blurb: string; docs?: boolean;
+function ConnectorHeader({ provider, name, blurb, onDocs }: {
+  provider: string; name: string; blurb: string;
+  /** Opens the provider's credential docs. Omitted: the link is not drawn. */
+  onDocs?: () => void;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -271,13 +295,21 @@ function ConnectorHeader({ provider, name, blurb, docs }: {
         {provider === "github" ? <GithubMark size={24} /> : <SourceMark provider={provider} size={24} />}
       </span>
       <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-[19px] font-semibold text-ink">Connect {name}</h2>
-          <Chip label="Step 2 · Connect" tone="neutral" caps />
-        </div>
+        {/* The "Step 2 · Connect" chip is gone. It was hardcoded on every
+            connector step and it restated the Stepper sitting directly above
+            it, so its only possible contribution was to be wrong (P-WE-6). */}
+        <h2 className="font-display text-[19px] font-semibold text-ink">Connect {name}</h2>
         <p className="mt-0.5 text-[13px] text-ink/65">
           {blurb}{" "}
-          {docs && <span className="inline-flex items-center gap-1 text-biscay-2">Where do I get these? <ExternalLink size={11} /></span>}
+          {onDocs && (
+            <button
+              type="button"
+              onClick={onDocs}
+              className={`inline-flex items-center gap-1 font-medium text-biscay-2 hover:underline rounded-[3px] ${focusRing}`}
+            >
+              Where do I get these? <ExternalLink size={11} />
+            </button>
+          )}
         </p>
       </div>
     </div>
@@ -429,7 +461,8 @@ function CredConnect({ provider, name, blurb, hint, fields, note, actions, nav }
   const cred = useCredValues(fields);
   return (
     <div className="space-y-4">
-      <ConnectorHeader provider={provider} name={name} blurb={blurb} docs />
+      <ConnectorHeader provider={provider} name={name} blurb={blurb}
+        onDocs={actions?.openDocs ? () => actions.openDocs!(provider) : undefined} />
       <BackToConnectors onBack={() => nav.go("connect")} />
       <CredFields fields={fields} values={cred.values} onChange={cred.set} />
       {note}
@@ -596,14 +629,17 @@ function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; action
   );
 }
 
-function FinishStep({ rows, actions }: { rows: SyncRow[]; actions?: WelcomeActions }) {
+function FinishStep({ rows, actions, onDone }: { rows: SyncRow[]; actions?: WelcomeActions; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  /* This is now the ONLY "Finish setup" on the screen (the footer no longer
+     draws a second one), so with no handler it has to advance the wizard the
+     way every other step does rather than sitting there inert (§2). */
   const finish = async () => {
-    if (!actions?.finish) return;
+    if (!actions?.finish) { onDone(); return; }
     setBusy(true);
     setFailed(null);
-    try { await actions.finish(); }
+    try { await actions.finish(); onDone(); }
     catch (err) { setFailed(err instanceof Error ? err.message : "Setup could not be completed."); }
     finally { setBusy(false); }
   };
@@ -624,13 +660,17 @@ function FinishStep({ rows, actions }: { rows: SyncRow[]; actions?: WelcomeActio
   );
 }
 
+/* Where each card actually goes. These were three <div>s with a hover border
+   and no handler: the last screen of onboarding offered three destinations and
+   led to none of them (§2, P-WE-3). Bots are configured on Sources, which is
+   what the Slack step above already tells the user. */
 const NEXT = [
-  { icon: <BookOpen size={18} />, title: "Explore Knowledge", sub: "Browse everything you just imported." },
-  { icon: <GitBranch size={18} />, title: "See Lineage", sub: "How facts trace back to sources." },
-  { icon: <Bot size={18} />, title: "Set up bots", sub: "Answer questions in Slack." },
+  { icon: <BookOpen size={18} />, title: "Explore Knowledge", sub: "Browse everything you just imported.", href: "/knowledge" },
+  { icon: <GitBranch size={18} />, title: "See Lineage", sub: "How facts trace back to sources.", href: "/lineage" },
+  { icon: <Bot size={18} />, title: "Set up bots", sub: "Answer questions in Slack.", href: "/sources" },
 ];
 
-function DoneStep({ summary }: { summary: WelcomeSummary }) {
+function DoneStep({ summary, onNavigate }: { summary: WelcomeSummary; onNavigate?: (href: string) => void }) {
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-md border border-moss/30 bg-moss/[0.06] p-4">
@@ -644,13 +684,18 @@ function DoneStep({ summary }: { summary: WelcomeSummary }) {
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {NEXT.map((n) => (
-          <div key={n.title} className="flex items-start gap-2.5 rounded-md border border-ink/15 p-3 hover:border-ink/35">
+          <button
+            key={n.title}
+            type="button"
+            onClick={() => onNavigate?.(n.href)}
+            className={`flex items-start gap-2.5 rounded-md border border-ink/15 p-3 text-left hover:border-ink/35 ${focusRing}`}
+          >
             <span className="mt-0.5 text-biscay-2">{n.icon}</span>
             <span className="min-w-0">
               <b className="block text-[13px] font-semibold text-ink">{n.title}</b>
               <span className="block text-[12px] text-ink/60">{n.sub}</span>
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -690,15 +735,29 @@ function StepBody({ data, current, actions, nav }: {
     case "connect-syncing": return <ConnectSyncing row={data.connectSync} nav={nav} />;
     case "guide": return <GuideStep packs={data.packs} actions={actions} />;
     case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} actions={actions} />;
-    case "finish": return <FinishStep rows={data.syncRows} actions={actions} />;
-    case "done": return <DoneStep summary={data.doneSummary} />;
-    default: return <Hero />;
+    case "finish": return <FinishStep rows={data.syncRows} actions={actions} onDone={() => nav.go("done")} />;
+    case "done": return <DoneStep summary={data.doneSummary} onNavigate={actions?.navigate} />;
+    default: return <Hero data={data} />;
   }
 }
 
 /** The five wizard positions, in order, for Continue / Back. Connecting a
     source detours off this spine and rejoins it at `guide`. */
 const SPINE: WelcomeStep[] = ["hero", "connect", "guide", "glossary", "finish"];
+
+/** Steps that carry their own primary action, so the wizard footer must not
+ *  draw a second one.
+ *
+ *  Every connector step ends in "Connect & sync" or "Done", and Finish ends in
+ *  "Finish setup". The footer put "Continue" beside each of them: two primary
+ *  actions on one screen, and the more prominent of the two was the one that
+ *  skipped the work the step existed to do. Pressing Continue on the GitHub
+ *  step left onboarding with no source connected and no sign that anything had
+ *  been missed (§2, P-WE-1). */
+const OWNS_PRIMARY = new Set<WelcomeStep>([
+  "connect-github", "connect-slack", "connect-notion", "connect-gdrive",
+  "connect-upload", "connect-syncing", "finish",
+]);
 
 function WelcomePage({ data, loading = false, error = null, actions, mobile = false }: PageProps<WelcomeData, WelcomeActions>) {
   /* Which step is on screen is the user's own progress through the wizard,
@@ -728,7 +787,16 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
     if (step === last) { setCurrent("done"); return; }
     setCurrent(SPINE[Math.min(step + 1, SPINE.length - 1)]);
   };
-  const back = () => setCurrent(SPINE[Math.max(step - 1, 0)]);
+  /* Back off a connector step returns to the GRID it was launched from. It
+     used to be `SPINE[step - 1]`, and every connector step shares the spine
+     index of "connect", so "← Back" from the GitHub form landed on the Hero:
+     two screens back, past the grid the user had just come through
+     (P-WE-2). */
+  const back = () => {
+    if (current === "done") { setCurrent("finish"); return; }
+    if (STEP_INDEX[current] === 1 && current !== "connect") { setCurrent("connect"); return; }
+    setCurrent(SPINE[Math.max(step - 1, 0)]);
+  };
 
   return (
     <div className={AUTH_SHELL}>
@@ -753,10 +821,12 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
 
           <StepBody data={data} current={current} actions={actions} nav={nav} />
 
-          {/* Primary bottom LEFT, secondary to its right (§2). */}
+          {/* Primary bottom LEFT, secondary to its right (§2). On a step that
+              owns its primary action the footer contributes only the way back
+              and the way out, so the screen never offers two. */}
           <div className={`mt-7 border-t border-ink/10 pt-4 ${AUTH_ACTIONS}`}>
-            <Button variant="primary" onClick={advance}>{nextLabel}</Button>
-            <Button variant="default" disabled={step === 0} onClick={back}>← Back</Button>
+            {!OWNS_PRIMARY.has(current) && <Button variant="primary" onClick={advance}>{nextLabel}</Button>}
+            <Button variant="default" disabled={current === "hero"} onClick={back}>← Back</Button>
             <Button variant="link" onClick={() => actions?.navigate?.("/")}>Save and finish later</Button>
             <span className="ml-auto font-term text-[12px] text-ink/65">
               {done ? <span className="inline-flex items-center gap-1 text-moss"><Sparkles size={12} /> Setup complete</span> : `${step + 1} of ${LABELS.length}`}

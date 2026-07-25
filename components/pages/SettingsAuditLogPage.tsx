@@ -1,30 +1,32 @@
-import { Fragment, useState, type ReactNode } from "react";
-import { ScrollText, RefreshCw, Search, ChevronDown, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ScrollText, RefreshCw } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
-import { Chip } from "../data-display/Chip";
-import { Scrollable } from "../data-display/Scrollable";
 import { PropertyList } from "../data-display/PropertyList";
-import { Avatar } from "../data-display/Avatar";
-import { Pagination } from "../data-display/Pagination";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { fmtDateTime } from "../tokens/format";
-import { SettingsAuditLog, type AuditEvent } from "../features/SettingsAuditLog";
+import { SettingsAuditLog, type AuditEvent, type AuditDetail } from "../features/SettingsAuditLog";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
 import type { PropertyItem } from "../data-display/PropertyList";
 
+/** Re-exported so an app types its rows off the page it renders. `detail` now
+    rides the event itself: the log lets you expand ANY row, so the detail has
+    to be available for any row, not only for one the adapter singled out. */
+export type { AuditDetail };
+
 /* Settings → Audit log (pages/settings-audit-log.md). Read-only record of the
-   last 50 workspace changes with a client-side filter and manual refresh. The
-   default / empty variants render the SettingsAuditLog feature; the filtered,
-   expanded, and paginated variants render inline so an applied filter, an open
-   detail row, and the pager can all be captured. Under the shared settings tab
-   strip.
+   workspace's changes, with a filter, a date range, expandable rows, an export
+   and a pager. Every variant is the SettingsAuditLog feature driven through
+   its own props: the filtered / expanded / paginated states used to be a
+   hand-drawn copy of the table in this file, whose filter input was
+   `readOnly`, whose clear was a bare X glyph, whose expand chevron was not a
+   button, and whose pager was `onChange={() => {}}` (P-SA-1). Under the shared
+   settings tab strip.
 
    Pure presenter: the events, the applied filter, the expanded row and the
    rail summary all arrive in `data`. "No events yet" is derived from the log
@@ -47,20 +49,22 @@ const STATES = [
 
 /** What Settings → Access log can do.
 
-    The log is immutable by design, so the one intent this page has is to go
-    and look again. There is no mutation behind it and there should not be:
-    `refresh` re-reads, and with no handler the button keeps the local
-    behaviour the feature ships. */
+    The log is immutable, so there is nothing here that writes: `refresh`
+    re-reads, and `filter` re-reads a NARROWER window. Filtering used to be a
+    canvas concept only — the page could show a filtered log and had no way to
+    ask for one (P-SA-3). With no handler the feature filters the window it was
+    given, which is honest about being a window. */
 export type SettingsAuditLogActions = {
   refresh?: () => void | Promise<void>;
+  /** `from` / `to` are ISO dates (yyyy-mm-dd), null for an open end. */
+  filter?: (f: { query: string; from: string | null; to: string | null }) => void | Promise<void>;
 };
 
-/** A filter the user has applied to the log. `matches` is what the server
-    returned for it, so an empty array genuinely means "no matches". */
-export type AuditFilter = { label: string; matches: AuditEvent[] };
-
-/** Extra detail the log shows when a row is expanded. */
-export type AuditDetail = { label: string; value: string };
+/** A filter already applied to the log, as the URL or the server describes it.
+    `query` is what the filter box shows; `matches` is legacy and unread, since
+    the log now filters the window it was handed rather than being told the
+    answer. */
+export type AuditFilter = { label: string; query?: string; matches?: AuditEvent[] };
 
 /** Everything Settings → Audit log renders. */
 export type SettingsAuditLogData = {
@@ -69,12 +73,18 @@ export type SettingsAuditLogData = {
   total: number;
   /** The applied filter, or `null` for the unfiltered log. */
   filter: AuditFilter | null;
-  /** The row whose detail panel is open. */
+  /** The row whose detail panel starts open. Every row is expandable, so this
+      is a deep link, not the only row that can open. */
   expandedId: number | null;
-  /** Detail rows for the expanded event. */
+  /** Detail for the expanded event, for an app that only resolves the one row
+      it was asked about. Detail now rides `events[].detail` as well, because a
+      table you can expand ANYWHERE needs it everywhere; this is merged onto
+      the expanded row so an adapter written against the old shape still
+      works. */
   detail: AuditDetail[];
-  /** Pager: `null` when the whole window fits on one page. */
-  pager: { page: number; pageCount: number; label: string } | null;
+  /** Legacy: the page-level pager. The log pages itself over the window it was
+      given, so this is no longer read. */
+  pager?: { page: number; pageCount: number; label: string } | null;
   /** Read-only facts in the rail. */
   summary: PropertyItem[];
 };
@@ -91,73 +101,6 @@ function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: React
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
       <aside className="flex min-w-0 flex-col gap-5">{rail}</aside>
     </div>
-  );
-}
-
-const thClass = "font-term font-medium text-[11px] uppercase tracking-[0.08em] text-ink/60";
-const initialsOf = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-
-function AuditInline({ data }: { data: SettingsAuditLogData }) {
-  const { filter, expandedId, detail, pager } = data;
-  const rows = filter ? filter.matches : data.events;
-
-  return (
-    <Card
-      variant="flush"
-      title="Events"
-      hint={`${rows.length} of ${data.total} events${pager ? "" : " (last 50)"}`}
-      actions={
-        <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper">
-          <Search size={13} className="text-ink/65" />
-          <input readOnly value={filter ? filter.label.split(": ")[1] ?? "" : ""} placeholder="Filter events…" className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
-        </div>
-      }
-    >
-      {filter && (
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-ink/10">
-          <span className="text-[11.5px] text-ink/65">Filter:</span>
-          <span className="inline-flex items-center gap-1"><Chip label={filter.label} tone="info" caps /><X size={12} className="text-ink/65" /></span>
-        </div>
-      )}
-      {rows.length === 0 ? (
-        <EmptyState icon={<ScrollText size={24} />} title="No matches">No events match that filter.</EmptyState>
-      ) : (
-        <Scrollable>
-          <table className="w-full text-left border-collapse" style={{ minWidth: 700 }}>
-            <thead><tr>{["Actor", "Action", "Target", "When", ""].map((h, i) => <th key={i} className={`${thClass} px-4 py-2.5 border-y border-ink/10`} style={i === 3 ? { width: 160 } : i === 4 ? { width: 40 } : undefined}>{h}</th>)}</tr></thead>
-            <tbody>
-              {rows.map((e) => (
-                <Fragment key={e.id}>
-                  <tr className={`border-b border-ink/10 last:border-0 ${e.id === expandedId ? "bg-flysch/60" : ""}`}>
-                    <td className="px-4 py-3"><span className="inline-flex items-center gap-2.5"><Avatar initials={initialsOf(e.actor)} /><span className="text-[13px] font-medium text-ink">{e.actor}</span></span></td>
-                    <td className="px-4 py-3 text-[13px] text-ink/60">{e.verb}</td>
-                    <td className="px-4 py-3 text-[13px] text-ink/85">{e.target}</td>
-                    <td className="px-4 py-3 font-term text-[12px] text-ink/60 whitespace-nowrap">{fmtDateTime(e.at)}</td>
-                    <td className="px-4 py-3"><ChevronDown size={14} className={`text-ink/65 ${e.id === expandedId ? "rotate-180" : ""}`} /></td>
-                  </tr>
-                  {e.id === expandedId && (
-                    <tr className="border-b border-ink/10 bg-flysch/30">
-                      <td colSpan={5} className="px-4 py-3">
-                        <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-term text-[12px] sm:grid-cols-4">
-                          {detail.map((d) => (
-                            <div key={d.label}><dt className="text-ink/65">{d.label}</dt><dd className="text-ink/80">{d.value}</dd></div>
-                          ))}
-                        </dl>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </Scrollable>
-      )}
-      {pager && (
-        <div className="px-4 py-3 border-t border-ink/10">
-          <Pagination page={pager.page} pageCount={pager.pageCount} onChange={() => {}} itemLabel={pager.label} />
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -183,7 +126,7 @@ function isEmpty(d: SettingsAuditLogData): boolean {
   return d.events.length === 0 && d.filter === null;
 }
 
-function Body({ data, error }: { data: SettingsAuditLogData; error: string | null }) {
+function Body({ data, error, actions }: { data: SettingsAuditLogData; error: string | null; actions?: SettingsAuditLogActions }) {
   if (error) {
     return <EmptyState icon={<ScrollText size={22} />} title="API offline">{error}</EmptyState>;
   }
@@ -194,12 +137,38 @@ function Body({ data, error }: { data: SettingsAuditLogData; error: string | nul
       </EmptyState>
     );
   }
-  /* An applied filter, an open detail row, or a pager all need the inline
-     table; the plain log is the feature's own. */
-  if (data.filter || data.expandedId !== null || data.pager) {
-    return <AuditInline data={data} />;
-  }
-  return <SettingsAuditLog embedded events={data.events} total={data.total} />;
+  /* One table for every state. The filter it starts with is whatever the app
+     already applied; the box, the date range, the expand controls and the
+     pager are the real ones the feature ships. */
+  return (
+    <SettingsAuditLog
+      embedded
+      events={withExpandedDetail(data)}
+      total={data.total}
+      initialQuery={queryOf(data.filter)}
+      expandedId={data.expandedId}
+      onFilterChange={actions?.filter}
+    />
+  );
+}
+
+/** The rows, with `data.detail` folded onto the row it describes. An app that
+    resolves detail for every event puts it on the event and this changes
+    nothing; one that resolves only the row it was asked about still gets that
+    row's detail rendered. */
+function withExpandedDetail(d: SettingsAuditLogData): AuditEvent[] {
+  if (d.expandedId === null || d.detail.length === 0) return d.events;
+  return d.events.map((e) => (e.id === d.expandedId && !e.detail ? { ...e, detail: d.detail } : e));
+}
+
+/** What the filter box starts with. A filter the app describes as
+    "actor: Maya Chen" filters on the value, not on the field name it used to
+    label it with. */
+function queryOf(filter: AuditFilter | null): string {
+  if (!filter) return "";
+  if (filter.query !== undefined) return filter.query;
+  const i = filter.label.indexOf(": ");
+  return i === -1 ? filter.label : filter.label.slice(i + 2);
 }
 
 function SettingsAuditLogPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SettingsAuditLogData, SettingsAuditLogActions>) {
@@ -233,7 +202,7 @@ function SettingsAuditLogPage({ data, loading = false, error = null, actions, ch
             <div className="mt-5"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
           )}
           <SettingsBody mobile={mobile} rail={<AuditRail summary={data.summary} />}>
-            <Body data={data} error={error} />
+            <Body data={data} error={error} actions={actions} />
           </SettingsBody>
         </div>
       )}

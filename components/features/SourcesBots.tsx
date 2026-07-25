@@ -15,6 +15,8 @@ import { Input } from "../forms/Input";
 import { SectionLabel } from "../forms/SectionLabel";
 import { SlackMark, GithubMark } from "../icons/marks";
 import { fmtDateTime } from "../tokens/format";
+import { useWrite } from "../actions/useWrite";
+import { WriteError } from "../feedback/WriteError";
 
 /* SourcesBots — the Sources page "Bots" tab: self-serve setup for the two
    push-into-Mari integrations (Slack answering bot + GitHub push webhook).
@@ -25,6 +27,25 @@ import { fmtDateTime } from "../tokens/format";
 
 export type SlackStatus = { configured: boolean; teamName?: string; lastEventAt?: string; lastError?: string };
 export type GithubStatus = { webhookConfigured: boolean; lastDeliveryAt?: string; repos: string[] };
+
+/** What the Bots tab can DO. The tab used to be handed status and nothing
+ *  else, so every credential it collected died in local state: "Saved" was a
+ *  word, not a write.
+ *
+ *  All optional. With none of them the drawers keep the local echo the design
+ *  canvas renders (CONVENTIONS.md §2) — except the connection test, which is
+ *  not drawn at all without a handler, because a test that reports "Connected
+ *  as @Mari" without asking Slack is invented data. */
+export type SourcesBotsActions = {
+  /** Store the bot token and signing secret server-side. Throws with the
+      server's own words: "invalid_auth" is the one thing the user can fix. */
+  saveSlackCredentials?: (v: { botToken: string; signingSecret: string }) => void | Promise<void>;
+  /** Slack's `auth.test`. Answers rather than throws: "not ok" is a normal
+      outcome of a test. */
+  testSlackConnection?: () => Promise<{ ok: boolean; teamName?: string; error?: string }>;
+  /** Store the webhook signing secret this workspace verifies deliveries with. */
+  saveGithubWebhookSecret?: (secret: string) => void | Promise<void>;
+};
 
 const SLACK_MANIFEST = `display_information:
   name: Mari
@@ -72,13 +93,34 @@ const origin = typeof window !== "undefined" ? window.location.origin : "https:/
 const SLACK_STEPS = ["Create the app", "Connect", "Verify", "Use it"];
 
 function SlackDrawer({
-  open, onClose, status,
-}: { open: boolean; onClose: () => void; status: SlackStatus }) {
+  open, onClose, status, actions,
+}: { open: boolean; onClose: () => void; status: SlackStatus; actions?: SourcesBotsActions }) {
   const [step, setStep] = useState(0);
   const [token, setToken] = useState("");
   const [secret, setSecret] = useState("");
   const [saved, setSaved] = useState(false);
-  const [tested, setTested] = useState<"idle" | "ok" | "fail">("idle");
+  /* The verify step reports what Slack answered, and nothing else: it used to
+     flip to "Connected as @Mari" from a click alone. */
+  const [tested, setTested] = useState<{ ok: boolean; teamName?: string; error?: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const write = useWrite();
+
+  const save = () => write.run(
+    actions?.saveSlackCredentials && (() => actions.saveSlackCredentials!({ botToken: token, signingSecret: secret.trim() })),
+    () => setSaved(true),
+  );
+  const test = async () => {
+    if (!actions?.testSlackConnection || testing) return;
+    setTesting(true);
+    setTested(null);
+    try {
+      setTested(await actions.testSlackConnection());
+    } catch (err) {
+      setTested({ ok: false, error: err instanceof Error ? err.message : "auth.test could not be run." });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const tokenOk = token.startsWith("xoxb-");
   const tokenErr = token.length > 0 && (token.startsWith("xoxp-") || !token.startsWith("xoxb-"));
@@ -103,23 +145,40 @@ function SlackDrawer({
         </Field>
         {status.configured && <p className="mt-2 text-[11.5px] text-ink/70">Already configured. Enter new values only to replace them.</p>}
         <div className="mt-3">
-          <Button variant="primary" compact disabled={!canSave} onClick={() => setSaved(true)}>Save credentials</Button>
+          <Button variant="primary" compact disabled={!canSave || write.busy} onClick={() => void save()}>{write.busy ? "Saving…" : "Save credentials"}</Button>
           {saved && <span className="ml-2 inline-flex items-center gap-1 text-[12.5px] text-moss"><CheckCircle2 size={14} /> Saved</span>}
         </div>
+        <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
       </div>
     );
     if (step === 2) return (
       <div className="grid grid-cols-1 gap-3">
-        <p className="text-[13px] text-ink/70">Run Slack's <code>auth.test</code> to confirm the token works.</p>
-        <div>
-          <Button compact onClick={() => setTested("ok")}><RefreshCw size={13} /> Test connection</Button>
-          {tested === "ok" && (
-            <div className="mt-3 flex items-center gap-2">
-              <StatusChip status="approved" /> <span className="text-[12.5px] text-ink/70">Connected as <b>@Mari</b> in <b>{status.teamName ?? "your workspace"}</b>.</span>
+        {/* Without a handler there is nothing to run, and a button that
+            answers "Connected" on its own would be inventing the result of a
+            call it never made (§2). */}
+        {actions?.testSlackConnection ? (
+          <>
+            <p className="text-[13px] text-ink/70">Run Slack's <code>auth.test</code> to confirm the token works.</p>
+            <div>
+              <Button compact disabled={testing} onClick={() => void test()}>
+                {testing ? <><Spinner size="sm" /> Testing…</> : <><RefreshCw size={13} /> Test connection</>}
+              </Button>
+              {tested?.ok && (
+                <div className="mt-3 flex items-center gap-2">
+                  <StatusChip status="approved" />
+                  <span className="text-[12.5px] text-ink/70">
+                    Connected{tested.teamName || status.teamName ? <> in <b>{tested.teamName ?? status.teamName}</b></> : null}.
+                  </span>
+                </div>
+              )}
+              {tested && !tested.ok && <p className="mt-3 text-[12.5px] text-espelette">{tested.error ?? "auth.test failed. Check the token and try again."}</p>}
             </div>
-          )}
-          {tested === "fail" && <p className="mt-3 text-[12.5px] text-espelette">auth.test failed. Check the token and try again.</p>}
-        </div>
+          </>
+        ) : (
+          <p className="text-[13px] text-ink/70">
+            Slack verifies the credentials on the first event. Invite the bot and mention it to confirm the setup.
+          </p>
+        )}
       </div>
     );
     return (
@@ -161,12 +220,18 @@ function SlackDrawer({
 const GH_STEPS = ["Add the webhook", "Secret", "Verify"];
 
 function GithubDrawer({
-  open, onClose, status,
-}: { open: boolean; onClose: () => void; status: GithubStatus }) {
+  open, onClose, status, actions,
+}: { open: boolean; onClose: () => void; status: GithubStatus; actions?: SourcesBotsActions }) {
   const [step, setStep] = useState(0);
   const [secret, setSecret] = useState("");
   const [saved, setSaved] = useState(false);
+  const write = useWrite();
   const payloadUrl = `${origin}/webhooks/github`;
+
+  const save = () => write.run(
+    actions?.saveGithubWebhookSecret && (() => actions.saveGithubWebhookSecret!(secret)),
+    () => setSaved(true),
+  );
 
   const body = () => {
     if (step === 0) return (
@@ -188,9 +253,10 @@ function GithubDrawer({
           </div>
         </Field>
         <div className="mt-3">
-          <Button variant="primary" compact disabled={!secret} onClick={() => setSaved(true)}>Save secret</Button>
+          <Button variant="primary" compact disabled={!secret || write.busy} onClick={() => void save()}>{write.busy ? "Saving…" : "Save secret"}</Button>
           {saved && <span className="ml-2 inline-flex items-center gap-1 text-[12.5px] text-moss"><CheckCircle2 size={14} /> Saved</span>}
         </div>
+        <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
         <p className="mt-2 text-[11.5px] text-ink/70">Paste the same value into GitHub's "Secret" field. A separate receiver reads <code>MARI_GITHUB_WEBHOOK_SECRET</code>.</p>
       </div>
     );
@@ -238,6 +304,7 @@ function GithubDrawer({
 export type SourcesBotsProps = {
   slack: SlackStatus;
   github: GithubStatus;
+  actions?: SourcesBotsActions;
   /** Which setup drawer opens on mount (so it shows in a static gallery). */
   defaultOpen?: "slack" | "github" | null;
   loading?: boolean;
@@ -245,7 +312,7 @@ export type SourcesBotsProps = {
 };
 
 export function SourcesBots({
-  slack, github, defaultOpen = "slack", loading = false, className = "",
+  slack, github, actions, defaultOpen = "slack", loading = false, className = "",
 }: SourcesBotsProps) {
   const [drawer, setDrawer] = useState<"slack" | "github" | null>(defaultOpen);
 
@@ -305,8 +372,8 @@ export function SourcesBots({
         </Button>
       </div>
 
-      <SlackDrawer open={drawer === "slack"} onClose={() => setDrawer(null)} status={slack} />
-      <GithubDrawer open={drawer === "github"} onClose={() => setDrawer(null)} status={github} />
+      <SlackDrawer open={drawer === "slack"} onClose={() => setDrawer(null)} status={slack} actions={actions} />
+      <GithubDrawer open={drawer === "github"} onClose={() => setDrawer(null)} status={github} actions={actions} />
     </div>
   );
 }

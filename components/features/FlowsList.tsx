@@ -16,7 +16,6 @@ import { Select } from "../forms/Select";
 import { Textarea } from "../forms/Textarea";
 import { Drawer } from "../layout/Drawer";
 import { Menu, MenuItem } from "../navigation/Menu";
-import { PageHeader } from "../layout/PageHeader";
 import { type RunStatus } from "../workflow/RunHistory";
 import { RunStatusChips } from "./FlowsRunPanel";
 import { Skeleton, SkeletonLine, SkeletonCard, SkeletonList } from "../data-display/Skeleton";
@@ -36,7 +35,12 @@ import { fmtDateTime, type DateInput } from "../tokens/format";
    through RunStatusChips — the one run vocabulary — and sits second-to-last
    because every row carries actions. Delete is a <ConfirmButton>, and both
    "New flow" and "Use template" open the same draft drawer, so neither is
-   inert (§2). Renders standalone. */
+   inert (§2). Renders standalone.
+
+   This used to open with its own <PageHeader>, which is why FlowsPage had to
+   suppress the page's header on the default view — Flows was the only console
+   page whose header came and went with state. The header belongs to the page;
+   the list keeps its create action in the table's own top right (§2). */
 
 type TriggerOn = "document_added" | "document_changed" | "schedule" | "" | null;
 
@@ -66,13 +70,6 @@ export type Flow = {
 };
 
 export type SourceRef = { id: number; name: string };
-
-const TEMPLATE_OUTCOME: Record<string, string> = {
-  "Docs guardrail": "Never merge a PR that contradicts your facts",
-  "Slack digest": "Turn a week of discussion into a Monday digest",
-  "Stale sweeper": "Docs that go quiet get flagged and assigned",
-  "Translation sync": "Customer-facing edits ship with review-ready drafts",
-};
 
 const hasTrigger = (t: FlowTrigger | null) => Boolean(t && t.on);
 
@@ -136,8 +133,12 @@ function RunDotStrip({ runs, max = 5, onOpen }: { runs: FlowRunSummary[]; max?: 
   );
 }
 
+/* The card describes the flow it copies, and nothing else. It used to look its
+   headline up in a name → marketing-copy table baked into this file, so a flow
+   that happened to be called "Docs guardrail" was captioned with a promise
+   nobody had made about it. A flow's own description is the only honest
+   summary of what it guarantees. */
 function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void }) {
-  const outcome = TEMPLATE_OUTCOME[flow.name] ?? flow.description;
   const mechanism = flow.nodes.map((n) => n.label).join(" → ");
   return (
     <div className={`${card} flex flex-col gap-2 p-4`}>
@@ -145,8 +146,9 @@ function TemplateCard({ flow, onUse }: { flow: Flow; onUse: (f: Flow) => void })
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: flow.color }} aria-hidden />
         <span className="font-term text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink/70">Template</span>
       </div>
-      <Truncate lines={2} className="text-[14px] font-semibold text-ink">{outcome}</Truncate>
-      <Truncate lines={2} className="text-[12px] leading-snug text-ink/70">{mechanism}</Truncate>
+      <Truncate lines={2} className="text-[14px] font-semibold text-ink">{flow.name}</Truncate>
+      <Truncate lines={2} className="text-[12px] leading-snug text-ink/70">{flow.description}</Truncate>
+      {mechanism && <Truncate lines={2} className="font-term text-[11px] leading-snug text-ink/65">{mechanism}</Truncate>}
       <Button variant="link" className="mt-auto self-start" onClick={() => onUse(flow)}>Use template →</Button>
     </div>
   );
@@ -192,6 +194,9 @@ export type FlowsListProps = {
   sources: SourceRef[];
   /** Side effects the list offers. Omitted = local echo only. */
   actions?: FlowsListActions;
+  /** One-column layout for a phone. Composed at the page level (§10/§11): the
+      list itself stays desktop fixed-width, the page says when it is narrow. */
+  compact?: boolean;
   /** Render a content-shaped skeleton silhouette instead of the list. */
   loading?: boolean;
   className?: string;
@@ -204,13 +209,29 @@ const PAGE = 25;
 
 export function FlowsList({
   flows, sources, actions, editTriggerFor = null, createOpen = false, onOpenFlow,
-  loading = false, className = "",
+  compact = false, loading = false, className = "",
 }: FlowsListProps) {
   const [rows, setRows] = useState<Flow[]>(flows);
   const [trigEdit, setTrigEdit] = useState<Flow | null>(
     () => flows.find((f) => f.id === editTriggerFor) ?? null,
   );
   const [draft, setDraft] = useState<{ from: Flow | null } | null>(createOpen ? { from: null } : null);
+
+  /* Both drawers are seeded from props and then owned locally, so a route
+     change that opens a DIFFERENT flow's trigger (or the create step) used to
+     leave the first render's drawer on screen forever. The sentinel adopts the
+     new instruction without stamping over a drawer the reader is already in
+     (C1: local state seeded from props never resynced). */
+  const [seenTrigger, setSeenTrigger] = useState(editTriggerFor);
+  if (seenTrigger !== editTriggerFor) {
+    setSeenTrigger(editTriggerFor);
+    setTrigEdit(flows.find((f) => f.id === editTriggerFor) ?? null);
+  }
+  const [seenCreate, setSeenCreate] = useState(createOpen);
+  if (seenCreate !== createOpen) {
+    setSeenCreate(createOpen);
+    setDraft(createOpen ? { from: null } : null);
+  }
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [running, setRunning] = useState<number | null>(null);
@@ -343,20 +364,15 @@ export function FlowsList({
 
   return (
     <div className={`flex flex-col gap-6 ${className}`}>
-      <PageHeader
-        eyebrow="Flows"
-        title="Flows"
-        description="Automations that watch your knowledge and do editorial work: start from a template or build your own."
-        actions={<Button variant="primary" onClick={() => setDraft({ from: null })}><Play size={14} /> New flow</Button>}
-      />
-
       {/* Template gallery */}
       <div>
         <div className="mb-2 font-term text-[11px] font-medium uppercase tracking-[0.1em] text-ink/65">Start from a template</div>
         {/* Intrinsic track sizing, not a breakpoint (§10): four up on the
             console, and a card never squeezes below 240px, which is what
-            crushed the outcome line to one character per line on a phone. */}
-        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+            crushed the outcome line to one character per line on a phone.
+            A phone gets one column from the page's `compact`, never from a
+            component breakpoint. */}
+        <div className={compact ? "grid grid-cols-1 gap-4" : "grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]"}>
           {templates.map((f) => (
             <TemplateCard key={f.id} flow={f} onUse={(t) => setDraft({ from: t })} />
           ))}

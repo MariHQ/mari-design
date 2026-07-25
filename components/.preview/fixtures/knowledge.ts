@@ -170,7 +170,12 @@ export const FIXTURES: PageFixtures<KnowledgeData> = {
   pages: { data: { results: RESULTS.filter((r) => r.source === "docs" || r.source === "notion"), doc: DOC } },
   "pull-requests": { data: { results: RESULTS.filter((r) => r.kind === "pr"), doc: DOC } },
   "single-result": { data: { results: RESULTS.slice(0, 1), doc: DOC } },
-  "many-results": { data: { results: MANY, doc: DOC } },
+  /* `total` is the corpus-wide count behind one page of hits, which is what
+     turns the browser's footer into "13 of 248" and arms Show more. Absent,
+     `results` IS the answer — which is what every other state here says.
+     (`query` is only read when an app supplies `setQuery`; the canvas has no
+     handlers, so the browser owns its own search box.) */
+  "many-results": { data: { results: MANY, doc: DOC, total: 248 } },
   "inspector-slack": { data: { results: RESULTS, doc: SLACK_DOC } },
   "no-selection": { data: { results: RESULTS, doc: null } },
   loading: { data: DEFAULT, loading: true },

@@ -24,6 +24,10 @@ const BASE: PreferencesData = {
     email: "dana@acme-data.com",
     initials: "DR",
     timezone: "America/Los_Angeles",
+    /* Present = the server stores a UI language for this account, so the
+       control is drawn. Omitted, the page draws no language select at all —
+       which is what `oauth` below leaves it as. */
+    language: "en",
   },
   provider: "password",
   notifications: { mentions: true, digest: true, flowFailures: true },
@@ -49,7 +53,13 @@ export const FIXTURES: PageFixtures<PreferencesData> = {
   oauth: {
     data: {
       ...BASE,
-      profile: { ...BASE.profile, email: "dana@users.noreply.github.com" },
+      /* No stored language either: the account signs in elsewhere and the
+         server keeps nothing for it, so neither the password form nor the
+         language select is drawn. */
+      profile: {
+        name: BASE.profile.name, email: "dana@users.noreply.github.com",
+        initials: BASE.profile.initials, timezone: BASE.profile.timezone,
+      },
       provider: "github",
     },
   },
@@ -84,6 +94,10 @@ export const FIXTURES: PageFixtures<PreferencesData> = {
         email: UNBREAKABLE,
         initials: "部",
         timezone: LONG_WORD,
+        /* A language tag this build has no label for: the select has to show
+           the stored value rather than snapping to English and rewriting the
+           setting on the next save. */
+        language: LONG_WORD,
       },
       provider: "google",
       notifications: { mentions: true, digest: false, flowFailures: true },

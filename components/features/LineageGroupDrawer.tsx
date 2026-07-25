@@ -11,7 +11,7 @@ import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList 
 import {
   LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow, groupParts, groupKindWord,
   LgAuthor, LgOwners, LgSourceChip, GROUP_PAGE_SIZE,
-  nodeById, type LNode, type LEdge,
+  nodeById, downloadText, type LNode, type LEdge,
 } from "./LineageDataModel";
 
 /** Rows shown before the list becomes its own bounded, scrolling region. */
@@ -144,7 +144,20 @@ export function LineageGroupDrawer({
               </Button>
             }
             secondary={
-              <Button onClick={() => setExported(true)} className={exported ? lgToggleOn : ""}>
+              // Writes the file. "Exported" used to be a label change and
+              // nothing else.
+              <Button
+                onClick={() => {
+                  const csv = [
+                    "document,owner,date,links",
+                    ...ranked.map((m) => [m.title, m.owner ?? "", m.date ?? "", degreeOf.get(m.id) ?? m.inbound ?? 0]
+                      .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")),
+                  ].join("\n");
+                  downloadText(`${repo.replace(/[^\w.-]+/g, "-")}-${kind || "group"}.csv`, csv, "text/csv");
+                  setExported(true);
+                }}
+                className={exported ? lgToggleOn : ""}
+              >
                 <Download size={13} /> {exported ? "Exported" : "Export"}
               </Button>
             }
@@ -165,11 +178,14 @@ export function LineageGroupDrawer({
           author={<LgAuthor name={owners[0]?.name} />}
         />
 
+        {/* Says what this panel does, not what the canvas does: expanding here
+            lists the members, it does not unfold the macro node on the graph,
+            and claiming otherwise sent readers looking for a change that never
+            happened. */}
         {isOpen && (
-          <LgResultPanel title="Group expanded on the canvas">
-            The {totalMembers} members now render as individual nodes. The list
-            below pages through them {GROUP_PAGE_SIZE} at a time rather than
-            drawing every row at once.
+          <LgResultPanel title="Members listed in full">
+            All {totalMembers} members are listed below, {GROUP_PAGE_SIZE} at a
+            time rather than every row at once.
           </LgResultPanel>
         )}
 

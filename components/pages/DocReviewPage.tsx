@@ -83,6 +83,10 @@ export type DocReviewActions = ChangeQueueActions & RefineActions & FindingsActi
       owns what sharing means — a copied link, a share sheet, an invite — so
       the page only says that the reader asked to share. */
   share?: () => void | Promise<void>;
+  /** Take the reader to the knowledge library. An intent, not a route: the
+      editor used to `window.open("/knowledge")` from inside the library, which
+      is the exact coupling every other page emits a handler to avoid. */
+  openLibrary?: () => void;
 };
 
 /** Whatever the server said, or a floor when the failure carried no message. */
@@ -96,6 +100,18 @@ export type DocReviewData = {
   save: SaveState;
   pane: ReviewPane;
   doc: ReviewDoc;
+  /** This document's tags, as the library stores them. The header used to
+      render "canonical" and "verified" on every document no matter what it was
+      tagged; a chip nobody can trace to a value is invented data. Omit it and
+      the header carries no tags. */
+  tags?: string[];
+  /** Whether the reader already watches this document. Optional because not
+      every deployment knows: where it is unknown the Watch control is not
+      drawn at all rather than claiming "Watch" at someone already watching. */
+  watched?: boolean;
+  /** Which review surface the bottom tab strip opens on, so the change queue
+      and the fact check are both deep-linkable. */
+  bottomTab?: BottomTab;
 };
 
 /** A document with no body and nothing said about it yet. Derived from the
@@ -108,12 +124,14 @@ function isEmpty(d: DocReviewData): boolean {
     && !doc.changes.length && !doc.findings.length && !doc.claims.length;
 }
 
-function HeaderActions({ save, onSave, onWatch, onShare, watched }: {
+function HeaderActions({ save, onSave, onWatch, onShare, watched, tags }: {
   save: SaveState;
   onSave?: () => void;
   onWatch?: () => void;
   onShare?: () => void;
-  watched: boolean;
+  /** Undefined means "nobody told this page", and the control stays away. */
+  watched?: boolean;
+  tags: string[];
 }) {
   const offlineDirty = save === "offline-dirty";
   const dirty = save === "dirty";
@@ -137,15 +155,22 @@ function HeaderActions({ save, onSave, onWatch, onShare, watched }: {
 
   return (
     <>
-      <TagChip tag="canonical" />
-      <TagChip tag="verified" />
+      {/* The document's own tags, or none. */}
+      {tags.map((t) => <TagChip key={t} tag={t} />)}
       {statusChip}
       <Button compact icon={false} disabled={saveDisabled} onClick={onSave}>
         <Save size={15} /> {saveLabel}
       </Button>
-      <Button compact variant="default" onClick={onWatch}>
-        <Eye size={15} /> {watched ? "Watching" : "Watch"}
-      </Button>
+      {/* Gated on KNOWING the state, not on being able to write it. A Watch
+          button that starts at "Watch" for a document you already watch is
+          worse than no Watch button, so an undefined `watched` draws nothing.
+          A missing `toggleWatch` is different: §2 says omitting an action must
+          never make a control vanish, it falls back to the local echo below. */}
+      {watched !== undefined && (
+        <Button compact variant="default" onClick={onWatch}>
+          <Eye size={15} /> {watched ? "Watching" : "Watch"}
+        </Button>
+      )}
       {/* Only offered where sharing means something. A Share button that
           cannot share is worse than a page with no Share button. */}
       {onShare && (
@@ -157,11 +182,15 @@ function HeaderActions({ save, onSave, onWatch, onShare, watched }: {
   );
 }
 
-function Workspace({ mobile, initialTab, doc, actions, onBodyChange }: {
+function Workspace({ mobile, initialTab, doc, actions, onBodyChange, onSave }: {
   mobile: boolean; initialTab: BottomTab; doc: ReviewDoc;
-  actions?: DocReviewActions; onBodyChange: (body: string) => void;
+  actions?: DocReviewActions; onBodyChange: (body: string) => void; onSave?: () => void;
 }) {
   const [tab, setTab] = useState<BottomTab>(initialTab);
+  /* The tab is a deep link, so a new one from the URL has to reach the strip.
+     C1's resync sentinel. */
+  const [seen, setSeen] = useState(initialTab);
+  if (seen !== initialTab) { setSeen(initialTab); setTab(initialTab); }
   return (
     <>
       {/* §11: main column carries minmax(0,1fr); both supporting rails at the
@@ -187,7 +216,14 @@ function Workspace({ mobile, initialTab, doc, actions, onBodyChange }: {
           <DocReviewOutlinePanel body={doc.outlineBody} revisions={doc.revisions} />
         </div>
         <div className="order-1 min-w-0 xl:order-none xl:col-start-1 xl:row-span-2 xl:row-start-1 2xl:col-start-2 2xl:row-span-1">
-          <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} onChange={onBodyChange} />
+          <DocReviewEditor
+            compact={mobile}
+            body={doc.editorBody}
+            findings={doc.editorFindings}
+            onChange={onBodyChange}
+            onSave={onSave}
+            onOpenLibrary={actions?.openLibrary}
+          />
         </div>
         <div className="order-3 flex min-w-0 flex-col gap-5 xl:order-none xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
           <DocReviewRefinePanel {...doc.refine} actions={actions} />
@@ -224,9 +260,9 @@ function PanelFrame({ title, description, children }: { title: string; descripti
   );
 }
 
-function Body({ data, error, actions, mobile, onBodyChange }: {
+function Body({ data, error, actions, mobile, onBodyChange, onSave }: {
   data: DocReviewData; error: string | null; actions?: DocReviewActions;
-  mobile: boolean; onBodyChange: (body: string) => void;
+  mobile: boolean; onBodyChange: (body: string) => void; onSave?: () => void;
 }) {
   const doc = data.doc;
   if (error) {
@@ -257,7 +293,14 @@ function Body({ data, error, actions, mobile, onBodyChange }: {
   if (data.pane === "editor") {
     return (
       <PanelFrame title="Block editor" description="Content-editable blocks with inline finding underlines and margin annotations.">
-        <DocReviewEditor compact={mobile} body={doc.editorBody} findings={doc.editorFindings} onChange={onBodyChange} />
+        <DocReviewEditor
+          compact={mobile}
+          body={doc.editorBody}
+          findings={doc.editorFindings}
+          onChange={onBodyChange}
+          onSave={onSave}
+          onOpenLibrary={actions?.openLibrary}
+        />
       </PanelFrame>
     );
   }
@@ -283,7 +326,9 @@ function Body({ data, error, actions, mobile, onBodyChange }: {
     );
   }
 
-  const initialTab: BottomTab = "changes";
+  /* Which pane the bottom strip opens on comes from the data, so a link to
+     the fact check opens the fact check (CONSOLE-REVIEW P-DR-5). */
+  const initialTab: BottomTab = data.bottomTab ?? "changes";
   return (
     <>
       {data.save === "offline-dirty" && (
@@ -296,7 +341,7 @@ function Body({ data, error, actions, mobile, onBodyChange }: {
           The document was saved and revisions were refreshed.
         </Alert>
       )}
-      <Workspace mobile={mobile} initialTab={initialTab} doc={doc} actions={actions} onBodyChange={onBodyChange} />
+      <Workspace mobile={mobile} initialTab={initialTab} doc={doc} actions={actions} onBodyChange={onBodyChange} onSave={onSave} />
     </>
   );
 }
@@ -308,10 +353,15 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
      as before. */
   const [save, setSave] = useState<SaveState | null>(null);
   const [body, setBody] = useState<string | null>(null);
-  const [watched, setWatched] = useState(false);
+  const [watch, setWatch] = useState<boolean | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
   const saveState = save ?? data.save;
+  /* Seeded from the document, not from `false`: a document you already watch
+     used to greet you with "Watch" (CONSOLE-REVIEW P-DR-2). `null` means the
+     reader has not toggled it here, so `data` is still the truth — and if
+     `data` does not know either, the control is not drawn. */
+  const watched = watch ?? data.watched;
 
   const onBodyChange = (next: string) => {
     if (!actions?.save) return; // nothing to save it with: no false "unsaved".
@@ -333,10 +383,10 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
   };
 
   const onWatch = async () => {
-    if (!actions?.toggleWatch) { setWatched((v) => !v); return; }
+    if (!actions?.toggleWatch) { setWatch((v) => !(v ?? data.watched ?? false)); return; }
     setFailed(null);
     try {
-      setWatched(await actions.toggleWatch());
+      setWatch(await actions.toggleWatch());
     } catch (e) {
       setFailed(why(e, "That subscription could not be changed."));
     }
@@ -346,8 +396,11 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
     <HeaderActions
       save={saveState}
       watched={watched}
+      tags={data.tags ?? []}
       onSave={actions?.save ? onSave : undefined}
-      onWatch={actions?.toggleWatch ? onWatch : undefined}
+      /* Always passed: with no `toggleWatch` it toggles local state, which is
+         what the design canvas renders and what §2 requires. */
+      onWatch={onWatch}
       onShare={actions?.share}
     />
   );
@@ -376,6 +429,7 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
             actions={actions}
             mobile={mobile}
             onBodyChange={onBodyChange}
+            onSave={actions?.save ? onSave : undefined}
           />
         </div>
       </div>

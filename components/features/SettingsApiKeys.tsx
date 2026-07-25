@@ -6,6 +6,7 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { Field } from "../forms/Field";
+import { Checkbox } from "../forms/Checkbox";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { TokenReveal as TokenRevealUI, TOKEN_REVEAL_WARNING } from "../data-display/TokenReveal";
@@ -35,6 +36,22 @@ export type ApiKey = {
   revoked: boolean;
 };
 
+/** The scopes a key can carry. The rail beside this table has always
+    documented exactly these four, while the form asked for them as free text
+    (P-SK-1) — so the one place that knew the vocabulary could not offer it,
+    and a typo produced a key with a scope nothing grants. */
+export const API_SCOPES: { id: string; blurb: string }[] = [
+  { id: "search:read", blurb: "Query the index" },
+  { id: "ingest:write", blurb: "Push documents" },
+  { id: "facts:read", blurb: "Read verified facts" },
+  { id: "metrics:read", blurb: "Export usage" },
+];
+
+/** Scopes are stored as a space-separated string; the checkboxes are a view
+    onto it. A scope this build has never heard of survives a round trip
+    because it is kept in the list rather than dropped on parse. */
+const parseScopes = (s: string): string[] => s.split(/[\s,]+/).filter(Boolean);
+
 function randomSecret(): string {
   const hex = Array.from({ length: 32 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
   return `mk_live_${hex}`;
@@ -58,6 +75,11 @@ export type SettingsApiKeysProps = {
   /** Whether the create form is open. Embedded, the host page owns the
       "Create key" button, so it owns this. */
   createOpen?: boolean;
+  /** What the create form starts with, when the host page already knows (a
+      retried creation, a deep link). Scopes are the stored space-separated
+      string; anything in it that this build has no checkbox for is kept, not
+      dropped. */
+  draft?: { name: string; scopes: string };
   onCreateOpenChange?: (open: boolean) => void;
   /** Pin one row's Revoke into its armed "Revoke?" step, and show a token as
       if it had just been minted. Canvas only, and for the same reason
@@ -70,7 +92,7 @@ export type SettingsApiKeysProps = {
 };
 
 export function SettingsApiKeys({
-  keys: initialKeys, actions, createOpen, onCreateOpenChange,
+  keys: initialKeys, actions, createOpen, onCreateOpenChange, draft,
   confirmRevokeId = null, revealToken = null,
   loading = false, embedded = false, className = "",
 }: SettingsApiKeysProps) {
@@ -78,10 +100,17 @@ export function SettingsApiKeys({
   const [creatingLocal, setCreatingLocal] = useState(false);
   const creating = createOpen ?? creatingLocal;
   const setCreating = (open: boolean) => { setCreatingLocal(open); onCreateOpenChange?.(open); };
-  const [name, setName] = useState("");
-  const [scopes, setScopes] = useState("read");
+  const [name, setName] = useState(draft?.name ?? "");
+  const [scopes, setScopes] = useState<string[]>(
+    draft?.scopes ? parseScopes(draft.scopes) : ["search:read"],
+  );
   const [saving, setSaving] = useState(false);
   const [token, setToken] = useState<string | null>(revealToken);
+
+  /* The list is seeded from a prop, and `useState` reads its seed once, so
+     after a refetch this table kept rendering the first response (C1). */
+  const [seenKeys, setSeenKeys] = useState(initialKeys);
+  if (seenKeys !== initialKeys) { setSeenKeys(initialKeys); setKeys(initialKeys); }
 
   /* Create and revoke both go through `write`: with no `actions` they are the
      local-state changes this panel has always made (which is what the design
@@ -90,8 +119,8 @@ export function SettingsApiKeys({
 
   const createKey = async () => {
     const keyName = name.trim();
-    if (!keyName) return;
-    const eff = scopes.trim() || "read";
+    if (!keyName || scopes.length === 0) return;
+    const eff = scopes.join(" ");
     setSaving(true);
     // The secret comes from the server when there is one, and from here only
     // when there is not. Either way it is shown once and never re-read.
@@ -102,7 +131,7 @@ export function SettingsApiKeys({
     if (!secret) return;
     setKeys((k) => [...k, { id: Math.max(0, ...k.map((x) => x.id)) + 1, name: keyName, prefix: `${secret.slice(0, 12)}…`, scopes: eff, created: new Date().toISOString().slice(0, 10), lastUsed: null, revoked: false }]);
     setToken(secret);
-    setName(""); setScopes("read"); setCreating(false);
+    setName(""); setScopes(["search:read"]); setCreating(false);
   };
 
   /* Destructive: the caller is <ConfirmButton>, so this is the second click. */
@@ -150,10 +179,35 @@ export function SettingsApiKeys({
         <Card title="New key" hint={TOKEN_REVEAL_WARNING}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" className="w-full" /></Field>
-            <Field label="Scopes"><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder="search:read ingest:write" className="w-full font-term" /></Field>
+            <Field label="Scopes">
+              {/* Pick from what the server actually grants, rather than typing
+                  a scope string and finding out later (P-SK-1). */}
+              <div className="flex flex-col gap-2 pt-1">
+                {API_SCOPES.map((s) => (
+                  <Checkbox
+                    key={s.id}
+                    checked={scopes.includes(s.id)}
+                    onCheckedChange={(on) => setScopes((c) => (on ? [...c, s.id] : c.filter((x) => x !== s.id)))}
+                    label={<span className="flex min-w-0 items-baseline gap-2"><span className="font-term text-[12.5px] text-ink">{s.id}</span><span className="text-[12px] text-ink/70">{s.blurb}</span></span>}
+                  />
+                ))}
+                {/* A scope the draft carried that this build has no row for is
+                    still shown and still saved: dropping it silently would
+                    narrow a key nobody asked to narrow. */}
+                {scopes.filter((s) => !API_SCOPES.some((a) => a.id === s)).map((s) => (
+                  <Checkbox
+                    key={s}
+                    checked
+                    onCheckedChange={(on) => setScopes((c) => (on ? c : c.filter((x) => x !== s)))}
+                    label={<span className="font-term text-[12.5px] text-ink">{s}</span>}
+                  />
+                ))}
+              </div>
+            </Field>
           </div>
+          {scopes.length === 0 && <p className="mt-2 text-[12px] text-ink/70">Choose at least one scope. A key with none can do nothing.</p>}
           <div className="mt-3 flex items-center gap-2">
-            <Button variant="primary" disabled={saving || !name.trim()} onClick={() => void createKey()}>{saving ? "Creating…" : "Create key"}</Button>
+            <Button variant="primary" disabled={saving || !name.trim() || scopes.length === 0} onClick={() => void createKey()}>{saving ? "Creating…" : "Create key"}</Button>
             <Button onClick={() => setCreating(false)}>Cancel</Button>
           </div>
         </Card>

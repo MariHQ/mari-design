@@ -27,7 +27,7 @@ export { DocReviewRefinePanel } from "./DocReviewRefinePanel";
 export { DocReviewOutlinePanel } from "./DocReviewOutlinePanel";
 
 // Lineage
-export { LineageDataModel } from "./LineageDataModel";
+export { LineageDataModel, type GraphView, type DocHistoryRow } from "./LineageDataModel";
 export { LineageGraph } from "./LineageGraph";
 export { LineageToolbar } from "./LineageToolbar";
 export { LineageTimeScrubber } from "./LineageTimeScrubber";
@@ -44,28 +44,50 @@ export { FlowsRunHistory } from "./FlowsRunHistory";
 
 // Insights
 export { InsightsWidgets } from "./InsightsWidgets";
-export { InsightsFreshnessChart } from "./InsightsFreshnessChart";
+/* `Freshness` carries the source's display LABEL now: the chart no longer has
+   a table turning "github" into a repository name it cannot know, so a caller
+   has to name its own sources. `BandKey` is what `openFreshness` reports. */
+export { InsightsFreshnessChart, type Freshness, type BandKey } from "./InsightsFreshnessChart";
 
 // Audit
 export { AuditFindingsChecklist } from "./AuditFindingsChecklist";
-export { FactsVerificationAudit } from "./FactsVerificationAudit";
+/* `factStatusKey` / `isVerifiedFact` are the one place a status string is
+   normalised. An adapter that spells the test itself ("status === 'verified'")
+   disagrees with the page about "Verified", "verified" and "VERIFIED". */
+export {
+  FactsVerificationAudit, factStatusKey, isVerifiedFact, type Fact,
+} from "./FactsVerificationAudit";
 
 // Library
 export { LibraryGlossaryPanel } from "./LibraryGlossaryPanel";
 export { LibraryGuidesPanel } from "./LibraryGuidesPanel";
-export { LibraryRulesPanel, RULE_COUNT, type CheckerDoc } from "./LibraryRulesPanel";
+/* `rulesMatching` counts the compiled rule registry against a query. The
+   registry lives inside the panel (live RegExps, no server rows), so a page
+   that searches across the whole Library has no other way to say how many
+   rules matched. */
+export {
+  LibraryRulesPanel, RULE_COUNT, rulesMatching,
+  type CheckerDoc, type LibraryRulesActions,
+} from "./LibraryRulesPanel";
 export { LibraryTagsPanel } from "./LibraryTagsPanel";
 export { LibraryTemplatesPanel } from "./LibraryTemplatesPanel";
 
 // Answers
-export { AnswersHarvestWizard } from "./AnswersHarvestWizard";
+/* `SourceId` is what the wizard asks a scan for; `HarvestProposal` is what a
+   scan answers with. Both are the handler's signature, so a caller cannot
+   implement the scan without them. */
+export {
+  AnswersHarvestWizard, type SourceId, type HarvestProposal,
+} from "./AnswersHarvestWizard";
 export { AnswerCard } from "./AnswerCard";
 
 // Sources
 export { SourcesConnectorCard, type Source, type Tier, type SyncState } from "./SourcesConnectorCard";
 export { SourcesConnectorWizard } from "./SourcesConnectorWizard";
 export { SourcesSyncStatus } from "./SourcesSyncStatus";
-export { SourcesBots } from "./SourcesBots";
+export {
+  SourcesBots, type SourcesBotsActions, type SlackStatus, type GithubStatus,
+} from "./SourcesBots";
 
 // Onboarding
 export { WelcomeGenericConnect } from "./WelcomeGenericConnect";
@@ -77,8 +99,14 @@ export { WelcomeUploadConnect } from "./WelcomeUploadConnect";
 
 // Admin
 export { SettingsMembersTable } from "./SettingsMembersTable";
-export { SettingsApiKeys } from "./SettingsApiKeys";
-export { SettingsAuditLog } from "./SettingsAuditLog";
+/* `API_SCOPES` is the scope vocabulary the key form offers; a caller that
+   invents its own list mints keys the server has no scope for. */
+export {
+  SettingsApiKeys, API_SCOPES, type ApiKey, type SettingsApiKeysActions,
+} from "./SettingsApiKeys";
+/* `detail` rides the event now (any row expands), so an adapter builds rows of
+   this shape rather than a page-level detail list. */
+export { SettingsAuditLog, type AuditEvent, type AuditDetail } from "./SettingsAuditLog";
 export { SettingsModelsConfig } from "./SettingsModelsConfig";
 export { BrandingEditor } from "./BrandingEditor";
 export { AuthSession } from "./AuthSession";

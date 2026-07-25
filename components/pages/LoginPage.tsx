@@ -7,6 +7,7 @@ import { Button } from "../actions/Button";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Spinner } from "../data-display/Spinner";
+import { Alert } from "../feedback/Alert";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { GithubMark } from "../icons/marks";
 import { FieldError } from "../feedback/ErrorMessage";
@@ -56,10 +57,21 @@ export type LoginActions = {
   /** Sign in as the workspace admin with no credentials, when the server has
       the bypass enabled. */
   bypass?: () => void | Promise<void>;
-  /** Submit the six-digit code from the authenticator app. */
-  verifyCode?: (code: string) => void | Promise<void>;
+  /** Submit the six-digit code from the authenticator app. `trustDevice` is
+      the user's answer to "don't ask again on this browser"; a handler that
+      does not offer that simply ignores it. */
+  verifyCode?: (code: string, trustDevice: boolean) => void | Promise<void>;
+  /** Send a fresh two-factor code. The 2FA screen had no resend at all while
+      the magic-link screen had one, so a code that never arrived was a dead
+      end (P-LG-5). */
+  resendCode?: () => void | Promise<void>;
   /** Fall back to a recovery code when the device is gone. */
   useRecoveryCode?: () => void;
+  /** Email a password-reset link. RECOVERY, which is a different job from the
+      magic link: the magic link signs you in and leaves the forgotten password
+      forgotten, so offering it as the only way back in meant the product had
+      no password reset at all (P-LG-1). */
+  resetPassword?: (email: string) => void | Promise<void>;
   /** Leave a post-submit screen and go back to the credentials form. Which
       screen is showing comes from `data`, so the page cannot undo it itself —
       without this, "Check your inbox" was a one-way door. */
@@ -210,10 +222,17 @@ function TwoFactorForm({ digits, error, actions }: {
   );
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [trust, setTrust] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [resending, setResending] = useState(false);
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
 
   const value = code.join("");
-  const ready = value.length === len && !code.includes("");
+  /* `ready` gates the BUTTON, so it has to include "there is something to
+     submit to". `submit` used to return early when `verifyCode` was absent
+     while the button stayed enabled, which is the worst of both: a live-looking
+     primary action that silently does nothing (§2, P-LG-4). */
+  const ready = value.length === len && !code.includes("") && Boolean(actions?.verifyCode);
 
   const put = (i: number, raw: string) => {
     const chars = raw.replace(/\D/g, "");
@@ -232,7 +251,7 @@ function TwoFactorForm({ digits, error, actions }: {
     setBusy(true);
     setFailed(null);
     try {
-      await actions.verifyCode(value);
+      await actions.verifyCode(value, trust);
     } catch (e) {
       setFailed(e instanceof Error ? e.message : "That code was not accepted.");
     } finally {
@@ -261,11 +280,41 @@ function TwoFactorForm({ digits, error, actions }: {
           />
         ))}
       </div>
+      {/* "Don't ask again here" is the thing every user of an authenticator
+          app wants and this screen did not offer, so every sign-in on a known
+          browser cost a phone. It is a plain checkbox rather than a default,
+          because extending a session is the user's decision to make. */}
+      <label className="mt-1 flex items-center gap-2 text-[12.5px] text-ink/70">
+        <input type="checkbox" className="accent-biscay" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
+        Trust this browser and skip codes here
+      </label>
       {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
+      {resent && <div className="mt-3"><Alert tone="ok" title="New code sent">Enter the most recent code. Earlier codes no longer work.</Alert></div>}
       <div className={`mt-4 ${AUTH_ACTIONS}`}>
         <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
           {busy ? "Verifying…" : "Verify & continue"}
         </Button>
+        {/* Resend existed on the magic-link screen and nowhere here, so a code
+            that never arrived left the only way forward being to start over. */}
+        {actions?.resendCode && (
+          <Button
+            variant="default"
+            disabled={resending}
+            onClick={() => {
+              const send = actions.resendCode;
+              if (!send) return;
+              setResending(true);
+              setFailed(null);
+              void (async () => {
+                try { await send(); setResent(true); }
+                catch (e) { setFailed(e instanceof Error ? e.message : "That code could not be sent."); }
+                finally { setResending(false); }
+              })();
+            }}
+          >
+            {resending ? "Sending…" : "Send a new code"}
+          </Button>
+        )}
         {actions?.useRecoveryCode && (
           <span className="text-[12.5px] text-ink/65">
             Lost your device?{" "}
@@ -331,6 +380,21 @@ function ModeToggle({ register, onToggle }: { register: boolean; onToggle: () =>
   );
 }
 
+/* One shape check for both "email me a link" affordances. Deliberately loose:
+   an address is only ever really validated by mail arriving at it, and a
+   stricter pattern rejects addresses that work. This catches the typo, which
+   is the failure the user can still fix on this screen. */
+const looksLikeEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+/** The one password rule in the product. Preferences already enforced 8
+    characters and a confirmation while Login's register mode and Setup's admin
+    step enforced neither, so the same account had two different rules
+    depending on which screen created or changed it (P-LG-6, P-ST-1). */
+export const PASSWORD_MIN = 8;
+export const PASSWORD_HINT = `At least ${PASSWORD_MIN} characters.`;
+
+const LINK_BTN = `text-[12.5px] font-medium text-biscay-2 hover:text-ink rounded-[3px] ${btnDisabled} ${focusRing}`;
+
 function CredForm({ data, error, actions }: { data: LoginData; error: string | null; actions?: LoginActions }) {
   const { register, workspace } = data;
   /* Controlled, because the values have to leave the form. They used to be
@@ -340,14 +404,43 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
   const [name, setName] = useState(data.name);
   const [email, setEmail] = useState(data.email);
   const [password, setPassword] = useState(data.password);
+  const [confirm, setConfirm] = useState("");
   const [ws, setWs] = useState(workspace ?? "");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  /* Which link is in flight, whether the address is unusable, and what was
+     sent. "Email me a magic link instead" used to call the handler with
+     whatever was in the box and then render nothing whatsoever: no address
+     check, no busy state, no confirmation. You could not tell a sent link from
+     a dead button (P-LG-3). */
+  const [sending, setSending] = useState<"magic" | "reset" | null>(null);
+  const [badEmail, setBadEmail] = useState(false);
+  const [sent, setSent] = useState<"magic" | "reset" | null>(null);
+
+  const run = register ? actions?.register : actions?.signIn;
+  const tooShort = register && password.length > 0 && password.length < PASSWORD_MIN;
+  const mismatch = register && confirm.length > 0 && password !== confirm;
+  const credsOk = !register || (password.length >= PASSWORD_MIN && password === confirm);
+
+  const sendLink = async (kind: "magic" | "reset", send: (email: string) => void | Promise<void>) => {
+    setFailed(null);
+    setSent(null);
+    if (!looksLikeEmail(email)) { setBadEmail(true); return; }
+    setBadEmail(false);
+    setSending(kind);
+    try {
+      await send(email.trim());
+      setSent(kind);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "That email could not be sent.");
+    } finally {
+      setSending(null);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const run = register ? actions?.register : actions?.signIn;
-    if (!run) return; // canvas: no server behind the page
+    if (!run || !credsOk) return; // canvas: no server behind the page
     setBusy(true);
     setFailed(null);
     try {
@@ -371,25 +464,68 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
       </Field>
       <Field label="Password">
         <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+        {/* The rule is stated BEFORE it is broken, not as a rejection after
+            submit. Same wording and same minimum as the Preferences password
+            card, which is the point. */}
+        {register && (
+          <p className={`mt-1 text-[12px] ${tooShort ? "text-espelette" : "text-ink/70"}`}>
+            {tooShort ? `Use at least ${PASSWORD_MIN} characters.` : PASSWORD_HINT}
+          </p>
+        )}
       </Field>
+      {register && (
+        <Field label="Confirm password">
+          <Input className="w-full" type="password" autoComplete="new-password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          {mismatch && <p className="mt-1 text-[12px] text-espelette">The two passwords do not match.</p>}
+        </Field>
+      )}
       {workspace !== null && (
         <Field label="Workspace">
           <Input className="w-full" value={ws} onChange={(e) => setWs(e.target.value)} />
         </Field>
       )}
+      {badEmail && <FieldError id="field.invalidEmail" />}
       {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
-      {/* Primary bottom left, secondary to its right (§2). */}
+      {sent === "magic" && (
+        <Alert tone="ok" title="Sign-in link sent">
+          We emailed a one-time sign-in link to {email.trim()}. Open it in this browser to finish signing in.
+        </Alert>
+      )}
+      {sent === "reset" && (
+        <Alert tone="ok" title="Reset link sent">
+          We emailed a link for setting a new password to {email.trim()}. Check your inbox, and your spam folder.
+        </Alert>
+      )}
+      {/* Primary bottom left, secondary to its right (§2). Each secondary is
+          drawn only when the workspace has a handler for it, so nothing here
+          is a button that cannot act. */}
       <div className={`mt-1 ${AUTH_ACTIONS}`}>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? "Signing in…" : register ? "Create account" : workspace !== null ? `Sign in to ${workspace}` : "Sign in"}
+        <Button type="submit" variant="primary" disabled={busy || !run || !credsOk}>
+          {busy
+            ? register ? "Creating account…" : "Signing in…"
+            : register ? "Create account"
+            : workspace !== null ? `Sign in to ${workspace}` : "Sign in"}
         </Button>
-        {!register && (
+        {!register && actions?.magicLink && (
           <button
             type="button"
-            onClick={() => actions?.magicLink?.(email)}
-            className={`text-[12.5px] font-medium text-biscay-2 rounded-[3px] ${focusRing}`}
+            disabled={sending !== null}
+            onClick={() => void sendLink("magic", actions.magicLink!)}
+            className={LINK_BTN}
           >
-            Email me a magic link instead
+            {sending === "magic" ? "Sending…" : "Email me a magic link instead"}
+          </button>
+        )}
+        {/* Recovery, not a second way in. A magic link signs you in and leaves
+            you with the same forgotten password next time. */}
+        {!register && actions?.resetPassword && (
+          <button
+            type="button"
+            disabled={sending !== null}
+            onClick={() => void sendLink("reset", actions.resetPassword!)}
+            className={LINK_BTN}
+          >
+            {sending === "reset" ? "Sending…" : "Forgot password?"}
           </button>
         )}
       </div>

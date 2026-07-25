@@ -4,6 +4,7 @@ import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { EmptyState } from "../data-display/EmptyState";
+import { Alert } from "../feedback/Alert";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Palette } from "lucide-react";
@@ -32,6 +33,7 @@ const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "API offline" },
+  { id: "empty", label: "Still on the defaults" },
   { id: "branded", label: "Brand already set" },
   { id: "imported", label: "Imported from a site" },
   { id: "overflow", label: "Overflow · long text" },
@@ -55,6 +57,13 @@ export type SettingsDesignActions = BrandingEditorActions;
 
 const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
 
+/** Nothing chosen yet: the workspace is still on the Mari defaults. A real
+    state, and the one the page had no words for (P-SS-1) — the editor drew
+    itself as though a brand had been set. */
+function isEmpty(d: SettingsDesignData): boolean {
+  return Object.values(d.branding).every((v) => !v);
+}
+
 function SettingsDesignPage({
   data, loading = false, error = null, actions, chrome, mobile = false,
 }: PageProps<SettingsDesignData, SettingsDesignActions>) {
@@ -76,17 +85,43 @@ function SettingsDesignPage({
               {error ? (
                 <EmptyState icon={<Palette size={22} />} title="API offline">{error}</EmptyState>
               ) : (
-                <BrandingEditor
-                  branding={data.branding}
-                  harvest={data.harvest}
-                  previewStats={data.previewStats}
-                  actions={actions}
-                />
+                <>
+                  {/* The editor cannot say "nothing is set here yet" about
+                      itself: every control has a default behind it, so a
+                      workspace on the Mari palette looks identical to one that
+                      chose it. The page says which it is (P-SS-1). */}
+                  {isEmpty(data) && (
+                    <Alert tone="info" title="Still on the Mari defaults">
+                      Nothing has been branded yet. Set an accent and a typeface below, or read them off your own site,
+                      and every doc site and export picks them up.
+                    </Alert>
+                  )}
+                  {!actions?.save && (
+                    <Alert tone="attention" title="Read only">
+                      This workspace has no way to save a brand yet, so the editor below previews changes without
+                      keeping them.
+                    </Alert>
+                  )}
+                  <BrandingEditor
+                    branding={data.branding}
+                    harvest={data.harvest}
+                    previewStats={data.previewStats}
+                    actions={actions}
+                  />
+                </>
               )}
             </div>
             <aside className="flex min-w-0 flex-col gap-5">
               <Card title="Where this shows up" hint="Read only">
-                <PropertyList items={data.summary} />
+                {/* An empty PropertyList renders as a blank box that reads as a
+                    loading failure. It says what it means instead. */}
+                {data.summary.length === 0 ? (
+                  <p className="text-[12.5px] leading-relaxed text-ink/70">
+                    Nothing publishes this brand yet. Doc sites and exports list themselves here once one exists.
+                  </p>
+                ) : (
+                  <PropertyList items={data.summary} />
+                )}
               </Card>
             </aside>
           </div>

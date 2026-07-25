@@ -14,21 +14,28 @@ import {
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER, MIXED_SCRIPT,
 } from "./stress";
 
+/* `syncIntervalMinutes` is what the schedule card is drawn from, per source:
+   a number is an automatic schedule, `null` is manual only, and OMITTING it
+   means the server reported no schedule for that source — so that row is left
+   out of the card entirely rather than shown a guessed value. All three cases
+   appear here, because all three are the point of the control. */
 const SOURCES: Source[] = [
   {
     id: "gh", provider: "github", name: "acme/handbook", tier: "live", state: "running",
     phase: "embedding", done: 340, total: 512,
     docCount: 1284, chunkCount: 8912, embeddedCount: 8340,
     lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11],
+    syncIntervalMinutes: 60,
   },
   {
     id: "slack", provider: "slack", name: "Slack · #engineering", tier: "live", state: "healthy",
     docCount: 4210, chunkCount: 15330, embeddedCount: 15330,
     lastSyncAt: "2026-07-21T09:41:00", bars: [6, 4, 7, 5, 8, 6, 9, 7],
+    syncIntervalMinutes: 1440,
   },
   {
     id: "notion", provider: "notion", name: "Notion · Product wiki", tier: "legacy", state: "healthy",
-    docsCount: 620, lastSyncAt: null,
+    docsCount: 620, lastSyncAt: null, syncIntervalMinutes: null,
   },
   {
     id: "gdrive", provider: "gdrive", name: "Google Drive · Design", tier: "actionless", state: "healthy",

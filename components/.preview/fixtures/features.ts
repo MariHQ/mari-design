@@ -40,7 +40,7 @@ import { FIXTURES as OVERVIEW } from "./overview";
 import { FIXTURES as PUBLISH } from "./publish";
 import { FIXTURES as SETTINGS_API_KEYS } from "./settingsApiKeys";
 import { FIXTURES as SETTINGS_AUDIT_LOG } from "./settingsAuditLog";
-import { FIXTURES as SETTINGS_GENERAL } from "./settingsGeneral";
+import { FIXTURES as SETTINGS_DESIGN } from "./settingsDesign";
 import { FIXTURES as SETTINGS_MEMBERS } from "./settingsMembers";
 import { FIXTURES as SETTINGS_MODELS } from "./settingsModels";
 import { FIXTURES as SOURCES } from "./sources";
@@ -99,9 +99,13 @@ const nodeDrawer = LINEAGE.inspect.data.drawer!;
 const groupDrawer = LINEAGE.group.data.drawer!;
 const assertDrawer = LINEAGE.assert.data.drawer!;
 
-/** Revision history for the node drawer, as the page's inspect state has it. */
+/** Revision history for the node drawer, as the page's inspect state has it.
+    The page's `history` is nullable — null means "these revisions were never
+    loaded", which the drawer reports as such. The feature gallery renders the
+    loaded case, so null collapses to the same empty array as a non-node
+    drawer would. */
 export const LINEAGE_HISTORY: DocHistoryRow[] =
-  nodeDrawer.kind === "node" ? nodeDrawer.history : [];
+  nodeDrawer.kind === "node" ? nodeDrawer.history ?? [] : [];
 export const LINEAGE_NODE_ID: string =
   nodeDrawer.kind === "node" ? nodeDrawer.nodeId : "n4";
 
@@ -239,13 +243,15 @@ export const MODELS_CONFIG = {
   indexSummary: models.indexSummary,
 };
 
-const general = SETTINGS_GENERAL.branding
-  ? SETTINGS_GENERAL.branding.data
-  : SETTINGS_GENERAL.default.data;
+/* The branding editor's inputs come from Settings → Design & brand, which is
+   the only page that renders it with handlers. Settings → General still
+   carries the three brand fields as optionals nothing reads; deriving from
+   there produced `Branding | undefined` against props that are required. */
+const design = SETTINGS_DESIGN.default.data;
 export const BRANDING = {
-  branding: general.branding,
-  harvest: general.brandHarvest,
-  previewStats: general.brandPreviewStats,
+  branding: design.branding,
+  harvest: design.harvest,
+  previewStats: design.previewStats,
 };
 
 /* ── Publish ────────────────────────────────────────────────────────────── */
@@ -327,7 +333,27 @@ Tokens are signed with \`RS256\` and rotated every 24 hours.
 POST /auth/token
 Authorization: Basic <credentials>
 \`\`\`
+
+### 3. Cutover order
+1. Drain the legacy session store
+2. Flip the router
+3. Revoke the old signing key
+
+| Phase | Traffic | Watch for |
+| --- | --- | --- |
+| Canary | 5% | error rate |
+| Ramp | 50% | p99 latency |
+
+> Rollback is not free: draining active tokens signs every user out.
+
+#### Open question
+Whether the 24-hour rotation cadence is a requirement or a habit.
 `;
+
+/* The blocks above the fence are the editable ones; the ordered list, the
+   table, the blockquote and the h4 below it are exactly what the parser used
+   to throw away on a round trip. Surviving `serializeBlocks(parseMarkdown(md))`
+   unchanged is the whole contract, so the fixture has to contain them. */
 
 export const MARKDOWN_FINDINGS: Finding[] = [
   { id: 1, kind: "fact", severity: "error", text: "reduce login latency by roughly 40%", note: "Contradicts verified fact: measured reduction was 22%." },

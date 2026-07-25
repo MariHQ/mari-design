@@ -4,15 +4,16 @@
 // back byte-faithfully, decorate findings inline, and compute the word-level
 // diff used by the change queue — no third-party parser.
 //
-// This file re-uses the library's ported parser (parseMarkdown / mdInline /
-// escapeHtml) and adds the doc-specific helpers that live outside the lib
-// (serialize, blockText, stripMarks, cleanText, hasOwnNumbering, decorateBlock,
-// diffChange). It is a visual showcase — every function is exercised on real
-// demo data — around the library's MarkdownView.
+// This file re-uses the library's markdown module (parseMarkdown /
+// serializeBlocks / escapeHtml) and adds only the doc-specific helpers that
+// live outside it (blockText, stripMarks, cleanText, hasOwnNumbering,
+// decorateBlock, diffChange). It is a visual showcase — every function is
+// exercised on real demo data — around the library's MarkdownView.
 
 import { useMemo, useState } from "react";
 import {
-  parseMarkdown, mdInline, escapeHtml, type Block, type BlockType,
+  parseMarkdown, serializeBlocks, escapeHtml,
+  type Block, type BlockType, type RawKind,
 } from "../data-display/markdown";
 import { MarkdownView } from "../data-display/MarkdownView";
 import { Card } from "../layout/Card";
@@ -33,50 +34,12 @@ export function blockText(html: string): string {
   return (div.textContent ?? "").replace(/ /g, " ").trim();
 }
 
-/** html → markdown inline text: <b>→**, <i>→*, <code>→`; strip the rest. */
-function htmlToMd(html: string): string {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  const walk = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-    if (node.nodeType !== Node.ELEMENT_NODE) return "";
-    const el = node as HTMLElement;
-    const inner = Array.from(el.childNodes).map(walk).join("");
-    switch (el.tagName) {
-      case "B": case "STRONG": return inner.trim() ? `**${inner}**` : inner;
-      case "I": case "EM": return inner.trim() ? `*${inner}*` : inner;
-      case "CODE": return inner.trim() ? `\`${inner}\`` : inner;
-      case "BR": return " ";
-      case "DIV": case "P": return inner + " ";
-      default: return inner; // u, spans, marks → plain text
-    }
-  };
-  return walk(div).replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
-}
-
-/** Serialize a block list back to markdown, byte-faithful (tight headings kept). */
-export function serialize(blocks: Block[]): string {
-  const parts: string[] = [];
-  let i = 0;
-  while (i < blocks.length) {
-    const b = blocks[i];
-    if (b.type === "li") {
-      const items: string[] = [];
-      while (i < blocks.length && blocks[i].type === "li") { items.push("- " + htmlToMd(blocks[i].html)); i++; }
-      parts.push(items.join("\n"));
-      continue;
-    }
-    if (b.type === "code") {
-      parts.push("```" + (b.lang ?? "") + "\n" + blockText(b.html) + "\n```");
-    } else {
-      const text = htmlToMd(b.html);
-      const hashes = { h1: "#", h2: "##", h3: "###", p: "" }[b.type];
-      if (text) parts.push(hashes + (hashes && !b.tight ? " " : "") + text);
-    }
-    i++;
-  }
-  return parts.join("\n\n") + "\n";
-}
+/* Serialization lives in the shared module (`serializeBlocks`), not here. This
+   file used to carry a second copy, written against the six-field block the
+   parser produced before opaque blocks existed: it ignored `raw`, so any
+   document with a table, a blockquote or a horizontal rule came back missing
+   them and the Serialize tab reported "Differs" on a round trip that was in
+   fact exact. One serializer, and it is the one Doc Review saves with. */
 
 /** Remove the finding-underline spans injected at render time. */
 export function stripMarks(html: string): string {
@@ -160,6 +123,23 @@ const TYPE_MARK: Record<BlockType, string> = {
   h1: "H1", h2: "H2", h3: "H3", p: "P", li: "LI", code: "CODE",
 };
 
+/* An opaque block carries `type: "p"` because that is what the editor draws it
+   with, but it is not a paragraph and labelling it "P" said it was one. The
+   marker names the construct the parser actually recognised, so a table reads
+   as a table in the block list. */
+const RAW_MARK: Record<RawKind, string> = {
+  frontmatter: "FM", hr: "HR", quote: "QUOTE", table: "TABLE", html: "HTML",
+  "indented-code": "CODE", footnote: "NOTE", setext: "SETEXT", list: "LIST",
+};
+
+/** What this block is: its heading level where it has one, the construct it
+    holds where it is opaque, its type otherwise. */
+const typeMark = (b: Block): string => {
+  if (b.rawKind) return RAW_MARK[b.rawKind];
+  if (b.level) return `H${b.level}`;
+  return TYPE_MARK[b.type];
+};
+
 /** Tag-free preview of a block's inline html, for sorting and table cells. */
 const blockPreview = (html: string) =>
   html.replace(/<[^>]*>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
@@ -188,12 +168,13 @@ export function DocReviewMarkdown({
   const [tab, setTab] = useState<EngineTab>(defaultTab);
 
   const blocks = useMemo(() => parseMarkdown(markdown), [markdown]);
-  const roundtrip = useMemo(() => serialize(blocks), [blocks]);
+  const roundtrip = useMemo(() => serializeBlocks(blocks), [blocks]);
   const faithful = roundtrip.trim() === markdown.trim();
 
   const decorated = useMemo(() => {
     const done = new Set<number>();
-    return blocks.map((b) => (b.type === "code" ? b.html : decorateBlock(b.html, findings, done)));
+    return blocks.map((b) =>
+      b.type === "code" || b.raw !== undefined ? b.html : decorateBlock(b.html, findings, done));
   }, [blocks, findings]);
 
   const diff = useMemo(() => diffChange(cleanText(DIFF_SAMPLE.original), cleanText(DIFF_SAMPLE.proposed)), []);
@@ -206,7 +187,7 @@ export function DocReviewMarkdown({
 
   /* Table rows for the Parse tab. */
   const { sort, onSort, sorted } = useSort(blocks, {
-    type: (b) => b.type,
+    type: (b) => typeMark(b),
     content: (b) => blockPreview(b.html),
   });
 
@@ -294,7 +275,7 @@ export function DocReviewMarkdown({
                 {sorted.map((b) => (
                   <tr key={b.id} className="border-b border-ink/10 last:border-0">
                     <td className={`${tdPad} align-top font-term text-[11.5px] font-bold uppercase tracking-[0.08em] text-ink`}>
-                      {TYPE_MARK[b.type]}
+                      {typeMark(b)}
                     </td>
                     <td className={`${tdPad} align-top`}>
                       <code className="block min-w-0 font-term text-[12px] leading-[1.5] text-ink/80 break-words">
@@ -324,7 +305,7 @@ export function DocReviewMarkdown({
         {tab === "roundtrip" && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-[12.5px]">
-              <span className="text-ink/70">serialize(parseMarkdown(md)) === md</span>
+              <span className="text-ink/70">serializeBlocks(parseMarkdown(md)) === md</span>
               <Chip label={faithful ? "Byte faithful" : "Differs"} tone={faithful ? "ok" : "blocked"} dot />
             </div>
             <pre className={codeBox}>{roundtrip}</pre>

@@ -234,6 +234,11 @@ export type LineageControlState = {
   lens: Lens;
   layout: LayoutMode;
   scope: "focus" | "all";
+  /** As-of date (ISO yyyy-mm-dd), `null` = live / all time. It lives here for
+      the same reason `path` does: the scrubber sets it and the canvas is what
+      has to obey it. Before this the scrubber kept the index to itself and its
+      caption described time travel that never happened. */
+  asOf: string | null;
   /** Canvas scale, 1 = 100%. */
   zoom: number;
   /** Path finder: `null` = off, otherwise the node ids picked so far (0–2).
@@ -245,6 +250,7 @@ export type LineageControlState = {
 const DEFAULT_CONTROLS: LineageControlState = {
   query: "", sources: null, rels: null, status: "all",
   lens: "source", layout: "flow", scope: "all", zoom: 1, path: null,
+  asOf: null,
 };
 
 let controlState: LineageControlState = DEFAULT_CONTROLS;
@@ -287,8 +293,35 @@ export function nodeStatusKey(n: LNode): NodeStatusKey {
   return "verified";
 }
 
-/** Does this node survive the current source + status + search filters? */
+/* ── Time travel (as-of) ────────────────────────────────────────────────────
+   The three predicates the scrubber's caption is a description of. A document
+   that did not exist on the as-of date is not drawn, a link that had not been
+   made yet is not drawn, and a document whose latest edit is still in the
+   future is drawn dashed. All three read dates the graph already carries, so
+   nothing here is invented: a node with no date is simply not time-filtered. */
+
+/** The date a node came into existence, as far as the graph knows. */
+const bornOn = (n: LNode) => n.createdDate ?? n.date;
+
+/** Did this node not exist yet on `asOf`? Macro roll-ups stand for a whole
+    bucket and carry no birthday of their own, so they are never hidden. */
+export const nodeCreatedAfter = (n: LNode, asOf: string | null): boolean => {
+  if (!asOf || n.macro) return false;
+  const born = bornOn(n);
+  return !!born && born > asOf;
+};
+
+/** Did this node exist on `asOf`, but pick up its latest edit after it? */
+export const nodeEditedAfter = (n: LNode, asOf: string | null): boolean =>
+  !!asOf && !!n.date && n.date > asOf && !nodeCreatedAfter(n, asOf);
+
+/** Was this link made after `asOf`? Undated links are left alone. */
+export const edgeCreatedAfter = (e: LEdge, asOf: string | null): boolean =>
+  !!asOf && !!e.date && e.date > asOf;
+
+/** Does this node survive the current source + status + as-of filters? */
 export function nodePasses(n: LNode, c: LineageControlState): boolean {
+  if (nodeCreatedAfter(n, c.asOf)) return false;
   if (c.sources && !n.macro && !c.sources.includes(n.source)) return false;
   if (c.status !== "all" && !n.macro) {
     const k = nodeStatusKey(n);

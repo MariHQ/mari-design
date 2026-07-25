@@ -6,9 +6,14 @@ import { MarkdownView } from "./MarkdownView";
 import { Scrollable } from "./Scrollable";
 
 // A self-contained markdown editor: a monospace source pane and a live
-// blueprint preview, controlled by value + onChange. See the note in the
-// component-library summary for why this ships as source+preview rather than
-// a port of DocReview's contentEditable block editor.
+// blueprint preview, controlled by value + onChange.
+//
+// This is also Doc Review's Source mode. It used to be exported and used
+// nowhere, which was the odd part: it is the one editing surface here that
+// cannot lose data, because it never re-serializes — the markdown the user
+// typed is the markdown that is saved. The block editor is the rich view over
+// the same body; this is the escape hatch for everything the block editor
+// shows read-only (tables, front matter, raw HTML).
 
 type Mode = "split" | "write" | "preview";
 
@@ -62,7 +67,10 @@ export function MarkdownEditor({
         </div>
       </div>
 
-      <div className={`grid ${showSource && showPreview ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} h-[360px] divide-ink/12 md:divide-x`}>
+      {/* Fixed columns, no breakpoint: components here are desktop-first and a
+          page decides how narrow they ever get (CONVENTIONS.md §10). The
+          `md:` split made this render single-column inside a desktop drawer. */}
+      <div className={`grid ${showSource && showPreview ? "grid-cols-2 divide-x" : "grid-cols-1"} h-[360px] divide-ink/12`}>
         {/* h-full on the source scroll box so the h-full textarea fills the
             pane (a percentage height needs a sized parent, not max-h). */}
         {showSource && (
@@ -71,7 +79,9 @@ export function MarkdownEditor({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder={placeholder}
-              spellCheck={false}
+              /* Prose, not code: this is where a writer edits the body of a
+                 document, so the browser's spell checker belongs on it. */
+              spellCheck
               className={SOURCE}
             />
           </Scrollable>

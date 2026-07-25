@@ -176,6 +176,9 @@ export const FIXTURES: PageFixtures<DecisionsData> = {
     data: {
       ...ledger(DEFAULT_DECISIONS, "proposed"),
       ratify: {
+        /* The ledger id being signed. Without it the pane can show the record
+           but never sign it (P-DE-2). It is decision #1 above. */
+        id: 1,
         statement: "Adopt short-lived JWTs for service-to-service auth",
         context: "Cookie sessions don't survive our move to multi-region. JWTs with a 10-minute TTL and rotating keys close the replay window.",
         status: "proposed",

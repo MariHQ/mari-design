@@ -44,11 +44,14 @@ const ACTIVITY: InsightsActivity[] = [
   { id: "a4", actor: "Dana R.", action: "dismissed a coverage finding", time: "May 10, 5:41 PM" },
 ];
 
+/* `label` is the source's real display name, which the chart no longer knows
+   how to invent from the provider key. The last row deliberately carries none,
+   so the canvas also shows what a row falls back to. */
 const FRESHNESS: Freshness[] = [
-  { source: "github", fresh: 128, aging: 34, stale: 12 },
-  { source: "gdocs", fresh: 62, aging: 41, stale: 27 },
-  { source: "slack", fresh: 210, aging: 18, stale: 4 },
-  { source: "notion", fresh: 44, aging: 22, stale: 31 },
+  { source: "github", label: "GitHub · product-docs", fresh: 128, aging: 34, stale: 12 },
+  { source: "gdocs", label: "Google Drive · Handbook", fresh: 62, aging: 41, stale: 27 },
+  { source: "slack", label: "Slack · #support", fresh: 210, aging: 18, stale: 4 },
+  { source: "notion", label: "Notion · Onboarding", fresh: 44, aging: 22, stale: 31 },
   { source: "docs", fresh: 0, aging: 0, stale: 0 },
 ];
 
@@ -89,7 +92,12 @@ const widgets = (over: Partial<InsightsWidgetData>): InsightsWidgetData => ({ ..
 
 /* ── states ───────────────────────────────────────────────────────────────── */
 
-const DEFAULT: InsightsData = { widgets: WIDGETS, freshness: FRESHNESS, extras: null };
+/* `range` is the window the counts were measured over, present only where the
+   app can change it — it rewrites the dashboard's subtitle from "counting
+   since …" to the window itself. */
+const DEFAULT: InsightsData = {
+  widgets: WIDGETS, freshness: FRESHNESS, range: { preset: "90d" }, extras: null,
+};
 
 /** A workspace with nothing measured. Every collection genuinely empty, so the
     page's own `isEmpty` fires: the canvas is not faking the empty state. */
@@ -137,7 +145,13 @@ function strained(extreme: boolean): InsightsData {
         icon: "scored",
       }), 5),
     },
-    freshness: FRESHNESS,
+    /* The chart's row labels are caller-supplied display names, so they are
+       user data and belong in the overflow sweep like every other label. */
+    freshness: FRESHNESS.map((f, i) => ({
+      ...f,
+      label: extreme ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT][i % 3] : LONG_TITLE,
+      ...(extreme ? { fresh: HUGE_NUMBER + i, aging: HUGE_NUMBER, stale: HUGE_NUMBER } : {}),
+    })),
     extras: {
       title: extreme ? MIXED_SCRIPT : LONG_TITLE,
       crumbs: LONG_BREADCRUMB,

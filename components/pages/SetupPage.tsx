@@ -11,6 +11,11 @@ import { CodeBlock } from "../data-display/CodeBlock";
 import { Alert } from "../feedback/Alert";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
+/* The password rule is imported, not restated. Setup, Login's register mode
+   and Preferences all create or change the same credential, and they used to
+   disagree about what a valid one was: Preferences demanded 8 characters and a
+   confirmation, these two demanded nothing (P-ST-1, P-LG-6). */
+import { PASSWORD_MIN, PASSWORD_HINT } from "./LoginPage";
 
 /* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
    has no admin yet; renders OUTSIDE the console shell on the same full-bleed
@@ -44,6 +49,11 @@ export type Claim = { token: string; name: string; email: string; password: stri
  *  still walk, which is what the design canvas renders. */
 export type SetupActions = {
   claimWorkspace?: (c: Claim) => void | Promise<void>;
+  /** Check the token before step 2 asks for four more fields. Optional: with
+      no handler the token is only checked by `claimWorkspace`, which is where
+      a mistyped one used to surface — after the whole admin account had been
+      filled in (P-ST-3). */
+  checkToken?: (token: string) => void | Promise<void>;
   /** Leave first-run setup. The workspace is claimed and the admin is signed
       in by this point, so both exits are ordinary navigation — the screen just
       names which one was chosen. */
@@ -94,18 +104,43 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-function TokenStep({ data, error, claim, set, onNext }: {
+function TokenStep({ data, error, claim, set, onNext, actions }: {
   data: SetupData; error: string | null; claim: Claim;
-  set: (patch: Partial<Claim>) => void; onNext: () => void;
+  set: (patch: Partial<Claim>) => void; onNext: () => void; actions?: SetupActions;
 }) {
   const [help, setHelp] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [rejected, setRejected] = useState<string | null>(null);
+
+  /* Check the token HERE when the server offers a way to. It used to be
+     carried forward unchecked, so a token off by one character was reported
+     only after a name, an email, a password and a workspace name had been
+     typed, and the form gave no clue which of the five fields was wrong. */
+  const next = async () => {
+    setRejected(null);
+    if (!actions?.checkToken) { onNext(); return; }
+    setChecking(true);
+    try {
+      await actions.checkToken(claim.token.trim());
+      onNext();
+    } catch (err) {
+      setRejected(err instanceof Error ? err.message : "That token was not accepted.");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const shown = rejected ?? error;
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
         This workspace has no admin yet. Paste the one-time token printed in the
         server logs to claim it.
       </p>
-      <CodeBlock code={data.logSample} language="log" title="server logs" copy={false} />
+      {/* Copyable. This is the one place the token exists, it is long, and it
+          is unguessable, so the block that carries it was the worst possible
+          place to turn copying off (P-ST-2). */}
+      <CodeBlock code={data.logSample} language="log" title="server logs" />
       <Field label="Admin token">
         <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false}
           value={claim.token} onChange={(e) => set({ token: e.target.value })} />
@@ -113,19 +148,20 @@ function TokenStep({ data, error, claim, set, onNext }: {
       {/* The token step is exactly where a rejected token has to be reported;
           this branch used to drop `error`, so "Invalid token" — a state this
           page declares — rendered as a silently unchanged form. */}
-      {error && <Alert tone="blocked" title="Token rejected">{error}</Alert>}
-      {/* Next-step action bottom LEFT (§2). The token is not checked here:
-          the server validates it together with the admin account it
-          authorizes, so this step only carries it forward. */}
+      {shown && <Alert tone="blocked" title="Token rejected">{shown}</Alert>}
+      {/* Next-step action bottom LEFT (§2). */}
       <div className={AUTH_ACTIONS}>
-        <Button variant="primary" disabled={!claim.token.trim()} onClick={onNext}>Continue <ArrowRight size={14} /></Button>
+        <Button variant="primary" disabled={!claim.token.trim() || checking} onClick={() => void next()}>
+          {checking ? <><Spinner size="sm" /> Checking token…</> : <>Continue <ArrowRight size={14} /></>}
+        </Button>
         <Button variant="link" onClick={() => setHelp((h) => !h)}>Where do I find this?</Button>
       </div>
       {help && (
         <p className="text-[12.5px] leading-relaxed text-ink/70">
           The API prints it once at first boot, on a line beginning{" "}
-          <code className="font-term">admin token:</code>. Run the command above
-          against the container that is serving this page.
+          <code className="font-term">admin token:</code>. The excerpt above is
+          from those logs: copy the value after the colon. If you no longer have
+          it, read the logs of the container that is serving this page.
         </p>
       )}
     </div>
@@ -136,6 +172,16 @@ function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
   error: string | null; claim: Claim; set: (patch: Partial<Claim>) => void;
   busy: boolean; onBack: () => void; onSubmit: () => void;
 }) {
+  /* Confirmation lives here rather than on `Claim`, because it never leaves
+     the form: the server is sent one password, and the second box exists only
+     so a typo in the first is caught on the screen that created it. */
+  const [confirm, setConfirm] = useState("");
+  const tooShort = claim.password.length > 0 && claim.password.length < PASSWORD_MIN;
+  const mismatch = confirm.length > 0 && claim.password !== confirm;
+  /* Every field here is required to create the admin: this is the only account
+     the workspace will have. */
+  const ready = Boolean(claim.name.trim() && claim.email.trim() && claim.workspace.trim())
+    && claim.password.length >= PASSWORD_MIN && claim.password === confirm;
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
@@ -158,6 +204,13 @@ function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
         </Field>
         <Field label="Password">
           <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" value={claim.password} onChange={(e) => set({ password: e.target.value })} />
+          <p className={`mt-1 text-[12px] ${tooShort ? "text-espelette" : "text-ink/70"}`}>
+            {tooShort ? `Use at least ${PASSWORD_MIN} characters.` : PASSWORD_HINT}
+          </p>
+        </Field>
+        <Field label="Confirm password">
+          <Input className="w-full" type="password" placeholder="••••••••" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          {mismatch && <p className="mt-1 text-[12px] text-espelette">The two passwords do not match.</p>}
         </Field>
         <Field label="Workspace name">
           <Input className="w-full" placeholder="Acme Product" value={claim.workspace} onChange={(e) => set({ workspace: e.target.value })} />
@@ -165,7 +218,7 @@ function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
       </div>
       <p className="-mt-2 text-[12px] text-ink/65">Shown in the sidebar and on published pages.</p>
       <div className={`pt-1 ${AUTH_ACTIONS}`}>
-        <Button variant="primary" disabled={busy} onClick={onSubmit}>
+        <Button variant="primary" disabled={busy || !ready} onClick={onSubmit}>
           {busy ? <><Spinner size="sm" /> Setting up…</> : "Finish setup"}
         </Button>
         <Button variant="link" onClick={onBack}>← Back to token</Button>
@@ -251,7 +304,7 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
             <Stepper labels={["Token", "Admin account"]} current={step === "token" ? 0 : 1} ariaLabel="Setup steps" />
           </div>
           {done ? <SuccessStep workspace={claim.workspace || data.workspace} actions={actions} />
-            : step === "token" ? <TokenStep data={data} error={shown} claim={claim} set={set} onNext={() => setStep("admin")} />
+            : step === "token" ? <TokenStep data={data} error={shown} claim={claim} set={set} actions={actions} onNext={() => setStep("admin")} />
             : <AdminStep error={shown} claim={claim} set={set} busy={busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
         </Card>
       </div>

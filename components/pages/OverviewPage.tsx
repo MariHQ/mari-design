@@ -12,6 +12,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { CardCollapseScope } from "../layout/Card";
 import { Truncate } from "../data-display/Truncate";
+import { DateRangePicker, type DateRange } from "../data-display/DateRangePicker";
 
 /* Overview dashboard (pages/overview.md). Composes the overview features into
    the two-track grid, inside the console frame.
@@ -35,6 +36,12 @@ const STATES = [
 export type OverviewData = {
   /** Shown in the greeting. Empty string drops the name, never a placeholder. */
   personName: string;
+  /** IANA zone the greeting reads the clock in (the one Preferences collects).
+      Omitted = the browser's own zone, which is still the reader's real local
+      time. Never a fixed hour. */
+  timeZone?: string;
+  /** The window the dashboard counts over, when the app can change it. */
+  range?: DateRange;
   stats: OverviewStats;
   tasks: ReviewTask[];
   digest: DigestTopic[];
@@ -62,7 +69,31 @@ function Cell({ mobile, span = 1, children }: { mobile: boolean; span?: 1 | 2 | 
   return <div className={mobile ? "min-w-0" : SPAN[span]}>{children}</div>;
 }
 
-function Greeting({ personName }: { personName: string }) {
+/* The greeting used to read "Good morning" at every hour of the day, in every
+   zone. It is a claim about the reader's clock, so it is read off the reader's
+   clock: the zone Preferences collects when the app supplies one, the
+   browser's own otherwise. A zone the runtime does not know falls back to
+   local time rather than to a guess. */
+function hourIn(timeZone: string | undefined, now: Date): number {
+  if (!timeZone) return now.getHours();
+  try {
+    return Number(
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone }).format(now),
+    );
+  } catch {
+    return now.getHours();
+  }
+}
+
+function greetingFor(hour: number): string {
+  if (hour < 5) return "Good evening";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function Greeting({ personName, timeZone }: { personName: string; timeZone?: string }) {
+  const hello = greetingFor(hourIn(timeZone, new Date()));
   return (
     /* min-w-0 + Truncate: a display name is user data and can be arbitrarily
        long (§12). Without the floor override the greeting pushed 159px out
@@ -71,7 +102,7 @@ function Greeting({ personName }: { personName: string }) {
       <span className="mt-1 shrink-0 text-moss"><Sprout size={28} /></span>
       <div className="min-w-0">
         <Truncate as="h2" className="font-display text-[24px] font-bold tracking-[-0.01em] text-ink">
-          {personName ? `Good morning, ${personName}` : "Good morning"}
+          {personName ? `${hello}, ${personName}` : hello}
         </Truncate>
         <div className="mt-1 h-[3px] w-24 rounded bg-espelette/60" />
       </div>
@@ -79,32 +110,72 @@ function Greeting({ personName }: { personName: string }) {
   );
 }
 
-/** A workspace with nothing in it at all. Derived from the data, not from a
-    state flag, so it is true in the real app for exactly the same reason it is
-    true on the canvas. */
-function isEmpty(d: OverviewData): boolean {
-  return !d.tasks.length && !d.digest.length && !d.activity.length
-    && !d.docs.length && !d.sources.length && !d.flow;
+/** Nothing has happened in this workspace yet. Deliberately NOT "every
+    collection is empty": that test required `sources` to be empty too, so a
+    workspace whose only content was one connected source that had never synced
+    fell through to the full dashboard and rendered six widgets of zeros
+    instead of saying what to do next. What makes the dashboard worth drawing
+    is content, not connections. */
+function hasContent(d: OverviewData): boolean {
+  return Boolean(d.tasks.length || d.digest.length || d.activity.length || d.docs.length || d.flow);
 }
 
-function OverviewPage({ data, loading = false, error = null, chrome, mobile = false }: PageProps<OverviewData>) {
+/** What the Overview can DO. */
+export type OverviewActions = {
+  /** Change the window the dashboard counts over. Without it the page draws no
+      range control at all — a picker that cannot re-query is decoration (§2). */
+  setRange?: (range: DateRange) => void;
+};
+
+function OverviewPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<OverviewData, OverviewActions>) {
+  const range = data.range ?? { preset: "30d" as const };
+  const rangeControl = actions?.setRange ? (
+    <DateRangePicker value={range} onChange={actions.setRange} align="end" compact />
+  ) : null;
+
   return (
     <PageFrame chrome={chrome} active={navFor("overview")} title="Overview" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-          <Greeting personName={data.personName} />
+          <div className={mobile ? "flex flex-col gap-3" : "flex items-start justify-between gap-4"}>
+            <Greeting personName={data.personName} timeZone={data.timeZone} />
+            {/* The stats and digest carried no period label at all, so a number
+                on this page was a count over an unstated window. The label only
+                appears where the window is a real, changeable thing. */}
+            {rangeControl && (
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-term text-[11.5px] text-ink/65">Counting</span>
+                {rangeControl}
+              </div>
+            )}
+          </div>
           <div className="mt-6">
             {/* Mobile collapses every titled widget behind its header, so the
                 dashboard scans as a list instead of a forever scroll (§17). */}
             <CardCollapseScope.Provider value={mobile}>
               {error ? (
                 <EmptyState title="API offline">{error}</EmptyState>
-              ) : isEmpty(data) ? (
-                <EmptyState title="Nothing here yet">
-                  Connect a source to start building your knowledge base.
-                </EmptyState>
+              ) : !hasContent(data) ? (
+                /* Two different nothings, and they need two different next
+                   steps. No sources: connect one. Sources but nothing indexed:
+                   the pulse tiles below say which source is quiet, so they
+                   still render — that is the whole answer to "why is this
+                   dashboard blank?". */
+                data.sources.length ? (
+                  <div className="flex flex-col gap-5">
+                    <EmptyState title="Nothing indexed yet">
+                      Your sources are connected but have not produced any documents,
+                      tasks, or activity yet. Check the sync status below.
+                    </EmptyState>
+                    <OverviewSourcePulse tiles={data.sources} />
+                  </div>
+                ) : (
+                  <EmptyState title="Nothing here yet">
+                    Connect a source to start building your knowledge base.
+                  </EmptyState>
+                )
               ) : (
                 <DashGrid mobile={mobile}>
                   {/* Spans follow each widget's own minimum width. The two table
@@ -134,7 +205,7 @@ function OverviewPage({ data, loading = false, error = null, chrome, mobile = fa
   );
 }
 
-export const page: PageModule<OverviewData> = {
+export const page: PageModule<OverviewData, OverviewActions> = {
   id: "overview",
   title: "Overview",
   route: "/",

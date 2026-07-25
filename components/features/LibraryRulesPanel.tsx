@@ -15,6 +15,7 @@ import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skele
 import { type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
 import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
+import { FieldError } from "../feedback/ErrorMessage";
 
 /* LibraryRulesPanel — the Library › Rules tab.
    Configures the deterministic prose engine: rules across four families
@@ -22,9 +23,20 @@ import { Scrollable } from "../data-display/Scrollable";
    tolerance / Ignore, plus a live client-side document checker that runs a
    subset of the rules as regexes over sample docs. Composes the library's
    RulesPanel registry with a project-config strip and a checker card, and
-   renders standalone. */
+   renders standalone.
 
-const RULE_CATALOG_COUNT = 170;
+   WHAT THIS PANEL CANNOT DO, AND WHY IT SAYS SO. The registry below is
+   compiled into this file as live RegExps: there is no rule row on a server,
+   so a workspace cannot add a rule, edit one, or change its severity. That is
+   a backend gap, not a design choice, and the panel now states it rather than
+   drawing controls that would only look like they worked.
+
+   What a workspace CAN change is which of the shipped rules apply to it — the
+   style pack, grammar, and each rule's Active / Zero / Ignore status. Those
+   are real settings, and they persist only when `actions.saveRuleConfig` is
+   wired. Without a handler they are session-only, the Save button is not drawn
+   at all, and a line says so — the button used to flash "Saved" over nothing
+   (§2: no control that cannot do anything). */
 
 type Rule = RuleRow & { re?: RegExp; suggestion?: string };
 
@@ -69,6 +81,20 @@ const PACKS = [
     consuming app for a number only this module knows guaranteed a wrong one.
     It rendered 0 beside a panel listing every rule. */
 export const RULE_COUNT = RULES.length;
+
+/** How many shipped rules match a free-text query. The Library's cross-tab
+    search needs a count for the Rules tab, and only this module can produce
+    one: the registry is not data the page was handed. */
+export function rulesMatching(query: string): number {
+  const q = query.trim().toLowerCase();
+  if (!q) return RULES.length;
+  return RULES.filter((r) =>
+    r.id.toLowerCase().includes(q)
+    || r.family.toLowerCase().includes(q)
+    || r.description.toLowerCase().includes(q)
+    || (r.pack ?? "").toLowerCase().includes(q),
+  ).length;
+}
 
 export type CheckerDoc = { id: string; label: string; source: string; text: string };
 
@@ -119,19 +145,38 @@ function mk(rule: Rule, text: string, start: number, end: number): Finding {
 
 const SEV_TONE: Record<RuleSeverity, string> = { error: "blocked", warn: "attention", advisory: "neutral" };
 
+/** The part of the rules tab a workspace really can curate: which shipped
+    rules apply to it, and how strictly. Adding or editing a rule is not here
+    because there is nothing on the server to write it to. */
+export type LibraryRulesActions = {
+  /** Persist the project's rule configuration. Omitted = session-only, and
+      the panel says so instead of drawing a Save that saves nothing. */
+  saveRuleConfig?: (config: {
+    pack: string;
+    grammar: boolean;
+    /** Rule id → status, for every rule the workspace has moved off Active. */
+    statuses: Record<string, RuleStatus>;
+  }) => void | Promise<void>;
+};
+
 export type LibraryRulesPanelProps = {
   workspace: string;
   /** Documents the live checker can be pointed at. */
   docs: CheckerDoc[];
+  /** Free-text filter from the Library's cross-tab search. Empty = show all. */
+  query?: string;
+  /** Side effects this panel offers. Omitted = session-only configuration. */
+  actions?: LibraryRulesActions;
   loading?: boolean;
   className?: string;
 };
 
-export function LibraryRulesPanel({ workspace, docs, loading = false, className = "" }: LibraryRulesPanelProps) {
+export function LibraryRulesPanel({ workspace, docs, query = "", actions, loading = false, className = "" }: LibraryRulesPanelProps) {
   const [pack, setPack] = useState("plain");
   const [grammar, setGrammar] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [status, setStatus] = useState<Record<string, RuleStatus>>({});
   const [ignore, setIgnore] = useState<Set<string>>(new Set());
   const [zero, setZero] = useState<Set<string>>(new Set(["inclusive.guys", "inclusive.whitelist"]));
@@ -162,7 +207,21 @@ export function LibraryRulesPanel({ workspace, docs, loading = false, className 
 
   const selectDoc = (id: string) => { const d = docs.find((x) => x.id === id) ?? docs[0]; setDocId(id); setText(d ? d.text : ""); setChecked(false); setFindings([]); };
   const check = () => { setFindings(runDetector(text, ignore, zero)); setChecked(true); };
-  const save = () => { setDirty(false); setSaved(true); window.setTimeout(() => setSaved(false), 1800); };
+
+  /* Only ever called where `saveRuleConfig` exists — the button is not drawn
+     otherwise, so "Saved" is never shown over a write that did not happen. */
+  const save = async () => {
+    if (!actions?.saveRuleConfig) return;
+    setSaveErr(null);
+    try {
+      await actions.saveRuleConfig({ pack, grammar, statuses: status });
+      setDirty(false);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1800);
+    } catch (e) {
+      setSaveErr(e instanceof Error && e.message ? e.message : "That configuration could not be saved.");
+    }
+  };
 
   const score = Math.min(100, findings.reduce((s, f) => s + SEV_WEIGHT[f.severity], 0));
   const band = score < 12 ? "clean" : score < 30 ? "light" : score < 60 ? "moderate" : "heavy";
@@ -206,12 +265,23 @@ export function LibraryRulesPanel({ workspace, docs, loading = false, className 
               <Checkbox checked={grammar} onCheckedChange={(v) => { setGrammar(v); setDirty(true); }} label="Check grammar" />
             </div>
           </div>
-          {/* Primary bottom left of its group; "Saved" keeps a reserved slot. */}
+          {/* Primary bottom left of its group; "Saved" keeps a reserved slot.
+              With no handler there is nothing to press: the panel states the
+              scope of the settings instead of offering a Save that lies. */}
           <div className="ml-auto flex items-center gap-3">
-            <Button variant="primary" compact disabled={!dirty} onClick={save}>Save</Button>
-            <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
+            {actions?.saveRuleConfig ? (
+              <>
+                <Button variant="primary" compact disabled={!dirty} onClick={() => void save()}>Save</Button>
+                <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
+              </>
+            ) : (
+              <span className="font-term text-[11.5px] text-ink/65">
+                Applies to checks in this session only.
+              </span>
+            )}
           </div>
         </div>
+        {saveErr && <div className="mt-2"><FieldError>{saveErr}</FieldError></div>}
       </Card>
 
       {/* Family grid */}
@@ -221,11 +291,15 @@ export function LibraryRulesPanel({ workspace, docs, loading = false, className 
         ))}
       </div>
 
-      {/* Rule registry — a local table so the columns keep one plumb line */}
+      {/* Rule registry — a local table so the columns keep one plumb line.
+          The hint used to read "170+ rules" beside a table of 14: a catalog
+          size this build has no evidence for. It counts what it ships. */}
       <RuleTable
         rules={rulesForRegistry}
+        query={query}
         onStatusChange={onStatusChange}
-        hint={`${RULE_CATALOG_COUNT}+ rules · every finding has an ID and span`}
+        hint={`${RULES.length} rules in this build · every finding has an ID and span`}
+        editable={Boolean(actions?.saveRuleConfig)}
       />
 
       {/* Document checker */}
@@ -304,11 +378,25 @@ const STATUS_STEPS: { id: RuleStatus; label: string }[] = [
 const STATUS_RANK: Record<RuleStatus, number> = { active: 0, zero: 1, ignored: 2 };
 
 function RuleTable({
-  rules, onStatusChange, hint,
-}: { rules: RuleRow[]; onStatusChange: (id: string, status: RuleStatus) => void; hint: string }) {
+  rules, query, onStatusChange, hint, editable,
+}: {
+  rules: RuleRow[]; query: string; hint: string; editable: boolean;
+  onStatusChange: (id: string, status: RuleStatus) => void;
+}) {
   const [family, setFamily] = useState<string | "All">("All");
   const families = useMemo(() => Array.from(new Set(rules.map((r) => r.family))), [rules]);
-  const visible = useMemo(() => rules.filter((r) => family === "All" || r.family === family), [rules, family]);
+  const q = query.trim().toLowerCase();
+  const visible = useMemo(
+    () => rules.filter((r) =>
+      (family === "All" || r.family === family)
+      && (!q
+        || r.id.toLowerCase().includes(q)
+        || r.family.toLowerCase().includes(q)
+        || r.description.toLowerCase().includes(q)
+        || (r.pack ?? "").toLowerCase().includes(q)),
+    ),
+    [rules, family, q],
+  );
 
   const { sort, onSort, sorted } = useSort(visible, {
     rule: (r) => r.id,
@@ -337,7 +425,8 @@ function RuleTable({
 
         <div className="overflow-hidden rounded-[5px] border border-ink/12">
         <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="rules"
-          note={family === "All" ? undefined : `family: ${family}`} />
+          note={[family === "All" ? null : `family: ${family}`, q ? `matching "${query.trim()}"` : null]
+            .filter(Boolean).join(", ") || undefined} />
         <Scrollable>
           <table className="w-full min-w-[620px] table-fixed border-collapse text-left">
             <colgroup>
@@ -387,7 +476,9 @@ function RuleTable({
               {sorted.length === 0 && (
                 <tr>
                   <td colSpan={4} className={thPad}>
-                    <EmptyState icon={<CheckCircle2 size={22} />}>No rules match this family.</EmptyState>
+                    <EmptyState icon={<CheckCircle2 size={22} />}>
+                      {q ? `No rules match "${query.trim()}".` : "No rules match this family."}
+                    </EmptyState>
                   </td>
                 </tr>
               )}
@@ -396,6 +487,16 @@ function RuleTable({
         </Scrollable>
         {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
         </div>
+
+        {/* The one Library tab that cannot be curated, said out loud. The rule
+            texts and their regexes ship with this build; only their status is
+            a workspace setting, and even that is session-only until there is
+            somewhere to save it. Naming the limit beats a disabled "Add rule"
+            the reader has to click to discover. */}
+        <p className="mt-3 text-[12px] text-ink/70">
+          Rule texts and their patterns ship with Mari and cannot be edited here.
+          You can set how strictly each one applies{editable ? "" : ", for this session"}.
+        </p>
       </div>
     </Card>
   );

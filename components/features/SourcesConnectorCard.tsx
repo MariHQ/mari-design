@@ -50,6 +50,12 @@ export type Source = {
   lastSyncAt?: string | null;
   lastError?: string;
   bars?: number[];
+  /** Minutes between automatic syncs; `null` is "manual only".
+   *
+   *  `undefined` means the server did not report a schedule for this source,
+   *  and the schedule control is then not drawn at all: a select showing
+   *  "Every hour" over an unknown value would be inventing the answer. */
+  syncIntervalMinutes?: number | null;
 };
 
 const HEALTH: Record<SyncState, ConnectorHealth> = {

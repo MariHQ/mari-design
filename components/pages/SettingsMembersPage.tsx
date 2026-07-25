@@ -1,20 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { Users, UserPlus, ChevronDown, Check, Mail } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
-import { Input } from "../forms/Input";
-import { Select } from "../forms/Select";
-import { Field } from "../forms/Field";
-import { Avatar } from "../data-display/Avatar";
 import { PropertyList } from "../data-display/PropertyList";
-import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { Scrollable } from "../data-display/Scrollable";
 import { Alert } from "../feedback/Alert";
 import { SettingsMembersTable, type Member, type GithubTeamSync, type SettingsMembersActions } from "../features/SettingsMembersTable";
 import type { PropertyItem } from "../data-display/PropertyList";
@@ -81,9 +75,8 @@ export type SettingsMembersData = {
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
-   main/rail split, one form-field grid. */
+   main/rail split. The form-field grid lives with the forms, in the feature. */
 const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
-const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
   return (
@@ -117,12 +110,15 @@ function isEmpty(d: SettingsMembersData): boolean {
   return d.members.length === 0;
 }
 
-function Body({ data, error, actions, inviteOpen, onInviteOpenChange }: {
+function Body({ data, error, actions, inviteOpen, onInviteOpenChange, sentTo, onInvited }: {
   data: SettingsMembersData;
   error: string | null;
   actions?: SettingsMembersActions;
   inviteOpen: boolean;
   onInviteOpenChange: (open: boolean) => void;
+  /** Who the page has just invited, as the table reported it. */
+  sentTo: string | null;
+  onInvited: (invite: { name: string; email: string; role: string }) => void;
 }) {
   if (error) {
     return <EmptyState icon={<Users size={22} />} title="API offline">{error}</EmptyState>;
@@ -136,9 +132,12 @@ function Body({ data, error, actions, inviteOpen, onInviteOpenChange }: {
   }
   return (
     <>
-      {data.interaction === "invite-sent" && (
+      {/* The banner follows the invite that was actually sent. It used to be
+          driven only by `data.interaction`, a field the app's adapter never
+          sets, so a real invitation was acknowledged by nothing (P-SM-2). */}
+      {(sentTo || data.interaction === "invite-sent") && (
         <Alert tone="ok" title="Invitation sent">
-          We emailed <span className="font-term">{data.invite.email}</span>. They appear below with an amber dot
+          We emailed <span className="font-term">{sentTo ?? data.invite.email}</span>. They appear below with an amber dot
           until they sign in.
         </Alert>
       )}
@@ -152,6 +151,7 @@ function Body({ data, error, actions, inviteOpen, onInviteOpenChange }: {
            review says it is open. */
         inviteOpen={inviteOpen || data.interaction === "invite-open"}
         onInviteOpenChange={onInviteOpenChange}
+        onInvited={onInvited}
         confirmRemoveId={data.interaction === "remove-confirm" ? data.focusMemberId : null}
       />
     </>
@@ -163,6 +163,7 @@ function SettingsMembersPage({ data, loading = false, error = null, actions, chr
      composer below it is open. Without this the button was decorative: the
      table's own header is hidden when embedded (§2). */
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   return (
     <PageFrame chrome={chrome} active={navFor("settings")} title="Settings" mobile={mobile}>
       {loading ? (
@@ -177,7 +178,15 @@ function SettingsMembersPage({ data, loading = false, error = null, actions, chr
           />
           <div className="mt-5"><SettingsTabs active="members" onNavigate={chrome?.onNavigate} /></div>
           <SettingsBody mobile={mobile} rail={<MembersRail summary={data.summary} />}>
-            <Body data={data} error={error} actions={actions} inviteOpen={inviteOpen} onInviteOpenChange={setInviteOpen} />
+            <Body
+              data={data}
+              error={error}
+              actions={actions}
+              inviteOpen={inviteOpen}
+              onInviteOpenChange={setInviteOpen}
+              sentTo={sentTo}
+              onInvited={(i) => setSentTo(i.email)}
+            />
           </SettingsBody>
         </div>
       )}

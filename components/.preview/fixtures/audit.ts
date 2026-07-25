@@ -14,15 +14,21 @@ import {
 
 const REPO = "acme/product-docs";
 const PROVIDER = "github";
-const RAN_AT = "Jul 21, 9:04 AM";
-const SUMMARY = `github · ${REPO} · last audit ${fmtDateTime("2026-07-21T09:04:00")} · 8 findings, 1 fixed`;
+/* ISO, not display text: the checklist header formats it itself (P-AU-3).
+   It used to be the string "Jul 21, 9:04 AM", which `fmtDate` could only
+   echo back verbatim. */
+const RAN_AT = "2026-07-21T09:04:00";
+const SUMMARY = `github · ${REPO} · last audit ${fmtDateTime(RAN_AT)} · 8 findings, 1 fixed`;
 
 const MEMBERS = [{ id: 1, name: "Aki K." }, { id: 2, name: "Dana R." }, { id: 3, name: "Priya S." }];
 
+/* Each run carries its `id`, so the rail rows are buttons that open a run
+   rather than hover affordances with nothing behind them (P-AU-2), and its
+   `ranAt` as an ISO date the rail formats. */
 const HISTORY: AuditRun[] = [
-  { label: "Today · 9:04 AM", detail: "8 findings · 1 fixed", current: true },
-  { label: "Jul 14", detail: "12 findings · 12 fixed" },
-  { label: "Jul 2", detail: "First audit · 21 findings" },
+  { id: "run-48", label: "Latest run", detail: "8 findings · 1 fixed", ranAt: RAN_AT, current: true },
+  { id: "run-47", label: "Weekly audit", detail: "12 findings · 12 fixed", ranAt: "2026-07-14T09:04:00" },
+  { id: "run-41", label: "First audit", detail: "21 findings", ranAt: "2026-07-02T16:20:00" },
 ];
 
 const SCANS = [

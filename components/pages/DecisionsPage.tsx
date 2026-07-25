@@ -9,10 +9,15 @@ import { DecisionCard } from "../data-display/DecisionCard";
 import { SourceMark } from "../icons/marks";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
 import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Truncate } from "../data-display/Truncate";
+import { FormField } from "../forms/FormField";
+import { Input } from "../forms/Input";
+import { Textarea } from "../forms/Textarea";
 import { Chip } from "../index";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
@@ -70,6 +75,10 @@ export type DecisionComposer = {
 
 /** A single decision pulled out for sign-off, in place of the timeline. */
 export type RatifyCard = {
+  /** The ledger id being signed. Without it the pane can only show the record,
+      never sign it — the card used to be handed `onRatify={() => {}}`, so the
+      primary action of the whole view did nothing (P-DE-2). */
+  id?: number;
   statement: string;
   context: string;
   status: Decision["status"];
@@ -118,7 +127,16 @@ export type DecisionsData = {
   /** Which ledger filter tab is selected. */
   filter: string;
   filters: LedgerFilterTab[];
-  /** Rail: statements still waiting for a signature. */
+  /** @deprecated The rail derives what is awaiting sign-off from `decisions`
+      itself. It used to read this list of statements and then look each one's
+      id back up BY MATCHING THE STATEMENT STRING; a statement whose record was
+      outside the current filter found no id and fell back to a local-only
+      "Ratified" chip that never reached the server (P-DE-3). Records carry
+      ids, so the rail uses the records.
+
+      Still required only because `web/src/data/decisions.ts` and the smoke
+      harness still build it; nothing reads it. Drop it from both and this
+      field goes with them. */
   awaiting: string[];
   /** Rail: the explainer paragraph. */
   howItWorks: string;
@@ -131,7 +149,8 @@ export type DecisionsData = {
     flag, so it is true in the real app for exactly the same reason it is true
     on the canvas. */
 function isEmpty(d: DecisionsData): boolean {
-  return !d.decisions.length && !d.ratify && !d.composer && !d.extras && !d.awaiting.length;
+  // `awaiting` is derived from `decisions`, so an empty ledger is empty.
+  return !d.decisions.length && !d.ratify && !d.composer && !d.extras;
 }
 
 function StressExtras({ extras }: { extras: DecisionExtras }) {
@@ -162,37 +181,48 @@ function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, o
     <div className={mobile ? "flex flex-col gap-5" : SPLIT[320]}>
       <div className="flex min-w-0 flex-col gap-5">
         {composer && <Composer composer={composer} actions={actions} onClose={onCloseComposer} />}
-        <LedgerFilter filters={data.filters} filter={filter} onChange={onFilter} />
+        {/* Counts describe the records this page holds, not a workspace-wide
+            total the timeline cannot show: a tab used to promise a number the
+            ledger below it never rendered (C2). */}
+        <LedgerFilter
+          filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
+          filter={filter}
+          onChange={onFilter}
+        />
         {data.extras && <StressExtras extras={data.extras} />}
         {children}
       </div>
-      <Rail awaiting={data.awaiting} howItWorks={data.howItWorks} decisions={data.decisions} actions={actions} />
+      <Rail howItWorks={data.howItWorks} decisions={data.decisions} actions={actions} />
     </div>
   );
 }
 
-/* The rail signs a proposal off in place. It lists statements, not records, so
-   the id the mutation needs is looked up in the ledger the same statements were
-   derived from; a statement outside the current filter has no id to sign, and
-   the button then keeps its local behaviour rather than writing to a guess. */
-function Rail({ awaiting, howItWorks, decisions, actions }: {
-  awaiting: string[]; howItWorks: string; decisions: Decision[]; actions?: DecisionsActions;
+/* The rail signs a proposal off in place. It lists RECORDS, not statements: it
+   used to be handed `data.awaiting` (statements) and look the id back up by
+   string-matching the ledger, so a proposal outside the current filter silently
+   became a local-only "Ratified" chip that never persisted (P-DE-3). Every row
+   here carries the id its mutation needs. */
+function Rail({ howItWorks, decisions, actions }: {
+  howItWorks: string; decisions: Decision[]; actions?: DecisionsActions;
 }) {
-  const [signed, setSigned] = useState<string[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [signed, setSigned] = useState<number[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const sign = async (statement: string) => {
-    const id = decisions.find((d) => d.statement === statement)?.id;
-    if (!actions?.ratify || id === undefined) {
-      setSigned((s) => [...s, statement]);
+  const awaiting = decisions.filter((d) => d.status === "proposed");
+
+  const sign = async (id: number) => {
+    if (!actions?.ratify) {
+      // No server behind the ledger: the sign-off is the local move alone,
+      // which is what the design canvas renders.
+      setSigned((s) => [...s, id]);
       return;
     }
-    setBusy(statement);
+    setBusy(id);
     setFailed(null);
     try {
       await actions.ratify({ id });
-      setSigned((s) => [...s, statement]);
+      setSigned((s) => [...s, id]);
     } catch (e) {
       setFailed(why(e, "That decision could not be ratified."));
     } finally {
@@ -203,22 +233,36 @@ function Rail({ awaiting, howItWorks, decisions, actions }: {
   return (
     <aside className="flex min-w-0 flex-col gap-5">
       <Card variant="plain" title="Awaiting sign-off">
-        <ul className="space-y-2 text-[12.5px]">
-          {awaiting.map((statement) => (
-            <li key={statement} className="rounded-[5px] border border-ink/12 p-2.5">
-              <div className="font-medium text-ink">{statement}</div>
-              <div className="mt-1.5">
-                {signed.includes(statement) ? (
-                  <Chip label="Ratified" tone="ok" dot />
-                ) : (
-                  <Button variant="success" compact disabled={busy !== null} onClick={() => sign(statement)}>
-                    {busy === statement ? "Signing…" : "Ratify"}
-                  </Button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        {awaiting.length === 0 ? (
+          /* An empty <ul> rendered as a blank box that read like a loading
+             failure; the card says what it means now (P-DE-4). */
+          <EmptyState title="Nothing awaiting sign-off">Every proposal in the ledger has been signed or set aside.</EmptyState>
+        ) : (
+          <ul className="space-y-2 text-[12.5px]">
+            {awaiting.map((d) => (
+              <li key={d.id} className="rounded-[5px] border border-ink/12 p-2.5">
+                <Truncate lines={3} className="font-medium text-ink">{d.statement}</Truncate>
+                <div className="mt-1.5">
+                  {signed.includes(d.id) ? (
+                    <Chip label="Ratified" tone="ok" dot />
+                  ) : (
+                    /* Ratifying is a governance act with no undo, so it never
+                       fires on a first click (§2, P-DE-5). */
+                    <ConfirmButton
+                      compact
+                      confirmVariant="success"
+                      confirmLabel="Ratify this decision?"
+                      disabled={busy !== null}
+                      onConfirm={() => void sign(d.id)}
+                    >
+                      {busy === d.id ? "Signing…" : "Ratify"}
+                    </ConfirmButton>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
         <FieldError>{failed}</FieldError>
       </Card>
       <Card variant="plain" title="How this works">
@@ -258,7 +302,6 @@ function Composer({ composer, actions, onClose }: {
   const [failed, setFailed] = useState<string | null>(null);
 
   const saving = composer.saving || busy;
-  const field = "w-full rounded-[5px] border border-ink/20 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-ink/65";
 
   const capture = async () => {
     if (!statement.trim() || saving) return;
@@ -277,25 +320,36 @@ function Composer({ composer, actions, onClose }: {
 
   return (
     <Card variant="default" title="Capture decision">
-      <div className="space-y-2.5">
-        <input
-          className={field}
-          placeholder="Statement: the decision, in one sentence"
-          value={statement}
-          onChange={(e) => setStatement(e.target.value)}
-        />
-        <textarea
-          className={`min-h-[72px] ${field}`}
-          placeholder="Context: why, and what it closes off"
-          value={context}
-          onChange={(e) => setContext(e.target.value)}
-        />
-        <input
-          className={field}
-          placeholder="Source: e.g. slack · #eng-security"
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-        />
+      {/* Every control is a labelled forms/* control. The composer used to
+          hand-roll <input>/<textarea> against a local `field` class and use
+          PLACEHOLDERS AS LABELS, so the form had no accessible names at all
+          and the styling could drift from every other form in the console
+          (§7, P-DE-1). FormField wraps its control in a real <label>. */}
+      <div className="flex flex-col gap-4">
+        <FormField label="Statement" hint="The decision, in one sentence.">
+          <Input
+            className="w-full"
+            placeholder="Sessions move to short-lived JWTs."
+            value={statement}
+            onChange={(e) => setStatement(e.target.value)}
+          />
+        </FormField>
+        <FormField label="Context" hint="Why, and what it closes off.">
+          <Textarea
+            short
+            placeholder="Cookie theft kept coming up in review."
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+          />
+        </FormField>
+        <FormField label="Source" hint="Where the decision was made.">
+          <Input
+            className="w-full font-term"
+            placeholder="slack · #eng-security"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+          />
+        </FormField>
         <FieldError>{failed}</FieldError>
         <div className="flex items-center gap-2">
           <Button variant="primary" disabled={saving || !statement.trim()} onClick={capture}>
@@ -308,46 +362,95 @@ function Composer({ composer, actions, onClose }: {
   );
 }
 
+/* One decision pulled out for sign-off. The card's own Ratify button used to
+   get `onRatify={() => {}}` and a permanently-true `ratifying`, so the primary
+   action of this whole view was a spinner that never resolved (P-DE-2). The
+   sign-off is a real write here, and it is a governance act with no undo, so
+   it goes through <ConfirmButton> (§2, P-DE-5). The card keeps no Ratify
+   button of its own: a decision the pane cannot sign shows no control (§2). */
+function RatifyPane({ card, actions }: { card: RatifyCard; actions?: DecisionsActions }) {
+  const [status, setStatus] = useState<Decision["status"]>(card.status);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [seenCard, setSeenCard] = useState(card);
+  if (seenCard !== card) { setSeenCard(card); setStatus(card.status); setFailed(null); }
+
+  const id = card.id;
+  const ratify = async () => {
+    if (id === undefined || busy) return;
+    setBusy(true);
+    setFailed(null);
+    try {
+      if (actions?.ratify) await actions.ratify({ id });
+      setStatus("ratified");
+    } catch (e) {
+      setFailed(why(e, "That decision could not be ratified."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
+        <p className="mt-0.5 text-[13px] text-ink/70">Proposals awaiting sign-off, ratified decisions, and their downstream impact.</p>
+      </div>
+      <div>
+        <DecisionCard
+          statement={card.statement}
+          context={card.context}
+          status={status}
+          fresh={card.fresh}
+          sourceLabel={card.sourceLabel}
+          sourceIcon={<SourceMark provider={card.provider} size={13} />}
+          owners={card.owners}
+          spine={false}
+          actions={id !== undefined && status === "proposed" ? (
+            <ConfirmButton
+              compact
+              confirmVariant="success"
+              confirmLabel="Ratify this decision?"
+              disabled={busy}
+              onConfirm={() => void ratify()}
+            >
+              {busy ? "Ratifying…" : "Ratify"}
+            </ConfirmButton>
+          ) : undefined}
+        />
+        <FieldError>{failed}</FieldError>
+      </div>
+    </div>
+  );
+}
+
 function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   data: DecisionsData; error: string | null; actions?: DecisionsActions; mobile: boolean;
   composerOpen: boolean; onCloseComposer: () => void;
 }) {
   /* The page owns the filter, and `data.filter` says which tab it opens on:
-     the tab strip was wired to a no-op while the timeline filtered itself. */
+     the tab strip was wired to a no-op while the timeline filtered itself.
+     The sentinel resyncs it when a refetch changes which tab the ledger opens
+     on, instead of rendering the first response forever (C1). */
   const [filter, setFilter] = useState(data.filter);
+  const [seenFilter, setSeenFilter] = useState(data.filter);
+  if (seenFilter !== data.filter) { setSeenFilter(data.filter); setFilter(data.filter); }
+
   const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter };
   if (error) return <EmptyState title="API offline">{error}</EmptyState>;
   if (isEmpty(data) && !composerOpen) {
     return (
       <EmptyState title="No decisions yet">
-        Capture a decision or run “Scan for decisions” to start the ledger.
+        {actions?.scan
+          ? "Capture a decision or run “Scan for decisions” to start the ledger."
+          : "Capture a decision to start the ledger."}
       </EmptyState>
     );
   }
   if (data.ratify) {
-    const r = data.ratify;
     return (
       <Shell {...shell}>
-        <div className="flex flex-col gap-4">
-          <div>
-            <h2 className="font-display text-[19px] text-ink">Decision ledger</h2>
-            <p className="mt-0.5 text-[13px] text-ink/70">Proposals awaiting sign-off, ratified decisions, and their downstream impact.</p>
-          </div>
-          <div>
-            <DecisionCard
-              statement={r.statement}
-              context={r.context}
-              status={r.status}
-              fresh={r.fresh}
-              sourceLabel={r.sourceLabel}
-              sourceIcon={<SourceMark provider={r.provider} size={13} />}
-              owners={r.owners}
-              ratifying
-              onRatify={() => {}}
-              spine={false}
-            />
-          </div>
-        </div>
+        <RatifyPane card={data.ratify} actions={actions} />
       </Shell>
     );
   }
@@ -366,13 +469,13 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
    call and forgot it: no run, no progress, no history — the same shape the
    fact scan had. It starts a real run now and the page follows it. */
 function ScanButton({ scan, onStarted }: {
-  scan?: DecisionsActions["scan"];
+  scan: NonNullable<DecisionsActions["scan"]>;
   onStarted: (run: ScanRun) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const run = async () => {
-    if (!scan || busy) return;
+    if (busy) return;
     setBusy(true);
     setFailed(null);
     try {
@@ -424,7 +527,9 @@ function DecisionsPage({ data, loading = false, error = null, actions, chrome, m
   }
   const headerActions = (
     <>
-      <ScanButton scan={actions?.scan} onStarted={setScan} />
+      {/* No handler, no button: a "Scan for decisions" that returns on its
+          first line is a control that cannot do anything (§2). */}
+      {actions?.scan && <ScanButton scan={actions.scan} onStarted={setScan} />}
       <Button variant="primary" onClick={() => setComposerOpen(true)}>Capture decision</Button>
     </>
   );

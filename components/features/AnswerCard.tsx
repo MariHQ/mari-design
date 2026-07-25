@@ -4,7 +4,7 @@ import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "../layout/CardShell";
 import { Button } from "../actions/Button";
 import { Input } from "../forms/Input";
-import { Textarea } from "../forms/Textarea";
+import { MarkdownEditor } from "../data-display/MarkdownEditor";
 import { StatusChip, Chip, type ChipStatus } from "../data-display/Chip";
 import { Avatar } from "../data-display/Avatar";
 import { Sparkline } from "../data-display/Sparkline";
@@ -68,9 +68,22 @@ export type AnswerCardProps = {
   className?: string;
 };
 
+/** Roughly the longest answer a chat client shows without a "see more" fold.
+    A ceiling for guidance, never a hard limit: a long answer still saves. */
+const LONG_ANSWER = 600;
+
 export function AnswerCard({ answer: initial, loading = false, actions, className = "" }: AnswerCardProps) {
   const [a, setA] = useState<Answer>(initial);
   const [editing, setEditing] = useState(false);
+
+  /* The card holds its own copy so a write can settle optimistically, but that
+     copy was taken once, at mount. After any refetch — someone else approves
+     the answer, a harvest import lands — the card kept rendering the first
+     response. The sentinel adopts the new answer without clobbering an edit
+     the reader is in the middle of (C1). */
+  const [seen, setSeen] = useState(initial);
+  if (seen !== initial) { setSeen(initial); if (!editing) setA(initial); }
+
   const [editQ, setEditQ] = useState(a.question);
   const [editA, setEditA] = useState(a.answer);
   const [expanded, setExpanded] = useState(false);
@@ -168,11 +181,20 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
   }
 
   if (editing) {
+    const n = editA.trim().length;
     return (
       <Card className={className}>
         <div className="flex flex-col gap-2.5">
           <Input value={editQ} onChange={(e) => setEditQ(e.target.value)} placeholder="Question" />
-          <Textarea value={editA} onChange={(e) => setEditA(e.target.value)} placeholder="Answer" />
+          {/* Bots serve this text verbatim, so the writer sees exactly how it
+              lands: source on the left, the rendered answer on the right. It
+              used to be a bare <Textarea> — no markdown, no preview, and no
+              sense of length until the answer turned up in a chat client. */}
+          <MarkdownEditor value={editA} onChange={setEditA} defaultMode="split" placeholder="The wording to serve, verbatim" />
+          <p className={`font-term text-[11.5px] ${n > LONG_ANSWER ? "text-clay" : "text-ink/65"}`}>
+            {n.toLocaleString("en-US")} characters
+            {n > LONG_ANSWER ? `. Over ${LONG_ANSWER} characters, most chat clients fold the answer behind "see more".` : ""}
+          </p>
           <FieldError>{failed}</FieldError>
           <div className="flex items-center gap-2">
             <Button variant="primary" compact disabled={!editQ.trim() || !editA.trim() || busy === "save"} onClick={saveEdit}>{busy === "save" ? "Saving…" : "Save"}</Button>

@@ -6,17 +6,10 @@ import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
-import { Input } from "../forms/Input";
-import { Field } from "../forms/Field";
-import { Scrollable } from "../data-display/Scrollable";
-import { Chip } from "../data-display/Chip";
 import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { Alert } from "../feedback/Alert";
-import { TokenReveal } from "../data-display/TokenReveal";
-import { fmtDate } from "../tokens/format";
-import { SettingsApiKeys, type ApiKey, type SettingsApiKeysActions } from "../features/SettingsApiKeys";
+import { SettingsApiKeys, API_SCOPES, type ApiKey, type SettingsApiKeysActions } from "../features/SettingsApiKeys";
 import type { PropertyItem } from "../data-display/PropertyList";
 
 /** What Settings → API keys can do. Defined with the panel that renders the
@@ -80,9 +73,8 @@ export type SettingsApiKeysData = {
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Shared verbatim with the other four Settings pages: one container width, one
-   main/rail split, one form-field grid. */
+   main/rail split. The form-field grid lives with the forms, in the feature. */
 const PAGE = "mx-auto max-w-[1400px] px-5 py-6 sm:px-8";
-const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 function SettingsBody({ mobile, rail, children }: { mobile: boolean; rail: ReactNode; children: ReactNode }) {
   return (
@@ -100,12 +92,13 @@ function KeysRail({ summary }: { summary: PropertyItem[] }) {
       <Card title="At a glance" hint="Read only">
         <PropertyList items={summary} />
       </Card>
+      {/* The same four scopes the create form offers, from the same list, so
+          the rail and the checkboxes can never document different vocabularies. */}
       <Card title="Scopes">
         <ul className="flex flex-col gap-2 font-term text-[12px] text-ink/70">
-          <li><b className="text-ink">search:read</b> query the index</li>
-          <li><b className="text-ink">ingest:write</b> push documents</li>
-          <li><b className="text-ink">facts:read</b> read verified facts</li>
-          <li><b className="text-ink">metrics:read</b> export usage</li>
+          {API_SCOPES.map((s) => (
+            <li key={s.id}><b className="text-ink">{s.id}</b> {s.blurb.toLowerCase()}</li>
+          ))}
         </ul>
       </Card>
     </>
@@ -143,6 +136,7 @@ function Body({ data, error, actions, createOpen, onCreateOpenChange }: {
       /* The form opens from the page header, or because the state under review
          says it is open. */
       createOpen={createOpen || data.phase === "create-key"}
+      draft={data.draft}
       confirmRevokeId={data.phase === "revoke-confirm" ? data.confirmKeyId : null}
       revealToken={data.phase === "key-created" ? data.newSecret : null}
       onCreateOpenChange={onCreateOpenChange}

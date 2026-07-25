@@ -54,12 +54,6 @@ export type Decision = {
 /** A decision with no impact run against it yet. Zero values, not content. */
 export const NO_IMPACT: ImpactState = { open: false, loading: false, docs: null, tasksCreated: false, count: 0, summary: "" };
 
-const IMPACT_DOCS: ImpactDoc[] = [
-  { title: "Auth architecture", source: "gdocs · eng", severity: "update-required", reason: "Describes the old session-cookie flow; it must move to short-lived JWTs." },
-  { title: "Security review", source: "notion · sec", severity: "review", reason: "Threat model references cookie theft, so revisit it under the new scheme." },
-  { title: "SDK quickstart", source: "github · docs", severity: "minor", reason: "Sample uses the legacy header; low-priority copy change." },
-];
-
 /** What a run of `decisionImpact` came back with. */
 export type ImpactRun = { summary: string; docs: ImpactDoc[] };
 
@@ -69,8 +63,17 @@ export type ImpactRun = { summary: string; docs: ImpactDoc[] };
 export type DecisionLedgerActions = {
   /** Sign one proposal off. */
   ratify?: (args: { id: number }) => void | Promise<void>;
-  /** Trace the blast radius. Resolves to the documents it found. */
+  /** Trace the blast radius. Resolves to the documents it found.
+
+      Without it no card draws "Run impact analysis": the strip used to answer
+      an unwired click with three hardcoded documents ("Auth architecture",
+      "Security review", "SDK quickstart") after a 1.1s sleep, which is a
+      fabricated analysis presented as a real one. */
   runImpact?: (args: { id: number }) => Promise<ImpactRun>;
+  /** Open a review task on each affected document. Without it the impact
+      strip's footer is not drawn: the button used to flip a label to "N tasks
+      created" without creating anything (§2). */
+  createImpactTasks?: (args: { id: number; docs: ImpactDoc[] }) => void | Promise<void>;
 };
 
 export type DecisionCardFeatureProps = {
@@ -128,12 +131,9 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
       patchImpact(d.id, { open: !d.impact.open });
       return;
     }
+    if (!actions?.runImpact) return;
     patchImpact(d.id, { open: true, loading: true });
     setFailed(null);
-    if (!actions?.runImpact) {
-      setTimeout(() => patchImpact(d.id, { loading: false, docs: IMPACT_DOCS }), 1100);
-      return;
-    }
     try {
       const run = await actions.runImpact({ id: d.id });
       patchImpact(d.id, {
@@ -146,9 +146,17 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
     }
   };
 
-  const createTasks = (d: Decision) => {
-    if (!d.impact.docs || d.impact.tasksCreated) return;
-    patchImpact(d.id, { tasksCreated: true });
+  /* Only ever called with a handler behind it (the footer is not drawn
+     otherwise): the label used to read "N tasks created" over nothing. */
+  const createTasks = async (d: Decision) => {
+    if (!d.impact.docs || d.impact.tasksCreated || !actions?.createImpactTasks) return;
+    setFailed(null);
+    try {
+      await actions.createImpactTasks({ id: d.id, docs: d.impact.docs });
+      patchImpact(d.id, { tasksCreated: true });
+    } catch (e) {
+      setFailed(why(e, "Those tasks could not be created."));
+    }
   };
 
   if (loading) {
@@ -193,11 +201,11 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
               footer={
                 im.tasksCreated ? (
                   <span className="font-term text-[11.5px] text-moss">{im.docs.length} tasks created</span>
-                ) : (
-                  <Button variant="primary" compact onClick={() => createTasks(d)}>
+                ) : actions?.createImpactTasks ? (
+                  <Button variant="primary" compact onClick={() => void createTasks(d)}>
                     Create {im.docs.length} tasks
                   </Button>
-                )
+                ) : undefined
               }
             />
           ) : im.docs ? (
@@ -212,15 +220,17 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
               <span className="min-w-0 flex-1">
                 <b className="text-ink">{im.count} documents affected</b> · {im.summary}
               </span>
-              <Button variant="link" className="shrink-0" onClick={() => runImpact(d)}>
-                Re-run
-              </Button>
+              {actions?.runImpact && (
+                <Button variant="link" className="shrink-0" onClick={() => void runImpact(d)}>
+                  Re-run
+                </Button>
+              )}
             </div>
-          ) : (
-            <Button compact onClick={() => runImpact(d)}>
+          ) : actions?.runImpact ? (
+            <Button compact onClick={() => void runImpact(d)}>
               <Sparkles size={13} /> Run impact analysis
             </Button>
-          );
+          ) : undefined;
 
         return (
           <DecisionCardUI

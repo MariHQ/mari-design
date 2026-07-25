@@ -50,10 +50,29 @@ Route 5% of traffic through the new service and watch error rates for 48 hours.
 ### 2.2 Ramp
 Increase to 50% once the canary is stable, tracking p99 latency closely.
 
+### 2.3 Cutover
+Full cutover after a clean week. The order is fixed:
+
+1. Drain the legacy session store
+2. Flip the router
+3. Revoke the old signing key
+
 ## 3. Risks
 - Token replay if clock skew exceeds the allowed window
+  - Clock skew above 90 seconds fails validation outright
 - JWKS downtime blocks all signature validation
-- Rollback requires draining every active token`;
+- Rollback requires draining every active token
+
+| Phase | Traffic | Watch for |
+| --- | --- | --- |
+| Canary | 5% | error rate, p99 |
+| Ramp | 50% | p99 latency |
+| Cutover | 100% | token replay |
+
+> Rollback is not free: draining active tokens signs every user out.
+
+#### Open question
+Whether the 24-hour rotation cadence is a requirement or a habit.`;
 
 const CHANGE_BODY =
   "The new authentication service replaces the legacy session store with stateless JWT tokens. " +
@@ -203,8 +222,22 @@ const BLANK_DOC: ReviewDoc = {
 const TITLE = "Billing proration runbook";
 const SUBTITLE = `Owner: Maya M. · Last verified ${fmtDate("2024-05-13")}`;
 
+/** This document's own tags. The header used to draw "canonical" and
+    "verified" on every document regardless of what it was tagged; it renders
+    `data.tags` or nothing now, so a fixture that omits them shows a bare
+    header. */
+const TAGS = ["canonical", "customer-facing"];
+
 const workspace = (data: Partial<DocReviewData> = {}): DocReviewData => ({
-  title: TITLE, subtitle: SUBTITLE, save: "saved", pane: "workspace", doc: DOC, ...data,
+  title: TITLE, subtitle: SUBTITLE, save: "saved", pane: "workspace", doc: DOC,
+  tags: TAGS,
+  /* Seeds the Watch button. `undefined` and the button is not drawn at all,
+     so leaving it out costs the canvas that control entirely. */
+  watched: false,
+  /* Which of Change queue / Fact check the bottom strip opens on. It was a
+     hardcoded constant; it is a deep link now. */
+  bottomTab: "changes",
+  ...data,
 });
 
 const DEFAULT = workspace();
@@ -214,7 +247,9 @@ export const FIXTURES: PageFixtures<DocReviewData> = {
   outline: { data: workspace({ pane: "outline" }) },
   editor: { data: workspace({ pane: "editor" }) },
   "change-queue": { data: workspace({ pane: "changes" }) },
-  findings: { data: workspace({ pane: "findings" }) },
+  /* The one state that is about the fact check, so it is also the one that
+     opens the bottom strip on it. */
+  findings: { data: workspace({ pane: "findings", bottomTab: "findings", watched: true }) },
   refine: { data: workspace({ pane: "refine" }) },
   dirty: { data: workspace({ save: "dirty" }) },
   saving: { data: workspace({ save: "saving" }) },
@@ -222,11 +257,15 @@ export const FIXTURES: PageFixtures<DocReviewData> = {
   "offline-dirty": { data: workspace({ save: "offline-dirty" }) },
   loading: { data: DEFAULT, loading: true },
   error: { data: workspace({ doc: BLANK_DOC }), error: "This document can't be loaded right now." },
-  empty: { data: workspace({ doc: BLANK_DOC }) },
+  /* A blank document with nothing said about it: no tags yet either, and a
+     deployment that does not know whether it is watched, so neither the tag
+     chips nor the Watch control are drawn. */
+  empty: { data: workspace({ doc: BLANK_DOC, tags: [], watched: undefined }) },
   overflow: {
     data: workspace({
       title: LONG_TITLE,
       subtitle: `Owner: ${LONG_NAME} · Last verified across every service, region, and team`,
+      tags: ["canonical", "customer-facing", "needs-review", "platform-reliability-quarterly-review", "deprecated"],
       doc: OVERFLOW_DOC,
     }),
   },
@@ -234,6 +273,7 @@ export const FIXTURES: PageFixtures<DocReviewData> = {
     data: workspace({
       title: `${UNBREAKABLE} ${MIXED_SCRIPT}`,
       subtitle: `${MIXED_SCRIPT} · ${LONG_URL}`,
+      tags: [UNBREAKABLE, MIXED_SCRIPT, LONG_WORD],
       doc: STRESS_DOC,
     }),
   },

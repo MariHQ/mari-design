@@ -15,6 +15,8 @@ import { FieldError } from "../feedback/ErrorMessage";
 import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
+import { fmtDate, type DateInput } from "../tokens/format";
+import type { ScanRun } from "./ScanRunCard";
 
 /* Audit findings checklist — the core of the repo-audit page: scan findings
    grouped by kind, each a checklist row you fix or dismiss until the run
@@ -55,8 +57,19 @@ type Override = { status: "fixed"; summary: string } | { status: "dismissed" };
     All optional: without them the checklist keeps the local overrides it has
     always applied, which is what the design canvas renders. */
 export type AuditActions = {
-  /** Re-scan the repository. Long-running: the button says it is scanning. */
-  runAudit?: (provider: string) => void | Promise<void>;
+  /** Re-scan the repository as a background run, and answer with the run so
+      the page can follow it through <ScanRunCard> — the same card, poll and
+      vocabulary Facts and Decisions use for their own scans, so the three
+      cannot drift (P-AU-1). A handler that only succeeds keeps the older
+      fire-and-forget behaviour. Without one, no Re-audit button is drawn: the
+      page used to sleep 700ms and call that a scan (§2). */
+  runAudit?: (provider: string) => ScanRun | Promise<ScanRun> | void | Promise<void>;
+  /** Re-read a run this page started. Polled until the run stops running;
+      without it the page shows the run once and does not follow it. */
+  scanProgress?: (id: string) => ScanRun | Promise<ScanRun>;
+  /** Open a past run from the history rail. Without it the rail's rows are not
+      clickable and carry no hover affordance (§2, P-AU-2). */
+  openRun?: (id: string) => void;
   /** Apply a finding's one-click fix. `memberName` maps an unmapped author. */
   fixFinding?: (args: { id: number; memberName?: string }) => void | Promise<void>;
   /** Apply the one-click fix to every open finding of one kind. */
@@ -75,23 +88,32 @@ export type AuditFindingsChecklistProps = {
   provider: string;
   /** The audited repository, e.g. "acme/product-docs". */
   repo: string;
-  /** When this run happened, already formatted. */
-  ranAt: string;
+  /** When this run happened: an ISO timestamp, rendered here through `fmtDate`
+      (§5). It used to arrive pre-formatted, so it could be neither sorted nor
+      re-localised (P-AU-3). */
+  ranAt: DateInput;
+  /** Start a re-scan. The PAGE owns the run and follows it; the checklist only
+      asks for one, so the two cannot report different things about the same
+      scan. Omitted = no Re-audit button (§2). */
+  onReaudit?: () => void;
+  /** A scan the page started is still going. */
+  scanning?: boolean;
+  /** Why the last scan could not be started, from the page that tried. */
+  scanError?: string | null;
   /** Render a content-shaped skeleton while the scan runs. */
   loading?: boolean;
   className?: string;
 };
 
 export function AuditFindingsChecklist({
-  findings, members, provider, repo, ranAt, actions, loading = false, className = "",
+  findings, members, provider, repo, ranAt, actions, onReaudit,
+  scanning = false, scanError = null, loading = false, className = "",
 }: AuditFindingsChecklistProps) {
   const [overrides, setOverrides] = useState<Record<number, Override>>({});
   const [hideHandled, setHideHandled] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<Kind>>(new Set());
   const [pulse, setPulse] = useState<Kind | null>(null);
   const [pick, setPick] = useState<Record<number, string>>({});
-  const [scanning, setScanning] = useState(false);
-  const [scanErr, setScanErr] = useState<string | null>(null);
   const [rowErr, setRowErr] = useState<Record<number, string>>({});
   const [kindErr, setKindErr] = useState<Partial<Record<Kind, string>>>({});
   const [fixingKind, setFixingKind] = useState<Kind | null>(null);
@@ -168,21 +190,15 @@ export function AuditFindingsChecklist({
     setTimeout(() => setPulse(null), 1400);
   };
 
-  /* A repo audit walks the whole tree, so the button has to say it is working
-     rather than sit there looking clicked. */
-  const reaudit = async () => {
-    if (scanning) return;
-    setScanning(true);
-    setScanErr(null);
+  /* A repo audit walks the whole tree, so the run belongs to the page, which
+     follows it and shows its progress. The checklist only asks for one and
+     drops the overrides it was laying over the old run's rows. It used to run
+     its own scan with `await new Promise(r => setTimeout(r, 700))` behind it —
+     a button that reported a scan nobody had run (P-AU-1). */
+  const reaudit = () => {
+    if (scanning || !onReaudit) return;
     setOverrides({});
-    try {
-      if (actions?.runAudit) await actions.runAudit(provider);
-      else await new Promise((r) => setTimeout(r, 700));
-    } catch (err) {
-      setScanErr(err instanceof Error ? err.message : "The audit could not run.");
-    } finally {
-      setScanning(false);
-    }
+    onReaudit();
   };
 
   const toggle = (k: Kind) => setCollapsed((c) => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -213,14 +229,14 @@ export function AuditFindingsChecklist({
           <EmptyState
             icon={<Layers size={26} />}
             title="No audits yet"
-            action={
-              <Button variant="primary" disabled={scanning} onClick={() => void reaudit()}>
+            action={onReaudit && (
+              <Button variant="primary" disabled={scanning} onClick={reaudit}>
                 <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Run first audit"}
               </Button>
-            }
+            )}
           >
             Run a repository audit to see findings grouped by kind.
-            {scanErr && <FieldError>{scanErr}</FieldError>}
+            {scanError && <FieldError>{scanError}</FieldError>}
           </EmptyState>
         </Card>
       </div>
@@ -233,11 +249,11 @@ export function AuditFindingsChecklist({
           PageHeader renders `description` as a bare <p> with no truncation of
           its own, so the ellipsis and the hover value are applied from here
           (§12). The real fix belongs in layout/PageHeader.tsx. */}
-      <div className="min-w-0 [&_p]:truncate" title={`${provider} · ${repo} · last run ${ranAt}`}>
+      <div className="min-w-0 [&_p]:truncate" title={describe(provider, repo, ranAt)}>
         <PageHeader
           eyebrow="Repository audit"
           title="Findings"
-          description={`${provider} · ${repo} · last run ${ranAt}`}
+          description={describe(provider, repo, ranAt)}
         />
       </div>
 
@@ -257,13 +273,15 @@ export function AuditFindingsChecklist({
             </button>
           );
         })}
-        <div className="ml-auto">
-          <Button variant="primary" disabled={scanning} onClick={() => void reaudit()}>
-            <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}
-          </Button>
-        </div>
+        {onReaudit && (
+          <div className="ml-auto">
+            <Button variant="primary" disabled={scanning} onClick={reaudit}>
+              <RotateCw size={14} className={scanning ? "animate-spin" : ""} /> {scanning ? "Scanning…" : "Re-audit"}
+            </Button>
+          </div>
+        )}
       </div>
-      {scanErr && <FieldError>{scanErr}</FieldError>}
+      {scanError && <FieldError>{scanError}</FieldError>}
 
       {/* Progress header */}
       <div className={`${card} flex flex-wrap items-center gap-4 px-4 py-3`}>
@@ -354,6 +372,15 @@ export function AuditFindingsChecklist({
       })}
     </div>
   );
+}
+
+/* The header line, with the run's date rendered rather than pasted: `ranAt` is
+   an ISO value now, so it carries a year and can be re-localised (§5). An
+   unparsable value falls through `fmtDate` unchanged, so a workspace still
+   sending a pre-formatted string reads exactly as it did. */
+function describe(provider: string, repo: string, ranAt: DateInput): string {
+  const when = ranAt ? `last run ${fmtDate(ranAt)}` : "never run";
+  return `${provider} · ${repo} · ${when}`;
 }
 
 function summaryFor(f: AuditFinding): string {

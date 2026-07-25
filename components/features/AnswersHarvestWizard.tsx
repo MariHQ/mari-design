@@ -14,10 +14,20 @@ import { focusRing } from "../tokens/focusRing";
 /* AnswersHarvestWizard — the LLM-driven "question harvest" wizard opened from
    the Answers header. Scans picked knowledge sources for Q/A candidates, lets
    the user edit and accept/skip each, then imports the accepted set as draft
-   answers. Four-step drawer: Sources → Scan → Review → Import. Standalone:
-   the trigger button opens the drawer and the scan/import are simulated. */
+   answers. Four-step drawer: Sources → Scan → Review → Import.
 
-type SourceId = "slack" | "docs" | "chat";
+   The scan used to resolve to four baked question/answer pairs about sessions,
+   settlement queues and webhook retries — invented findings, attributed to
+   "Google Docs" and "Notion", presented as what a real scan had turned up. A
+   scan now returns what the CALLER can find: `onScan`, or the `candidates` it
+   was handed. With neither, the scan honestly finds nothing and the wizard
+   says so, which is the empty state it already carried and never reached.
+
+   NOTE: `pages/AnswersPage` composes its own harvest wizard inline, wired to
+   `AnswersActions.harvest` / `.importAnswers`. This standalone drawer is the
+   catalog rendition of the same flow; the page is the one that ships. */
+
+export type SourceId = "slack" | "docs" | "chat";
 const SOURCES: { id: SourceId; label: string; description: string; icon: ReactNode }[] = [
   { id: "slack", label: "Slack", description: "Threads and decision chunks across connected channels.", icon: <MessagesSquare size={18} /> },
   { id: "docs", label: "Docs & repos", description: "Google Docs, Notion pages, and GitHub READMEs.", icon: <FileText size={18} /> },
@@ -34,12 +44,9 @@ type Candidate = {
   status?: ImportStatus;
 };
 
-const SCAN_RESULTS: Omit<Candidate, "accepted">[] = [
-  { question: "How long do sessions last before they expire?", draft: "Sessions are 30-day rolling tokens. Signing in on a new device revokes the oldest session once you pass the device cap.", sourceLabel: "Google Docs", confidence: 0.88 },
-  { question: "What happens when the settlement queue backs up?", draft: "Drain the queue before restarting workers, and escalate to #payments-oncall if depth exceeds 10,000.", sourceLabel: "Notion", confidence: 0.79 },
-  { question: "Is the v1 export API still supported?", draft: "v1 export is deprecated in favor of the streaming endpoint. It stays read-only for one quarter, then is removed.", sourceLabel: "Slack", confidence: 0.62 },
-  { question: "How do webhook retries work now?", draft: "Delivery retries use exponential backoff on 5xx from the gateway, capped at 5 attempts with a metric per retry.", sourceLabel: "GitHub", confidence: 0.41 },
-];
+/** One question/answer pair a scan proposed. Plain JSON, so an API can return
+    it and no React element is carried. */
+export type HarvestProposal = Omit<Candidate, "accepted" | "status">;
 
 function confLevel(c: number) { return c >= 0.75 ? "high" : c >= 0.45 ? "med" : "low"; }
 const CONF_TONE: Record<string, string> = { high: "ok", med: "attention", low: "neutral" };
@@ -59,11 +66,21 @@ function SourcePickerItem({ icon, label, description, checked, onChange }: { ico
 
 export type AnswersHarvestWizardProps = {
   defaultOpen?: boolean;
+  /** What a scan finds, when the caller already knows. Empty = nothing found. */
+  candidates?: HarvestProposal[];
+  /** Ask a server to scan the picked sources. Answers with what it found, so
+      the wizard reviews the server's result rather than reading it back. */
+  onScan?: (sources: SourceId[]) => Promise<HarvestProposal[]>;
+  /** Save the accepted drafts. Omitted = the wizard reports nothing saved. */
+  onImport?: (drafts: { question: string; answer: string }[]) => void | Promise<void>;
   loading?: boolean;
   className?: string;
 };
 
-export function AnswersHarvestWizard({ defaultOpen = false, loading = false, className = "" }: AnswersHarvestWizardProps) {
+export function AnswersHarvestWizard({
+  defaultOpen = false, candidates: found, onScan, onImport,
+  loading = false, className = "",
+}: AnswersHarvestWizardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState<Set<SourceId>>(new Set(["slack", "docs", "chat"]));
@@ -84,13 +101,21 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
 
   const togglePick = (id: SourceId) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const scan = () => {
+  /* Nothing is invented here: the scan reports what the handler answered, or
+     what the caller handed over, or nothing at all. "Nothing found" is a real
+     result and gets the empty state rather than four fabricated pairs. */
+  const scan = async () => {
     setStep(1); setScanning(true); setScanEmpty(false);
-    window.setTimeout(() => {
-      setScanning(false);
-      setCandidates(SCAN_RESULTS.map((c) => ({ ...c, accepted: true })));
-      setStep(2);
-    }, 1400);
+    let result: HarvestProposal[] = [];
+    try {
+      result = onScan ? await onScan([...picked]) : (found ?? []);
+    } catch {
+      result = [];
+    }
+    setScanning(false);
+    if (result.length === 0) { setScanEmpty(true); return; }
+    setCandidates(result.map((c) => ({ ...c, accepted: true })));
+    setStep(2);
   };
 
   const setAccepted = (i: number, v: boolean) => setCandidates((prev) => prev.map((c, idx) => (idx === i ? { ...c, accepted: v } : c)));
@@ -100,24 +125,27 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
   const doImport = async () => {
     if (importing || acceptedCount === 0) return;
     setStep(3); setImporting(true);
-    setCandidates((prev) => prev.map((c) => (c.accepted ? { ...c, status: "pending" } : c)));
-    let done = 0;
-    const indices = candidates.map((c, i) => (c.accepted ? i : -1)).filter((i) => i >= 0);
-    for (const i of indices) {
-      setCandidates((prev) => prev.map((c, idx) => (idx === i ? { ...c, status: "saving" } : c)));
-      await new Promise((r) => window.setTimeout(r, 550));
-      done += 1;
-      setCandidates((prev) => prev.map((c, idx) => (idx === i ? { ...c, status: "done" } : c)));
+    const accepted = candidates.filter((c) => c.accepted);
+    setCandidates((prev) => prev.map((c) => (c.accepted ? { ...c, status: "saving" } : c)));
+    try {
+      if (onImport) await onImport(accepted.map((c) => ({ question: c.question, answer: c.draft })));
+      setCandidates((prev) => prev.map((c) => (c.accepted ? { ...c, status: "done" } : c)));
+      setImportedCount(accepted.length);
+    } catch {
+      // A failed import leaves the rows where they were: nothing is reported
+      // as saved that was not saved.
+      setCandidates((prev) => prev.map((c) => (c.accepted ? { ...c, status: "pending" } : c)));
+      setImportedCount(0);
+    } finally {
+      setImporting(false);
     }
-    setImportedCount(done);
-    setImporting(false);
   };
 
   const footer = (() => {
     if (step === 0) return (
       <>
         <span className="flex-1" />
-        <Button variant="primary" disabled={picked.size === 0} onClick={scan}>Scan {picked.size} source{picked.size === 1 ? "" : "s"}</Button>
+        <Button variant="primary" disabled={picked.size === 0} onClick={() => void scan()}>Scan {picked.size} source{picked.size === 1 ? "" : "s"}</Button>
       </>
     );
     if (step === 1) return <Button disabled={scanning} onClick={() => setStep(0)}>Back to sources</Button>;
@@ -170,7 +198,7 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
                   <div className="font-term text-[11.5px] text-ink/65">Clustering threads · extracting question/answer pairs</div>
                 </div>
               ) : scanEmpty ? (
-                <EmptyState title="Nothing new found" action={<Button compact onClick={scan}>Scan again</Button>}>No fresh question candidates in the selected sources.</EmptyState>
+                <EmptyState title="Nothing new found" action={<Button compact onClick={() => void scan()}>Scan again</Button>}>No fresh question candidates in the selected sources.</EmptyState>
               ) : null}
             </div>
           )}
@@ -215,9 +243,15 @@ export function AnswersHarvestWizard({ defaultOpen = false, loading = false, cla
           {step === 3 && (
             <div className="flex flex-col gap-4">
               <p className="text-[13px] text-ink/70">
+                {/* "Imported N" is a claim about a write. It is only made when
+                    there was a write to make. */}
                 {importing
                   ? `Saving ${acceptedCount} draft answer${acceptedCount === 1 ? "" : "s"}…`
-                  : `Imported ${importedCount} draft answer${importedCount === 1 ? "" : "s"}. They're queued in the Drafts filter for approval.`}
+                  : !onImport
+                    ? `${acceptedCount} draft answer${acceptedCount === 1 ? "" : "s"} accepted. Nothing was saved: this wizard has no import wired.`
+                    : importedCount > 0
+                      ? `Imported ${importedCount} draft answer${importedCount === 1 ? "" : "s"}. They're queued in the Drafts filter for approval.`
+                      : "The import did not finish. Nothing was saved."}
               </p>
               <ul className="flex flex-col gap-2">
                 {candidates.filter((c) => c.status).map((c, i) => (

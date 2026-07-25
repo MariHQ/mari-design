@@ -38,6 +38,13 @@ export type KnowledgeData = {
   results: KnowledgeResult[];
   /** The document in the inspector rail. `null` means nothing is selected. */
   doc: KnowledgeDoc | null;
+  /** The search behind `results`. Optional: pass it (with `setQuery`) when the
+      app runs the search, and the query becomes shareable state the app owns
+      rather than a box inside the browser nothing can read. */
+  query?: string;
+  /** How many documents match `query` corpus-wide, when `results` is one page
+      of that answer. Absent means `results` IS the answer. */
+  total?: number;
 };
 
 /** What the Knowledge page can DO. Search, facets, sort and bookmarks are all
@@ -52,6 +59,14 @@ export type KnowledgeActions = KnowledgeInspectorActions & {
       result was picked and the app decides where that lives (a query param, a
       route). Without the handler the feed keeps its own highlight. */
   select?: (args: { id: string }) => void;
+  /** The search text changed. Like `select`, the page reports it and the app
+      decides where it lives — in the URL, so a search can be shared and
+      survives a reload — and then re-runs the query behind `data.results`.
+      Without the handler the search box filters what is already loaded, which
+      is what the design canvas does. */
+  setQuery?: (args: { query: string }) => void;
+  /** Fetch the next page of results for the current query. */
+  showMore?: () => void;
 };
 
 /** Nothing matched. Derived from the data, not from a state flag, so it is
@@ -76,7 +91,12 @@ function Feed({ data, error, mobile, actions }: {
   data: KnowledgeData; error: string | null; mobile: boolean; actions?: KnowledgeActions;
 }) {
   if (error) return <EmptyBox title="API offline">{error}</EmptyBox>;
-  if (isEmpty(data)) {
+  /* When the app owns the query, a search that matched nothing must keep the
+     search box on screen — replacing the browser with an empty card leaves the
+     reader no way to change the query that emptied it. The browser draws its
+     own "No results" in that case. */
+  const searching = actions?.setQuery !== undefined;
+  if (isEmpty(data) && !searching) {
     return (
       <EmptyBox title="No results">
         No results match the current filters. Clear a filter or try a different search.
@@ -94,6 +114,12 @@ function Feed({ data, error, mobile, actions }: {
       stacked={mobile}
       selectedId={select ? data.doc?.id ?? null : undefined}
       onSelect={select && ((id) => select({ id }))}
+      /* Controlled only when something can receive the query, for the same
+         reason as the selection above (§2). */
+      query={searching ? data.query ?? "" : undefined}
+      onQueryChange={actions?.setQuery && ((query) => actions.setQuery!({ query }))}
+      total={data.total}
+      onShowMore={actions?.showMore}
     />
   );
 }

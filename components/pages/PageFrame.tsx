@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Home, BookOpen, CheckCircle2, Feather, Tag, Network, Shield, Workflow,
-  Send, Sparkles, Settings, Menu as MenuIcon, Search, Bell, UserRound, KeyRound,
+  Send, Sparkles, Settings, Menu as MenuIcon, Search, UserRound, KeyRound,
+  ListChecks, ClipboardCheck,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -63,12 +64,21 @@ export const SPAN = {
 export const NAV: NavSection[] = [
   { heading: "Workspace", items: [
     { id: "overview", label: "Overview", icon: <Home size={18} /> },
+    /* Tasks was reachable only by finding the back-link on Overview, which
+       made the console's own work queue the one page you had to already know
+       about. It is a workspace destination like any other, so it is in the
+       rail. */
+    { id: "tasks", label: "Tasks", icon: <ListChecks size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
     { id: "answers", label: "Answers", icon: <CheckCircle2 size={18} /> },
     { id: "decisions", label: "Decisions", icon: <Feather size={18} /> },
     { id: "library", label: "Library", icon: <Tag size={18} /> },
     { id: "lineage", label: "Lineage", icon: <Network size={18} /> },
     { id: "facts", label: "Facts", icon: <Shield size={18} /> },
+    /* /audit was linked from nothing at all: no nav entry, no page body, no
+       menu. A routed page with no entry point is a page that does not exist.
+       It sits next to Facts because it is the same subject seen per run. */
+    { id: "audit", label: "Repository audit", icon: <ClipboardCheck size={18} /> },
     { id: "flows", label: "Flows", icon: <Workflow size={18} /> },
     { id: "publish", label: "Publish", icon: <Send size={18} /> },
     { id: "insights", label: "Insights", icon: <Sparkles size={18} /> },
@@ -205,8 +215,10 @@ function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigat
     a few off-nav routes map onto the closest nav entry. */
 export function navFor(pageId: string): string {
   if (pageId.startsWith("settings") || pageId === "lookbook") return "settings";
-  if (pageId === "audit") return "facts";
-  if (pageId === "tasks") return "overview";
+  // Tasks and Repository Audit have their own rail entries now, so they
+  // highlight themselves rather than borrowing Overview's and Facts'.
+  // Doc Review stays a DETAIL route: you arrive at it from a document, never
+  // from the rail, so it highlights the page you came from.
   if (pageId === "doc-review") return "knowledge";
   if (pageId === "sources") return "settings";
   // Preferences is reached from the account menu, not the sidebar, and it is
@@ -353,20 +365,18 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
   );
 }
 
-export function PageFrame({
-  active, title, mobile = false, chrome, children,
-}: {
-  active: string;
-  title?: string;
-  mobile?: boolean;
-  /** Session + notifications for the topbar. */
-  chrome?: ShellChrome;
-  children: ReactNode;
-}) {
+/** The live desktop frame.
+ *
+ * Split out of PageFrame so that EXACTLY ONE of the three frames owns the
+ * search hook. PageFrame used to call `useGlobalSearch` itself and then hand
+ * off to MobileFrame / DesktopStatic, which each call it too: on mobile and in
+ * static render that bound two ⌘K listeners, so the shortcut toggled an
+ * invisible overlay's state in lockstep with the visible one and the two could
+ * disagree about whether search was open. PageFrame is now pure dispatch and
+ * holds no state of its own. */
+function DesktopFrame({ active, chrome, children }: { active: string; chrome?: ShellChrome; children: ReactNode }) {
   const user = chrome?.user ?? NO_USER;
   const search = useGlobalSearch(chrome);
-  if (mobile) return <MobileFrame active={active} title={title} grow={staticFrame} chrome={chrome}>{children}</MobileFrame>;
-  if (staticFrame) return <DesktopStatic active={active} chrome={chrome}>{children}</DesktopStatic>;
   return (
     <AppShell
       /* The shell claims the VIEWPORT. AppShell is `h-full`, which resolves
@@ -405,4 +415,19 @@ export function PageFrame({
       {children}
     </AppShell>
   );
+}
+
+export function PageFrame({
+  active, title, mobile = false, chrome, children,
+}: {
+  active: string;
+  title?: string;
+  mobile?: boolean;
+  /** Session + notifications for the topbar. */
+  chrome?: ShellChrome;
+  children: ReactNode;
+}) {
+  if (mobile) return <MobileFrame active={active} title={title} grow={staticFrame} chrome={chrome}>{children}</MobileFrame>;
+  if (staticFrame) return <DesktopStatic active={active} chrome={chrome}>{children}</DesktopStatic>;
+  return <DesktopFrame active={active} chrome={chrome}>{children}</DesktopFrame>;
 }

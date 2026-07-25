@@ -41,7 +41,12 @@ export type KnowledgeDoc = {
   messageCount?: number;
   summary: string;
   tags: string[];
-  facts: Fact[];
+  /** Verified facts extracted from THIS document. Optional, and the difference
+      matters: `[]` means the document has been mined and nothing was found,
+      which the rail says out loud; `undefined` means this workspace has no
+      per-document fact source at all, and the rail then draws no Verified
+      facts section rather than a permanently empty one (§2). */
+  facts?: Fact[];
   related: Related[];
   timeline: Revision[];
   /** Lineage edges off this doc. Optional: callers that predate the preview
@@ -148,7 +153,8 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
     </Button>
   );
 
-  const factList = allFacts ? doc.facts : doc.facts.slice(0, FACTS_PAGE);
+  const facts = doc.facts;
+  const factList = facts ? (allFacts ? facts : facts.slice(0, FACTS_PAGE)) : [];
   const relatedList = allRelated ? doc.related : doc.related.slice(0, RELATED_PAGE);
   const revisions = fullHistory ? doc.timeline : doc.timeline.slice(0, REVISIONS_PAGE);
 
@@ -232,31 +238,35 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
             {/* Summary (order slot 5) */}
             <p className="text-[13px] leading-relaxed text-ink/80">{doc.summary}</p>
 
-            <CardSection label="Verified facts" count={doc.facts.length}>
-              {/* Honest count above the list it describes (§13): a well-mined
-                  document carries dozens of facts, and the rail shows a page of
-                  them instead of silently dropping the rest. */}
-              <CountLine
-                shown={factList.length}
-                total={doc.facts.length}
-                noun="facts"
-                expanded={allFacts}
-                onToggle={() => setAllFacts((v) => !v)}
-              />
-              <BoundedList bounded={factList.length > BOUND_AT}>
-                <ul className="flex min-w-0 flex-col gap-1.5">
-                  {factList.map((f, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[12.5px] text-ink/80">
-                      <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-moss" />
-                      <span className="min-w-0 break-words">{f.text}</span>
-                    </li>
-                  ))}
-                  {doc.facts.length === 0 && (
-                    <li className="text-[12.5px] text-ink/70">No verified facts extracted from this document yet.</li>
-                  )}
-                </ul>
-              </BoundedList>
-            </CardSection>
+            {/* Drawn only when the caller has a per-document fact source. A
+                section that can never fill is a promise the rail cannot keep. */}
+            {facts && (
+              <CardSection label="Verified facts" count={facts.length}>
+                {/* Honest count above the list it describes (§13): a well-mined
+                    document carries dozens of facts, and the rail shows a page of
+                    them instead of silently dropping the rest. */}
+                <CountLine
+                  shown={factList.length}
+                  total={facts.length}
+                  noun="facts"
+                  expanded={allFacts}
+                  onToggle={() => setAllFacts((v) => !v)}
+                />
+                <BoundedList bounded={factList.length > BOUND_AT}>
+                  <ul className="flex min-w-0 flex-col gap-1.5">
+                    {factList.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[12.5px] text-ink/80">
+                        <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-moss" />
+                        <span className="min-w-0 break-words">{f.text}</span>
+                      </li>
+                    ))}
+                    {facts.length === 0 && (
+                      <li className="text-[12.5px] text-ink/70">No verified facts extracted from this document yet.</li>
+                    )}
+                  </ul>
+                </BoundedList>
+              </CardSection>
+            )}
 
             <CardSection label="Related docs" count={doc.related.length}>
               <CountLine

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Tag, Clock, ArrowRight, Settings, AlertTriangle, Trash2 } from "lucide-react";
+import { Tag, Clock, ArrowRight, Settings, AlertTriangle, Trash2, Palette } from "lucide-react";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
@@ -11,11 +11,13 @@ import { ConfirmButton } from "../actions/ConfirmButton";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
+import { Combobox } from "../forms/Combobox";
+import { normalizeTimezone, timezoneOptions } from "../tokens/timezones";
 import { EmptyState } from "../data-display/EmptyState";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
-import { BrandingEditor, type Branding, type BrandHarvest, type BrandPreviewStat } from "../features/BrandingEditor";
+import type { Branding, BrandHarvest, BrandPreviewStat } from "../features/BrandingEditor";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
@@ -90,10 +92,12 @@ export type SettingsGeneralData = {
   summary: PropertyItem[];
   /** Owner-only destructive controls. */
   danger: boolean;
-  /** Branding sub-section. Ignored unless `section` is "branding". */
-  branding: Branding;
-  brandHarvest: BrandHarvest;
-  brandPreviewStats: BrandPreviewStat[];
+  /** Branding, as General used to render it. The editor moved to Settings →
+      Design & brand (the only place it has handlers), so these three are no
+      longer read here and an app can stop sending them. */
+  branding?: Branding;
+  brandHarvest?: BrandHarvest;
+  brandPreviewStats?: BrandPreviewStat[];
 };
 
 
@@ -151,11 +155,11 @@ function withCurrent(options: { value: string; label: string }[], current: strin
 const PLANS = [
   { value: "free", label: "Free" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" },
 ];
-const TIMEZONES = [
-  { value: "utc", label: "UTC" },
-  { value: "pt", label: "America/Los_Angeles" },
-  { value: "et", label: "America/New_York" },
-];
+/* Timezones come from tokens/timezones.ts, the way regions come from
+   tokens/regions.ts. This page used to define its own three-item list whose
+   ids (`utc`, `pt`, `et`) matched nothing Preferences offered, so the two
+   pages could describe the same account incompatibly and neither could name
+   the zone most people are in (C8). `normalizeTimezone` reads the old ids. */
 const LANGUAGES = [
   { value: "en", label: "English" }, { value: "es", label: "Español" }, { value: "de", label: "Deutsch" },
 ];
@@ -168,14 +172,27 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
   const [name, setName] = useState(data.name);
   const [slug, setSlug] = useState(data.slug);
   const [plan, setPlan] = useState(data.plan);
-  const [timezone, setTimezone] = useState(data.timezone);
+  const [timezone, setTimezone] = useState(normalizeTimezone(data.timezone));
   const [language, setLanguage] = useState(data.language);
+  /* The edit buffer is seeded from `data`, and `useState` only reads its
+     argument once — so after any refetch the form kept rendering the FIRST
+     response and would have saved it back over the newer one (C1). The
+     sentinel resyncs when, and only when, the server's record changes. */
+  const [seen, setSeen] = useState(data);
+  if (seen !== data) {
+    setSeen(data);
+    setName(data.name);
+    setSlug(data.slug);
+    setPlan(data.plan);
+    setTimezone(normalizeTimezone(data.timezone));
+    setLanguage(data.language);
+  }
   const write = useWrite();
   /* Whether there is anything to save is derived from the fields against what
      the server sent, not from a mode: the two cannot disagree. `data.save` is
      still honoured, because the canvas drives the lifecycle through it. */
   const dirty = name !== data.name || slug !== data.slug || plan !== data.plan
-    || timezone !== data.timezone || language !== data.language;
+    || timezone !== normalizeTimezone(data.timezone) || language !== data.language;
   const [justSaved, setJustSaved] = useState(false);
   const save = write.busy ? "saving" : justSaved ? "saved" : dirty ? "dirty" : data.save;
   const invalid = slugError !== null;
@@ -206,9 +223,18 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
           </Select>
         </Field>
         <Field label="Timezone">
-          <Select value={timezone} onChange={(e) => { setTimezone(e.target.value); setJustSaved(false); }} className="w-full">
-            {withCurrent(TIMEZONES, data.timezone).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </Select>
+          {/* Forty-odd zones is past the point where a native select is
+              scannable, so this is the searchable Combobox (§7). The option
+              list is the canonical one, with the account's own zone appended
+              when this build has no label for it. */}
+          <Combobox
+            ariaLabel="Timezone"
+            value={timezone}
+            onChange={(v) => { setTimezone(v); setJustSaved(false); }}
+            options={timezoneOptions(timezone || data.timezone)}
+            placeholder="Select a timezone"
+            searchPlaceholder="Search timezones…"
+          />
         </Field>
         <Field label="Language">
           <Select value={language} onChange={(e) => { setLanguage(e.target.value); setJustSaved(false); }} className="w-full">
@@ -252,7 +278,10 @@ function DangerZone({ actions }: { actions?: SettingsGeneralActions }) {
               <div className="text-[13.5px] font-medium text-ink">Transfer workspace</div>
               <p className="mt-0.5 text-[12.5px] text-ink/60">Move ownership to another admin. You keep admin access.</p>
             </div>
-            <Button variant="default" compact onClick={() => void transfer()}>Transfer</Button>
+            {/* Handing the workspace to someone else is as irreversible as
+                deleting it, and it used to fire on the first click while the
+                row below it confirmed properly (§2). */}
+            <ConfirmButton compact confirmLabel="Transfer ownership?" onConfirm={() => void transfer()}>Transfer</ConfirmButton>
           </li>
         )}
         {remove && (
@@ -284,18 +313,28 @@ function GeneralRail({ summary, onNavigate }: { summary: PropertyItem[]; onNavig
   );
 }
 
-function Body({ data, error, actions }: { data: SettingsGeneralData; error: string | null; actions?: SettingsGeneralActions }) {
+function Body({ data, error, actions, onNavigate }: {
+  data: SettingsGeneralData; error: string | null; actions?: SettingsGeneralActions;
+  onNavigate?: (pageId: string) => void;
+}) {
   if (error) {
     return (
       <EmptyState icon={<Settings size={22} />} title="API offline">{error}</EmptyState>
     );
   }
+  /* Branding used to render the real BrandingEditor here with NO `actions`, so
+     every control in it was a control that could not save (§2) — and the same
+     editor already lives on Settings → Design & brand, where it does have
+     handlers. One editor, one place; General points at it. */
   if (data.section === "branding") {
     return (
-      <BrandingEditor
-        branding={data.branding}
-        harvest={data.brandHarvest}
-        previewStats={data.brandPreviewStats}
+      <LinkCard
+        icon={<Palette size={18} />}
+        title="Design & brand"
+        blurb="Colours, type and the logo this workspace publishes under moved to their own tab, where they save."
+        cta="Open Design & brand"
+        to="settings-design"
+        onNavigate={onNavigate}
       />
     );
   }
@@ -318,7 +357,7 @@ function SettingsGeneralPage({ data, loading = false, error = null, actions, chr
           <PageHeader eyebrow="Settings" title="Workspace" description="Workspace identity and language." />
           <div className="mt-5"><SettingsTabs active="general" onNavigate={chrome?.onNavigate} /></div>
           <SettingsBody mobile={mobile} rail={<GeneralRail summary={data.summary} onNavigate={chrome?.onNavigate} />}>
-            <Body data={data} error={error} actions={actions} />
+            <Body data={data} error={error} actions={actions} onNavigate={chrome?.onNavigate} />
           </SettingsBody>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { RefreshCw, Search, ScrollText } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { RefreshCw, Search, ScrollText, ChevronDown, Download } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
@@ -10,33 +10,106 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
+import { DateRangePicker, dateRangeStart, type DateRange } from "../data-display/DateRangePicker";
 import { fmtDateTime } from "../tokens/format";
+import { focusRing } from "../tokens/focusRing";
 
 /* Settings — Access log ───────────────────────────────────────────────────
    A read-only chronological record of every workspace change — actor, action
-   verb, target, and time — for the last 50 events, with a client-side text
-   filter and manual refresh. Source: web/src/pages/settings/AuditLog.tsx.
-   Standalone with baked demo events; Refresh just reshuffles the "now". */
+   verb, target, and time — with a text filter, a date range, expandable rows
+   carrying the before/after detail, an export, and a pager.
+   Source: web/src/pages/settings/AuditLog.tsx. */
 
-export type AuditEvent = { id: number; actor: string; verb: string; target: string; at: string };
+/** One extra fact about an event, shown when its row is expanded. Recorded at
+    write time by whoever logged the event, so an event logged before the
+    writer had anything more to say simply has none. */
+export type AuditDetail = { label: string; value: string };
+
+export type AuditEvent = {
+  id: number; actor: string; verb: string; target: string; at: string;
+  /** Before/after values, request id, source IP. Absent means the row has
+      nothing to expand, and it does not draw an expand control. */
+  detail?: AuditDetail[];
+};
 
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+/** CSV of exactly the rows on screen. Quoting is the boring kind: double the
+    quotes, wrap every field, so a target containing a comma survives. */
+function toCsv(rows: AuditEvent[]): string {
+  const cell = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [["Actor", "Action", "Target", "When"].map(cell).join(",")];
+  for (const e of rows) lines.push([e.actor, e.verb, e.target, e.at].map(cell).join(","));
+  return lines.join("\r\n");
+}
+
 export type SettingsAuditLogProps = {
   /** Hide the internal PageHeader when the host page already renders one. */
-  embedded?: boolean; events: AuditEvent[]; total: number; loading?: boolean; className?: string };
+  embedded?: boolean;
+  events: AuditEvent[];
+  total: number;
+  /** Seed the filter box. The host page passes whatever filter the URL or the
+      server-side narrowing describes; typing still owns it from then on. */
+  initialQuery?: string;
+  /** Told whenever the filter or the date range changes, so an app can narrow
+      the WINDOW server-side instead of only narrowing what was fetched. With
+      no handler the filtering below is the whole story, over the window this
+      component was given. */
+  onFilterChange?: (f: { query: string; from: string | null; to: string | null }) => void;
+  /** Which row starts expanded. Deep-linking a single event, and how the
+      canvas captures the expanded state without a click. */
+  expandedId?: number | null;
+  loading?: boolean;
+  className?: string;
+};
 
-export function SettingsAuditLog({ events, total, loading = false, embedded = false, className = "" }: SettingsAuditLogProps) {
-  const [filter, setFilter] = useState("");
+export function SettingsAuditLog({
+  events, total, initialQuery = "", onFilterChange, expandedId = null,
+  loading = false, embedded = false, className = "",
+}: SettingsAuditLogProps) {
+  const [filter, setFilter] = useState(initialQuery);
+  const [range, setRange] = useState<DateRange>({ preset: "all" });
   const [nonce, setNonce] = useState(0);
+  /* Which row is open. Seeded from the prop, then owned here: the chevron used
+     to be a bare icon on a row nothing listened to, so the log depicted an
+     expandable table that could not expand (P-SA-1). */
+  const [openId, setOpenId] = useState<number | null>(expandedId);
+  /* Both buffers are seeded from props, which `useState` reads once: without
+     these sentinels a new window (or a new deep link) left the old filter text
+     and the old open row on screen (C1). */
+  const [seen, setSeen] = useState({ expandedId, initialQuery });
+  if (seen.expandedId !== expandedId || seen.initialQuery !== initialQuery) {
+    setSeen({ expandedId, initialQuery });
+    setOpenId(expandedId);
+    setFilter(initialQuery);
+  }
+
+  const changeFilter = (q: string, r: DateRange) => {
+    setFilter(q);
+    setRange(r);
+    const start = dateRangeStart(r);
+    onFilterChange?.({
+      query: q,
+      from: start ? start.toISOString().slice(0, 10) : null,
+      to: r.preset === "custom" ? r.to ?? null : null,
+    });
+  };
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return events;
-    return events.filter((e) => `${e.actor} ${e.verb} ${e.target} ${e.at}`.toLowerCase().includes(q));
-  }, [events, filter]);
+    const start = dateRangeStart(range);
+    const end = range.preset === "custom" && range.to ? new Date(`${range.to}T23:59:59`) : null;
+    return events.filter((e) => {
+      if (q && !`${e.actor} ${e.verb} ${e.target} ${e.at}`.toLowerCase().includes(q)) return false;
+      if (!start && !end) return true;
+      const at = new Date(e.at);
+      if (start && at < start) return false;
+      if (end && at > end) return false;
+      return true;
+    });
+  }, [events, filter, range]);
 
   const { sort, onSort, sorted } = useSort(shown, {
     actor: (e) => e.actor,
@@ -48,6 +121,20 @@ export function SettingsAuditLog({ events, total, loading = false, embedded = fa
   /* An access log is thousands of rows deep. It pages, 15 at a time, instead
      of rendering a mile of card (CONVENTIONS §13). */
   const pager = usePaged(sorted, 15);
+
+  /* Export is the rows on screen, made in the browser: nothing to fetch, and
+     no claim about anything outside the window that was fetched. */
+  const exportCsv = () => {
+    const blob = new Blob([toCsv(sorted)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `access-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filtered = filter.trim().length > 0 || range.preset !== "all";
 
   if (loading) {
     return (
@@ -71,10 +158,22 @@ export function SettingsAuditLog({ events, total, loading = false, embedded = fa
 
       {/* The count lives in the result strip, once (CONVENTIONS §13). */}
       <Card variant="flush" title="Events" hint="Every change in this workspace, newest first" actions={
-        <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
-          <Search size={13} className="text-ink/65" />
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter events…" className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none" />
-        </div>
+        <>
+          <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-[4px] border border-ink/20 bg-paper focus-within:border-biscay-2 focus-within:ring-1 focus-within:ring-biscay-2/40">
+            <Search size={13} className="text-ink/65" />
+            <input
+              value={filter}
+              onChange={(e) => changeFilter(e.target.value, range)}
+              placeholder="Filter events…"
+              aria-label="Filter events"
+              className="w-[150px] bg-transparent text-[12.5px] text-ink placeholder:text-ink/65 outline-none"
+            />
+          </div>
+          {/* A log without a date range is a log you cannot answer "what
+              happened last Tuesday" with (P-SA-2). */}
+          <DateRangePicker compact value={range} onChange={(r) => changeFilter(filter, r)} />
+          <Button compact onClick={exportCsv} disabled={sorted.length === 0}><Download size={14} /> Export CSV</Button>
+        </>
       }>
         {shown.length === 0 ? (
           <EmptyState icon={<ScrollText size={24} />} title={events.length === 0 ? "No events yet" : "No matches"}>
@@ -83,11 +182,12 @@ export function SettingsAuditLog({ events, total, loading = false, embedded = fa
         ) : (
           <>
           <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="events"
-            note={filter.trim() ? `filtered from ${total.toLocaleString("en-US")}` : undefined} />
+            note={filtered ? `filtered from ${total.toLocaleString("en-US")}` : undefined} />
           <Scrollable>
             <table className="w-full table-fixed text-left border-collapse" style={{ minWidth: 760 }}>
               <colgroup>
-                <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "36%" }} /><col style={{ width: "20%" }} />
+                <col style={{ width: "23%" }} /><col style={{ width: "19%" }} /><col style={{ width: "34%" }} />
+                <col style={{ width: "18%" }} /><col style={{ width: "6%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -95,25 +195,59 @@ export function SettingsAuditLog({ events, total, loading = false, embedded = fa
                   <SortHeader label="Action" sortKey="action" sort={sort} onSort={onSort} />
                   <SortHeader label="Target" sortKey="target" sort={sort} onSort={onSort} />
                   <SortHeader label="When" sortKey="when" sort={sort} onSort={onSort} align="center" />
+                  <SortHeader label="Detail" sortable={false} align="center" />
                 </tr>
               </thead>
               <tbody>
-                {pager.pageRows.map((e) => (
-                  <tr key={e.id} className="border-b border-ink/10 last:border-0 align-top">
-                    <td className={tdPad}>
-                      <span className="flex items-start gap-2.5">
-                        <Avatar initials={initialsOf(e.actor)} />
-                        <Truncate className="min-w-0 flex-1 text-[13px] font-medium text-ink">{e.actor}</Truncate>
-                      </span>
-                    </td>
-                    <td className={tdPad}><Truncate className="text-[13px] text-ink/70">{e.verb}</Truncate></td>
-                    {/* A target is an arbitrary identifier: truncate with the
-                        full value on hover, never wrap it a character at a
-                        time down the column (CONVENTIONS §12). */}
-                    <td className={tdPad}><Truncate className="text-[13px] text-ink/85">{e.target}</Truncate></td>
-                    <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDateTime(e.at)}</td>
-                  </tr>
-                ))}
+                {pager.pageRows.map((e) => {
+                  const open = e.id === openId;
+                  const detail = e.detail ?? [];
+                  return (
+                    <Fragment key={e.id}>
+                      <tr className={`border-b border-ink/10 last:border-0 align-top ${open ? "bg-flysch/60" : ""}`}>
+                        <td className={tdPad}>
+                          <span className="flex items-start gap-2.5">
+                            <Avatar initials={initialsOf(e.actor)} />
+                            <Truncate className="min-w-0 flex-1 text-[13px] font-medium text-ink">{e.actor}</Truncate>
+                          </span>
+                        </td>
+                        <td className={tdPad}><Truncate className="text-[13px] text-ink/70">{e.verb}</Truncate></td>
+                        {/* A target is an arbitrary identifier: truncate with the
+                            full value on hover, never wrap it a character at a
+                            time down the column (CONVENTIONS §12). */}
+                        <td className={tdPad}><Truncate className="text-[13px] text-ink/85">{e.target}</Truncate></td>
+                        <td className={`${tdPad} text-center font-term text-[12px] text-ink/65`}>{fmtDateTime(e.at)}</td>
+                        <td className={`${tdPad} text-center`}>
+                          {detail.length > 0 && (
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              aria-label={open ? `Hide detail for event ${e.id}` : `Show detail for event ${e.id}`}
+                              onClick={() => setOpenId(open ? null : e.id)}
+                              className={`grid h-7 w-7 place-items-center rounded-[4px] border border-ink/20 text-ink/70 hover:border-ink/45 hover:text-ink transition-colors ${focusRing}`}
+                            >
+                              <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {open && detail.length > 0 && (
+                        <tr className="border-b border-ink/10 bg-flysch/30">
+                          <td colSpan={5} className={tdPad}>
+                            <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-term text-[12px] sm:grid-cols-4">
+                              {detail.map((d) => (
+                                <div key={d.label} className="min-w-0">
+                                  <dt className="text-ink/65">{d.label}</dt>
+                                  <dd className="text-ink/80"><Truncate>{d.value}</Truncate></dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </Scrollable>

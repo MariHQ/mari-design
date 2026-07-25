@@ -1,11 +1,16 @@
-import { useState, type ReactNode } from "react";
-import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock, FileText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Truncate, TruncateInline } from "../data-display/Truncate";
+import { Tabs } from "../navigation/Tabs";
+import { Combobox } from "../forms/Combobox";
+import { FormField } from "../forms/FormField";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { ErrorMessage, FieldError } from "../feedback/ErrorMessage";
+import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -33,7 +38,7 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** One row of the inbox. Dates arrive pre-formatted (§5: always with a year). */
+/** One row of the inbox. */
 export type Task = {
   id: number;
   title: string;
@@ -41,8 +46,43 @@ export type Task = {
   kind: string;
   kindLabel: string;
   done: boolean;
-  due?: string;
+  /** When the task is due: an ISO date. The row renders it with `fmtDate`
+      (§5), and the board sorts on it. It used to arrive PRE-FORMATTED, so it
+      could be neither sorted nor localised (P-TA-4). */
+  due?: DateInput;
+  /** The server's own overdue verdict, when it has one. Absent, the board
+      compares `due` against the reader's own midnight — a stated timezone
+      rather than the unstated one the flag used to carry. */
   overdue?: boolean;
+  /** What the task is about. Rendered as a link only when the page can open it
+      (`actions.openDoc`); a task with no way back to its document is where the
+      inbox used to dead-end (P-TA-5). */
+  doc?: { id: string; title: string };
+  /** How urgent, in the workspace's own words ("High"). Display text, like
+      `kindLabel`, so a workspace with no priority vocabulary shows none. */
+  priority?: string;
+};
+
+/** Someone a task can be filed to. */
+export type TaskAssignee = {
+  /** What `create` receives, e.g. an email or a member id. */
+  id: string;
+  name: string;
+  initials?: string;
+};
+
+/** One option of the composer's priority control. */
+export type TaskPriority = { id: string; label: string };
+
+/** Local midnight: "overdue" needs a boundary, and the reader's own day is the
+    only one this page can honestly name. */
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+const isOverdue = (t: Task, floor: number): boolean => {
+  if (t.overdue !== undefined) return t.overdue;
+  if (!t.due || t.done) return false;
+  const ms = new Date(String(t.due)).getTime();
+  return Number.isFinite(ms) && ms < floor;
 };
 
 /** The chip-row / avatar-stack / headline-number strip above the columns. Only
@@ -65,10 +105,22 @@ export type TaskStrip = {
 export type TasksActions = {
   /** Check / uncheck one row. */
   setDone?: (args: { id: number; done: boolean }) => void | Promise<void>;
-  /** Add the composer's draft to the inbox. */
-  create?: (args: { title: string; kind: string; kindLabel: string }) => void | Promise<void>;
+  /** Add the composer's draft to the inbox.
+
+      `assignee`, `priority` and `due` are only sent when the composer collected
+      them, which it only does when the board carries the vocabulary for them.
+      Answer with the row that was written and the board shows THAT row: it
+      used to invent one keyed `id: Date.now()`, a number that can collide with
+      a real server id the very next refetch (P-TA-3). */
+  create?: (args: {
+    title: string; kind: string; kindLabel: string;
+    assignee?: string; priority?: string; priorityLabel?: string; due?: string;
+  }) => Task | void | Promise<Task | void>;
   /** Empty the Done column. Destructive: goes through ConfirmButton. */
   clearDone?: () => void | Promise<void>;
+  /** Open the document a task is about. Without it a task's document is text,
+      not a link that goes nowhere (§2). */
+  openDoc?: (docId: string) => void;
 };
 
 /** The kinds the composer can file a task under. The value is the API's key,
@@ -91,17 +143,31 @@ export type TasksData = {
   /** The composer is mid-submit: the add button locks and reads "Adding…". */
   saving: boolean;
   strip: TaskStrip | null;
+  /** Who a task can be filed to. Empty (or absent) and the composer draws no
+      owner picker and the task files to whoever is signed in — which is what
+      it silently did for EVERY task before, with a due date on screen that
+      could never be set (P-TA-1). Non-empty, it draws a searchable combobox,
+      never a plain select (§7, P-TA-2). */
+  assignees?: TaskAssignee[];
+  /** The workspace's priority vocabulary. Empty and no priority control is
+      drawn: a control whose value nothing can store is decoration (§2). */
+  priorities?: TaskPriority[];
 };
 
 /* Emptiness is derived per column from the rows themselves (`rows.length === 0`
    below), not from a state flag, so an inbox with nothing in it renders the
    same on the canvas and in a real workspace. */
 
-/* One row = title + a meta cluster. The title takes the slack (min-w-0 so a
-   long one wraps instead of collapsing to one word per line) and the meta
-   cluster wraps under it rather than shoving chips outside the card. The done
+/* One row = title + a meta cluster. The title takes the slack and TRUNCATES:
+   it used to `[overflow-wrap:anywhere]`, which is exactly the "pack it in"
+   the rule names (§12, C4). The full title rides the title attribute. The done
    marker is a SQUARE checkbox: a circle reads as "pick one" (§6). */
-function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number) => void }) {
+function TaskRow({ task, overdue, onToggle, onOpenDoc }: {
+  task: Task;
+  overdue: boolean;
+  onToggle: (id: number) => void;
+  onOpenDoc?: (docId: string) => void;
+}) {
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5">
       <button
@@ -114,18 +180,29 @@ function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: number) => voi
       >
         <Check size={12} />
       </button>
-      <span
-        className={`min-w-[9rem] flex-1 text-[13.5px] [overflow-wrap:anywhere] ${
-          task.done ? "text-ink/70 line-through" : "text-ink"
-        }`}
-      >
-        {task.title}
+      <span className="min-w-[9rem] flex-1">
+        <Truncate
+          lines={2}
+          className={`text-[13.5px] ${task.done ? "text-ink/70 line-through" : "text-ink"}`}
+        >
+          {task.title}
+        </Truncate>
+        {task.doc && (
+          onOpenDoc ? (
+            <Button variant="link" compact className="mt-0.5" onClick={() => onOpenDoc(task.doc!.id)}>
+              <FileText size={12} /> <TruncateInline className="max-w-[220px]">{task.doc.title}</TruncateInline>
+            </Button>
+          ) : (
+            <Truncate className="mt-0.5 text-[12px] text-ink/70">{task.doc.title}</Truncate>
+          )
+        )}
       </span>
       <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+        {task.priority && <Chip label={task.priority} tone={overdue ? "attention" : "neutral"} />}
         {task.due && !task.done && (
           <Chip
-            label={<span className="block max-w-[190px] truncate">{task.due}</span>}
-            tone={task.overdue ? "blocked" : "neutral"}
+            label={fmtDate(task.due)}
+            tone={overdue ? "blocked" : "neutral"}
             icon={<CalendarClock size={12} />}
           />
         )}
@@ -164,7 +241,8 @@ function Column({
 function StressStrip({ strip }: { strip: TaskStrip }) {
   return (
     <Card className="space-y-3">
-      <div className="min-w-0 text-[13.5px] font-semibold text-ink break-words">{strip.title}</div>
+      {/* §12: a strip headline truncates like every other long value (C4). */}
+      <Truncate lines={2} className="text-[13.5px] font-semibold text-ink">{strip.title}</Truncate>
       <div className="flex flex-wrap items-center gap-1.5">
         {strip.tags.map((t) => <Chip key={t} label={t} tone="neutral" />)}
       </div>
@@ -182,7 +260,25 @@ function Body({ data, error, actions, who, mobile }: {
   const [tasks, setTasks] = useState<Task[]>(() => data.tasks);
   const [draft, setDraft] = useState(data.draft);
   const [kind, setKind] = useState(KINDS[1].id);
+  const [assignee, setAssignee] = useState<string | null>(null);
+  const [priority, setPriority] = useState("");
+  const [due, setDue] = useState("");
   const [adding, setAdding] = useState(false);
+  const [view, setView] = useState<"all" | "mine" | "overdue">("all");
+  const [sort, setSort] = useState<"due" | "title" | "priority">("due");
+
+  /* The board is the page's most-mutated state, and it was seeded from `data`
+     ONCE: every refetch landed behind it, so a task someone else closed stayed
+     open here until a reload (C1, P-TA-6). The sentinel adopts each new server
+     read while keeping the optimistic moves that have not been overwritten by
+     it — a new array identity means a new answer. */
+  const [seenTasks, setSeenTasks] = useState(data.tasks);
+  if (seenTasks !== data.tasks) { setSeenTasks(data.tasks); setTasks(data.tasks); }
+  const [seenDraft, setSeenDraft] = useState(data.draft);
+  if (seenDraft !== data.draft) { setSeenDraft(data.draft); setDraft(data.draft); }
+
+  const assignees = data.assignees ?? [];
+  const priorities = data.priorities ?? [];
   /* A failed write is as visible as a failed read (PageProps.actions): the
      server's own message lands under the control that tried it. */
   const [composerFailed, setComposerFailed] = useState<string | null>(null);
@@ -216,19 +312,44 @@ function Body({ data, error, actions, who, mobile }: {
     const title = draft.trim();
     if (!title || saving) return;
     const kindLabel = KINDS.find((k) => k.id === kind)?.label ?? kind;
-    if (!actions?.create) {
-      setTasks((ts) => [...ts, { id: Date.now(), title, who, kind, kindLabel, done: false }]);
+    const picked = assignees.find((a) => a.id === assignee);
+    const pickedPriority = priorities.find((p) => p.id === priority);
+
+    /* An optimistic row's id is NEGATIVE and decreasing: `Date.now()` can
+       collide with a real server id, and the collision silently merges two
+       different tasks in every keyed list on the page (P-TA-3). Nothing
+       server-side issues a negative id, so this one cannot. */
+    const localRow = (): Task => ({
+      id: -Date.now(),
+      title,
+      // Filed to the picked owner, or to whoever is standing at the composer,
+      // which is who the server's own `assignee` default names.
+      who: picked ? (picked.initials ?? picked.name.slice(0, 2)) : who,
+      kind, kindLabel, done: false,
+      due: due || undefined,
+      priority: pickedPriority?.label,
+    });
+
+    const settle = (row: Task) => {
+      setTasks((ts) => [...ts, row]);
       setDraft("");
-      return;
-    }
+      setDue("");
+    };
+
+    if (!actions?.create) { settle(localRow()); return; }
     setAdding(true);
     setComposerFailed(null);
     try {
-      await actions.create({ title, kind, kindLabel });
-      // The row the server just wrote, filed to whoever is signed in — the
-      // same person its own `assignee` default names.
-      setTasks((ts) => [...ts, { id: Date.now(), title, who, kind, kindLabel, done: false }]);
-      setDraft("");
+      // The row the server wrote, when it answers with one; otherwise the
+      // optimistic row the next refetch replaces.
+      const created = await actions.create({
+        title, kind, kindLabel,
+        assignee: picked?.id,
+        priority: pickedPriority?.id,
+        priorityLabel: pickedPriority?.label,
+        due: due || undefined,
+      });
+      settle(created ?? localRow());
     } catch (e) {
       setComposerFailed(why(e, "That task could not be added."));
     } finally {
@@ -251,43 +372,141 @@ function Body({ data, error, actions, who, mobile }: {
 
   const offline = Boolean(error);
 
-  const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  /* Filter and sort, over the rows already on the board. An inbox you cannot
+     narrow to "mine" or "overdue", and cannot order by when things are due,
+     is a list you read top to bottom forever (P-TA-5). Dates are ISO now, so
+     "due" is a real comparison rather than a string ordering (P-TA-4). */
+  const floor = startOfToday();
+  const shown = useMemo(() => {
+    const kept = tasks.filter((t) => {
+      if (view === "mine") return t.who === who;
+      if (view === "overdue") return isOverdue(t, floor);
+      return true;
+    });
+    const rank = (t: Task) => priorities.findIndex((p) => p.label === t.priority);
+    return [...kept].sort((a, b) => {
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "priority") {
+        const ra = rank(a), rb = rank(b);
+        return (ra < 0 ? priorities.length : ra) - (rb < 0 ? priorities.length : rb);
+      }
+      // Undated tasks sort last: an absent deadline is not an urgent one.
+      const av = a.due ? new Date(String(a.due)).getTime() : Infinity;
+      const bv = b.due ? new Date(String(b.due)).getTime() : Infinity;
+      return av - bv;
+    });
+  }, [tasks, view, sort, who, floor, priorities]);
+
+  const open = shown.filter((t) => !t.done);
+  const done = shown.filter((t) => t.done);
+
+  const views = [
+    { id: "all" as const, label: "All", count: tasks.length },
+    { id: "mine" as const, label: "Assigned to me", count: tasks.filter((t) => t.who === who).length },
+    { id: "overdue" as const, label: "Overdue", count: tasks.filter((t) => isOverdue(t, floor)).length },
+  ];
 
   const listBody = (rows: Task[], emptyText: string) => {
     // One banner for the page, not one per column: the same alert twice reads
     // as two separate failures.
     if (error) return <div className="py-6 text-center text-[13px] text-ink/70">{error}</div>;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
-    return rows.map((t) => <TaskRow key={t.id} task={t} onToggle={toggle} />);
+    return rows.map((t) => (
+      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenDoc={actions?.openDoc} />
+    ));
   };
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Fields first, primary action bottom LEFT (§2). */}
+      {/* Fields first, primary action bottom LEFT (§2). Owner, priority and
+          due date sit on ONE line, in that order (§7): the composer used to
+          collect a title and a kind only, so a due date was visible on every
+          row and settable on none, and every task filed itself to whoever was
+          signed in (P-TA-1). Each of the three is drawn only where the board
+          carries the vocabulary to store it. */}
       <Card className={composing ? "ring-1 ring-biscay-2/40" : ""}>
-        <div className="flex items-center gap-3">
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="New task: e.g. Re-verify SLA uptime fact"
-            className="min-w-0 flex-1"
-          />
-          <Select value={kind} onChange={(e) => setKind(e.target.value)} className="w-40 shrink-0">
-            {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-          </Select>
-        </div>
-        {composerFailed && <FieldError>{composerFailed}</FieldError>}
-        <div className="mt-3">
-          <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
-            <Plus size={15} /> {saving ? "Adding…" : "Add task"}
-          </Button>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-end gap-3">
+            <span className="min-w-0 flex-1">
+              <FormField label="Task">
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && add()}
+                  placeholder="Re-verify SLA uptime fact"
+                  className="w-full"
+                />
+              </FormField>
+            </span>
+            <span className="w-40 shrink-0">
+              <FormField label="Kind">
+                <Select value={kind} onChange={(e) => setKind(e.target.value)} className="w-full">
+                  {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+                </Select>
+              </FormField>
+            </span>
+          </div>
+
+          {(assignees.length > 0 || priorities.length > 0) && (
+            <div className="flex items-end gap-3">
+              {assignees.length > 0 && (
+                <span className="w-[220px] shrink-0">
+                  <FormField label="Owner">
+                    {/* An assignee picker is always a searchable combobox,
+                        never a plain select (§7, P-TA-2). */}
+                    <Combobox
+                      ariaLabel="Owner"
+                      placeholder="Assign to"
+                      searchPlaceholder="Search people"
+                      value={assignee}
+                      onChange={setAssignee}
+                      options={assignees.map((a) => ({ value: a.id, label: a.name }))}
+                    />
+                  </FormField>
+                </span>
+              )}
+              {priorities.length > 0 && (
+                <span className="w-40 shrink-0">
+                  <FormField label="Priority">
+                    <Select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full">
+                      <option value="">No priority</option>
+                      {priorities.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    </Select>
+                  </FormField>
+                </span>
+              )}
+              <span className="w-44 shrink-0">
+                <FormField label="Due date">
+                  <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-full" />
+                </FormField>
+              </span>
+            </div>
+          )}
+
+          {composerFailed && <FieldError>{composerFailed}</FieldError>}
+          <div>
+            <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
+              <Plus size={15} /> {saving ? "Adding…" : "Add task"}
+            </Button>
+          </div>
         </div>
       </Card>
 
       {offline && <ErrorMessage id="server.unavailable" />}
       {boardFailed && <FieldError>{boardFailed}</FieldError>}
+
+      {/* Filter left, sort on the SAME line (§13). */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs ariaLabel="Filter tasks" options={views} value={view} onChange={setView} />
+        <span className="ml-auto flex items-center gap-2">
+          <label className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65" htmlFor="tasks-sort">Sort</label>
+          <Select id="tasks-sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="w-44">
+            <option value="due">Due date</option>
+            <option value="title">Title</option>
+            {priorities.length > 0 && <option value="priority">Priority</option>}
+          </Select>
+        </span>
+      </div>
 
       {data.strip && <StressStrip strip={data.strip} />}
 
@@ -296,7 +515,9 @@ function Body({ data, error, actions, who, mobile }: {
           level, not via a component breakpoint (§10). */}
       <div className={mobile ? "grid grid-cols-1 gap-5" : DASH2}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
-          {listBody(open, "Nothing open: all caught up.")}
+          {/* The empty line names the filter, so a hidden backlog never reads
+              as an empty inbox. */}
+          {listBody(open, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
         </Column>
         <Column
           title="Done"
@@ -311,7 +532,7 @@ function Body({ data, error, actions, who, mobile }: {
             ) : null
           }
         >
-          {listBody(done, "No completed tasks yet.")}
+          {listBody(done, view === "all" ? "No completed tasks yet." : "No completed tasks in this filter.")}
         </Column>
       </div>
     </div>

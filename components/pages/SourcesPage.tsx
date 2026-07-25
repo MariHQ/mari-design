@@ -15,6 +15,7 @@ import { PropertyList } from "../data-display/PropertyList";
 import { Button } from "../actions/Button";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
+import { Select } from "../forms/Select";
 import { Textarea } from "../forms/Textarea";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Alert } from "../feedback/Alert";
@@ -25,8 +26,8 @@ import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark } from "../icons/marks";
 import { SourcesConnectorCard, type Source } from "../features/SourcesConnectorCard";
 import { SourcesConnectorWizard, type WizardProviderSpec } from "../features/SourcesConnectorWizard";
-import { SourcesSyncStatus, PhaseTracker } from "../features/SourcesSyncStatus";
-import { SourcesBots, type GithubStatus, type SlackStatus } from "../features/SourcesBots";
+import { PhaseTracker } from "../features/SourcesSyncStatus";
+import { SourcesBots, type GithubStatus, type SlackStatus, type SourcesBotsActions } from "../features/SourcesBots";
 import { Truncate } from "../data-display/Truncate";
 import type { PropertyItem } from "../data-display/PropertyList";
 
@@ -123,7 +124,7 @@ export type FirstSync = {
  *
  *  All optional. With none of them the page keeps the local behaviour the
  *  library ships, which is what the design canvas renders (CONVENTIONS.md §2). */
-export type SourcesActions = {
+export type SourcesActions = SourcesBotsActions & {
   /** Pre-flight credential check. Answers rather than throws: "not ok" is a
       normal result of a test, not a broken request. */
   testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
@@ -138,6 +139,13 @@ export type SourcesActions = {
   fullResync?: (s: Source) => void | Promise<void>;
   /** Destructive: stops syncing this source. Goes through <ConfirmButton>. */
   disconnect?: (s: Source) => void | Promise<void>;
+  /** Start the first sync again after it failed. Takes the provider key the
+      failed row carries, because that run has no source row behind it yet.
+      Without it the failure has no retry button rather than an inert one. */
+  retryFirstSync?: (provider: string) => void | Promise<void>;
+  /** How often this source syncs itself. `null` is manual only. Drawn only
+      for sources whose schedule the server actually reports. */
+  setSyncSchedule?: (s: Source, everyMinutes: number | null) => void | Promise<void>;
 };
 
 /** Everything Sources renders. */
@@ -193,7 +201,8 @@ function UploadBody({ chosen, seeded, onChoose }: {
         <p className="font-term text-[11px] text-ink/65">Markdown or text, up to 20 files, 1 MB each</p>
       </label>
       <div className="mt-3">
-        <SectionLabel>Selected files — {names.length}</SectionLabel>
+        {/* §5: no em dashes in user-visible copy. */}
+        <SectionLabel>Selected files, {names.length}</SectionLabel>
         <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
           {names.map((f) => (
             <li key={f} className="flex items-center gap-2 rounded-[4px] border border-ink/12 px-2.5 py-1.5 text-[12.5px] text-ink/80">
@@ -244,10 +253,13 @@ function ConfigureBody({ c, values, onChange, tested }: {
 function connectorSyncSource(c: Connector, phase: "sync" | "done"): SyncSource {
   const base = { id: c.key, name: `${c.name} · ${c.detail}`, mark: <SourceMark provider={c.key} size={24} /> } as const;
   if (phase === "done") {
+    /* No `lastSyncAt`: this function used to hand the panel the literal
+       "2026-07-21T14:12:00", so every finished connect reported the same
+       invented sync time as fact. The connector carries no timestamp, so the
+       row simply does not claim one (SyncPanel omits the line). */
     return {
       ...base, state: "done",
       docCount: c.sync.docCount, chunkCount: c.sync.chunkCount, embeddedCount: c.sync.chunkCount,
-      lastSyncAt: "2026-07-21T14:12:00",
     };
   }
   return {
@@ -420,7 +432,71 @@ const STATES = [
    read-only summary card plus one explanatory card. The connect and first-sync
    states swap the summary for the live phase tracker, which is what used to
    sit above the panel and force a half-width body. */
-function SourcesRail({ data }: { data: SourcesData }) {
+/** How often a source may sync itself. `""` is the manual-only option, because
+    a <select> value is a string. */
+const SCHEDULES: { value: string; label: string; minutes: number | null }[] = [
+  { value: "", label: "Manual only", minutes: null },
+  { value: "15", label: "Every 15 minutes", minutes: 15 },
+  { value: "60", label: "Every hour", minutes: 60 },
+  { value: "360", label: "Every 6 hours", minutes: 360 },
+  { value: "1440", label: "Every day", minutes: 1440 },
+  { value: "10080", label: "Every week", minutes: 10080 },
+];
+
+/* Sources had no schedule control anywhere: every sync was something a person
+   had to press. This is that control, one row per source.
+
+   It is drawn only for sources whose schedule the server reports
+   (`syncIntervalMinutes !== undefined`) and only with a handler to write it
+   to. A select over an unknown current value would be showing the user a
+   setting this page guessed. */
+function ScheduleCard({ sources, onSet }: {
+  sources: Source[];
+  onSet: (s: Source, everyMinutes: number | null) => void | Promise<void>;
+}) {
+  const scheduled = sources.filter((s) => s.syncIntervalMinutes !== undefined);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  if (scheduled.length === 0) return null;
+
+  const set = async (s: Source, value: string) => {
+    const minutes = SCHEDULES.find((o) => o.value === value)?.minutes ?? null;
+    setBusy(s.id);
+    setFailed(null);
+    try {
+      await onSet(s, minutes);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "That schedule could not be saved.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className={`${card} p-4`}>
+      <SectionLabel>Sync schedule</SectionLabel>
+      <ul className="mt-2 flex flex-col gap-2.5">
+        {scheduled.map((s) => (
+          <li key={s.id} className="flex min-w-0 flex-col gap-1">
+            <Truncate className="text-[12.5px] text-ink/80">{s.name}</Truncate>
+            <Select
+              className="w-full"
+              aria-label={`Sync schedule for ${s.name}`}
+              disabled={busy === s.id}
+              value={s.syncIntervalMinutes == null ? "" : String(s.syncIntervalMinutes)}
+              onChange={(e) => void set(s, e.target.value)}
+            >
+              {SCHEDULES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </li>
+        ))}
+      </ul>
+      {failed && <FieldError>{failed}</FieldError>}
+    </div>
+  );
+}
+
+function SourcesRail({ data, actions }: { data: SourcesData; actions?: SourcesActions }) {
   const connect = data.view === "connect" && data.connector !== null;
   const syncing = data.view === "sync-status";
 
@@ -451,6 +527,7 @@ function SourcesRail({ data }: { data: SourcesData }) {
         <SectionLabel>At a glance</SectionLabel>
         <PropertyList className="mt-3" items={data.summary} />
       </div>
+      {actions?.setSyncSchedule && <ScheduleCard sources={data.sources} onSet={actions.setSyncSchedule} />}
       <div className={`${card} p-4`}>
         <SectionLabel>Credentials</SectionLabel>
         <p className="mt-2 text-[12.5px] leading-relaxed text-ink/70">
@@ -545,29 +622,41 @@ function Body({ data, error, tab, actions }: {
     return <ConnectFlow c={data.connector} phase={data.connectPhase} uploadFiles={data.uploadFiles} actions={actions} />;
   }
   if (data.view === "sync-status") {
-    return <SyncPanel sources={[syncPhaseSource(data.firstSync, data.syncPhase)]} onRetry={() => {}} />;
+    /* Retry used to be `() => {}`: a button on a failed first sync that did
+       nothing at all (§2). It is drawn only where there is a handler behind
+       it, and SyncPanel hides it otherwise. */
+    return (
+      <SyncPanel
+        sources={[syncPhaseSource(data.firstSync, data.syncPhase)]}
+        onRetry={actions?.retryFirstSync && (() => void actions.retryFirstSync!(data.firstSync.provider))}
+      />
+    );
   }
   if (data.view === "bots" || tab === "bots") {
-    return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} />;
+    return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} actions={actions} />;
   }
 
-  // grid / wizard → connectors grid
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-end gap-2">
-        {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
-        <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
-      </div>
-      <SourcesConnectorCard sources={data.sources} actions={actions} />
-      <SourcesSyncStatus animate={false} />
-    </div>
-  );
+  /* grid / wizard → connectors grid.
+     `<SourcesSyncStatus animate={false} />` used to close this list. It takes
+     no props: it is the catalog's own self-advancing demo of the sync state
+     model, and it drew "GitHub · acme/handbook, 500 docs, 8,912 chunks" under
+     every real workspace's connectors. The live sync state for this workspace
+     is the `sync-status` view and each card's own sync line, both of which are
+     the workspace's own data. */
+  return <SourcesConnectorCard sources={data.sources} actions={actions} />;
 }
 
 function SourcesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SourcesData, SourcesActions>) {
   const [tab, setTab] = useState<Tab>(data.view === "bots" ? "bots" : "connectors");
+  /* The route is the truth about which screen is on: a refetch that lands on
+     the Bots view used to leave the tab row on Connectors (C1). */
+  const [seen, setSeen] = useState(data.view);
+  if (seen !== data.view) { setSeen(data.view); setTab(data.view === "bots" ? "bots" : "connectors"); }
   const pinned = data.view === "connect" || data.view === "sync-status";
   const bare = error !== null || isEmpty(data);
+  /* Add source / Upload belong to the connectors grid, and only there: on the
+     Bots tab, or mid-connect, they act on a screen that is not showing. */
+  const showConnectorTools = !pinned && tab === "connectors" && (data.view === "grid" || data.view === "wizard");
 
   if (loading) {
     return (
@@ -588,17 +677,26 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
         />
         {/* Sources IS one of the Settings tabs, so it carries the same row as
             the five settings/* pages — without it this page is reachable from
-            Settings and has no way back. The page's own sections drop to the
-            segmented variant so the two rows read as page-level and in-page
-            rather than as two competing navigations. */}
+            Settings and has no way back. That row is the page's navigation. */}
         <div className="mt-5"><SettingsTabs active="sources" onNavigate={chrome?.onNavigate} /></div>
+        {/* One nav row, then ONE toolbar. The Connectors/Bots switch used to
+            sit on a row of its own directly under the Settings tabs, so the
+            page opened with two stacked bars that read as competing
+            navigation. It now shares the toolbar line with the actions that
+            belong to the tab it selects (§13). */}
         {!bare && (
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <Tabs<Tab> ariaLabel="Sources sections" variant="seg" options={TAB_OPTIONS} value={pinned ? "connectors" : tab} onChange={setTab} />
+            {showConnectorTools && (
+              <div className="ml-auto flex flex-wrap items-start gap-2">
+                {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
+                <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
+              </div>
+            )}
           </div>
         )}
         <div className="mt-6">
-          <SplitBody mobile={mobile} rail={<SourcesRail data={data} />}>
+          <SplitBody mobile={mobile} rail={<SourcesRail data={data} actions={actions} />}>
             <Body data={data} error={error} tab={tab} actions={actions} />
           </SplitBody>
         </div>

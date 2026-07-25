@@ -1,16 +1,19 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Download } from "lucide-react";
 import {
   InsightsWidgets,
   type InsightStat, type ReadRow, type GlossRow, type InsightsActivity, type InsightsWidgetsActions,
 } from "../features/InsightsWidgets";
-import { InsightsFreshnessChart, type Freshness } from "../features/InsightsFreshnessChart";
+import { InsightsFreshnessChart, type Freshness, type BandKey } from "../features/InsightsFreshnessChart";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
+import { Button } from "../actions/Button";
+import { DateRangePicker, dateRangeLabel, type DateRange } from "../data-display/DateRangePicker";
 import { PageHeader } from "../layout/PageHeader";
 import { ErrorMessage } from "../feedback/ErrorMessage";
+import { fmtDate } from "../tokens/format";
 
 /* Insights (pages/insights.md). Read-mostly dashboard proving the knowledge
    cloud is working: the headline stat row + evidence panels (readability,
@@ -64,7 +67,15 @@ export type InsightsExtras = {
 /** What Insights can DO. Every handler may throw; the widget that owns the
     control shows the message beside it. Optional: without actions the controls
     keep the local echo the library ships (the canvas has no server). */
-export type InsightsActions = InsightsWidgetsActions;
+export type InsightsActions = InsightsWidgetsActions & {
+  /** Re-query the dashboard over a different window. Insights had no window
+      control at all: `since` was data the reader could see and never change.
+      Without this handler no picker is drawn — a range control that cannot
+      re-query would be decoration (§2). */
+  setRange?: (range: DateRange) => void;
+  /** Open the documents behind one freshness band. */
+  openFreshness?: (args: { source: string; band: BandKey }) => void;
+};
 
 /** Everything the Insights dashboard renders. */
 export type InsightsData = {
@@ -74,19 +85,58 @@ export type InsightsData = {
   /** `null` when the freshness query is unavailable, so the card is not
       rendered at all. `[]` is a real answer: no sources yet. */
   freshness: Freshness[] | null;
+  /** The window `widgets.since` came from, when the app can change it. */
+  range?: DateRange;
   extras: InsightsExtras | null;
 };
+
+/* ── Export ────────────────────────────────────────────────────────────────
+   Export writes out exactly the rows on screen, from the data already loaded.
+   It never asks the server for a wider set than the page was given, so the
+   file and the dashboard can never disagree. */
+
+const csvCell = (v: string | number): string => {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const csvRows = (rows: (string | number)[][]): string =>
+  rows.map((r) => r.map(csvCell).join(",")).join("\n");
+
+function insightsCsv(w: InsightsWidgetData, freshness: Freshness[] | null): string {
+  const out: (string | number)[][] = [["section", "key", "label", "value", "detail"]];
+  for (const s of w.stats) out.push(["stat", s.key, s.label, s.value, ""]);
+  for (const r of w.readability) out.push(["readability", r.id, r.title, r.grade, `${r.source}: ${r.note}`]);
+  for (const g of w.glossary) out.push(["glossary", g.id, g.term, g.variants.join(" / "), g.definition]);
+  for (const a of w.activity) out.push(["activity", a.id, a.actor, a.action, a.time]);
+  for (const f of freshness ?? []) {
+    out.push(["freshness", f.source, f.label ?? f.source, f.fresh + f.aging + f.stale, `fresh ${f.fresh}, aging ${f.aging}, stale ${f.stale}`]);
+  }
+  return csvRows(out);
+}
+
+function downloadCsv(name: string, body: string) {
+  const url = URL.createObjectURL(new Blob([body], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* <InsightsWidgets/> carries the page header (eyebrow, title, "counting
    since…"), so it must be the FIRST thing on the page and the freshness chart
    goes under it. The bare states below have no widgets, so the page supplies
-   the same header itself and keeps every Insights state on one rhythm. */
-function BareHeader() {
+   the same header itself and keeps every Insights state on one rhythm. The
+   page's own controls (range, export) pass THROUGH the widgets into that one
+   header rather than becoming a second toolbar row (§13). */
+function BareHeader({ actions }: { actions?: React.ReactNode }) {
   return (
     <PageHeader
       eyebrow="Insights"
       title="Insights"
       description="Usage, quality, and coverage across your knowledge base."
+      actions={actions}
     />
   );
 }
@@ -113,16 +163,23 @@ function Extras({ extras }: { extras: InsightsExtras }) {
 const GRID = `${DASH3} items-start [&>*]:min-w-0`;
 const GRID_M = "flex flex-col gap-5 [&>*]:min-w-0";
 
-/** Nothing measured yet. Derived from the data, so it is true in the real app
-    for exactly the same reason it is true on the canvas. */
+/** Nothing measured yet.
+
+    `widgets === null` is deliberately NOT empty: it means the widget query has
+    not answered, and the widgets' own skeletons are the honest render. Judging
+    it empty is what made a workspace with freshness data but no readability
+    rows claim there was nothing to measure, instead of letting each widget say
+    what it is missing. */
 function isEmpty(d: InsightsData): boolean {
   const w = d.widgets;
+  if (!w) return false;
   return !d.extras && !d.freshness?.length
-    && (!w || (!w.stats.length && !w.readability.length && !w.glossary.length && !w.activity.length));
+    && !w.stats.length && !w.readability.length && !w.glossary.length && !w.activity.length;
 }
 
-function Body({ data, error, actions, mobile }: {
+function Body({ data, error, actions, mobile, headerActions }: {
   data: InsightsData; error: string | null; actions?: InsightsActions; mobile: boolean;
+  headerActions?: React.ReactNode;
 }) {
   const grid = mobile ? GRID_M : GRID;
   const full = mobile ? "" : SPAN[3];
@@ -131,7 +188,8 @@ function Body({ data, error, actions, mobile }: {
     return (
       <>
         <BareHeader />
-        {/* Error copy is catalogued, not composed per page (§8). */}
+        {/* Error copy is catalogued, not composed per page (§8). No controls
+            beside a header whose page could not load. */}
         <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>
       </>
     );
@@ -139,7 +197,7 @@ function Body({ data, error, actions, mobile }: {
   if (isEmpty(data)) {
     return (
       <>
-        <BareHeader />
+        <BareHeader actions={headerActions} />
         <div className="mt-6">
           <EmptyState icon={<Sparkles size={22} />} title="Nothing to measure yet">
             Sync a source and run a few searches to start collecting insights.
@@ -150,14 +208,21 @@ function Body({ data, error, actions, mobile }: {
   }
 
   const w = data.widgets;
+  /* The window the numbers count over, said on the page rather than implied.
+     `data.range` only exists where the app can change it, so the sentence
+     never claims a window the reader cannot check. */
+  const periodLabel = data.range && w
+    ? `Usage, quality, and coverage over ${dateRangeLabel(data.range).toLowerCase()}, from ${fmtDate(w.since)}.`
+    : undefined;
+
   return (
     <div className={grid}>
       {w
-        ? <InsightsWidgets className={full} actions={actions} {...w} />
+        ? <InsightsWidgets className={full} actions={actions} headerActions={headerActions} periodLabel={periodLabel} {...w} />
         : <InsightsWidgets className={full} loading stats={[]} readability={[]} glossary={[]} activity={[]} since="" />}
       {data.freshness && (
         <div className={mobile ? "" : data.extras ? SPAN[2] : SPAN[3]}>
-          <InsightsFreshnessChart freshness={data.freshness} />
+          <InsightsFreshnessChart freshness={data.freshness} onOpenBand={actions?.openFreshness} />
         </div>
       )}
       {data.extras && <div className={mobile ? "" : SPAN[1]}><Extras extras={data.extras} /></div>}
@@ -166,13 +231,39 @@ function Body({ data, error, actions, mobile }: {
 }
 
 function InsightsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<InsightsData, InsightsActions>) {
+  const w = data.widgets;
+  const exportable = Boolean(
+    w && (w.stats.length || w.readability.length || w.glossary.length || w.activity.length),
+  );
+
+  /* Both controls are drawn only where they can act: the picker needs a
+     handler to re-query with, and Export needs rows to write. */
+  const headerActions = (data.range && actions?.setRange) || exportable ? (
+    <>
+      {data.range && actions?.setRange && (
+        <DateRangePicker value={data.range} onChange={actions.setRange} align="end" compact />
+      )}
+      {exportable && (
+        <Button
+          compact
+          onClick={() => downloadCsv(
+            `insights-${new Date().toISOString().slice(0, 10)}.csv`,
+            insightsCsv(w!, data.freshness),
+          )}
+        >
+          <Download size={14} /> Export CSV
+        </Button>
+      )}
+    </>
+  ) : undefined;
+
   return (
     <PageFrame chrome={chrome} active={navFor("insights")} title="Insights" mobile={mobile}>
       {loading ? (
         <SkeletonPage variant="dashboard" />
       ) : (
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-          <Body data={data} error={error} actions={actions} mobile={mobile} />
+          <Body data={data} error={error} actions={actions} mobile={mobile} headerActions={headerActions} />
         </div>
       )}
     </PageFrame>

@@ -152,6 +152,11 @@ const STRESS_ANSWER_2: Answer = {
 
 /* ── harvest wizard ────────────────────────────────────────────────────── */
 
+/* The sources this workspace can harvest from. This list used to be a
+   constant inside AnswersPage, which meant every workspace was offered the
+   same three places whether or not it had them connected. It is data now, and
+   the page draws no "Harvest questions" button without it — so a fixture that
+   omits it cannot review the wizard at all. */
 const HARVEST_SOURCES: HarvestSource[] = [
   { key: "slack", label: "Slack", desc: "Threads and decision chunks across connected channels.", on: true },
   { key: "docs", label: "Docs & repos", desc: "Google Docs, Notion pages, and GitHub READMEs.", on: true },
@@ -179,14 +184,20 @@ const list = (answers: Answer[], filter: AnswersData["filter"] = "all"): Answers
   filter,
   answers,
   coverage: COVERAGE,
+  harvestSources: HARVEST_SOURCES,
   pane: { kind: "answers" },
 });
 
 const DEFAULT = list([APPROVED, DRAFT, APPROVED_2]);
 
 /** Nothing curated at all: no answers and no coverage gaps, so the page's own
-    `isEmpty` check fires rather than the canvas faking the empty state. */
-const EMPTY: AnswersData = { stats: STATS, filter: "all", answers: [], coverage: [], pane: { kind: "answers" } };
+    `isEmpty` check fires rather than the canvas faking the empty state. No
+    harvest sources either: a workspace with nothing connected has nothing to
+    scan, and the page draws no button for it. */
+const EMPTY: AnswersData = {
+  stats: STATS, filter: "all", answers: [], coverage: [],
+  harvestSources: [], pane: { kind: "answers" },
+};
 
 export const FIXTURES: PageFixtures<AnswersData> = {
   default: { data: DEFAULT },

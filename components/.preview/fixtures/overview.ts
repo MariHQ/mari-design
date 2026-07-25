@@ -113,6 +113,12 @@ const SOURCES: PulseTileData[] = [
 
 const DEFAULT: OverviewData = {
   personName: "Dana",
+  /* The greeting reads the reader's own clock, in the zone Preferences
+     collects. Naming one here means the canvas exercises that path rather
+     than the browser fallback — and it is the zone the Preferences fixture
+     stores. */
+  timeZone: "America/Los_Angeles",
+  range: { preset: "30d" },
   stats: STATS, tasks: TASKS, digest: DIGEST, activity: ACTIVITY,
   docs: DOCS, flow: FLOW, run: RUN, sources: SOURCES,
   activityPollMs: 0,
