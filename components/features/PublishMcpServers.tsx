@@ -146,6 +146,12 @@ export function PublishMcpServers({
      compared on the token it carries. */
   useResync(initialServers, setServers, { hold: creating });
   useResync(revealServer, setFresh, { key: revealServer?.token ?? null });
+  /* `createOpen` was the third mount-only read, and the page renders this same
+     component for all three MCP screens — so React keeps ONE instance and a
+     route change from the list to `mcp-add` never opened the form. Held while
+     the reader has named a server, so a route landing under a half-filled
+     draft does not throw it away. */
+  useResync(createOpen, setCreating, { hold: name.trim() !== "" });
 
   const toggleCap = (setter: (fn: (c: string[]) => string[]) => void) => (k: string) =>
     setter((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));

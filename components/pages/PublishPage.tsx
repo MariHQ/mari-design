@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Truncate } from "../data-display/Truncate";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
@@ -27,6 +27,7 @@ import { Switch } from "../forms/Switch";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers, type McpServer, type PublishMcpActions } from "../features/PublishMcpServers";
 import { useWrite } from "../actions/useWrite";
+import { useResync } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
 import { Link } from "../navigation/Link";
 import { siteUrl } from "../tokens/siteUrl";
@@ -47,9 +48,10 @@ import { fmtDate } from "../tokens/format";
    `data`. A workspace with no sites renders the list's own empty state, under
    the list's own "New site" — the create path this page used to lack. */
 
-type Tab = "sites" | "mcp";
+/** Which of the two surfaces the top-level tab strip is on. */
+export type PublishSection = "sites" | "mcp";
 
-const TAB_OPTIONS: TabOption<Tab>[] = [
+const TAB_OPTIONS: TabOption<PublishSection>[] = [
   { id: "sites", label: "Doc sites" },
   { id: "mcp", label: "MCP servers" },
 ];
@@ -63,6 +65,15 @@ export type PublishPhase = "draft" | "publishing" | "published";
 export type PublishView =
   | "site-list" | "site-new" | "site-editor" | "publish-flow"
   | "mcp-list" | "mcp-add" | "mcp-token";
+
+/** Which tab a deep-linked view belongs under. The top strip used to be driven
+    off `data.view` alone, so clicking a tab moved the underline and nothing
+    else; the section a view belongs to is what seeds the tab, and the reader
+    owns it from then on. */
+const SECTION_OF: Record<PublishView, PublishSection> = {
+  "site-list": "sites", "site-new": "sites", "site-editor": "sites", "publish-flow": "sites",
+  "mcp-list": "mcp", "mcp-add": "mcp", "mcp-token": "mcp",
+};
 
 /** A doc site as the site list shows it. The workspace has as many as it has
     made; `site` below is the one an editor is open on. */
@@ -140,6 +151,11 @@ export type McpCreated = {
     edits: adding, removing and reordering a section are all one write of the
     new order. Without it the tree keeps its local echo (the canvas). */
 export type PublishActions = PublishMcpActions & {
+  /** The reader switched the top-level tab. Like Knowledge's `setQuery`, the
+      page reports it and the app decides where it lives — in the URL, so a
+      Publish tab survives a reload and can be linked. Without the handler the
+      tab is this page's own state, which is what the canvas renders. */
+  openSection?: (section: PublishSection) => void;
   /** Leave the site editor and go back to the list of sites. Which view is on
       screen lives in `data`, so the page cannot go back on its own. */
   openSites?: () => void;
@@ -227,13 +243,12 @@ function ContentBody({ site, actions }: { site: DocSite; actions?: PublishAction
     Object.fromEntries(site.features.map((f) => [f.key, f.on])),
   );
   /* A refetch replaces the site under this panel; without the resync the
-     editor kept rendering the nav and switches it mounted with (C1). */
-  const [seen, setSeen] = useState(site);
-  if (seen !== site) {
-    setSeen(site);
-    setNav(site.nav);
-    setFeatures(Object.fromEntries(site.features.map((f) => [f.key, f.on])));
-  }
+     editor kept rendering the nav and switches it mounted with (C1). Held
+     while a new section is half-typed, so the refetch does not eat it. */
+  useResync(site, (s) => {
+    setNav(s.nav);
+    setFeatures(Object.fromEntries(s.features.map((f) => [f.key, f.on])));
+  }, { hold: newSection.trim() !== "" });
   const write = useWrite();
 
   /* One path for every nav edit: the server takes the whole tree, and the row
@@ -496,16 +511,11 @@ function SiteEditorInline({ initialTab, site, mobile, actions }: { initialTab: E
      the editor owns it from then on, because the tab row is a control the
      user clicks, not a read-out of the route. */
   const [tab, setTab] = useState<EditorTab>(initialTab);
-  const [seenTab, setSeenTab] = useState(initialTab);
-  if (seenTab !== initialTab) { setSeenTab(initialTab); setTab(initialTab); }
+  useResync(initialTab, setTab);
   /* The theme being previewed lives here so the Theme tab and the live
      preview beside it are the same value (P-PU-3). */
   const [theme, setTheme] = useState({ preset: site.themes[0]?.key ?? "", accent: site.accents[0] ?? "" });
-  const [seenSite, setSeenSite] = useState(site);
-  if (seenSite !== site) {
-    setSeenSite(site);
-    setTheme({ preset: site.themes[0]?.key ?? "", accent: site.accents[0] ?? "" });
-  }
+  useResync(site, (s) => setTheme({ preset: s.themes[0]?.key ?? "", accent: s.accents[0] ?? "" }));
   const deploy = () => write.run(
     actions?.deploySite && (() => actions.deploySite!()),
     () => { setDeployed(true); window.setTimeout(() => setDeployed(false), 2400); },
@@ -581,8 +591,10 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
   const write = useWrite();
 
   /* A create invalidates the read behind it, so the next `sites` is the new
-     truth rather than the copy taken at mount. */
-  useEffect(() => { setRows(sites); }, [sites]);
+     truth rather than the copy taken at mount. Through the one sentinel
+     (actions/useResync.ts): as an effect this painted one frame of the stale
+     list before correcting itself. */
+  useResync(sites, setRows);
 
   const create = async (name: string, domain: string, sourceTags: string[]) => {
     const ok = await write.run(
@@ -862,42 +874,70 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
   );
 }
 
-function Body({ data, error, mobile, actions }: { data: PublishData; error: string | null; mobile: boolean; actions?: PublishActions }): ReactNode {
+function Body({ data, section, error, mobile, actions }: {
+  data: PublishData; section: PublishSection; error: string | null; mobile: boolean; actions?: PublishActions;
+}): ReactNode {
   /* XA-01: this was the closest of the eight hand-rolled read-failure
      surfaces, but it was still a copy. One surface, shared with every other
      page: catalog heading and tone, the server's own message underneath. */
   if (error) return <ReadError>{error}</ReadError>;
+
+  /* The TAB decides which of the two surfaces is on screen; `data.view` only
+     decides which SCREEN of that surface, and only when it belongs to it.
+     This switched on `data.view` alone, so the tab strip above set state that
+     nothing here read: the underline moved and the panel never changed. */
+  if (section === "mcp") {
+    /* All three MCP screens are the same component. They used to be two static
+       copies of it plus the real one, so "Create server", "Cancel" and both
+       "New server" buttons were decoration. */
+    return (
+      <PublishMcpServers
+        servers={data.servers}
+        actions={actions}
+        createOpen={data.view === "mcp-add"}
+        /* A token screen with no token would render the one-time reveal empty.
+           The reveal is what `createServer` hands back, so a `mcp-token` route
+           that carries nothing shows the plain list (§2). */
+        revealServer={data.view === "mcp-token" && data.created.token
+          ? { name: data.created.name, token: data.created.token }
+          : null}
+      />
+    );
+  }
 
   const siteList = (
     <SiteList sites={data.sites} tagOptions={data.tagOptions} createOpen={data.view === "site-new"} actions={actions} />
   );
 
   switch (data.view) {
-    /* All three MCP screens are the same component. They used to be two static
-       copies of it plus the real one, so "Create server", "Cancel" and both
-       "New server" buttons were decoration. */
-    case "mcp-add":
-      return <PublishMcpServers servers={data.servers} actions={actions} createOpen />;
-    case "mcp-token":
-      return <PublishMcpServers servers={data.servers} actions={actions} revealServer={{ name: data.created.name, token: data.created.token }} />;
-    case "mcp-list":
-      return <PublishMcpServers servers={data.servers} actions={actions} />;
     case "publish-flow":
-      return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} actions={actions} /> : null;
+      /* Same fallback as the editor: a deploy flow with no site to deploy is a
+         blank panel, and the list is where the reader picks one. */
+      return data.site ? <PublishFlow phase={data.phase} site={data.site} mobile={mobile} actions={actions} /> : siteList;
     case "site-editor":
       /* No site on an editor route means the row is gone (or has not arrived).
          The list is the honest fallback — a blank panel is not. */
       return data.site ? <SiteEditorInline initialTab={data.editorTab} site={data.site} mobile={mobile} actions={actions} /> : siteList;
-    case "site-list":
-    case "site-new":
     default:
+      /* Includes the MCP views: the reader is on Doc sites, so that is what
+         they get, whatever screen the route last named. */
       return siteList;
   }
 }
 
 function PublishPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<PublishData, PublishActions>) {
-  const mcpView = data.view.startsWith("mcp");
-  const [tab, setTab] = useState<Tab>(mcpView ? "mcp" : "sites");
+  /* Seeded by the route, then owned by the reader — the seen-sentinel idiom
+     (actions/useResync.ts). `data.view` is how an app deep-links a screen (it
+     routes to `mcp-token` after minting a token), so a NEW view adopts its
+     section; between those, the tab the reader clicked wins. The old code
+     wrote `value={mcpView ? "mcp" : tab}`, which let the route veto the click
+     for as long as an MCP view stayed on. */
+  const section = SECTION_OF[data.view] ?? "sites";
+  const [tab, setTab] = useState<PublishSection>(section);
+  useResync(section, setTab);
+  /* The app is told, so it can put the tab in the URL and a Publish tab
+     survives a reload; with no handler the tab stays local to this page. */
+  const pickTab = (next: PublishSection) => { setTab(next); actions?.openSection?.(next); };
   // Only a failed read has nothing to switch between: the site list exists
   // even when the workspace has no sites, because it is where one is made.
   const bare = error !== null;
@@ -929,9 +969,9 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
         />
         <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
           {!bare && (
-            <Tabs<Tab> ariaLabel="Publish sections" variant="underline" options={TAB_OPTIONS} value={mcpView ? "mcp" : tab} onChange={setTab} />
+            <Tabs<PublishSection> ariaLabel="Publish sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={pickTab} />
           )}
-          <Body data={data} error={error} mobile={mobile} actions={actions} />
+          <Body data={data} section={tab} error={error} mobile={mobile} actions={actions} />
         </div>
       </div>
     </PageFrame>
