@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button, type ButtonProps } from "./Button";
 
@@ -14,48 +14,64 @@ export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
   /* Start already armed. Only the design canvas should pass this: it is how
      the confirm step gets captured as a state without a click, which is what
      the Settings pages used to fake by drawing a second, static copy of the
-     whole table beside the real one. No disarm timer runs until you actually
-     click, so the armed step holds still for a screenshot. */
+     whole table beside the real one. */
   defaultArmed?: boolean;
 };
 
 /* Two-step confirm, the one pattern for deletes/revokes and for any yes/no
-   that must not fire on first click. First click arms ("Really delete?"),
-   second within 4s fires; blur or timeout disarms. Replaces window.confirm
-   and unguarded deletes.
+   that must not fire on first click. First press arms ("Really delete?"), the
+   next press fires; leaving the button, or Escape, disarms. Replaces
+   window.confirm and unguarded deletes.
 
    Wherever this sits inline on a card or panel it belongs BOTTOM LEFT, ahead
    of any secondary action (CONVENTIONS.md §2). */
 export function ConfirmButton({
   confirmLabel = "Really?", onConfirm, confirmVariant = "danger", defaultArmed = false,
-  children, onBlur, ...rest
+  children, onBlur, onKeyDown, ...rest
 }: ConfirmButtonProps) {
   const [armed, setArmed] = useState(defaultArmed);
-  const timer = useRef<number>();
-
-  useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const click = () => {
     if (armed) {
-      window.clearTimeout(timer.current);
       setArmed(false);
       onConfirm();
     } else {
       setArmed(true);
-      timer.current = window.setTimeout(() => setArmed(false), 4000);
     }
   };
 
   return (
-    <Button
-      {...rest}
-      variant={armed ? confirmVariant : "default"}
-      onClick={click}
-      onBlur={(e) => { setArmed(false); onBlur?.(e); }}
-    >
-      {armed
-        ? <>{confirmVariant === "success" && <Check size={13} />}{confirmLabel}</>
-        : children}
-    </Button>
+    <>
+      <Button
+        {...rest}
+        variant={armed ? confirmVariant : "default"}
+        onClick={click}
+        /* WCAG 2.2.1: arming used to expire after 4s, an unadjustable time
+           limit on the console's only destructive-action pattern — long enough
+           for a mouse, nowhere near enough for someone reading the new label
+           with a screen reader or a switch. The timer is gone. Disarming is
+           now under the user's control: move off the button, or press Escape.
+           Nothing can fire without a second, deliberate press on the button
+           whose label says what it will do. */
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && armed) { e.stopPropagation(); setArmed(false); }
+          onKeyDown?.(e);
+        }}
+        onBlur={(e) => { setArmed(false); onBlur?.(e); }}
+      >
+        {armed
+          ? <>{confirmVariant === "success" && <Check size={13} />}{confirmLabel}</>
+          : children}
+      </Button>
+      {/* ACC-07: arming was silent. The label swapped to "Really delete?" with
+          nothing announced, so a screen-reader user heard the ORIGINAL label,
+          pressed again to retry what looked like a dead button, and destroyed
+          the record. The armed step now says so, and says how to back out. */}
+      {armed && (
+        <span role="alert" className="sr-only">
+          {confirmLabel} Press again to confirm, or Escape to cancel.
+        </span>
+      )}
+    </>
   );
 }

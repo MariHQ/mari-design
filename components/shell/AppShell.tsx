@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { focusRing } from "../tokens/focusRing";
 
 /* App layout — composes the Sidebar, the HeaderBar, and a scrollable content
    region, mirroring the console shell's `grid: sidebar 1fr` + sticky topbar +
@@ -42,13 +43,30 @@ export function AppShell({
   const ctx: ShellContext = { collapsed, toggle };
 
   return (
-    <div className={["flex h-full min-h-0 w-full overflow-hidden bg-paper text-ink", className].filter(Boolean).join(" ")}>
+    <div className={["relative flex h-full min-h-0 w-full overflow-hidden bg-paper text-ink", className].filter(Boolean).join(" ")}>
+      {/* SH5: without this a keyboard user crossed the collapse toggle, the
+          brand, 13 nav items, the help card, search, the bell and the account
+          menu before reaching the page — on every page, every time. Invisible
+          until focused, and the first thing Tab reaches. */}
+      <a
+        href="#main-content"
+        className={`sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[100] focus:rounded-[4px] focus:border focus:border-ink/25 focus:bg-paper focus:px-3 focus:py-2 focus:text-[13px] focus:font-medium focus:text-ink ${focusRing}`}
+      >
+        Skip to main content
+      </a>
       <div className="shrink-0 border-r border-ink/10 transition-[width] duration-150 ease-out">
         {sidebar(ctx)}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {header(ctx)}
-        <main className={["min-h-0 flex-1 overflow-y-auto bg-flysch/40", contentClassName].filter(Boolean).join(" ")}>
+        {/* Named, and focusable as a skip target: an unlabelled <main> gives
+            the landmark list nothing to distinguish it by (SH5). */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          aria-label="Main content"
+          className={["min-h-0 flex-1 overflow-y-auto bg-flysch/40 outline-none", contentClassName].filter(Boolean).join(" ")}
+        >
           {children}
         </main>
       </div>

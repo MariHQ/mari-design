@@ -133,6 +133,13 @@ function Extras({ extras }: { extras: FlowsExtras }) {
   );
 }
 
+/* The Flows split, owned HERE. The editor, the run panel and the run history
+   each used to hard-code their own rail (340px, 400px, 380px), so the plumb
+   line moved as the user walked between three surfaces of the same page. §10:
+   components are desktop-first fixed-width and the PAGE owns the split. */
+const runSplit = (mobile: boolean) =>
+  mobile ? "flex flex-col gap-5" : `items-start [&>*]:min-w-0 ${SPLIT[420]}`;
+
 function Body({ data, error, actions, mobile }: {
   data: FlowsData; error: string | null; actions?: FlowsActions; mobile: boolean;
 }) {
@@ -147,6 +154,7 @@ function Body({ data, error, actions, mobile }: {
     return (
       <FlowsPipelineEditor
         {...editor}
+        split={runSplit(mobile)}
         onBack={actions?.openFlows}
         onSave={actions?.saveFlow && ((flow) => actions.saveFlow!({ id, ...flow }))}
         /* Running from the editor is the same run the list starts, so it is
@@ -164,8 +172,8 @@ function Body({ data, error, actions, mobile }: {
        below, at the PAGE level — the run panels stay desktop fixed-width. */
     const runs = (
       <div className="flex min-w-0 flex-col gap-5">
-        {data.runHistory && <FlowsRunHistory runs={data.runHistory.runs} limit={data.runHistory.limit} actions={actions} />}
-        {data.runPanel && <FlowsRunPanel runs={data.runPanel.runs} openNumber={data.runPanel.openNumber} actions={actions} />}
+        {data.runHistory && <FlowsRunHistory runs={data.runHistory.runs} limit={data.runHistory.limit} actions={actions} split={runSplit(mobile)} />}
+        {data.runPanel && <FlowsRunPanel runs={data.runPanel.runs} openNumber={data.runPanel.openNumber} actions={actions} split={runSplit(mobile)} />}
       </div>
     );
     if (!data.extras) return runs;

@@ -11,7 +11,9 @@ export function Page({ title, subtitle, kicker, actions, children }: { title: st
               {kicker}
             </div>
           )}
-          <h3 className="text-[22px] font-bold tracking-[-0.015em] text-ink">{title}</h3>
+          {/* h1, matching PageHeader: the page title is the top of the document
+              outline, not a third-level heading (ACC-01). Size unchanged. */}
+          <h1 className="text-[22px] font-bold tracking-[-0.015em] text-ink">{title}</h1>
           <p className="text-[13px] text-ink/60 mt-1 max-w-[680px]">{subtitle}</p>
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}

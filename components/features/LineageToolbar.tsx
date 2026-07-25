@@ -343,7 +343,15 @@ export function LineageToolbar({
                 <button
                   key={r.id}
                   type="button"
+                  /* Both paths, not just mousedown (ACC-03): keyboard
+                     activation fires `click` and never `mousedown`, so these
+                     suggestions were Tab-reachable and could not be chosen.
+                     The mousedown preventDefault stays — it is what keeps the
+                     search input focused when a suggestion is clicked — and the
+                     click handler runs only for keyboard activation, which
+                     reports `detail === 0`. */
                   onMouseDown={(e) => { e.preventDefault(); setControls({ query: r.node.title }); }}
+                  onClick={(e) => { if (e.detail === 0) setControls({ query: r.node.title }); }}
                   className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left hover:bg-flysch active:bg-ink/[0.07] ${focusRing}`}
                 >
                   <span className="shrink-0 text-ink/75"><NodeGlyph node={r.node} size={16} /></span>

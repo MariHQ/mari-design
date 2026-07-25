@@ -29,6 +29,8 @@ export function CardTitleBlock({
           {eyebrow}
         </span>
       )}
+      {/* Stays h3, which is now the correct rung: page title h1 (PageHeader),
+          card heading h2 (Card), item heading h3 (ACC-01). */}
       <h3 className="text-[15px] font-semibold leading-snug text-ink">{title}</h3>
       {summary && <p className="mt-1 text-[13px] leading-relaxed text-ink/70">{summary}</p>}
     </div>
@@ -86,7 +88,11 @@ export function CardSection({
   return (
     <section className={className}>
       <div className="flex items-center gap-2 mb-2">
-        <h4 className="font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65">{label}</h4>
+        {/* h3, not h4: a CardSection is just as often a direct child of a card
+            (h2) as it is a block under a CardTitleBlock (h3), and at h4 the
+            first case skipped a level (ACC-01). At h3 it either descends by one
+            or reads as a sibling of the item title — never a gap. */}
+        <h3 className="font-term text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink/65">{label}</h3>
         {count != null && (
           <span className="font-term text-[10.5px] font-medium text-ink/65 bg-flysch border border-ink/10 rounded-[3px] px-1.5">
             {count}

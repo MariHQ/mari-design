@@ -219,11 +219,26 @@ export function RunInspector({
 /** Runs rendered in the live list beside the panel. */
 const LIST_PAGE = 30;
 
-/** What a run inspector can DO. Optional: without it the panel keeps resuming
-    the run locally, which is what the design canvas renders. */
+/* One rail width for every Flows surface. The PAGE owns the split (§10/§11:
+   components are desktop-first fixed-width), so FlowsPage passes its own
+   `PageFrame.SPLIT` value through `split`. This is only the standalone/canvas
+   fallback, and the editor, the run panel and the run history all share it —
+   they used to own 340px, 400px and 380px each, so the plumb line jumped as
+   the user moved between three surfaces of one page (X6). */
+export const FLOWS_SPLIT =
+  "grid grid-cols-1 items-start gap-5 [&>*]:min-w-0 xl:grid-cols-[minmax(0,1fr)_420px]";
+
+/** What a run inspector can DO. Optional, and each control is drawn only when
+    its handler exists (§2): a run is a server-side fact, so a panel with no
+    handler has nothing honest to echo. */
 export type FlowsRunActions = {
   /** Resume a run paused at an approval step. May throw; the panel shows it. */
   approveRun?: (runId: string) => void | Promise<void>;
+  /** Start a fresh run of the flow this run belongs to. `dry` is the test run.
+      Takes the RUN id: a run row knows its workflow (`workflow_runs.workflow_id`),
+      so the host resolves the flow rather than the panel guessing one.
+      May throw; the panel shows it. */
+  rerunRun?: (runId: string, dry: boolean) => void | Promise<void>;
 };
 
 export type FlowsRunPanelProps = {
@@ -231,21 +246,57 @@ export type FlowsRunPanelProps = {
   runs: WorkflowRun[];
   /** Run number to open by default. */
   openNumber?: number;
-  /** Side effects the inspector offers. Omitted = local echo only. */
+  /** Side effects the inspector offers. Omitted = a read-only inspector. */
   actions?: FlowsRunActions;
+  /** The page's main-column/rail split (§11). */
+  split?: string;
   /** Render a content-shaped skeleton silhouette instead of the panel. */
   loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = false, className = "" }: FlowsRunPanelProps) {
-  const [runs, setRuns] = useState<WorkflowRun[]>(initial);
-  const [openId, setOpenId] = useState<string | null>(
-    (openNumber != null ? runs.find((r) => r.number === openNumber) : runs[0])?.id ?? null,
-  );
+const defaultOpen = (runs: WorkflowRun[], openNumber?: number) =>
+  (openNumber != null ? runs.find((r) => r.number === openNumber) : runs[0])?.id ?? null;
+
+/* The one echo an approval earns. `approve_run` marks the paused row approved
+   and puts the run back to running; it says NOTHING about the steps below it,
+   because the engine has not reached them yet. This used to rewrite every
+   PENDING row to "passed · Deployed", so approving a deploy gate reported a
+   deploy that had not happened (I2). The next read of the run replaces it. */
+function withApproval(r: WorkflowRun): WorkflowRun {
+  if (r.status !== "waiting") return r;
+  return {
+    ...r,
+    status: "running",
+    rows: r.rows?.map((row) =>
+      row.status === "waiting" ? { ...row, status: "passed", detail: "Approved by you" } : row),
+  };
+}
+
+export function FlowsRunPanel({
+  runs: incoming, openNumber, actions, split = FLOWS_SPLIT, loading = false, className = "",
+}: FlowsRunPanelProps) {
+  const [approved, setApproved] = useState<string[]>([]);
+  const [openId, setOpenId] = useState<string | null>(defaultOpen(incoming, openNumber));
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+
+  /* Seen-sentinel resync (X9). The panel used to copy `runs` into state once
+     and never look at the prop again, so every later read was thrown away —
+     which is how a locally-minted run row survived every refetch. Props are
+     now the only source of run rows; local state carries the selection and the
+     approval echo, both of which the incoming read supersedes. */
+  const [seenRuns, setSeenRuns] = useState(incoming);
+  if (seenRuns !== incoming) {
+    setSeenRuns(incoming);
+    setApproved([]);
+    if (!incoming.some((r) => r.id === openId)) setOpenId(defaultOpen(incoming, openNumber));
+  }
+
+  const runs = approved.length
+    ? incoming.map((r) => (approved.includes(r.id) ? withApproval(r) : r))
+    : incoming;
 
   const run = openId ? runs.find((r) => r.id === openId) ?? null : null;
   const visible = runs.slice(0, LIST_PAGE);
@@ -254,10 +305,8 @@ export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = fa
     setBusy(true);
     setFailed(null);
     try {
-      if (actions?.approveRun) await actions.approveRun(r.id);
-      setRuns((rs) => rs.map((x) => (x.id === r.id
-        ? { ...x, status: "passed", rows: x.rows?.map((row) => (row.status === "waiting" ? { ...row, status: "passed", detail: "Approved by you" } : row.status === "pending" ? { ...row, status: "passed", detail: "Deployed" } : row)) }
-        : x)));
+      await actions!.approveRun!(r.id);
+      setApproved((a) => (a.includes(r.id) ? a : [...a, r.id]));
       setNote(`Approved run #${r.number}: the run is resuming.`);
     } catch (err) {
       setFailed(err instanceof Error ? err.message : `Could not approve run #${r.number}.`);
@@ -266,21 +315,27 @@ export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = fa
     }
   };
 
-  const rerun = (r: WorkflowRun, dry: boolean) => {
-    const nextNumber = Math.max(...runs.map((x) => x.number)) + 1;
-    const fresh: WorkflowRun = {
-      ...r, id: `r${nextNumber}`, number: nextNumber, status: "running", dry, started: new Date().toISOString(),
-      duration: undefined, triggeredBy: undefined, headline: "Re-running…",
-      rows: r.rows?.map((row, i) => ({ ...row, status: i === 0 ? "passed" : "pending", detail: i === 0 ? row.detail : undefined, duration: i === 0 ? row.duration : undefined })),
-    };
-    setRuns((rs) => [fresh, ...rs]);
-    setOpenId(fresh.id);
-    setNote(`Started run #${nextNumber}${dry ? " as a test" : ""}: this panel is now showing it.`);
+  /* Re-run starts a run on the SERVER and says only that. It used to invent
+     the next run number, stamp it with `new Date()` and splice a permanently
+     "running" row into a table headed "durable and complete" (I1). The panel
+     cannot know the new run's number, so it does not name one. */
+  const rerun = async (r: WorkflowRun, dry: boolean) => {
+    setBusy(true);
+    setFailed(null);
+    setNote(null);
+    try {
+      await actions!.rerunRun!(r.id, dry);
+      setNote(`Re-run of ${r.workflowName} started${dry ? " as a test" : ""}. It appears in this list when the runs reload.`);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : `Could not re-run ${r.workflowName}.`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
     return (
-      <div className={`grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`} aria-hidden="true">
+      <div className={`${split} ${className}`} aria-hidden="true">
         <SkeletonList rows={5} />
         <SkeletonCard lines={6} footer />
       </div>
@@ -288,8 +343,9 @@ export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = fa
   }
 
   return (
-    <div className={`grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_400px] ${className}`}>
-      {/* Faux live list behind the panel */}
+    <div className={`${split} ${className}`}>
+      {/* The live list behind the panel. Every row is a run the caller read;
+          the panel has never been allowed to add one. */}
       <div className={`${card} overflow-hidden`}>
         <div className="border-b border-ink/10 px-4 py-3">
           <h3 className="text-[15px] font-semibold text-ink">Recent runs</h3>
@@ -332,12 +388,16 @@ export function FlowsRunPanel({ runs: initial, openNumber, actions, loading = fa
       </div>
 
       {/* The run panel inspector */}
-      <div className="lg:sticky lg:top-4">
+      {/* Sticky from the breakpoint the split actually appears at (xl). */}
+      <div className="xl:sticky xl:top-4">
         <RunInspector
           run={run}
           onClose={() => { setOpenId(null); setNote(null); setFailed(null); }}
-          onApprove={(r) => void approve(r)}
-          onRerun={rerun}
+          /* Drawn only when a handler exists (§2). Both controls report a
+             server-side fact, so with nothing behind them there is no local
+             behaviour that would not be a lie. */
+          onApprove={actions?.approveRun ? (r) => void approve(r) : undefined}
+          onRerun={actions?.rerunRun ? (r, dry) => void rerun(r, dry) : undefined}
           busy={busy}
           note={note}
           error={failed}

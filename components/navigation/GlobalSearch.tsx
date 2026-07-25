@@ -58,13 +58,16 @@ export type GlobalSearchProps = {
       asynchronously; without it a slow backend is indistinguishable from
       "no results", which reads as a broken search. */
   loading?: boolean;
+  /** Right-hand note in the footer, e.g. what the host's search actually does.
+      Only the host knows that, so nothing is shown when this is omitted. */
+  footerNote?: ReactNode;
 };
 
 export function GlobalSearch({
   open, onOpenChange, scopes, results = [], onQuery, onSelect,
   recentSearches = [], onRecentSelect,
   placeholder = "Search knowledge, people, sources…",
-  value, onValueChange, loading = false,
+  value, onValueChange, loading = false, footerNote,
 }: GlobalSearchProps) {
   const [internalQuery, setInternalQuery] = useState("");
   const query = value ?? internalQuery;
@@ -73,7 +76,17 @@ export function GlobalSearch({
   const [scope, setScope] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
-  useEffect(() => { if (open) { if (value === undefined) setInternalQuery(""); setScope(null); setActive(0); } }, [open, value]);
+  /* NAV-02: this reset must fire on the OPEN edge only. `value` used to be in
+     the deps and PageFrame drives GlobalSearch in its controlled form, so every
+     keystroke changed `value`, re-ran this, and cleared the scope the user had
+     just picked. Picking "Docs" and typing immediately unpicked "Docs". */
+  const controlled = value !== undefined;
+  useEffect(() => {
+    if (!open) return;
+    if (!controlled) setInternalQuery("");
+    setScope(null);
+    setActive(0);
+  }, [open, controlled]);
 
   // Scope chips: explicit prop, else derived from whichever scopes have results.
   const scopeList = useMemo<SearchScope[]>(() => {
@@ -211,7 +224,12 @@ export function GlobalSearch({
           <div className="flex items-center gap-4 px-4 h-9 border-t border-ink/10 font-term text-[10.5px] text-ink/65 shrink-0">
             <span className="flex items-center gap-1.5"><ArrowUp size={11} /><ArrowDown size={11} />to navigate</span>
             <span className="flex items-center gap-1.5"><CornerDownLeft size={11} />to open</span>
-            <span className="ml-auto">Hybrid search · BM25 + embeddings</span>
+            {/* NAV-01: this used to read "Hybrid search · BM25 + embeddings"
+                unconditionally. Results come from the host's `onQuery` (or from
+                a static `results` array), so this component has no way to know
+                what retrieval ran, and naming a ranking algorithm it cannot see
+                is invented data. The host says it, or nothing is said. */}
+            {footerNote && <span className="ml-auto">{footerNote}</span>}
           </div>
         </RD.Content>
       </RD.Portal>

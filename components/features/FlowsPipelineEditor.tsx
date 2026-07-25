@@ -15,7 +15,10 @@ import { Select } from "../forms/Select";
 import { Switch } from "../forms/Switch";
 import { type WorkflowRun } from "../workflow/RunHistory";
 import { FlowRunsTable } from "./FlowsRunHistory";
+import { FLOWS_SPLIT } from "./FlowsRunPanel";
 import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
+import { Alert } from "../feedback/Alert";
+import { ERRORS } from "../feedback/errors";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 
@@ -105,6 +108,54 @@ const STEP_PAGE = 25;
 const asNum = (v: unknown, f = 0) => { const n = Number(v); return Number.isNaN(n) ? f : n; };
 const asStr = (v: unknown) => (v == null ? "" : String(v));
 
+/** The condition a yes-branch step hangs off, or null when it has none. */
+function branchConditionIndex(steps: EditorStep[], i: number): number | null {
+  if (!steps[i]?.only_if_branch) return null;
+  for (let j = i - 1; j >= 0; j--) {
+    if (steps[j].kind === "condition") return j;
+    if (!steps[j].only_if_branch) break;
+  }
+  return null;
+}
+
+/** Steps whose own config panel says "Position it after a Fetch docs step":
+    they operate over the fetched set, so ahead of one there is nothing for
+    them to operate on. */
+const NEEDS_FETCH: StepKind[] = ["fact_check", "summarize", "derive_links", "refresh_digest", "scan_facts"];
+
+/** What is wrong with a draft, in step order. Empty means it can be saved.
+
+    The editor validated NOTHING before `onSave`, so a pipeline could be
+    persisted in states the engine cannot run: a branch whose condition had
+    been deleted or reordered below it, an approval assigned to nobody (the run
+    then pauses forever), a fetch-dependent step in position 1, and an unnamed
+    flow stored as "Untitled flow" (WF11). `write.failed` only ever surfaced
+    what the SERVER rejected, and the server rejects none of these. */
+export function validateFlow(name: string, steps: EditorStep[]): string[] {
+  const problems: string[] = [];
+  if (!name.trim()) problems.push("The flow has no name. Name it above the pipeline.");
+  if (steps.length === 0) problems.push("The flow has no steps.");
+  else if (steps[0].kind !== "trigger") {
+    problems.push(`Step 1 is "${KIND_META[steps[0].kind].name}". Every flow starts with its source event.`);
+  }
+
+  const where = (i: number, s: EditorStep) => `Step ${i + 1}, "${s.label || KIND_META[s.kind].name}"`;
+  let fetched = false;
+  steps.forEach((s, i) => {
+    if (s.only_if_branch && branchConditionIndex(steps, i) == null) {
+      problems.push(`${where(i, s)}: on a yes-branch with no condition above it. Add a condition, or turn the branch off.`);
+    }
+    if (s.kind === "approval" && !asStr(s.config.assignee).trim()) {
+      problems.push(`${where(i, s)}: no approver, so a run would pause on nobody. Choose one.`);
+    }
+    if (NEEDS_FETCH.includes(s.kind) && !fetched) {
+      problems.push(`${where(i, s)}: nothing has been fetched yet. Position it after a Fetch docs step.`);
+    }
+    if (s.kind === "fetch_docs") fetched = true;
+  });
+  return problems;
+}
+
 export type FlowsPipelineEditorProps = {
   name: string;
   description: string;
@@ -128,6 +179,8 @@ export type FlowsPipelineEditorProps = {
       without doing it, which is the distinction the footer chip explains.
       A dirty flow saves first — a run always uses the saved version. */
   onRun?: (opts: { dry: boolean }) => void | Promise<void>;
+  /** The page's main-column/rail split (§11). */
+  split?: string;
   /** Render a content-shaped skeleton silhouette instead of the editor. */
   loading?: boolean;
   className?: string;
@@ -136,6 +189,7 @@ export type FlowsPipelineEditorProps = {
 export function FlowsPipelineEditor({
   name, description, enabled: initialEnabled = true, steps: initialSteps, runs, members, sites, tags,
   onBack, onSave, onRun,
+  split = FLOWS_SPLIT,
   loading = false,
   className = "",
 }: FlowsPipelineEditorProps) {
@@ -147,16 +201,40 @@ export function FlowsPipelineEditor({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [allSteps, setAllSteps] = useState(false);
+  const [problems, setProblems] = useState<string[]>([]);
   const write = useWrite();
+
+  /* Seen-sentinel resync (X9). The draft was seeded from props on the first
+     render only, so a later read of the flow — including the one that follows
+     the save — was never reflected, and the editor could sit on a version of
+     the pipeline nothing else agreed with. A read arriving over an UNSAVED
+     draft is the same collision the round-1 pages settled the same way: the
+     server's copy wins, because it is the one a run would execute. */
+  const [seenSteps, setSeenSteps] = useState(initialSteps);
+  if (seenSteps !== initialSteps) { setSeenSteps(initialSteps); setSteps(initialSteps); setDirty(false); setProblems([]); }
+  const [seenName, setSeenName] = useState(name);
+  if (seenName !== name) { setSeenName(name); setFlowName(name); }
+  const [seenDesc, setSeenDesc] = useState(description);
+  if (seenDesc !== description) { setSeenDesc(description); setDesc(description); }
+  const [seenEnabled, setSeenEnabled] = useState(initialEnabled);
+  if (seenEnabled !== initialEnabled) { setSeenEnabled(initialEnabled); setEnabled(initialEnabled); }
 
   /* Save and run are one control in two costumes: the labels already say
      "Save & run" when the flow is dirty, because a run uses the SAVED version.
      Doing the save here rather than in each button keeps that promise true
-     instead of merely written on the label. */
-  const save = () => write.run(
-    onSave && (() => onSave({ name: flowName, description: desc, enabled, steps })),
-    () => setDirty(false),
-  );
+     instead of merely written on the label.
+
+     Validation runs first and BLOCKS (WF11): a draft the engine cannot run
+     must not reach the server, and the reason names the step. */
+  const save = async (): Promise<boolean> => {
+    const found = validateFlow(flowName, steps);
+    setProblems(found);
+    if (found.length > 0) return false;
+    return write.run(
+      onSave && (() => onSave({ name: flowName, description: desc, enabled, steps })),
+      () => setDirty(false),
+    );
+  };
 
   const run = async (dry: boolean) => {
     if (dirty && !(await save())) return;
@@ -194,12 +272,9 @@ export function FlowsPipelineEditor({
   };
 
   const branchLabelFor = (i: number): string | null => {
-    if (!steps[i].only_if_branch) return null;
-    for (let j = i - 1; j >= 0; j--) {
-      if (steps[j].kind === "condition") return `if ${asStr(steps[j].config.field)} > ${asNum(steps[j].config.greater_than)}`;
-      if (!steps[j].only_if_branch) break;
-    }
-    return null;
+    const j = branchConditionIndex(steps, i);
+    if (j == null) return null;
+    return `if ${asStr(steps[j].config.field)} > ${asNum(steps[j].config.greater_than)}`;
   };
 
   if (loading) {
@@ -213,7 +288,7 @@ export function FlowsPipelineEditor({
         <div className={`${card} space-y-2 px-5 py-4`}>
           <Skeleton width="45%" height={26} /><SkeletonLine w="70%" h={11} />
         </div>
-        <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className={split}>
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={64} className="rounded-md" />)}
           </div>
@@ -251,7 +326,7 @@ export function FlowsPipelineEditor({
       </div>
 
       {/* Editor grid */}
-      <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className={split}>
         {/* Pipeline spine */}
         <div className="relative pl-10">
           <span aria-hidden className="pointer-events-none absolute left-[17px] top-4 bottom-8 border-l border-dashed border-ink/25" />
@@ -329,7 +404,8 @@ export function FlowsPipelineEditor({
         </div>
 
         {/* Config panel */}
-        <div className="lg:sticky lg:top-4">
+        {/* Sticky from the breakpoint the split actually appears at (xl). */}
+        <div className="xl:sticky xl:top-4">
           <ConfigPanel
             key={`${selIdx}-${selStep?.kind}`}
             step={selStep}
@@ -340,12 +416,28 @@ export function FlowsPipelineEditor({
             onLabel={(v) => patch(selIdx, { label: v })}
             onConfig={(k, v) => setConfig(selIdx, k, v)}
             onBranch={(v) => patch(selIdx, { only_if_branch: v })}
-            onSave={() => setDirty(false)}
+            /* The REAL save. This used to be `() => setDirty(false)`: the
+               panel showed "Step saved.", the footer flipped to "Saved.",
+               "Save flow" went disabled and Run stopped saving first, so
+               every edit made here was discarded and the next run executed
+               the previous version (A1). */
+            onSave={save}
+            busy={write.busy}
           />
         </div>
       </div>
 
       {/* Footer */}
+      {/* A draft the engine cannot run never reaches the server, so its
+          rejection has to come from here — same banner tone and heading a
+          server rejection uses, naming the step (WF11, §8). */}
+      {problems.length > 0 && (
+        <Alert tone="blocked" title={ERRORS["generic.saveFailed"].title} onDismiss={() => setProblems([])}>
+          <ul className="ml-4 list-disc space-y-1">
+            {problems.map((p) => <li key={p}>{p}</li>)}
+          </ul>
+        </Alert>
+      )}
       <WriteError>{write.failed}</WriteError>
       <div className={`${card} flex flex-wrap items-center gap-2 px-5 py-3`}>
         <Button variant="primary" compact disabled={!dirty || write.busy} onClick={() => void save()}>Save flow</Button>
@@ -445,12 +537,15 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
 
 /* ── config panel ──────────────────────────────────────────────────────── */
 function ConfigPanel({
-  step, idx, members, sites, tags, onLabel, onConfig, onBranch, onSave,
+  step, idx, members, sites, tags, onLabel, onConfig, onBranch, onSave, busy = false,
 }: {
   step: EditorStep | undefined; idx: number;
   members: string[]; sites: SiteRef[]; tags: string[];
   onLabel: (v: string) => void; onConfig: (key: string, value: unknown) => void; onBranch: (v: boolean) => void;
-  onSave: () => void;
+  /** Persists the flow. Resolves false when the save was blocked or rejected,
+      so "Saved." is only ever drawn over a save that happened. */
+  onSave: () => Promise<boolean>;
+  busy?: boolean;
 }) {
   const [saved, setSaved] = useState(false);
   if (!step) return <div className={`${card} px-5 py-6 text-[13px] text-ink/70`}>Select a step to configure it.</div>;
@@ -481,7 +576,10 @@ function ConfigPanel({
           <>
             <Field label="Event"><Input value={asStr(c.label)} onChange={(e) => onConfig("label", e.target.value)} placeholder="e.g. GitHub PR merged" className="w-full" /></Field>
             <Field label="Scope query"><Input value={asStr(c.query)} onChange={(e) => onConfig("query", e.target.value)} placeholder="docs/**" className="w-full font-term" /></Field>
-            <HydrationHint query={asStr(c.query)} />
+            {/* A "Currently matches N documents" line used to sit here. N was
+                `3 + (query.length % 22)` — a number the editor cannot know,
+                moving as the user typed, in biscay blue (I3). Removed rather
+                than replaced: nothing in this build counts the matches. */}
           </>
         )}
 
@@ -497,7 +595,6 @@ function ConfigPanel({
             <Field label="Max documents (k)">
               <Input type="number" min={1} max={25} value={asNum(c.k, 3)} onChange={(e) => onConfig("k", Math.max(1, asNum(e.target.value, 1)))} className="w-full" />
             </Field>
-            <HydrationHint query={asStr(c.query)} tail={`, top ${asNum(c.k, 3)} enter the run`} />
           </>
         )}
 
@@ -587,25 +684,23 @@ function ConfigPanel({
         )}
       </div>
 
-      {/* The affirmative action is BOTTOM LEFT (CONVENTIONS §2). */}
+      {/* The affirmative action is BOTTOM LEFT (CONVENTIONS §2). A step's
+          settings are part of the flow, so this saves the flow: there is no
+          per-step write, and the button that pretended otherwise threw the
+          edit away (A1). */}
       <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-3">
-        <Button variant="primary" compact onClick={() => { onSave(); setSaved(true); window.setTimeout(() => setSaved(false), 1800); }}>
-          Save step
+        <Button
+          variant="primary" compact disabled={busy}
+          onClick={async () => {
+            if (!(await onSave())) return;
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 1800);
+          }}
+        >
+          Save flow
         </Button>
-        {saved && <span className="font-term text-[11.5px] text-moss">Step saved.</span>}
+        {saved && <span className="font-term text-[11.5px] text-moss">Saved.</span>}
       </div>
-    </div>
-  );
-}
-
-function HydrationHint({ query, tail = "" }: { query: string; tail?: string }) {
-  const q = query.trim();
-  if (!q) return <div className="px-1 pb-3 pt-1 font-term text-[11px] text-ink/65">Enter a query to preview the matching documents.</div>;
-  // Deterministic pseudo-count from the query so the demo reads as live.
-  const n = 3 + (q.length % 22);
-  return (
-    <div className="px-1 pb-3 pt-1 font-term text-[11px] text-biscay-2">
-      Currently matches {n} documents {tail}
     </div>
   );
 }

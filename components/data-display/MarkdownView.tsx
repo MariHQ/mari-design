@@ -7,8 +7,15 @@ import { SkeletonLine, SkeletonText } from "./Skeleton";
 // Blueprint prose styling: display font for headings, ink body text, a flysch
 // tint behind code, biscay-2 for inline code accents. Inline HTML (links,
 // images, **bold**, *italic*, ~~strike~~, `code`) is produced by the ported
-// parser and injected verbatim — the parser escapes all input first, so this is
-// safe for trusted markdown.
+// parser and injected verbatim.
+//
+// The markdown reaching this component is UNTRUSTED — it is synced from Slack,
+// GitHub, Confluence, Drive and user uploads. `mdInline` escapes every
+// character that could open a tag AND scheme-checks every href/src, so a
+// `javascript:` or `data:` URL arrives here on `data-mdhref`/`data-mdsrc`
+// rather than on `href`/`src` and is inert markup by the time it is injected
+// (DD-68). This file styles that state instead of hiding it: an anchor with no
+// href must not be painted as a working link.
 //
 // Everything the parser hands back as an OPAQUE block (`raw` set) is rendered
 // here from its source rather than dumped as a paragraph of markdown
@@ -19,7 +26,15 @@ import { SkeletonLine, SkeletonText } from "./Skeleton";
 const INLINE =
   "[&_b]:font-semibold [&_b]:text-ink [&_i]:italic [&_s]:line-through [&_s]:text-ink/65 " +
   "[&_a]:text-biscay-2 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-biscay-1 " +
+  // A blocked URL (DD-68) keeps its text but must not look or behave like a
+  // link: no link colour, no underline, no pointer, and a dotted rule so the
+  // reader can see the difference rather than clicking a dead word.
+  "[&_a[data-unsafe-url]]:text-ink/70 [&_a[data-unsafe-url]]:no-underline [&_a[data-unsafe-url]]:cursor-default " +
+  "[&_a[data-unsafe-url]]:border-b [&_a[data-unsafe-url]]:border-dotted [&_a[data-unsafe-url]]:border-ink/35 " +
   "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-[4px] [&_img]:border [&_img]:border-ink/10 " +
+  // A blocked image has no src, so the browser lays out an empty box; render
+  // the alt text as ordinary inline prose instead.
+  "[&_img[data-unsafe-url]]:my-0 [&_img[data-unsafe-url]]:inline [&_img[data-unsafe-url]]:border-0 " +
   "[&_code]:font-term [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded-[3px] [&_code]:bg-flysch [&_code]:text-biscay-2 [&_code]:border [&_code]:border-ink/10";
 
 /* Six levels, because the parser reads six. h4–h6 arrive as `type: "h3"` with
@@ -241,8 +256,9 @@ export type MarkdownViewProps = {
   className?: string;
 };
 
-/** Render trusted markdown as styled blueprint prose (headings, lists, tables,
-    quotes, code, links, inline marks). */
+/** Render markdown as styled blueprint prose (headings, lists, tables, quotes,
+    code, links, inline marks). The source does not have to be trusted: the
+    parser escapes it and allowlists link/image URL schemes (DD-68). */
 export function MarkdownView({ children, loading = false, className = "" }: MarkdownViewProps) {
   if (loading) {
     return (

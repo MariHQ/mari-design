@@ -24,9 +24,16 @@ export function Alert({
   onDismiss?: () => void;
   children: ReactNode;
 }) {
-  const t = STYLE[resolveToneKey(tone) as AlertTone];
+  const key = resolveToneKey(tone) as AlertTone;
+  const t = STYLE[key];
+  /* FDB-01: every tone used to be `role="status"`, i.e. aria-live="polite", and
+     both <ErrorMessage> and <WriteError> render through here. A failed save was
+     therefore queued behind whatever else was being announced and could be
+     dropped entirely. A failure and a warning are assertive; ok/info/neutral
+     stay polite so a page full of banners does not interrupt on every render. */
+  const assertive = key === "blocked" || key === "attention";
   return (
-    <div role="status" className={`flex gap-3 rounded-md border px-4 py-3 ${t.border} ${t.bg}`}>
+    <div role={assertive ? "alert" : "status"} className={`flex gap-3 rounded-md border px-4 py-3 ${t.border} ${t.bg}`}>
       <span className="shrink-0 mt-0.5" aria-hidden="true">{t.icon}</span>
       <div className="min-w-0 flex-1 break-words">
         {title && <div className="text-[13px] font-semibold text-ink">{title}</div>}

@@ -71,6 +71,17 @@ export function Drawer({
 }: DrawerProps) {
   const panelRef = useRef<HTMLElement | null>(null);
 
+  /* LAY-07: `onClose` cannot be an effect dependency. Every documented call
+     site passes an inline arrow, so it is a new function on every parent
+     render; with it in the deps the effect tore down and re-ran on each of
+     those renders, and the teardown moves focus back to the trigger OUTSIDE
+     the drawer before the re-run calls `panel.focus()`. The visible symptom
+     was that typing in a drawer input lost the caret on any keystroke that
+     re-rendered the parent. A ref gives the handler the current `onClose`
+     without making the effect depend on its identity. */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
     if (variant !== "overlay" || !open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -79,7 +90,7 @@ export function Drawer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -90,8 +101,16 @@ export function Drawer({
       const first = els[0];
       const last = els[els.length - 1];
       const active = document.activeElement;
+      // LAY-11: the panel itself is `tabIndex={-1}` and is what holds focus on
+      // open, so a plain Tab from there was not `active === last` and not
+      // `active === first` — it fell through and moved focus to whatever came
+      // after the drawer in the document, straight out of a modal trap. Tabbing
+      // off the panel now enters the panel at its first control.
       if (e.shiftKey && (active === first || active === panel)) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+      else if (!e.shiftKey && (active === last || active === panel)) { e.preventDefault(); first.focus(); }
+      // Focus that is outside the panel entirely (a stray click on the page
+      // behind, a browser-chrome round trip) is pulled back in as well.
+      else if (!panel.contains(active)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     };
 
     document.addEventListener("keydown", onKey, true);
@@ -99,7 +118,7 @@ export function Drawer({
       document.removeEventListener("keydown", onKey, true);
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose, variant]);
+  }, [open, variant]);
 
   if (!open) return null;
 

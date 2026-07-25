@@ -61,6 +61,13 @@ export const SPAN = {
   3: "col-span-1 min-w-0 lg:col-span-2 xl:col-span-3",
 } as const;
 
+/** What a focus trap counts as focusable. Same list `layout/Drawer.tsx` uses,
+    so the two modals in the console cannot disagree about where Tab may go. */
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+/** Invisible until focused, then the first thing Tab reaches (SH5). */
+const SKIP_LINK = `sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[100] focus:rounded-[4px] focus:border focus:border-ink/25 focus:bg-paper focus:px-3 focus:py-2 focus:text-[13px] focus:font-medium focus:text-ink ${focusRing}`;
+
 export const NAV: NavSection[] = [
   { heading: "Workspace", items: [
     { id: "overview", label: "Overview", icon: <Home size={18} /> },
@@ -250,7 +257,8 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
   const search = useGlobalSearch(chrome);
   const [navOpen, setNavOpen] = useState(false);
   return (
-    <div className={`flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-screen min-h-0 overflow-hidden"}`}>
+    <div className={`relative flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-screen min-h-0 overflow-hidden"}`}>
+      <a href="#main-content" className={SKIP_LINK}>Skip to main content</a>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-ink/12 bg-paper px-4">
         <button
           aria-label="Menu"
@@ -281,7 +289,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
       </header>
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} active={active} chrome={chrome} />
       {search.node}
-      <main className={grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}>{children}</main>
+      <main id="main-content" tabIndex={-1} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
     </div>
   );
 }
@@ -293,18 +301,67 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
  * exactly one page. This is the same Sidebar the desktop frame uses, in a
  * slide-over, so the two can never list different destinations. */
 function MobileNav({ open, onClose, active, chrome }: { open: boolean; onClose: () => void; active: string; chrome?: ShellChrome }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /* ACC-10 / SH2: this sheet covers the page and takes it over, but had none
+     of the behaviour that makes that safe — no dialog role, no focus move, no
+     trap (Tab walked straight out behind the scrim into a page the user could
+     still operate but could not see), no restore on close, no scroll lock.
+     `layout/Drawer.tsx` already does all of this; this is the same contract,
+     kept here because the sheet hosts a Sidebar rather than Drawer's chrome. */
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    // The page behind a modal must not scroll under the finger.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const els = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (els.length === 0) { e.preventDefault(); return; }
+      const first = els[0];
+      const last = els[els.length - 1];
+      const activeEl = document.activeElement;
+      if (e.shiftKey && (activeEl === first || activeEl === panel)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && activeEl === last) { e.preventDefault(); first.focus(); }
+    };
+
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70] font-display">
-      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <div className="absolute left-0 top-0 h-full w-[264px] max-w-[85vw] overflow-y-auto">
+      {/* The scrim's dismiss was a <div onClick>: a target no keyboard could
+          reach and no screen reader could announce. It is a real button now,
+          named, and hidden from the reading order only because Escape and the
+          nav itself are the paths that matter there. */}
+      <button
+        type="button"
+        aria-label="Close navigation"
+        tabIndex={-1}
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-ink/40"
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        tabIndex={-1}
+        className="absolute left-0 top-0 h-full w-[264px] max-w-[85vw] overflow-y-auto outline-none"
+      >
         <Sidebar
           sections={NAV}
           activeId={active}
@@ -338,7 +395,8 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
   const user = chrome?.user ?? NO_USER;
   const search = useGlobalSearch(chrome);
   return (
-    <div className="flex min-h-screen w-full bg-paper text-ink">
+    <div className="relative flex min-h-screen w-full bg-paper text-ink">
+      <a href="#main-content" className={SKIP_LINK}>Skip to main content</a>
       <div className="shrink-0 self-stretch border-r border-ink/10">
         <Sidebar
           sections={NAV}
@@ -359,7 +417,7 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
           userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />}
         />
         {search.node}
-        <main className="flex-1 bg-flysch/40">{children}</main>
+        <main id="main-content" tabIndex={-1} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
       </div>
     </div>
   );

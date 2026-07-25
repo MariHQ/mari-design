@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, CheckCircle2, ShieldCheck, ExternalLink } from "lucide-react";
 import { Drawer } from "../layout/Drawer";
 import { Button } from "../actions/Button";
-import { Field } from "./Field";
+import { FormField } from "./FormField";
 import { Input } from "./Input";
 import { Textarea } from "./Textarea";
 import { Spinner } from "../data-display/Spinner";
@@ -17,7 +17,7 @@ import type { ConnectorField, ConnectTestResult } from "./ConnectorWizard";
    then Connect & sync. The gql/validate/connect network layer is abstracted
    away — fields arrive as props and the flow exposes onConnect(values). Once
    the parent supplies a `syncStatus`, the drawer switches to live sync (built
-   on our SyncPanel). Built on Drawer + Field + Input + Button. */
+   on our SyncPanel). Built on Drawer + FormField + Input + Button. */
 
 export type ConnectDrawerProps = {
   open: boolean;
@@ -48,6 +48,17 @@ export function ConnectDrawer({
   const [config, setConfig] = useState<Record<string, string>>({});
   const [test, setTest] = useState<{ busy: boolean; ok: boolean | null; error: string }>({ busy: false, ok: null, error: "" });
 
+  /* FRM-15: credentials must not survive a close. Nothing used to clear
+     `config`, so closing the drawer half-way through typing a token and
+     reopening it (for the same provider or a different one) redisplayed that
+     token, and it went out with the next Connect. ConnectorWizard already does
+     this; the drawer has to as well. Both edges are cleared, so the secret is
+     also dropped on close rather than being held until the next open. */
+  useEffect(() => {
+    setConfig({});
+    setTest({ busy: false, ok: null, error: "" });
+  }, [open]);
+
   const filled = fields.every((f) => (config[f.key] ?? "").trim().length > 0);
   const set = (key: string, value: string) => {
     setConfig((c) => ({ ...c, [key]: value }));
@@ -68,21 +79,24 @@ export function ConnectDrawer({
 
   const connected = syncStatus != null;
 
+  /* FRM-20 / §2: the primary action goes BOTTOM LEFT with the secondary to its
+     right. Both of these footers used to be right-aligned with the primary
+     last. */
   const footer = connected ? (
     <div className="flex items-center gap-3 w-full">
-      <span className="text-[12px] text-ink/70 flex-1">Sync continues on the server. Closing won’t interrupt it.</span>
       <Button variant="primary" onClick={onClose}>Done <CheckCircle2 size={16} /></Button>
+      <span className="min-w-0 flex-1 text-[12px] text-ink/70">Sync continues on the server. Closing won’t interrupt it.</span>
     </div>
   ) : (
-    <div className="flex items-center gap-2 w-full justify-end">
+    <div className="flex items-center gap-2 w-full">
+      <Button variant="primary" disabled={!filled} onClick={() => onConnect(trimmed())}>
+        Connect &amp; sync <ArrowRight size={16} />
+      </Button>
       {onTest && (
         <Button disabled={!filled || test.busy} onClick={runTest}>
           {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={16} /> Test connection</>}
         </Button>
       )}
-      <Button variant="primary" disabled={!filled} onClick={() => onConnect(trimmed())}>
-        Connect &amp; sync <ArrowRight size={16} />
-      </Button>
     </div>
   );
 
@@ -112,17 +126,31 @@ export function ConnectDrawer({
         </>
       ) : (
         <>
-          <p className="text-[13px] text-ink/70">
-            {blurb}{" "}
-            {docsUrl && (
-              <a className="inline-flex items-center gap-1 text-biscay-2 hover:underline" href={docsUrl} target="_blank" rel="noreferrer">
-                Where do I get these? <ExternalLink size={14} />
-              </a>
-            )}
-          </p>
-          <div className="mt-2">
+          {/* FRM-16: the drawer used to print "Credentials are stored
+              server-side and never shown again" under every form, always. This
+              component never talks to a server and cannot know what one does
+              with a credential, so that was a security promise it had no way to
+              keep. If a provider has something to say here it says it in
+              `blurb`. */}
+          {(blurb || docsUrl) && (
+            <p className="text-[13px] text-ink/70">
+              {blurb}
+              {blurb && docsUrl ? " " : null}
+              {docsUrl && (
+                <a className="inline-flex items-center gap-1 text-biscay-2 hover:underline" href={docsUrl} target="_blank" rel="noreferrer">
+                  Where do I get these? <ExternalLink size={14} />
+                </a>
+              )}
+            </p>
+          )}
+          {/* FRM-03: these are credential inputs, so they need real labels.
+              They used to sit inside <Field>, which is the READ-ONLY key/value
+              display row: a div with a span, no htmlFor, no wrapping label. To
+              a screen reader every token box in this drawer was an unnamed text
+              field. FormField is the editable sibling and associates the two. */}
+          <div className="mt-2 flex flex-col gap-3">
             {fields.map((f) => (
-              <Field key={f.key} label={f.label}>
+              <FormField key={f.key} label={f.label} hint={f.help}>
                 {f.multiline ? (
                   <Textarea
                     rows={5}
@@ -136,19 +164,15 @@ export function ConnectDrawer({
                   <Input
                     className="w-full"
                     type={f.secret ? "password" : "text"}
-                    autoComplete="off"
+                    autoComplete={f.secret ? "new-password" : "off"}
                     placeholder={f.placeholder}
                     value={config[f.key] ?? ""}
                     onChange={(e) => set(f.key, e.target.value)}
                   />
                 )}
-                {f.help && <p className="mt-1 text-[11.5px] text-ink/70">{f.help}</p>}
-              </Field>
+              </FormField>
             ))}
           </div>
-          <p className="mt-3 text-[11.5px] text-ink/70">
-            Credentials are stored server-side and never shown again.
-          </p>
           {test.ok === true && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
               <CheckCircle2 size={16} /> Connection test passed. <Chip label="Valid" tone="ok" caps />

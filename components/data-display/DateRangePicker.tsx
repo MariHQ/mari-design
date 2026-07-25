@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Calendar, ChevronDown } from "lucide-react";
 import { Popover } from "../navigation/Popover";
 import { Button } from "../actions/Button";
@@ -87,9 +87,18 @@ export function DateRangePicker({
   const setOpen = (o: boolean) => { if (openProp === undefined) setInternalOpen(o); };
   const [draft, setDraft] = useState<DateRange>(value);
 
-  // Re-seed the draft each time the popover opens so a cancelled edit is
+  // Re-seed the draft each time the popover OPENS so a cancelled edit is
   // genuinely discarded.
-  useEffect(() => { if (open) setDraft(value); }, [open, value]);
+  //
+  // DD-64: `value` used to be in the deps, and `value` is an object literal at
+  // nearly every call site, so it is a new reference on every parent render.
+  // Any re-render while the popover was open re-ran this and overwrote whatever
+  // the user had typed into From/To. The seed is a function of the open edge
+  // alone; `valueRef` is what makes reading the current value here legal
+  // without re-subscribing to it.
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; });
+  useEffect(() => { if (open) setDraft(valueRef.current); }, [open]);
 
   const list = presets
     ? DATE_RANGE_PRESETS.filter((p) => presets.includes(p.id))

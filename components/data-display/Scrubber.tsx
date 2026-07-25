@@ -46,10 +46,20 @@ export function Scrubber({
   const isoDates = dates.map(String);
   const maxActivity = Math.max(1, ...activity.map((a) => a.count));
 
+  /* DD-13: "All time" is its own stop, one past the last event date.
+     It used to share the last date's position — `next >= lastIdx` sent a step
+     forward from `lastIdx - 1` straight to null, and the slider mapped its
+     rightmost notch to null as well — so the newest event date could never be
+     selected as "As of …", and a null value drew the thumb on top of a date it
+     was not showing. Giving null a stop of its own makes every date reachable
+     and makes the thumb position mean one thing. */
+  const allTimeStop = lastIdx + 1;
+  const sliderPos = value == null ? allTimeStop : effIdx;
+
   const step = (delta: number) => {
-    const next = effIdx + delta;
+    const next = sliderPos + delta;
     if (next <= 0) return onChange(0);
-    if (next >= lastIdx) return onChange(null);
+    if (next >= allTimeStop) return onChange(null);
     onChange(next);
   };
 
@@ -60,8 +70,10 @@ export function Scrubber({
     onRangeChange?.(next);
     const start = dateRangeStart(next);
     if (!start || empty) return onChange(null);
+    // DD-13: `i >= lastIdx` used to fall through to "All time", so a window
+    // that contains only the newest event silently showed everything instead.
     const i = dates.findIndex((d) => new Date(String(d)).getTime() >= start.getTime());
-    if (i < 0 || i >= lastIdx) return onChange(null);
+    if (i < 0) return onChange(null);
     onChange(i);
   };
 
@@ -87,7 +99,9 @@ export function Scrubber({
           {activity.map((a) => {
             const i = isoDates.indexOf(a.date);
             if (i < 0) return null;
-            const x = lastIdx > 0 ? (i / lastIdx) * 97 + 1.5 : 50;
+            // Bars line up with the slider's stops, and the slider now has one
+            // stop more than there are dates (the "All time" stop, DD-13).
+            const x = (i / allTimeStop) * 97 + 1.5;
             const h = 2 + (a.count / maxActivity) * 12;
             return <rect key={a.date} x={x - 0.6} y={14 - h} width={1.2} height={h} rx={0.5} className="fill-espelette" opacity={0.55} />;
           })}
@@ -100,20 +114,21 @@ export function Scrubber({
             className="pointer-events-none absolute bottom-[7px] h-1.5 rounded-full bg-biscay-2/25 ring-1 ring-inset ring-biscay-2/40"
             // clamp: at the first/last stop a 14px centred marker would sit half
             // outside the track and read as an overflow.
-            style={{ left: `clamp(7px, ${(effIdx / Math.max(1, lastIdx)) * 100}%, calc(100% - 7px))`, width: 14, transform: "translateX(-50%)" }}
+            style={{ left: `clamp(7px, ${(sliderPos / allTimeStop) * 100}%, calc(100% - 7px))`, width: 14, transform: "translateX(-50%)" }}
           />
         )}
         <input
           type="range"
           className={`absolute inset-x-0 bottom-1 w-full cursor-pointer accent-biscay-2 ${focusRing}`}
           min={0}
-          max={lastIdx}
-          value={effIdx}
+          max={allTimeStop}
+          value={sliderPos}
           disabled={empty}
           aria-label="As-of date (snaps to event dates)"
+          aria-valuetext={label}
           onChange={(e) => {
             const i = Number(e.target.value);
-            onChange(i >= lastIdx ? null : i);
+            onChange(i >= allTimeStop ? null : i);
           }}
         />
       </div>

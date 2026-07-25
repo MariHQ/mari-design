@@ -6,7 +6,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonTable, SkeletonCard } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { type WorkflowRun, type RunStatus } from "../workflow/RunHistory";
-import { RUN_CHIP, RunStatusChips, RunInspector, type FlowsRunActions } from "./FlowsRunPanel";
+import { RUN_CHIP, RunStatusChips, RunInspector, FLOWS_SPLIT, type FlowsRunActions } from "./FlowsRunPanel";
 import { card } from "../tokens/card";
 import { fmtDate } from "../tokens/format";
 
@@ -39,6 +39,31 @@ const NONE = "Not recorded";
 
 const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-middle`;
 
+/** A recorded duration in seconds, for ordering. The engine writes several
+    shapes ("00:04:12", "12m", "9s", "1h 2m"), and sorting them as TEXT put
+    "9s" after "12m" — the column claimed to rank by length and ranked by first
+    character (WF4). Unparseable stays 0 rather than becoming a guess. */
+export function durationSeconds(d: string | undefined): number {
+  if (!d) return 0;
+  const clock = d.trim().match(/^(\d+):([0-5]?\d)(?::([0-5]?\d))?$/);
+  if (clock) {
+    const [, a, b, c] = clock;
+    return c === undefined
+      ? Number(a) * 60 + Number(b)
+      : Number(a) * 3600 + Number(b) * 60 + Number(c);
+  }
+  let secs = 0;
+  let matched = false;
+  const UNIT: Record<string, number> = { h: 3600, m: 60, s: 1, ms: 0.001 };
+  for (const m of d.matchAll(/(\d+(?:\.\d+)?)\s*(ms|[hms])/gi)) {
+    secs += Number(m[1]) * UNIT[m[2].toLowerCase()];
+    matched = true;
+  }
+  if (matched) return secs;
+  const plain = Number(d.trim());
+  return Number.isFinite(plain) ? plain : 0;
+}
+
 export type FlowRunsTableProps = {
   runs: WorkflowRun[];
   selectedId?: string | null;
@@ -61,18 +86,21 @@ export function FlowRunsTable({
   actions, loading = false, className = "",
 }: FlowRunsTableProps) {
   const [showAll, setShowAll] = useState(false);
-  /* A flow's history is thousands of runs long. The table renders one page,
-     says so above the rows (§13), and the region itself scrolls (§20) instead
-     of the card growing to the height of the history. */
-  const capped = showAll ? runs.slice(0, limit * 4) : runs.slice(0, limit);
-  const { sort, onSort, sorted } = useSort(capped, {
+  /* Sort the WHOLE history, then take a page of it. It used to cap first and
+     sort the cap, so "longest run" meant "longest of the first twelve" and the
+     header ranked a page rather than the history it names (WF3). */
+  const { sort, onSort, sorted } = useSort(runs, {
     number: (r) => r.number,
     workflowName: (r) => r.workflowName,
     started: (r) => new Date(r.started).getTime() || 0,
-    duration: (r) => r.duration || "",
+    duration: (r) => durationSeconds(r.duration),
     headline: (r) => r.headline || "",
     status: (r) => RUN_CHIP[r.status],
   });
+  /* A flow's history is thousands of runs long. The table renders one page,
+     says so above the rows (§13), and the region itself scrolls (§20) instead
+     of the card growing to the height of the history. */
+  const page = showAll ? sorted.slice(0, limit * 4) : sorted.slice(0, limit);
 
   return (
     <div className={`${card} overflow-hidden ${className}`}>
@@ -86,14 +114,14 @@ export function FlowRunsTable({
 
       {loading ? (
         <div className="px-4 pb-4"><SkeletonTable rows={6} cols={6} className="border-0" /></div>
-      ) : sorted.length === 0 ? (
+      ) : page.length === 0 ? (
         <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
       ) : (
         <>
         <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
           <span className="font-term text-[11.5px] text-ink/65">
-            {sorted.length < runs.length
-              ? `Showing ${sorted.length} of ${runs.length.toLocaleString()} runs`
+            {page.length < runs.length
+              ? `Showing ${page.length} of ${runs.length.toLocaleString()} runs`
               : `Showing all ${runs.length.toLocaleString()} run${runs.length === 1 ? "" : "s"}`}
           </span>
           {runs.length > limit && (
@@ -102,7 +130,7 @@ export function FlowRunsTable({
             </Button>
           )}
         </div>
-        <Scrollable axis="both" style={{ maxHeight: sorted.length > 8 ? 520 : undefined }}>
+        <Scrollable axis="both" style={{ maxHeight: page.length > 8 ? 520 : undefined }}>
           <table className="w-full border-collapse text-left" style={{ minWidth: onSelect ? 720 : 620 }}>
             <thead>
               <tr>
@@ -117,7 +145,7 @@ export function FlowRunsTable({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => {
+              {page.map((r) => {
                 const selected = r.id === selectedId;
                 return (
                   <tr key={r.id} className={selected ? "bg-espelette/[0.05]" : "hover:bg-flysch"}>
@@ -155,16 +183,30 @@ export type FlowsRunHistoryProps = {
   limit?: number;
   /** Side effects the inspector offers. Omitted = read-only history. */
   actions?: FlowsRunActions;
+  /** The page's main-column/rail split (§11). */
+  split?: string;
   /** Render a content-shaped skeleton silhouette instead of the history. */
   loading?: boolean;
   className?: string;
 };
 
-export function FlowsRunHistory({ runs, limit = 12, actions, loading = false, className = "" }: FlowsRunHistoryProps) {
+export function FlowsRunHistory({
+  runs, limit = 12, actions, split = FLOWS_SPLIT, loading = false, className = "",
+}: FlowsRunHistoryProps) {
   const [selId, setSelId] = useState<string | null>(runs[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+
+  /* Seen-sentinel resync (X9): the selection is seeded from the first read and
+     a later read may not contain it any more. Inspecting a run the history no
+     longer lists is the same failure as a ghost row. */
+  const [seenRuns, setSeenRuns] = useState(runs);
+  if (seenRuns !== runs) {
+    setSeenRuns(runs);
+    if (!runs.some((r) => r.id === selId)) setSelId(runs[0]?.id ?? null);
+  }
+
   const selected = selId ? runs.find((r) => r.id === selId) ?? null : null;
 
   const approve = async (r: WorkflowRun) => {
@@ -180,11 +222,27 @@ export function FlowsRunHistory({ runs, limit = 12, actions, loading = false, cl
     }
   };
 
+  /* No invented run row and no invented run number: the server starts the run
+     and the next read of the history is what shows it (I1). */
+  const rerun = async (r: WorkflowRun, dry: boolean) => {
+    setBusy(true);
+    setFailed(null);
+    setNote(null);
+    try {
+      await actions!.rerunRun!(r.id, dry);
+      setNote(`Re-run of ${r.workflowName} started${dry ? " as a test" : ""}. It appears in this table when the history reloads.`);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : `Could not re-run ${r.workflowName}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={`flex flex-col gap-5 ${className}`} aria-hidden="true">
         <Skeleton height={44} className="rounded-md" />
-        <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className={split}>
           <SkeletonTable rows={7} cols={4} />
           <SkeletonCard lines={6} footer />
         </div>
@@ -209,13 +267,15 @@ export function FlowsRunHistory({ runs, limit = 12, actions, loading = false, cl
         </span>
       </div>
 
-      <div className="grid items-start gap-5 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className={split}>
         <FlowRunsTable runs={runs} limit={limit} selectedId={selId} onSelect={(r) => setSelId(r.id)} />
-        <div className="lg:sticky lg:top-4">
+        <div className="xl:sticky xl:top-4">
           <RunInspector
             run={selected}
             onClose={() => { setSelId(null); setNote(null); setFailed(null); }}
+            /* Drawn only when a handler exists (§2). */
             onApprove={actions?.approveRun ? (r) => void approve(r) : undefined}
+            onRerun={actions?.rerunRun ? (r, dry) => void rerun(r, dry) : undefined}
             busy={busy}
             note={note}
             error={failed}

@@ -24,7 +24,7 @@
 
 import {
   createElement, useEffect, useLayoutEffect, useMemo, useRef, useState,
-  type CSSProperties, type KeyboardEvent, type ReactNode,
+  type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode,
 } from "react";
 import { ChevronDown, ExternalLink, Link2, Undo2, Redo2, Code2, ListOrdered, FileCode2 } from "lucide-react";
 import {
@@ -393,6 +393,10 @@ export function DocReviewEditor({
   const focusNext = useRef<{ id: number; atEnd: boolean } | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
+  /* The last range the caret held INSIDE the editor. The toolbar's keyboard
+     path needs it: tabbing to a button moves focus out of the contenteditable
+     and browsers do not agree on whether the range survives (ACC-03). */
+  const lastRange = useRef<Range | null>(null);
 
   const focusedBlock = blocks.find((b) => b.id === focusedId) ?? null;
 
@@ -569,6 +573,7 @@ export function DocReviewEditor({
       const sel = window.getSelection();
       const node = sel?.anchorNode ?? null;
       const inside = !!root && !!node && root.contains(node);
+      if (inside && sel && sel.rangeCount) lastRange.current = sel.getRangeAt(0).cloneRange();
       const next = {
         b: inside && !!markAncestor(node, "b", root!),
         i: inside && !!markAncestor(node, "i", root!),
@@ -582,6 +587,30 @@ export function DocReviewEditor({
     document.addEventListener("selectionchange", onSel);
     return () => document.removeEventListener("selectionchange", onSel);
   }, []);
+
+  /* Every formatting control in the toolbar binds through this (ACC-03).
+     Keyboard activation of a <button> fires `click` and never `mousedown`, so
+     a toolbar bound to onMouseDown alone was Tab-reachable and completely
+     inoperable — bold, italic, strikethrough, code, link, both lists, undo and
+     redo. The mousedown handler keeps its preventDefault, which is what stops
+     the editor losing its selection when the button takes focus; the click
+     handler runs ONLY for keyboard activation (a real mouse click reports
+     `detail >= 1`, a keyboard one reports 0) and puts the caret's last
+     in-editor range back before acting, since focus is on the button by then. */
+  const toolbarAction = (run: () => void) => ({
+    onMouseDown: (e: ReactMouseEvent) => { e.preventDefault(); run(); },
+    onClick: (e: ReactMouseEvent) => {
+      if (e.detail !== 0) return; // the pointer path already ran on mousedown
+      const range = lastRange.current;
+      const root = editorRef.current;
+      if (range && root && root.contains(range.commonAncestorContainer)) {
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+      run();
+    },
+  });
 
   const runMark = (tag: Mark) => {
     const root = editorRef.current;
@@ -775,7 +804,7 @@ export function DocReviewEditor({
                 aria-pressed={marks[tag]}
                 aria-label={`${label} selection`}
                 title={`${label} selection`}
-                onMouseDown={(e) => { e.preventDefault(); runMark(tag); }}
+                {...toolbarAction(() => runMark(tag))}
               >{glyph}</Button>
             ))}
             <Button
@@ -784,7 +813,7 @@ export function DocReviewEditor({
               aria-pressed={marks.code}
               aria-label="Inline code"
               title="Inline code"
-              onMouseDown={(e) => { e.preventDefault(); runMark("code"); }}
+              {...toolbarAction(() => runMark("code"))}
             ><Code2 size={15} /></Button>
             <Button
               icon
@@ -792,7 +821,7 @@ export function DocReviewEditor({
               aria-pressed={marks.a}
               aria-label="Link selection"
               title="Link selection"
-              onMouseDown={(e) => { e.preventDefault(); openLinkField(); }}
+              {...toolbarAction(openLinkField)}
             ><Link2 size={15} /></Button>
 
             <span className="mx-1 h-5 w-px bg-ink/12" />
@@ -803,7 +832,7 @@ export function DocReviewEditor({
               aria-pressed={focusedBlock?.type === "li" && !/^\d/.test(focusedBlock.marker ?? "-")}
               aria-label="Toggle bullet list"
               title="Toggle bullet list"
-              onMouseDown={(e) => { e.preventDefault(); toggleList(false); }}
+              {...toolbarAction(() => toggleList(false))}
             ><BulletListIc /></Button>
             <Button
               icon
@@ -811,7 +840,7 @@ export function DocReviewEditor({
               aria-pressed={focusedBlock?.type === "li" && /^\d/.test(focusedBlock.marker ?? "-")}
               aria-label="Toggle numbered list"
               title="Toggle numbered list"
-              onMouseDown={(e) => { e.preventDefault(); toggleList(true); }}
+              {...toolbarAction(() => toggleList(true))}
             ><ListOrdered size={15} /></Button>
 
             <span className="mx-1 h-5 w-px bg-ink/12" />
@@ -819,12 +848,12 @@ export function DocReviewEditor({
             <Button
               icon className={toolBtn(false)} disabled={!hist.past.length}
               aria-label="Undo" title="Undo (⌘Z)"
-              onMouseDown={(e) => { e.preventDefault(); undo(); }}
+              {...toolbarAction(undo)}
             ><Undo2 size={15} /></Button>
             <Button
               icon className={toolBtn(false)} disabled={!hist.future.length}
               aria-label="Redo" title="Redo (⇧⌘Z)"
-              onMouseDown={(e) => { e.preventDefault(); redo(); }}
+              {...toolbarAction(redo)}
             ><Redo2 size={15} /></Button>
           </>
         )}

@@ -248,11 +248,19 @@ export function OverviewWorkflowStrip({
                   {flow.nodes.length} steps, {flow.nodes.filter((n) => n.state).length} checked
                 </dd>
                 <dt className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65">State</dt>
-                <dd className="text-ink/70">{flow.status === "active" ? "Runs on every doc change" : "Paused, no runs scheduled"}</dd>
+                {/* This read "Runs on every doc change" for any active flow.
+                    The cadence is the trigger's, it is the row directly above,
+                    and a scheduled or manual flow was described as neither
+                    (I8). The state row says only whether the flow is on. */}
+                <dd className="text-ink/70">{flow.status === "active" ? "Enabled" : "Paused, no runs scheduled"}</dd>
               </dl>
+              {/* Read-only: this panel is a <dl>, there is no field to edit and
+                  no handler behind it. It used to draw a primary "Save flow"
+                  beside a "Cancel" that did the identical thing, so a user who
+                  pressed Save was told nothing and saved nothing (A2). Editing
+                  a flow happens in Flows. */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="primary" compact onClick={() => setConfiguring(false)}>Save flow</Button>
-                <Button compact onClick={() => setConfiguring(false)}>Cancel</Button>
+                <Button compact onClick={() => setConfiguring(false)}>Close</Button>
               </div>
             </CardSection>
           )}

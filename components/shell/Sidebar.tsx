@@ -78,6 +78,12 @@ export function SidebarItem({
     <button
       type="button"
       disabled={item.disabled}
+      /* SH3: the label is dropped from the DOM on the rail and the icon is
+         aria-hidden, so a collapsed sidebar was a column of 13 unnamed
+         buttons. The tooltip does not fix this — it contributes
+         aria-describedby, and only while it is open; a description is not a
+         name. Expanded rows are named by their visible label. */
+      aria-label={collapsed ? item.label : undefined}
       aria-current={active ? "page" : undefined}
       onClick={() => onNavigate?.(item.id)}
       style={indent}

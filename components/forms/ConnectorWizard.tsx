@@ -6,7 +6,7 @@ import { focusRing } from "../tokens/focusRing";
 import { Dialog } from "../layout/Dialog";
 import { Stepper } from "../data-display/Stepper";
 import { Button } from "../actions/Button";
-import { Field } from "./Field";
+import { FormField } from "./FormField";
 import { Input } from "./Input";
 import { Textarea } from "./Textarea";
 import { Spinner } from "../data-display/Spinner";
@@ -19,7 +19,7 @@ import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
    confirm/sync. The source's gql/useSyncStatus data layer is abstracted away —
    the provider catalog, an optional test handler, and the live sync status all
    arrive as props; the flow exposes onFinish(values). Built on Dialog +
-   Stepper + Field/Input + Button, reusing SyncPanel for the sync step. */
+   Stepper + FormField/Input + Button, reusing SyncPanel for the sync step. */
 
 export type ConnectorField = {
   key: string;
@@ -189,9 +189,12 @@ export function ConnectorWizard({
       if (!chosen) return null;
       return (
         <div>
-          <div className="text-[13px] text-ink/70 mb-1">
-            {chosen.blurb || "Credentials stay on the server and are never shown again."}
-          </div>
+          {/* FRM-16: the fallback here used to be "Credentials stay on the
+              server and are never shown again" — an unrelated second sentence
+              sharing one slot, and a claim about server-side storage that this
+              component cannot see and must not make. A provider with no blurb
+              simply has no blurb. */}
+          {chosen.blurb && <div className="text-[13px] text-ink/70 mb-1">{chosen.blurb}</div>}
           {chosen.docsUrl && (
             <a className="inline-flex items-center gap-1 text-[12px] text-biscay-2 hover:underline" href={chosen.docsUrl} target="_blank" rel="noreferrer">
               {chosen.name} setup docs <ExternalLink size={11} />
@@ -200,9 +203,14 @@ export function ConnectorWizard({
           {chosen.fields.length === 0 ? (
             <div className="mt-3 text-[13px] text-ink/70">No credentials needed. Connect to start the first sync.</div>
           ) : (
-            <div className="mt-2">
+            /* FRM-03: credential inputs need accessible names. These sat in
+               <Field>, the READ-ONLY key/value display row (a div + a span, no
+               htmlFor, no wrapping label), so every token box in the wizard was
+               an unnamed text field to assistive tech. FormField is the
+               editable sibling and associates label and control. */
+            <div className="mt-2 flex flex-col gap-3">
               {chosen.fields.map((f) => (
-                <Field key={f.key} label={f.label}>
+                <FormField key={f.key} label={f.label} hint={f.help}>
                   {f.multiline ? (
                     <Textarea
                       rows={5}
@@ -222,8 +230,7 @@ export function ConnectorWizard({
                       onChange={(e) => setField(f.key, e.target.value)}
                     />
                   )}
-                  {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
-                </Field>
+                </FormField>
               ))}
             </div>
           )}
@@ -257,37 +264,38 @@ export function ConnectorWizard({
     );
   };
 
+  /* FRM-20 / §2: the primary action is BOTTOM LEFT with the secondary to its
+     right, on every step. This footer used to be `justify-between` with the
+     primary pinned to the right, which is the layout §2 names explicitly.
+     Step 0's Back button is also gone rather than drawn disabled: there is
+     nothing behind the first step, and §2 says a control that cannot act is
+     not drawn. */
   const footer = (
-    <div className="flex-1 flex items-center justify-between gap-2">
+    <div className="flex-1 flex items-center gap-2">
       {step === 0 && (
-        <>
-          <Button disabled><ChevronLeft size={13} /> Back</Button>
-          <Button variant="primary" disabled={!chosen} onClick={() => setStep(1)}>
-            Next <ChevronRight size={13} />
-          </Button>
-        </>
+        <Button variant="primary" disabled={!chosen} onClick={() => setStep(1)}>
+          Next <ChevronRight size={13} />
+        </Button>
       )}
       {step === 1 && (
         <>
-          <Button onClick={() => setStep(0)}><ChevronLeft size={13} /> Back</Button>
-          <span className="flex items-center gap-2">
-            {onTest && chosen && chosen.fields.length > 0 && (
-              <Button disabled={!filled || test.busy} onClick={runTest}>
-                {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={13} /> Test connection</>}
-              </Button>
-            )}
-            <Button variant="primary" disabled={!chosen || (chosen.fields.length > 0 && !filled)} onClick={connect}>
-              Connect &amp; sync <ArrowRight size={14} />
+          <Button variant="primary" disabled={!chosen || (chosen.fields.length > 0 && !filled)} onClick={connect}>
+            Connect &amp; sync <ArrowRight size={14} />
+          </Button>
+          {onTest && chosen && chosen.fields.length > 0 && (
+            <Button disabled={!filled || test.busy} onClick={runTest}>
+              {test.busy ? <><Spinner size="sm" /> Testing…</> : <><ShieldCheck size={13} /> Test connection</>}
             </Button>
-          </span>
+          )}
+          <Button onClick={() => setStep(0)}><ChevronLeft size={13} /> Back</Button>
         </>
       )}
       {step === 2 && (
         <>
-          <span className="text-[12px] text-ink/65">Sync continues in the background.</span>
           <Button variant="primary" onClick={() => onOpenChange(false)}>
             Done <CheckCircle2 size={14} />
           </Button>
+          <span className="min-w-0 text-[12px] text-ink/65">Sync continues in the background.</span>
         </>
       )}
     </div>

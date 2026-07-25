@@ -48,7 +48,11 @@ export function PageHeader({ title, eyebrow, description, icon, actions, backLin
               {eyebrow}
             </div>
           )}
-          <h3 className="text-[22px] font-bold leading-tight tracking-[-0.015em] text-ink [overflow-wrap:anywhere]">{title}</h3>
+          {/* The page title is the page's <h1> (ACC-01). Every framed page used
+              to open at h3 with the card titles as its siblings, so the console
+              had no level-1 or level-2 heading anywhere and no outline to
+              navigate by. The size is unchanged — this is semantics only. */}
+          <h1 className="text-[22px] font-bold leading-tight tracking-[-0.015em] text-ink [overflow-wrap:anywhere]">{title}</h1>
           {description && <p className="mt-1 max-w-[680px] text-[13px] text-ink/70 [overflow-wrap:anywhere]">{description}</p>}
         </div>
       </div>

@@ -46,13 +46,17 @@ export function Card({ variant = "default", title, eyebrow, icon, actions, hint,
             {/* Headers truncate with an ellipsis; they never wrap tall or run
                 off screen (CONVENTIONS.md §12/§17). The full value rides the
                 title attribute. */}
+            {/* h2: one level under the page title, which is now the h1
+                (ACC-01). Card headings used to be h3 — the same level as the
+                page title they sit inside, so cards read as siblings of the
+                page rather than sections of it. Size unchanged. */}
             {title && (
-              <h3
+              <h2
                 className="text-[15px] font-semibold leading-snug text-ink truncate"
                 title={typeof title === "string" ? title : undefined}
               >
                 {title}
-              </h3>
+              </h2>
             )}
           </div>
           {hint && <span className="min-w-0 max-w-full self-center font-term text-[11px] text-ink/65 [overflow-wrap:anywhere]">{hint}</span>}
