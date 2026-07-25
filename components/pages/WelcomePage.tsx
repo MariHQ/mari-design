@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { ErrorMessage } from "../feedback/ErrorMessage";
-import { Alert } from "../feedback/Alert";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite, why } from "../actions/useWrite";
+import { ResultCount } from "../data-display/Pagination";
 import { Spinner } from "../data-display/Spinner";
 import {
-  CheckCircle2, ArrowRight, ChevronRight, GitFork, Lock, ExternalLink,
+  CheckCircle2, ArrowRight, GitFork, Lock, ExternalLink,
   Send, FileText, BookOpen, GitBranch, Bot, Sparkles,
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
@@ -250,6 +252,19 @@ function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]
           Pick a source to import. Connecting hits the live ingestion pipeline and shows real progress.
         </p>
       </div>
+      {/* XA-08: this step capped the catalog at the five providers onboarding
+          has a step for and closed with a "Show all {n} connectors" toggle
+          that expanded nothing: it navigated to Sources. There is genuinely
+          nowhere here to expand to, so the strip says what is on screen and
+          what is not (§13) and the control says where the rest live. */}
+      <ResultCount
+        from={1}
+        to={tiles.length}
+        total={connectorCount}
+        noun="connectors"
+        note="the rest are set up on Sources"
+        actions={onNavigate ? <Button variant="link" onClick={() => onNavigate("/sources")}>Open Sources <ArrowRight size={13} aria-hidden /></Button> : undefined}
+      />
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {tiles.map((t) => {
           const step = TILE_STEP[t.key];
@@ -275,9 +290,6 @@ function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]
           );
         })}
       </div>
-      <button type="button" onClick={() => onNavigate?.("/sources")} className={`inline-flex items-center gap-1 font-term text-[12px] text-ink/65 rounded-[3px] ${focusRing}`}>
-        <ChevronRight size={13} /> Show all {connectorCount} connectors
-      </button>
     </div>
   );
 }
@@ -337,30 +349,19 @@ function ConnectFooter({ hint, label = "Connect & sync", disabled = false, run, 
   run?: () => void | Promise<void>;
   onDone: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
-
-  const go = async () => {
-    if (!run) { onDone(); return; }
-    setBusy(true);
-    setFailed(null);
-    try {
-      await run();
-      onDone();
-    } catch (err) {
-      setFailed(err instanceof Error ? err.message : "The source could not be connected.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // XA-04: a busy flag, a failed string and a try/catch around one optional call.
+  const write = useWrite();
+  const go = () => write.run(run, onDone);
 
   return (
     <>
-      {failed && <Alert tone="blocked" title="Could not connect">{failed}</Alert>}
+      {/* XA-02: a refused connect belongs to the whole action, not to any one
+          credential field, so it is the shared write banner. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div className="mt-4 flex items-center gap-3 border-t border-ink/10 pt-3">
         <span className="flex-1 text-[12px] text-ink/65">{hint}</span>
-        <Button variant="primary" disabled={busy || disabled} onClick={() => void go()}>
-          {busy ? <><Spinner size="sm" /> Connecting…</> : <>{label} <ArrowRight size={14} /></>}
+        <Button variant="primary" disabled={write.busy || disabled} onClick={() => void go()}>
+          {write.busy ? <><Spinner size="sm" /> Connecting…</> : <>{label} <ArrowRight size={14} /></>}
         </Button>
       </div>
     </>
@@ -478,23 +479,16 @@ function CredConnect({ provider, name, blurb, hint, fields, note, actions, nav }
 
 function UploadConnect({ data, actions, nav }: { data: WelcomeData; actions?: WelcomeActions; nav: StepNav }) {
   const [chosen, setChosen] = useState<File[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
   const [ingested, setIngested] = useState<string[]>([]);
+  // XA-04: hand-rolled busy/failed pair around one awaited upload.
+  const write = useWrite();
 
   const upload = async (files: File[]) => {
     setChosen(files);
+    /* The guard stays: with no handler nothing has been ingested, so the
+       manifest must not echo "Ingested" against files no server ever saw. */
     if (!actions?.uploadFiles || files.length === 0) return;
-    setBusy(true);
-    setFailed(null);
-    try {
-      await actions.uploadFiles(files);
-      setIngested(files.map((f) => f.name));
-    } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Those files could not be ingested.");
-    } finally {
-      setBusy(false);
-    }
+    await write.run(() => actions.uploadFiles!(files), () => setIngested(files.map((f) => f.name)));
   };
 
   /* Rows the server has actually ingested win over rows this session picked;
@@ -518,10 +512,11 @@ function UploadConnect({ data, actions, nav }: { data: WelcomeData; actions?: We
             reach the file input, so the affordance is a styled span and the
             whole drop zone is the control. */}
         <span className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper px-3 text-[13px] font-medium text-ink/80">
-          {busy ? <><Spinner size="sm" /> Uploading…</> : "Browse files"}
+          {write.busy ? <><Spinner size="sm" /> Uploading…</> : "Browse files"}
         </span>
       </label>
-      {failed && <Alert tone="blocked" title="Upload failed">{failed}</Alert>}
+      {/* XA-02: a refused upload has no input to sit under. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div>
         <p className="text-[12.5px] text-ink/70">{data.uploadSummary} <span className="text-ink/65">(unchanged chunks skipped by content hash)</span></p>
         <div className="mt-2 grid grid-cols-1 gap-1.5">
@@ -536,7 +531,7 @@ function UploadConnect({ data, actions, nav }: { data: WelcomeData; actions?: We
       </div>
       <div className="mt-2 flex items-center gap-3 border-t border-ink/10 pt-3">
         <span className="flex-1 text-[12px] text-ink/65">.md / .txt · up to 20 files · 1 MB each</span>
-        <Button variant="primary" disabled={busy} onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
+        <Button variant="primary" disabled={write.busy} onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
   );
@@ -578,17 +573,11 @@ function ConnectSyncing({ row, nav }: { row: SyncRow; nav: StepNav }) {
 /* ── Steps 2–4 ────────────────────────────────────────────────────────── */
 
 function GuideStep({ packs, actions }: { packs: GuidePack[]; actions?: WelcomeActions }) {
-  const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  // XA-04: hand-rolled saving/failed pair around one awaited call.
+  const write = useWrite();
   const pick = (id: string) => {
     if (!actions?.chooseGuide) return;
-    setSaving(true);
-    setFailed(null);
-    void (async () => {
-      try { await actions.chooseGuide!(id); }
-      catch (err) { setFailed(err instanceof Error ? err.message : "That style guide could not be saved."); }
-      finally { setSaving(false); }
-    })();
+    void write.run(() => actions.chooseGuide!(id));
   };
   return (
     <div className="space-y-5">
@@ -596,8 +585,8 @@ function GuideStep({ packs, actions }: { packs: GuidePack[]; actions?: WelcomeAc
         <h2 className="font-display text-[20px] font-semibold text-ink">Choose a style guide</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default: you can change it any time.</p>
       </div>
-      {failed && <Alert tone="blocked" title="Could not save your pick">{failed}</Alert>}
-      <WelcomeGuideStep packs={packs} saving={saving} onPick={pick} />
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+      <WelcomeGuideStep packs={packs} saving={write.busy} onPick={pick} />
       <Button variant="link" onClick={() => actions?.navigate?.("/library")}>Manage guides in the Library →</Button>
     </div>
   );
@@ -605,11 +594,13 @@ function GuideStep({ packs, actions }: { packs: GuidePack[]; actions?: WelcomeAc
 
 function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; actions?: WelcomeActions }) {
   const [failed, setFailed] = useState<string | null>(null);
+  /* Not useWrite: this wrapper has to RETHROW so WelcomeGlossaryStep's own
+     scan/add busy states resolve, and useWrite swallows the throw by design. */
   const guard = async <T,>(fn: () => Promise<T> | T): Promise<T> => {
     setFailed(null);
     try { return await fn(); }
     catch (err) {
-      setFailed(err instanceof Error ? err.message : "The glossary step failed.");
+      setFailed(why(err, "The glossary step failed."));
       throw err; // the step keeps its own busy state honest
     }
   };
@@ -619,7 +610,7 @@ function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; action
         <h2 className="font-display text-[20px] font-semibold text-ink">Seed your glossary</h2>
         <p className="mt-1 text-[13.5px] text-ink/65">Harvest candidate terms from the documents you just connected.</p>
       </div>
-      {failed && <Alert tone="blocked" title="Glossary step failed">{failed}</Alert>}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       <WelcomeGlossaryStep
         candidates={candidates}
         onScan={actions?.harvestGlossary ? () => guard(() => actions.harvestGlossary!()) : undefined}
@@ -630,19 +621,12 @@ function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; action
 }
 
 function FinishStep({ rows, actions, onDone }: { rows: SyncRow[]; actions?: WelcomeActions; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
   /* This is now the ONLY "Finish setup" on the screen (the footer no longer
      draws a second one), so with no handler it has to advance the wizard the
-     way every other step does rather than sitting there inert (§2). */
-  const finish = async () => {
-    if (!actions?.finish) { onDone(); return; }
-    setBusy(true);
-    setFailed(null);
-    try { await actions.finish(); onDone(); }
-    catch (err) { setFailed(err instanceof Error ? err.message : "Setup could not be completed."); }
-    finally { setBusy(false); }
-  };
+     way every other step does rather than sitting there inert (§2) — which is
+     exactly useWrite's no-handler branch (XA-04). */
+  const write = useWrite();
+  const finish = () => write.run(actions?.finish && (() => actions.finish!()), onDone);
   return (
     <div className="space-y-5">
       <div>
@@ -650,10 +634,10 @@ function FinishStep({ rows, actions, onDone }: { rows: SyncRow[]; actions?: Welc
         <p className="mt-1 text-[13.5px] text-ink/65">Here’s what actually happened: live sync state from your sources.</p>
       </div>
       <WelcomeSyncPanel sources={rows} />
-      {failed && <Alert tone="blocked" title="Could not finish setup">{failed}</Alert>}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <div className={AUTH_ACTIONS}>
-        <Button variant="primary" disabled={busy} onClick={() => void finish()}>
-          {busy ? <><Spinner size="sm" /> Finishing…</> : "Finish setup"}
+        <Button variant="primary" disabled={write.busy} onClick={() => void finish()}>
+          {write.busy ? <><Spinner size="sm" /> Finishing…</> : "Finish setup"}
         </Button>
       </div>
     </div>
@@ -815,7 +799,8 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
               the recovery action (§8); `error` carries the real detail. */}
           {error && (
             <div className="mb-4">
-              <ErrorMessage id="server.unavailable">{error}</ErrorMessage>
+              {/* XA-01: exactly what ReadError wraps, written out by hand. */}
+              <ReadError>{error}</ReadError>
             </div>
           )}
 

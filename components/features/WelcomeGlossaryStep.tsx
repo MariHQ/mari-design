@@ -6,6 +6,8 @@ import { Button } from "../actions/Button";
 import { Chip } from "../data-display/Chip";
 import { Spinner } from "../data-display/Spinner";
 import { EmptyState } from "../data-display/EmptyState";
+import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
 import { Skeleton, SkeletonLine, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 
 /* WelcomeGlossaryStep — the Welcome wizard's optional glossary-seeding step:
@@ -57,7 +59,7 @@ export function WelcomeGlossaryStep({ candidates: given, llm = true, defaultMode
   const candidates = scanned ?? given;
   const [checked, setChecked] = useState<Set<string>>(new Set(defaultMode === "review" ? given.map((c) => c.term) : []));
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [addResult, setAddResult] = useState<{ ok: number; failed: number } | null>(null);
+  const [addResult, setAddResult] = useState<{ ok: number; failed: number; error?: string } | null>(null);
   const [addedThisSession, setAddedThisSession] = useState(0);
 
   /* The candidate list is the server's, and the harvest replaces it. Without
@@ -112,8 +114,8 @@ export function WelcomeGlossaryStep({ candidates: given, llm = true, defaultMode
           await onAdd(picked);
           setAddedThisSession((n) => n + picked.length);
           setAddResult({ ok: picked.length, failed: 0 });
-        } catch {
-          setAddResult({ ok: 0, failed: picked.length });
+        } catch (e) {
+          setAddResult({ ok: 0, failed: picked.length, error: why(e, "The terms could not be saved.") });
         } finally {
           setProgress({ done: picked.length, total: picked.length });
           setMode("start");
@@ -240,9 +242,14 @@ export function WelcomeGlossaryStep({ candidates: given, llm = true, defaultMode
       <span className="grid place-items-center mx-auto w-10 h-10 rounded-full border border-ink/15 text-ink/60 mb-3"><BookOpen size={20} /></span>
       <h2 className="text-[15px] font-semibold text-ink">Fill glossary</h2>
       {addResult && addResult.failed > 0 ? (
-        <p className="mt-1 inline-flex items-center justify-center gap-1.5 text-[13.5px] text-espelette">
-          <AlertTriangle size={15} /> None of the {addResult.failed} term{addResult.failed === 1 ? " was" : "s were"} saved. The detail is above.
-        </p>
+        /* XA-02: a refused save is a failed WRITE, not a red sentence. It also
+           used to point at "the detail is above" when nothing above carried
+           one, because the throw was caught and dropped. */
+        <div className="mt-2 text-left">
+          <WriteError onDismiss={() => setAddResult(null)}>
+            {`None of the ${addResult.failed} term${addResult.failed === 1 ? " was" : "s were"} saved. ${addResult.error ?? ""}`.trim()}
+          </WriteError>
+        </div>
       ) : addResult ? (
         <p className="mt-1 text-[13.5px] text-moss inline-flex items-center gap-1.5 justify-center">
           <CheckCircle2 size={15} /> Added {addResult.ok} term{addResult.ok === 1 ? "" : "s"} to your glossary.

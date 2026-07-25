@@ -19,7 +19,6 @@
  * the registry glob picks it up and filters it back out. It is not a page.
  */
 
-import type { Site } from "../../features/PublishSiteEditor";
 import type { AuthUser } from "../../features/AuthSession";
 import type { ChatSession } from "../../features/ChatDockFeature";
 import type { Doc } from "../../features/TagPickerFeature";
@@ -269,35 +268,6 @@ export const DECISIONS_ROWS = DECISIONS.default.data.decisions;
    feature whose props are all optional is deliberately absent. */
 
 
-/** The doc-site editor's own `Site` shape. Lifted out of `PublishSiteEditor`,
-    which was the last feature in the library still carrying a demo default
-    (MIGRATION.md: nothing under `features/` ships demo content). The Publish
-    page fixture's `DocSite` is a different, page-level shape, so this cannot
-    just reuse it. */
-export const EDITOR_SITE: Site = {
-  id: 7,
-  name: "Acme Docs",
-  domain: "docs.acme.com",
-  status: "live",
-  docs: 148,
-  warnings: 2,
-  sources: ["customer-facing", "canonical"],
-  gates: [
-    { name: "All facts verified", ok: true, note: "148/148 verified" },
-    { name: "No broken links", ok: true, note: "checked at build" },
-    { name: "Glossary coverage", ok: false, note: "3 terms undefined" },
-  ],
-  nav: [
-    { label: "Getting started", active: true, children: ["Install", "Quickstart"] },
-    { label: "Guides", children: ["Ingestion", "Search", "Publishing"] },
-    { label: "Reference", children: ["API", "CLI"] },
-  ],
-  releases: [
-    { id: 14, version: "v14", status: "live", deployed: "2025-07-19T09:55:00", notes: "Deployed to S3 · acme-docs-prod" },
-    { id: 13, version: "v13", status: "superseded", deployed: "2025-07-12T14:02:00" },
-    { id: 12, version: "v12", status: "superseded", deployed: "2025-07-05T11:40:00", notes: "Docusaurus generator" },
-  ],
-};
 
 
 /* ── features with no page of their own ──────────────────────────────────
@@ -449,7 +419,6 @@ export const FEATURE_PROPS: Record<string, Record<string, unknown>> = {
   BrandingEditor: { ...BRANDING },
 
   PublishMcpServers: { servers: MCP_SERVERS },
-  PublishSiteEditor: { site: EDITOR_SITE },
   TagPickerFeature: { docs: TAG_PICKER_DOCS },
   AuthSession: { signedInAs: AUTH_IDENTITY },
   ChatDockFeature: { sessions: CHAT_SESSIONS },

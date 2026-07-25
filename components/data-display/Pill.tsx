@@ -16,9 +16,15 @@ export type PillKind =
 // caps label beside them (CONVENTIONS.md §6).
 const GLYPH = { size: 14, strokeWidth: 2.2 } as const;
 
+/* XA-25: this table is the third status vocabulary in the console, after
+   StatusChip and TagChip, and it disagreed with both. `verified` was `info`
+   (blue) here and `ok` (green) in TagChip, so the same word rendered in two
+   colours depending on which chip a page happened to import. §4 is explicit:
+   "verified is green". Every kind below now carries the tone StatusChip gives
+   the same word; only the glyph is Pill's own. */
 const PILL: Record<PillKind, { tone: ChipTone; label: string; icon: ReactNode }> = {
   canonical: { tone: "ok", label: "Canonical", icon: <CheckCircle2 {...GLYPH} /> },
-  verified: { tone: "info", label: "Verified", icon: <ShieldCheck {...GLYPH} /> },
+  verified: { tone: "ok", label: "Verified", icon: <ShieldCheck {...GLYPH} /> },
   approval: { tone: "ok", label: "Approval", icon: <Check {...GLYPH} strokeWidth={2.8} /> },
   factcheck: { tone: "info", label: "Fact check", icon: <FileCheck {...GLYPH} /> },
   "needs-review": { tone: "attention", label: "Needs review", icon: <Bell {...GLYPH} /> },

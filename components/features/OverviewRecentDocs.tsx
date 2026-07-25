@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
-import { Button } from "../actions/Button";
 import { fmtDate } from "../tokens/format";
 import { focusRing } from "../tokens/focusRing";
 import { Scrollable } from "../data-display/Scrollable";
@@ -82,13 +83,9 @@ export function OverviewRecentDocs({
       title="Recent docs"
       /* A table's action button lives in the top right (§3). */
       actions={
-        !loading && !offline && hidden > 0 ? (
-          <Button compact onClick={browse} aria-expanded={expanded}>
-            {expanded
-              ? <><ChevronUp size={14} /> Show fewer</>
-              : <><ChevronDown size={14} /> Browse all {docs.length}</>}
-          </Button>
-        ) : undefined
+        !loading && !offline && hidden > 0
+          ? <ShowRest expanded={expanded} total={docs.length} onToggle={browse} />
+          : undefined
       }
     >
       {loading ? (
@@ -103,18 +100,13 @@ export function OverviewRecentDocs({
         </div>
       ) : offline ? (
         /* §8: failure copy comes from the catalog, never a bespoke string. */
-        <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
+        <div className="px-4 pb-4"><ReadError onRetry={onRetry} /></div>
       ) : (
         <>
-        {/* Count strip above the list, below the card's action bar (§13). */}
+        {/* Count strip above the list, below the card's action bar (§13). It
+            used to be a bespoke span with its own ternary. */}
         {docs.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
-            <span className="font-term text-[11.5px] text-ink/65">
-              {rows.length < docs.length
-                ? `Showing ${rows.length} of ${docs.length.toLocaleString()} documents`
-                : `Showing all ${docs.length.toLocaleString()} document${docs.length === 1 ? "" : "s"}`}
-            </span>
-          </div>
+          <ResultCount from={1} to={rows.length} total={docs.length} noun="documents" />
         )}
         <Scrollable axis="both" style={{ maxHeight: rows.length > 8 ? 420 : undefined }}>
           <table className="w-full border-collapse text-left">

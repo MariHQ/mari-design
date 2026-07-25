@@ -102,24 +102,19 @@ function SlackDrawer({
   /* The verify step reports what Slack answered, and nothing else: it used to
      flip to "Connected as @Mari" from a click alone. */
   const [tested, setTested] = useState<{ ok: boolean; teamName?: string; error?: string } | null>(null);
-  const [testing, setTesting] = useState(false);
   const write = useWrite();
+  /* Its own hook, not the one Save uses: the two steps are separately
+     disableable and a failure on one must not surface on the other. */
+  const tester = useWrite();
 
   const save = () => write.run(
     actions?.saveSlackCredentials && (() => actions.saveSlackCredentials!({ botToken: token, signingSecret: secret.trim() })),
     () => setSaved(true),
   );
   const test = async () => {
-    if (!actions?.testSlackConnection || testing) return;
-    setTesting(true);
     setTested(null);
-    try {
-      setTested(await actions.testSlackConnection());
-    } catch (err) {
-      setTested({ ok: false, error: err instanceof Error ? err.message : "auth.test could not be run." });
-    } finally {
-      setTesting(false);
-    }
+    const result = await tester.runFor(actions?.testSlackConnection && (() => actions.testSlackConnection!()));
+    if (result) setTested(result);
   };
 
   const tokenOk = token.startsWith("xoxb-");
@@ -160,8 +155,8 @@ function SlackDrawer({
           <>
             <p className="text-[13px] text-ink/70">Run Slack's <code>auth.test</code> to confirm the token works.</p>
             <div>
-              <Button compact disabled={testing} onClick={() => void test()}>
-                {testing ? <><Spinner size="sm" /> Testing…</> : <><RefreshCw size={13} /> Test connection</>}
+              <Button compact disabled={tester.busy} onClick={() => void test()}>
+                {tester.busy ? <><Spinner size="sm" /> Testing…</> : <><RefreshCw size={13} /> Test connection</>}
               </Button>
               {tested?.ok && (
                 <div className="mt-3 flex items-center gap-2">
@@ -171,7 +166,18 @@ function SlackDrawer({
                   </span>
                 </div>
               )}
-              {tested && !tested.ok && <p className="mt-3 text-[12.5px] text-espelette">{tested.error ?? "auth.test failed. Check the token and try again."}</p>}
+              {/* XA-02: a refused connection test is a failed WRITE beside a
+                  button, not a note under an input, and it used to render as a
+                  bespoke red <p> at a third of the weight the same event gets
+                  everywhere else. Either source of the failure lands here: the
+                  call threw, or it came back saying no. */}
+              {(tester.failed || (tested && !tested.ok)) && (
+                <div className="mt-3">
+                  <WriteError onDismiss={() => { tester.setFailed(null); setTested(null); }}>
+                    {tester.failed ?? tested?.error ?? "auth.test failed. Check the token and try again."}
+                  </WriteError>
+                </div>
+              )}
             </div>
           </>
         ) : (

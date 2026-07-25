@@ -9,6 +9,7 @@ import { OverviewSourcePulse, type PulseTileData } from "../features/OverviewSou
 import { OverviewLiveActivity, type FeedItem } from "../features/OverviewLiveActivity";
 import { OverviewWorkflowStrip, type WfFlow, type WfRun } from "../features/OverviewWorkflowStrip";
 import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { CardCollapseScope } from "../layout/Card";
 import { Truncate } from "../data-display/Truncate";
@@ -25,7 +26,7 @@ import { DateRangePicker, type DateRange } from "../data-display/DateRangePicker
 const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty / new workspace" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -156,7 +157,9 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                 dashboard scans as a list instead of a forever scroll (§17). */}
             <CardCollapseScope.Provider value={mobile}>
               {error ? (
-                <EmptyState title="API offline">{error}</EmptyState>
+                /* XA-01: an EmptyState here read as "your workspace is empty"
+                   when the dashboard simply failed to load. */
+                <ReadError>{error}</ReadError>
               ) : !hasContent(data) ? (
                 /* Two different nothings, and they need two different next
                    steps. No sources: connect one. Sources but nothing indexed:

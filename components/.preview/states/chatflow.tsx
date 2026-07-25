@@ -2,8 +2,7 @@ import { Plus, X } from "lucide-react";
 import type { ComponentSpec } from "./types";
 import {
   ChatDock, ChatMessage, ToolCall, Composer, TypingIndicator,
-  PipelineView, RunHistory, RunPanel, WorkflowScreen,
-  Button, type ChatMessageData, type WorkflowRun, type WorkflowStep,
+  Button, type ChatMessageData,
 } from "../../index";
 
 /* State matrix for the chatflow group. Author EVERY state worth reviewing:
@@ -53,57 +52,6 @@ const OVERFLOW_TRANSCRIPT: ChatMessageData[] = [
   },
   { id: "3", role: "warning", content: `${BODY} ${HUGE}` },
 ];
-
-const STEPS: WorkflowStep[] = [
-  { id: "s1", section: "when", label: "A document changes", summary: "Fires whenever a synced source reports an edit." },
-  { id: "s2", section: "do", label: "Extract claims", summary: "Pulls factual statements out of the changed document.", llm: true },
-  { id: "s3", section: "check", label: "Compare with canon", summary: "Checks each claim against the canonical set." },
-  { id: "s4", section: "then", label: "Open review tasks", summary: "One task per contradicting document.", branch: true, branchLabel: "if contradictions > 0" },
-];
-const STEPS_LONG: WorkflowStep[] = [
-  { id: "s1", section: "when", label: LONG, summary: `${BODY} ${HUGE}` },
-  { id: "s2", section: "do", label: HUGE, summary: HUGE, llm: true },
-  ...Array.from({ length: 6 }, (_, i) => ({
-    id: `x${i}`, section: (["do", "check", "then"] as const)[i % 3],
-    label: `Stage number ${i + 1}`, summary: "Runs as configured.",
-  })),
-];
-
-const RUNS: WorkflowRun[] = [
-  {
-    id: "r1", number: 412, workflowName: "Contradiction sweep", status: "waiting",
-    started: "2026-07-21T09:14:00Z", duration: "1m 12s", triggeredBy: "Drive edit: Pricing sheet", dry: true,
-    headline: "Waiting on approval for 3 review tasks",
-    rows: [
-      { step: "Fetch changed docs", status: "passed", detail: "4 documents fetched", duration: "6s" },
-      { step: "Extract claims", status: "passed", detail: "18 claims extracted", duration: "41s" },
-      { step: "Compare with canon", status: "passed", detail: "3 contradictions found", duration: "25s" },
-      { step: "Approve review tasks", status: "waiting", detail: "3 tasks pending approval" },
-      { step: "Notify owners", status: "pending" },
-    ],
-    stats: [{ label: "Claims", value: 18 }, { label: "Contradictions", value: 3, bad: true }, { label: "Tasks", value: 3 }],
-  },
-  {
-    id: "r2", number: 411, workflowName: "Contradiction sweep", status: "passed",
-    started: "2026-07-20T22:02:00Z", duration: "58s", headline: "No contradictions found",
-    rows: [{ step: "Fetch changed docs", status: "passed", detail: "2 documents", duration: "4s" }],
-    stats: [{ label: "Claims", value: 9 }, { label: "Contradictions", value: 0 }],
-  },
-  {
-    id: "r3", number: 410, workflowName: "Freshness audit", status: "failed",
-    started: "2026-07-20T06:30:00Z", duration: "12s", triggeredBy: "Schedule: daily 06:30",
-    headline: "Confluence token expired",
-  },
-  { id: "r4", number: 409, workflowName: "Freshness audit", status: "running", started: "2026-07-19T06:30:00Z" },
-  { id: "r5", number: 408, workflowName: "Glossary sync", status: "skipped", started: "2026-07-18T06:30:00Z", duration: "0s", dry: true },
-];
-const RUNS_LONG: WorkflowRun[] = Array.from({ length: 14 }, (_, i) => ({
-  id: `l${i}`, number: 500 - i, workflowName: i % 2 ? LONG : HUGE,
-  status: (["passed", "failed", "running", "waiting", "skipped", "pending"] as const)[i % 6],
-  started: "2026-07-21T09:14:00Z", duration: i % 3 ? "1m 12s" : undefined,
-  triggeredBy: i % 2 ? HUGE : undefined, dry: i % 3 === 0,
-  headline: i % 2 ? `${LONG} (${i})` : HUGE,
-}));
 
 export const CHATFLOW: ComponentSpec[] = [
   {
@@ -187,69 +135,6 @@ export const CHATFLOW: ComponentSpec[] = [
       { id: "default", label: "Default", node: <TypingIndicator /> },
       { id: "custom", label: "Custom label", node: <TypingIndicator label="reading 12 documents…" /> },
       { id: "narrow", label: "Overflow: long label, narrow frame", width: 320, node: <TypingIndicator label={LONG} /> },
-    ],
-  },
-  {
-    id: "PipelineView", title: "PipelineView", width: 620,
-    states: [
-      { id: "default", label: "Default", node: (
-        <PipelineView steps={STEPS} name="Contradiction sweep" description="Runs whenever a synced document changes." onSelect={() => {}} />) },
-      { id: "selected", label: "Selected stage", node: (
-        <PipelineView steps={STEPS} selectedId="s2" name="Contradiction sweep" onSelect={() => {}} />) },
-      { id: "loading", label: "Loading", node: <PipelineView steps={[]} loading /> },
-      { id: "empty", label: "Empty", node: <PipelineView steps={[]} name="New flow" description="No stages yet." /> },
-      { id: "overflow", label: "Overflow: long labels, many stages", node: (
-        <PipelineView steps={STEPS_LONG} name={LONG} description={`${BODY} ${HUGE}`} onSelect={() => {}} />) },
-      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
-        <PipelineView steps={STEPS_LONG.slice(0, 4)} name={LONG} onSelect={() => {}} />) },
-    ],
-  },
-  {
-    id: "RunHistory", title: "RunHistory", width: 900,
-    states: [
-      { id: "default", label: "Default (sortable columns, Dry chip)", node: <RunHistory runs={RUNS} onSelect={() => {}} /> },
-      { id: "selected", label: "Selected row", node: <RunHistory runs={RUNS} selectedId="r1" onSelect={() => {}} /> },
-      { id: "loading", label: "Loading", node: <RunHistory runs={[]} loading /> },
-      { id: "empty", label: "Empty", node: <RunHistory runs={[]} /> },
-      { id: "static", label: "No row action", node: <RunHistory runs={RUNS.slice(0, 3)} title="Recent runs" /> },
-      { id: "overflow", label: "Overflow: 14 rows, long cells", node: <RunHistory runs={RUNS_LONG} onSelect={() => {}} /> },
-      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: <RunHistory runs={RUNS_LONG.slice(0, 5)} onSelect={() => {}} /> },
-    ],
-  },
-  {
-    id: "RunPanel", title: "RunPanel", width: 460,
-    states: [
-      { id: "waiting", label: "Waiting (approve bottom left, Dry left of status)", node: (
-        <RunPanel run={RUNS[0]} onClose={() => {}} onApprove={() => {}} onRerun={() => {}} />) },
-      { id: "passed", label: "Passed", node: <RunPanel run={RUNS[1]} onClose={() => {}} onRerun={() => {}} /> },
-      { id: "failed-nolog", label: "Failed, no step log", node: <RunPanel run={RUNS[2]} onRerun={() => {}} /> },
-      { id: "busy", label: "Busy with note", node: (
-        <RunPanel run={RUNS[0]} busy note="Approved, resuming." onApprove={() => {}} onRerun={() => {}} />) },
-      { id: "loading", label: "Loading", node: <RunPanel run={null} loading /> },
-      { id: "empty", label: "No run selected", node: <RunPanel run={null} /> },
-      { id: "overflow", label: "Overflow: long names and details", node: (
-        <RunPanel run={{ ...RUNS[0], workflowName: LONG, triggeredBy: HUGE,
-          rows: [{ step: LONG, status: "waiting", detail: `${BODY} ${HUGE}`, duration: "1m 12s" },
-                 { step: HUGE, status: "failed", detail: HUGE }],
-          stats: [{ label: "Contradictions found this run", value: 128, bad: true }, { label: "Claims", value: 9410 }, { label: "Tasks", value: 3 }, { label: "Skipped", value: 12 }] }}
-          onClose={() => {}} onApprove={() => {}} onRerun={() => {}} />) },
-      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
-        <RunPanel run={RUNS[0]} onClose={() => {}} onApprove={() => {}} onRerun={() => {}} />) },
-    ],
-  },
-  {
-    id: "WorkflowScreen", title: "WorkflowScreen", width: 1200,
-    states: [
-      { id: "default", label: "Default", node: (
-        <WorkflowScreen name="Contradiction sweep" description="Runs whenever a synced document changes."
-          steps={STEPS} runs={RUNS} onApprove={() => {}} onRerun={() => {}} />) },
-      { id: "empty", label: "No stages, no runs", node: (
-        <WorkflowScreen name="New flow" description="Nothing configured yet." steps={[]} runs={[]} />) },
-      { id: "overflow", label: "Overflow: long labels", node: (
-        <WorkflowScreen name={LONG} description={`${BODY} ${HUGE}`} steps={STEPS_LONG} runs={RUNS_LONG}
-          onApprove={() => {}} onRerun={() => {}} />) },
-      { id: "narrow", label: "Overflow: narrow frame", width: 320, node: (
-        <WorkflowScreen name={LONG} steps={STEPS.slice(0, 2)} runs={RUNS.slice(0, 2)} onRerun={() => {}} />) },
     ],
   },
 ];

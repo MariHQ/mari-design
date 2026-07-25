@@ -3,7 +3,7 @@
 **Type:** Forms
 **Source:** [`Combobox.tsx`](./Combobox.tsx) (this repo)
 
-A searchable select. `Select` wraps the native `<select>` (fine for short lists); reach for `Combobox` once a list is long enough that scanning it top-to-bottom isn't practical. No native Radix combobox primitive exists — this composes `Popover` plus a hand-rolled listbox (same shape as `CommandPalette`, smaller scope: single-select, no keyboard arrow nav, click/type-to-filter only).
+A searchable select. `Select` wraps the native `<select>` (fine for short lists); reach for `Combobox` once a list is long enough that scanning it top-to-bottom isn't practical. No native Radix combobox primitive exists — this composes `Popover` plus a hand-rolled listbox (same shape as `GlobalSearch`, smaller scope: single-select, no keyboard arrow nav, click/type-to-filter only).
 
 ## Props
 

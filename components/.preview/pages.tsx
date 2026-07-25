@@ -95,7 +95,6 @@ const GROUPS: Group[] = [
     { name: "AuthSession", title: "Sign in & session" },
   ] },
   { group: "Publish", items: [
-    { name: "PublishSiteEditor", title: "Site editor" },
     { name: "PublishMcpServers", title: "MCP servers" },
   ] },
   { group: "Misc (macro of a primitive)", items: [

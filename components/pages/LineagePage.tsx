@@ -18,6 +18,7 @@ import {
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 
@@ -47,7 +48,7 @@ const STATES = [
   { id: "group", label: "Roll-up drawer open" },
   { id: "assert", label: "Impact-analysis drawer" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty / no graph" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -332,7 +333,9 @@ function Body({ data, error, actions, mobile }: {
     return (
       <div className="mt-6">
         <Card>
-          <EmptyState icon={<Network size={22} />} title="API offline">{error}</EmptyState>
+          {/* XA-01: a failed read is not an empty graph. The EmptyState here
+              said "no lineage" when the request simply did not come back. */}
+          <ReadError>{error}</ReadError>
         </Card>
       </div>
     );

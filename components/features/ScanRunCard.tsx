@@ -2,8 +2,9 @@ import { Workflow } from "lucide-react";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { Progress } from "../data-display/Progress";
-import { StatusChip, type ChipStatus } from "../data-display/Chip";
-import type { RunStatus, RunStepRow } from "../workflow/RunHistory";
+import { StatusChip } from "../data-display/Chip";
+import type { RunStepRow } from "../workflow/RunHistory";
+import { RUN_STATUS_CHIP, type RunStatus } from "../tokens/runStatus";
 
 /* A background run, followed from the page that started it.
  *
@@ -33,14 +34,7 @@ export type ScanRun = {
   added: number | null;
 };
 
-const SCAN_CHIP: Record<RunStatus, ChipStatus> = {
-  passed: "succeeded",
-  running: "running",
-  pending: "queued",
-  waiting: "needs-review",
-  failed: "failed",
-  skipped: "skipped",
-};
+/* XA-25: was SCAN_CHIP, one of four independent copies of this mapping. */
 
 export type ScanRunCardProps = {
   run: ScanRun;
@@ -67,7 +61,7 @@ export function ScanRunCard({
   const outcome = run.added == null
     ? null
     : run.added === 0
-      ? `No new ${noun}s — everything it found is already recorded.`
+      ? `No new ${noun}s. Everything it found is already recorded.`
       : `${run.added} new ${noun}${run.added === 1 ? "" : "s"} captured, ${destination}.`;
 
   return (
@@ -79,7 +73,7 @@ export function ScanRunCard({
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <StatusChip status={SCAN_CHIP[run.status]} />
+          <StatusChip status={RUN_STATUS_CHIP[run.status]} />
           {outcome && <span className="min-w-0 text-[12.5px] text-ink/70">{outcome}</span>}
         </div>
         <Progress value={run.progress} tone={tone} label={label} />

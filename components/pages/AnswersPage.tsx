@@ -5,9 +5,12 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
 import { MarkdownEditor } from "../data-display/MarkdownEditor";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
+import { useWrite, why } from "../actions/useWrite";
 
 /* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
    A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
@@ -34,7 +37,7 @@ const STATES = [
   { id: "filtered", label: "Filtered · empty" },
   { id: "empty", label: "No answers" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -98,9 +101,6 @@ export type AnswersActions = AnswerActions & {
   importAnswers?: (drafts: { question: string; answer: string }[]) => void | Promise<void>;
 };
 
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
-
 /** Everything the Answers page renders. */
 export type AnswersData = {
   stats: AnswerStat[];
@@ -143,9 +143,12 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
   error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
 }) {
   if (error) {
+    /* A failed read is not an empty library: an EmptyState here told the reader
+       they had curated nothing when the truth was that the request did not come
+       back (§8, XA-01). */
     return (
       <Card>
-        <EmptyState title="API offline">{error}</EmptyState>
+        <ReadError>{error}</ReadError>
       </Card>
     );
   }
@@ -198,20 +201,28 @@ function CoverageCard({
     <Card>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="text-[14px] font-semibold text-ink">Coverage</span>
-        {!error && questions.length > 0 && (
-          <span className="font-term text-[11.5px] text-ink/65">
-            {extended
-              ? `${questions.length.toLocaleString("en-US")} uncovered`
-              : `${qs.length} of ${questions.length.toLocaleString("en-US")} uncovered`}
-          </span>
-        )}
       </div>
       {error ? (
-        <EmptyState title="API offline">Coverage unavailable.</EmptyState>
+        /* The rail used to report a failed read as an EmptyState carrying a
+           bespoke "Coverage unavailable." — an empty state must never report a
+           failure, and the copy for one comes from the catalog (§8, XA-01). */
+        <ReadError>{error}</ReadError>
       ) : questions.length === 0 ? (
         <EmptyState title="All covered">No uncovered questions yet.</EmptyState>
       ) : (
         <div className="space-y-3">
+          {/* One count strip, above the list it describes (§13, XA-07): the
+              hand-rolled "N of M uncovered" span sat on the header line, and
+              "See all …" was one of eight spellings of the same toggle. */}
+          <ResultCount
+            from={1}
+            to={qs.length}
+            total={questions.length}
+            noun="uncovered questions"
+            actions={hidden > 0 && onSeeAll
+              ? <ShowRest expanded={false} total={questions.length} onToggle={onSeeAll} />
+              : undefined}
+          />
           {qs.map((q) => (
             <div key={q} className="rounded-[6px] border border-ink/12 p-3">
               <div className="text-[13px] text-ink">{q}</div>
@@ -221,11 +232,6 @@ function CoverageCard({
               <Button variant="link" compact className="mt-1.5" onClick={() => onCompose(q)}>Draft answer</Button>
             </div>
           ))}
-          {hidden > 0 && onSeeAll && (
-            <Button variant="link" compact onClick={onSeeAll}>
-              See all {questions.length.toLocaleString("en-US")} uncovered questions
-            </Button>
-          )}
         </div>
       )}
     </Card>
@@ -296,23 +302,18 @@ function NewAnswer({ question: initial, actions, onClose }: {
 }) {
   const [question, setQuestion] = useState(initial);
   const [answer, setAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /* One hook for the busy/failed pair the composer used to keep by hand: no
+     handler runs the local echo, a handler is awaited before the form claims
+     the draft was saved (XA-04). */
+  const write = useWrite();
 
   const save = async () => {
-    if (!question.trim() || !answer.trim() || busy) return;
-    if (!actions?.create) { setSaved(true); return; }
-    setBusy(true);
-    setFailed(null);
-    try {
-      await actions.create({ question: question.trim(), answer: answer.trim() });
-      setSaved(true);
-    } catch (e) {
-      setFailed(why(e, "That answer could not be saved."));
-    } finally {
-      setBusy(false);
-    }
+    if (!question.trim() || !answer.trim() || write.busy) return;
+    await write.run(
+      actions?.create && (() => actions.create!({ question: question.trim(), answer: answer.trim() })),
+      () => setSaved(true),
+    );
   };
 
   return (
@@ -335,12 +336,14 @@ function NewAnswer({ question: initial, actions, onClose }: {
             placeholder="The wording to serve, verbatim"
           />
           <AnswerLength value={answer} />
-          <FieldError>{failed}</FieldError>
+          {/* A refused save has no single input to sit under, so it is a
+              banner beside the control that fired, not a FieldError (XA-02). */}
+          <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
           <div className="flex items-center gap-2">
-            <Button variant="primary" compact disabled={busy || !question.trim() || !answer.trim()} onClick={save}>
-              {busy ? "Saving…" : "Save draft"}
+            <Button variant="primary" compact disabled={write.busy || !question.trim() || !answer.trim()} onClick={save}>
+              {write.busy ? "Saving…" : "Save draft"}
             </Button>
-            <Button compact disabled={busy} onClick={onClose}>Cancel</Button>
+            <Button compact disabled={write.busy} onClick={onClose}>Cancel</Button>
           </div>
         </div>
       )}
@@ -416,7 +419,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
       setRows(found.map((c, i) => reviewed(c, i, c.confidence >= HIGH_CONFIDENCE)));
       setPhase("review");
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "The scan could not finish.");
+      setFailed(why(e, "The scan could not finish."));
       setPhase("select");
     }
   };
@@ -430,7 +433,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
       }
       setPhase("done");
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "The import could not finish.");
+      setFailed(why(e, "The import could not finish."));
       setPhase("review");
     }
   };
@@ -494,15 +497,24 @@ function HarvestWizard({ harvest, actions, onClose }: {
             </>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-term text-[12px] text-ink/65">{`${accepted.length} of ${rows.length} accepted`}</span>
-                <Button
-                  compact
-                  onClick={() => setRows((prev) => prev.map((r) => (r.confidence >= HIGH_CONFIDENCE ? { ...r, accepted: true } : r)))}
-                >
-                  Accept all high confidence
-                </Button>
-              </div>
+              {/* The review's own count strip, above the rows it describes
+                  (§13, XA-07). The hand-rolled span reported the same two
+                  numbers in a fourth wording. */}
+              <ResultCount
+                from={1}
+                to={rows.length}
+                total={rows.length}
+                noun="candidates"
+                note={`${accepted.length.toLocaleString("en-US")} accepted`}
+                actions={
+                  <Button
+                    compact
+                    onClick={() => setRows((prev) => prev.map((r) => (r.confidence >= HIGH_CONFIDENCE ? { ...r, accepted: true } : r)))}
+                  >
+                    Accept all high confidence
+                  </Button>
+                }
+              />
               {rows.map((r, i) => (
                 <Card key={r.key} className={r.accepted ? undefined : "opacity-55"}>
                   <h3 className="text-[13.5px] font-semibold text-ink">{r.question}</h3>

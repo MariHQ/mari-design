@@ -13,7 +13,7 @@ import {
    overflow cases (very long text, unbreakable strings, too many items, a
    frame too narrow). Overflow states are where layout actually breaks.
 
-   Menu, Tooltip, ContextMenu, CommandPalette and GlobalSearch portal their
+   Menu, Tooltip, ContextMenu and GlobalSearch portal their
    panels to <body>, which sits outside the captured frame. Their open panels
    are reviewed on the library preview page; here we cover the trigger states.
    Popover can opt out of the portal, so its open panel IS captured. */
@@ -211,13 +211,13 @@ export const NAVIGATION: ComponentSpec[] = [
     ],
   },
   {
-    id: "CommandPalette", title: "CommandPalette / GlobalSearch", width: 620,
+    id: "GlobalSearch", title: "GlobalSearch", width: 620,
     states: [
-      { id: "triggers", label: "Launchers (both overlays portal to body)", node: (
+      { id: "triggers", label: "Launchers (the overlay portals to body)", node: (
         <div className="space-y-3">
           <SearchFieldDemo />
           <div className="flex items-center gap-2">
-            <Button variant="primary" compact>Open command palette</Button>
+            <Button variant="primary" compact>Open global search</Button>
             <Kbd keys="⌘ K" />
             <StatusChip status="connected" />
           </div>

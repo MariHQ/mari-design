@@ -19,13 +19,16 @@ import { Skeleton, SkeletonLine, SkeletonText } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { ResultCount } from "../data-display/Pagination";
-import { FieldError } from "../feedback/ErrorMessage";
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+import { WriteError } from "../feedback/WriteError";
+import { CreateReviewTaskButton } from "../actions/RepeatedActions";
+import { why } from "../actions/useWrite";
+import { factStatusKey } from "./FactsVerificationAudit";
 
 /** One fact-check finding. */
 export type DocFinding = { id: number; kind: string; severity: string; text: string; note: string };
+/** Is this claim verified, however the extractor spelled the word? */
+const isVerifiedClaim = (c: DocClaim) => factStatusKey(c.status) === "verified";
+
 /** One extracted claim and its verification status. */
 export type DocClaim = { claim: string; source: string; status: string; verified: string };
 type FactTab = "check" | "claims";
@@ -99,7 +102,11 @@ export function DocReviewFindingsPanel({
   const evidence = contra ? contra.note.replace(/^Contradicts verified fact:\s*/i, "") : "";
   const contradictionN = findings.filter((f) => f.kind === "fact" && f.severity === "error").length;
   const unsupportedN = findings.filter((f) => (f.kind === "fact" && f.severity !== "error") || f.kind === "freshness").length;
-  const supportedN = claims.filter((f) => f.status === "Verified").length;
+  /* XA-25: P-FA-1 removed status-dispatch-on-display-string from the Facts
+     views and this panel kept it, so a workspace whose ledger spells the word
+     "verified" or "VERIFIED" counted zero supported claims and drew a grey
+     tick beside every verified one. Same normaliser the fact views use. */
+  const supportedN = claims.filter(isVerifiedClaim).length;
   const allClaimsN = supportedN + contradictionN + unsupportedN;
 
   const runCheck = async () => {
@@ -231,7 +238,9 @@ export function DocReviewFindingsPanel({
           <ShieldCheck size={14} /> {checking ? "Checking claims against verified facts…" : "Run fact check"}
         </Button>
         {checked && <p className="mt-1.5 text-[11.5px] text-ink/70">{checked}</p>}
-        <FieldError>{failed}</FieldError>
+        {/* Both writes on this panel report here, and neither accuses an input,
+            so the failure is a banner rather than a field caption (XA-02). */}
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       </div>
 
       {tab === "claims" ? (
@@ -242,7 +251,10 @@ export function DocReviewFindingsPanel({
             note={claimFilter ? `filtered to ${claimFilter.toLowerCase()}, ${claims.length} in total` : undefined}
             className="border-t"
             actions={claimFilter && (
-              <Button variant="link" compact onClick={() => setClaimFilter(null)}>Show all</Button>
+              /* Not a <ShowRest>: this resets the tally filter rather than
+                 expanding a capped list, and "Show all" read like the expand
+                 toggle it is not. */
+              <Button variant="link" compact onClick={() => setClaimFilter(null)}>Clear filter</Button>
             )}
           />
           {/* A long document yields hundreds of claims: the list scrolls in a
@@ -251,7 +263,7 @@ export function DocReviewFindingsPanel({
           <Scrollable axis="y" className="max-h-[420px]" scrollerClassName="space-y-2 px-4 pt-3">
             {shownClaims.map((f, i) => (
               <div key={`${f.claim}-${i}`} className="flex items-start gap-2.5">
-                <span className={`mt-0.5 shrink-0 ${f.status === "Verified" ? "text-moss" : "text-ink/65"}`}>
+                <span className={`mt-0.5 shrink-0 ${isVerifiedClaim(f) ? "text-moss" : "text-ink/65"}`}>
                   <CheckCircle2 size={15} />
                 </span>
                 <span className="min-w-0 flex-1 text-[13px] text-ink/85">
@@ -294,7 +306,7 @@ export function DocReviewFindingsPanel({
                 <mark className="mt-1 inline-block max-w-full break-words rounded-[3px] bg-moss/15 px-1 py-0.5 text-[12.5px] text-ink/85">{evidence}</mark>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-ink/65">
-                <FileText size={13} /> Auth RFC v1.2 · May 1, 2024
+                <FileText size={13} /> Auth RFC v1.2 · {fmtDate("2024-05-01")}
                 <StatusChip status="canonical" />
                 <Button variant="link" className="ml-auto" onClick={() => window.open("/knowledge?q=Auth%20RFC", "_blank")}>
                   Open source <ArrowRight size={11} />
@@ -362,10 +374,15 @@ export function DocReviewFindingsPanel({
 
           <CardActions
             className="mt-3"
+            /* XA-23: this was the one "Create review task" drawn without its
+               ClipboardCheck and with a shorter done word ("Task created") than
+               the three Lineage drawers used. One component owns all of it. */
             primary={
-              <Button variant="primary" compact onClick={createTask} disabled={taskState !== "idle"}>
-                {taskState === "done" ? "Task created" : taskState === "creating" ? "Creating…" : "Create review task"}
-              </Button>
+              <CreateReviewTaskButton
+                compact
+                state={taskState === "done" ? "done" : taskState === "creating" ? "busy" : "idle"}
+                onClick={createTask}
+              />
             }
           />
         </div>

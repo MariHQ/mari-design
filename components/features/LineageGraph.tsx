@@ -8,7 +8,8 @@ import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine, SkeletonChip } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
 import { fmtDate } from "../tokens/format";
 import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
@@ -184,7 +185,9 @@ export function LineageGraph({
   const [trace, setTrace] = useState(traceProp);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>({});
-  const [pinErr, setPinErr] = useState<string | null>(null);
+  /* Dropping a node writes its position, so the drop goes through the one
+     write hook rather than a local busy/failed pair (actions/useWrite.ts). */
+  const pinWrite = useWrite();
 
   /* ONE source of truth for lens/layout: the shared control store. The props
      only seed it, and only when they change — the page used to both pass them
@@ -338,14 +341,7 @@ export function LineageGraph({
     const at = moved[d.id];
     const node = byId[d.id];
     if (!at || !node || node.docId == null) return;
-    setPinErr(null);
-    void (async () => {
-      try {
-        await onPinNode({ docId: node.docId as number, x: at.x, y: at.y });
-      } catch (err) {
-        setPinErr(err instanceof Error ? err.message : "That position could not be saved.");
-      }
-    })();
+    void pinWrite.run(() => onPinNode({ docId: node.docId as number, x: at.x, y: at.y }));
   };
 
   const selectNode = (id: string) => {
@@ -763,10 +759,12 @@ export function LineageGraph({
           </div>
         )}
 
-        {/* A rejected pin says so over the canvas, where the drag happened. */}
-        {pinErr && (
-          <div className="absolute bottom-3 left-3 z-20 max-w-[320px] rounded-[5px] border border-ink/20 bg-paper/95 px-2.5 py-1.5 backdrop-blur">
-            <FieldError>{pinErr}</FieldError>
+        {/* A rejected pin says so over the canvas, where the drag happened. It
+            is a failed WRITE with no input to accuse, so it is the banner (§8),
+            not a 12px field caption. */}
+        {pinWrite.failed && (
+          <div className="absolute bottom-3 left-3 z-20 max-w-[320px]">
+            <WriteError onDismiss={() => pinWrite.setFailed(null)}>{pinWrite.failed}</WriteError>
           </div>
         )}
 

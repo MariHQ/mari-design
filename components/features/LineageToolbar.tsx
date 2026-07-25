@@ -7,7 +7,8 @@ import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
 import { Input } from "../forms/Input";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
 import { Skeleton, SkeletonButton } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
@@ -224,7 +225,7 @@ export function LineageToolbar({
       const count = await onDeriveLinks();
       setDerived({ count: typeof count === "number" ? count : null });
     } catch (err) {
-      setDeriveErr(err instanceof Error ? err.message : "Mari could not read the graph.");
+      setDeriveErr(why(err, "Mari could not read the graph."));
     } finally {
       setDeriving(false);
     }
@@ -247,7 +248,7 @@ export function LineageToolbar({
       setSaveName(null);
       setView(name);
     } catch (err) {
-      setSaveErr(err instanceof Error ? err.message : "That view could not be saved.");
+      setSaveErr(why(err, "That view could not be saved."));
     } finally {
       setSaving(false);
     }
@@ -518,8 +519,13 @@ export function LineageToolbar({
         {savedAs && !saveName && <Badge tone="ok" label={`Saved as ${savedAs}`} />}
       </Row>
 
+      {/* A refused derive or a refused save is a failed ACTION beside a
+          button, not validation on the name field, so it is the banner every
+          other failed write gets (§8). */}
       {(deriveErr || saveErr) && (
-        <div className="pl-[66px]"><FieldError>{deriveErr ?? saveErr}</FieldError></div>
+        <div className="pl-[66px]">
+          <WriteError onDismiss={() => { setDeriveErr(null); setSaveErr(null); }}>{deriveErr ?? saveErr}</WriteError>
+        </div>
       )}
 
       {/* Name-and-save row for "Save current view". */}

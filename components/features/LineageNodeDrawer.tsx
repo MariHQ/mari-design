@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "../navigation/Link";
 import { docHref } from "../tokens/routes";
-import { ExternalLink, Eye, ClipboardCheck, Target, Pin, Link2, Plus } from "lucide-react";
+import { Eye, Target, Pin, Link2 } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
+import { CreateReviewTaskButton, ExportButton, OpenDocumentButton } from "../actions/RepeatedActions";
+import { useWrite, why } from "../actions/useWrite";
+import { useResync } from "../actions/useResync";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Tabs } from "../navigation/Tabs";
 import { Pill } from "../data-display/Pill";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { SectionLabel } from "../forms/SectionLabel";
 import { FileQuestion } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
 import { Timeline } from "../data-display/Timeline";
 import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList } from "../data-display/Skeleton";
 import { fmtDate } from "../tokens/format";
@@ -34,7 +39,7 @@ type Tab = "overview" | "connections" | "history" | "impact";
 
 /** Connection rows drawn per page on the Connections tab. */
 const CONN_PAGE = 20;
-/** Reference rows previewed on Overview before "See all" takes over. */
+/** Reference rows previewed on Overview before the Connections tab takes over. */
 const REF_PREVIEW = 4;
 /** Tags shown before the rest collapse into a "+N more" chip. */
 const TAG_PREVIEW = 8;
@@ -76,14 +81,27 @@ export function LineageNodeDrawer({
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
+  /* C1: `openId` was seeded from `nodeId` at mount and never followed it, so
+     selecting a DIFFERENT node on the canvas left the drawer describing the
+     previously opened one. Identity mode is right here: `nodeId` is a string
+     (`drawerFor` in web/src/data/lineage.ts hands over `node.id` off the URL),
+     so `Object.is` compares its VALUE and cannot mis-fire on a rebuilt object.
+     No `hold`: the drawer's local state is walk position and latches, not an
+     unsaved edit, and a new node arriving means the reader asked for it. */
+  useResync(nodeId, setOpenId);
   const [tab, setTab] = useState<Tab>("overview");
   const [watched, setWatched] = useState(false);
   const [copied, setCopied] = useState(false);
   const [focal, setFocal] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [taskMade, setTaskMade] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  /** Tags past the preview cap need somewhere to go: a bare "+N more" span
+      named a number the reader had no way of opening (§16, D6). */
+  const [showAllTags, setShowAllTags] = useState(false);
+  /* Pin / watch / create-task all go through one `write`: with no handler they
+     are the local latches this drawer has always made, and with one they only
+     latch once the server accepts (actions/useWrite.ts). */
+  const write = useWrite();
   /** Inline result for the otherwise-inert trace/export buttons. */
   const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
@@ -121,7 +139,7 @@ export function LineageNodeDrawer({
         const next = await load(openDocId);
         if (live) setHistRows(next);
       } catch (err) {
-        if (live) setHistErr(err instanceof Error ? err.message : "That history could not be loaded.");
+        if (live) setHistErr(why(err, "That history could not be loaded."));
       } finally {
         if (live) setHistBusy(false);
       }
@@ -163,58 +181,41 @@ export function LineageNodeDrawer({
 
   const copyLink = () => { setCopied(true); setTimeout(() => setCopied(false), 1600); };
 
-  /* Each footer control latches optimistically and rolls back on a rejected
-     write, saying what the server said (§8). With no handler wired the latch
-     is the whole behaviour, which is what the design canvas renders. */
-  const run = async (settle: () => void, revert: () => void, work?: () => void | Promise<void>) => {
-    settle();
-    setFailed(null);
-    if (!work) return;
-    setBusy(true);
-    try {
-      await work();
-    } catch (err) {
-      revert();
-      setFailed(err instanceof Error ? err.message : "That did not save.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  /* Each footer control latches once the write lands, and says what the server
+     said when it does not (§8). With no handler wired the latch is the whole
+     behaviour, which is what the design canvas renders. This used to be a
+     bespoke settle/revert copy of `useWrite` living in this one file. */
   const togglePin = () => {
     if (!node) return;
     const next = !pinned;
-    void run(
-      () => setPinned(next),
-      () => setPinned(!next),
+    void write.run(
       node.docId == null
         ? undefined
         : next
           ? onPin && (() => onPin({ docId: node.docId as number, x: node.x, y: node.y }))
           : onUnpin && (() => onUnpin(node.docId as number)),
+      () => setPinned(next),
     );
   };
 
   const toggleWatch = () => {
     if (!node) return;
     const next = !watched;
-    void run(
-      () => setWatched(next),
-      () => setWatched(!next),
+    void write.run(
       node.docId != null && onWatch ? () => onWatch(node.docId as number) : undefined,
+      () => setWatched(next),
     );
   };
 
   const createTask = () => {
     if (!node) return;
-    void run(
-      () => setTaskMade(true),
-      () => setTaskMade(false),
+    void write.run(
       // Assignee is the document's owner, or empty for the server to route:
       // this used to fall back to a person's name that was simply made up.
       onCreateReviewTask
         ? () => onCreateReviewTask({ title: `Review: ${node.title}`, assignee: node.owner ?? "" })
         : undefined,
+      () => setTaskMade(true),
     );
   };
 
@@ -261,33 +262,34 @@ export function LineageNodeDrawer({
             <Button compact onClick={() => setFocal((f) => !f)} className={focal ? lgToggleOn : ""}>
               <Target size={13} /> {focal ? "Focal" : "Set focal"}
             </Button>
-            <Button compact disabled={busy} onClick={togglePin} className={pinned ? lgToggleOn : ""}>
+            <Button compact disabled={write.busy} onClick={togglePin} className={pinned ? lgToggleOn : ""}>
               <Pin size={13} /> {pinned ? "Pinned" : "Pin"}
             </Button>
             <Button compact onClick={copyLink} className={copied ? lgToggleOn : ""}>
               <Link2 size={13} /> {copied ? "Copied" : "Copy link"}
             </Button>
-            <Button compact disabled={busy} onClick={toggleWatch} className={watched ? lgToggleOn : ""}>
+            <Button compact disabled={write.busy} onClick={toggleWatch} className={watched ? lgToggleOn : ""}>
               <Eye size={13} /> {watched ? "Watching" : "Watch"}
             </Button>
           </div>
-          {failed && <FieldError>{failed}</FieldError>}
-          {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right. */}
+          {/* A refused pin, watch or task is a failed WRITE, with no input to
+              point at, so it gets the banner and not a field caption (§8). */}
+          <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+          {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right, both
+              at the same height (§13). */}
           <CardActions
             primary={
-              <Button variant="primary" disabled={busy || taskMade} onClick={createTask}>
-                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
-              </Button>
+              <CreateReviewTaskButton
+                state={taskMade ? "done" : write.busy ? "busy" : "idle"}
+                onClick={createTask}
+              />
             }
-            secondary={              node.docId != null ? (
-                <Link
-                  href={docHref(node.docId)}
-                  onClick={onOpenDocument && ((e) => { e.preventDefault(); onOpenDocument(node.docId as number); })}
-                  className={`inline-flex h-9 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3.5 text-[13px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05]`}
-                >
-                  Open document <ExternalLink size={12} />
-                </Link>
-              ) : undefined}
+            secondary={node.docId != null ? (
+              <OpenDocumentButton
+                href={docHref(node.docId)}
+                onOpen={onOpenDocument && (() => onOpenDocument(node.docId as number))}
+              />
+            ) : undefined}
           />
         </div>
       }
@@ -325,14 +327,9 @@ export function LineageNodeDrawer({
 
           {node.tags && node.tags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
-              {node.tags.slice(0, TAG_PREVIEW).map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}
+              {(showAllTags ? node.tags : node.tags.slice(0, TAG_PREVIEW)).map((t) => <Pill key={t} kind="canonical" text={t} tone="neutral" />)}
               {node.tags.length > TAG_PREVIEW && (
-                <span
-                  className="font-term text-[11px] text-ink/65"
-                  title={node.tags.slice(TAG_PREVIEW).join(", ")}
-                >
-                  +{node.tags.length - TAG_PREVIEW} more
-                </span>
+                <ShowRest expanded={showAllTags} total={node.tags.length} onToggle={() => setShowAllTags((v) => !v)} />
               )}
             </div>
           )}
@@ -342,7 +339,7 @@ export function LineageNodeDrawer({
               label="References"
               count={references.length}
               action={references.length > REF_PREVIEW
-                ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See all</button>
+                ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See in Connections</button>
                 : undefined}
             >
               {references.length === 0 ? (
@@ -366,7 +363,7 @@ export function LineageNodeDrawer({
             label="Connections"
             count={connections.length}
             action={connections.length > 3
-              ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See all</button>
+              ? <button type="button" onClick={() => setTab("connections")} className={`font-term text-[11px] text-biscay-2 hover:underline ${focusRing}`}>See in Connections</button>
               : undefined}
           >
             {connections.length === 0 ? (
@@ -407,7 +404,17 @@ export function LineageNodeDrawer({
           {connections.length === 0 ? (
             <EmptyState title="No links">No links recorded for this node.</EmptyState>
           ) : (
-            shownConnections.map((c, i) => (
+            <>
+            {/* The count strip belongs above the rows it counts (§13); it used
+                to sit under them, in its own spelling of the sentence. */}
+            <ResultCount
+              from={1}
+              to={shownConnections.length}
+              total={connections.length}
+              noun="links"
+              className="mb-2 rounded-[4px] border border-ink/10"
+            />
+            {shownConnections.map((c, i) => (
               <div key={i}>
                 {(i === 0 || shownConnections[i - 1].rel !== c.rel || shownConnections[i - 1].dir !== c.dir) && (
                   <div className="mb-1 mt-3 flex items-center gap-2 first:mt-0">
@@ -427,20 +434,16 @@ export function LineageNodeDrawer({
                   onFocus={() => setOpenId(c.other.id)}
                 />
               </div>
-            ))
+            ))}
+            </>
           )}
           {/* A well-connected node has hundreds of links. Page them rather than
               paying for hundreds of rows and an endless drawer scroll. */}
-          {connections.length > 0 && (
-            <div className="mt-3 flex items-center gap-3 border-t border-ink/10 pt-3">
-              {hiddenConnections > 0 && (
-                <Button compact onClick={() => setConnPage((p) => p + 1)}>
-                  Show {Math.min(hiddenConnections, CONN_PAGE)} more
-                </Button>
-              )}
-              <span className="font-term text-[11px] text-ink/65">
-                Showing {shownConnections.length} of {connections.length} links
-              </span>
+          {hiddenConnections > 0 && (
+            <div className="mt-3 border-t border-ink/10 pt-3">
+              <Button compact onClick={() => setConnPage((p) => p + 1)}>
+                Show {Math.min(hiddenConnections, CONN_PAGE)} more
+              </Button>
             </div>
           )}
         </div>
@@ -450,7 +453,9 @@ export function LineageNodeDrawer({
         histBusy ? (
           <SkeletonList rows={4} />
         ) : histErr ? (
-          <FieldError>{histErr}</FieldError>
+          /* A history that did not come back is a failed READ, so it gets the
+             same surface every other failed read gets, not a field caption. */
+          <ReadError>{histErr}</ReadError>
         ) : histRows === null ? (
           /* Not loaded is not the same as nothing happened, and saying the
              wrong one of those is a claim about the document. */
@@ -509,8 +514,11 @@ export function LineageNodeDrawer({
             >
               Trace provenance
             </Button>
-            <Button
+            {/* <Plus> read as "add something"; this writes a file out (§16). */}
+            <ExportButton
               compact
+              format="CSV"
+              state={result?.title.startsWith("Exported") ? "done" : "idle"}
               disabled={downstream + upstream === 0}
               className={result?.title.startsWith("Exported") ? lgToggleOn : ""}
               /* The file is actually written now. It used to announce a CSV
@@ -525,9 +533,7 @@ export function LineageNodeDrawer({
                 downloadText(name, csv, "text/csv");
                 setResult({ title: `Exported ${connections.length} rows`, body: `Downloaded as ${name}.` });
               }}
-            >
-              <Plus size={13} /> Export CSV
-            </Button>
+            />
           </div>
           {result ? (
             <div className="mt-3">

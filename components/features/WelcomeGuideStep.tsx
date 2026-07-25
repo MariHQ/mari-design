@@ -5,6 +5,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
 import { card } from "../tokens/card";
+import { useResync } from "../actions/useResync";
 
 /* WelcomeGuideStep — the Welcome wizard's Step 2 style-guide picker: a
    radio-card list of built-in guide packs (mirroring the Library's GUIDES
@@ -47,6 +48,14 @@ export function WelcomeGuideStep({
   guide, saving = false, loading = false, onPick, onOpenLibrary, packs, className = "",
 }: WelcomeGuideStepProps) {
   const [selected, setSelected] = useState<string | null>(guide ?? "plain");
+
+  /* The saved pick was read once, at mount, so the step rendered the "plain"
+     default until a reload — including right after `onPick` saved a different
+     one (C1). A string, so identity is its value. Nothing is held: the pick
+     IS the write, so an arriving `guide` is either what the reader just chose
+     or a correction worth showing. */
+  useResync(guide, (g) => setSelected(g ?? "plain"));
+
   const pick = (id: string) => { setSelected(id); onPick?.(id); };
 
   if (loading) {

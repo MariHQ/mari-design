@@ -1,8 +1,9 @@
 import { Fragment, useMemo, useState } from "react";
-import { RefreshCw, Search, ScrollText, ChevronDown, Download } from "lucide-react";
+import { Search, ScrollText, ChevronDown } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { ExportButton, RefreshButton } from "../actions/RepeatedActions";
 import { Avatar } from "../data-display/Avatar";
 import { EmptyState } from "../data-display/EmptyState";
 import { Skeleton, SkeletonLine, SkeletonTable } from "../data-display/Skeleton";
@@ -153,7 +154,12 @@ export function SettingsAuditLog({
       {!embedded && <PageHeader
         title="Access log"
         description="Every change in the workspace, who made it, and when"
-        actions={<Button onClick={() => setNonce((n) => n + 1)}><RefreshCw size={14} /> Refresh{nonce > 0 ? ` (${nonce})` : ""}</Button>}
+        /* XA-23: Refresh was written out at both levels of this one feature,
+           here and again on SettingsAuditLogPage's header, with different
+           glyph sizes and a different busy word. One component now spells it
+           (§16); this header only renders when the log is NOT embedded in
+           that page, so the two never appear at once. */
+        actions={<RefreshButton count={nonce} onClick={() => setNonce((n) => n + 1)} />}
       />}
 
       {/* The count lives in the result strip, once (CONVENTIONS §13). */}
@@ -172,7 +178,7 @@ export function SettingsAuditLog({
           {/* A log without a date range is a log you cannot answer "what
               happened last Tuesday" with (P-SA-2). */}
           <DateRangePicker compact value={range} onChange={(r) => changeFilter(filter, r)} />
-          <Button compact onClick={exportCsv} disabled={sorted.length === 0}><Download size={14} /> Export CSV</Button>
+          <ExportButton compact format="CSV" onClick={exportCsv} disabled={sorted.length === 0} />
         </>
       }>
         {shown.length === 0 ? (

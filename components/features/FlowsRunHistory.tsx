@@ -5,8 +5,12 @@ import { StatusChip, DryChip } from "../data-display/Chip";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Skeleton, SkeletonTable, SkeletonCard } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
+import { why } from "../actions/useWrite";
 import { type WorkflowRun, type RunStatus } from "../workflow/RunHistory";
-import { RUN_CHIP, RunStatusChips, RunInspector, FLOWS_SPLIT, type FlowsRunActions } from "./FlowsRunPanel";
+import { RUN_STATUS_CHIP } from "../tokens/runStatus";
+import { RunStatusChips, RunInspector, FLOWS_SPLIT, type FlowsRunActions } from "./FlowsRunPanel";
 import { card } from "../tokens/card";
 import { fmtDate } from "../tokens/format";
 
@@ -95,7 +99,7 @@ export function FlowRunsTable({
     started: (r) => new Date(r.started).getTime() || 0,
     duration: (r) => durationSeconds(r.duration),
     headline: (r) => r.headline || "",
-    status: (r) => RUN_CHIP[r.status],
+    status: (r) => RUN_STATUS_CHIP[r.status],
   });
   /* A flow's history is thousands of runs long. The table renders one page,
      says so above the rows (§13), and the region itself scrolls (§20) instead
@@ -118,18 +122,18 @@ export function FlowRunsTable({
         <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
       ) : (
         <>
-        <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
-          <span className="font-term text-[11.5px] text-ink/65">
-            {page.length < runs.length
-              ? `Showing ${page.length} of ${runs.length.toLocaleString()} runs`
-              : `Showing all ${runs.length.toLocaleString()} run${runs.length === 1 ? "" : "s"}`}
-          </span>
-          {runs.length > limit && (
-            <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer" : "Show more"}
-            </Button>
-          )}
-        </div>
+        {/* The count says what is on screen and the toggle says how to see the
+            rest, both above the rows (§13). The toggle used to say "Show more"
+            here and "Show all" in the flow list, for the same affordance. */}
+        <ResultCount
+          from={1}
+          to={page.length}
+          total={runs.length}
+          noun="runs"
+          actions={runs.length > limit
+            ? <ShowRest expanded={showAll} total={runs.length} onToggle={() => setShowAll((v) => !v)} />
+            : undefined}
+        />
         <Scrollable axis="both" style={{ maxHeight: page.length > 8 ? 520 : undefined }}>
           <table className="w-full border-collapse text-left" style={{ minWidth: onSelect ? 720 : 620 }}>
             <thead>
@@ -216,7 +220,7 @@ export function FlowsRunHistory({
       await actions!.approveRun!(r.id);
       setNote(`Approved run #${r.number}: the run is resuming.`);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : `Could not approve run #${r.number}.`);
+      setFailed(why(err, `Could not approve run #${r.number}.`));
     } finally {
       setBusy(false);
     }
@@ -232,7 +236,7 @@ export function FlowsRunHistory({
       await actions!.rerunRun!(r.id, dry);
       setNote(`Re-run of ${r.workflowName} started${dry ? " as a test" : ""}. It appears in this table when the history reloads.`);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : `Could not re-run ${r.workflowName}.`);
+      setFailed(why(err, `Could not re-run ${r.workflowName}.`));
     } finally {
       setBusy(false);
     }
@@ -257,7 +261,7 @@ export function FlowsRunHistory({
         <span className="font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/65">Status mapping</span>
         {CHIP_LEGEND.map((l) => (
           <span key={l.status} className="inline-flex items-center gap-1.5">
-            <StatusChip status={RUN_CHIP[l.status]} />
+            <StatusChip status={RUN_STATUS_CHIP[l.status]} />
             <span className="font-term text-[11px] text-ink/65">{l.label}</span>
           </span>
         ))}

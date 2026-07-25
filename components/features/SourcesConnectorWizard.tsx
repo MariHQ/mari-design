@@ -8,6 +8,7 @@ import {
 } from "../forms/ConnectorWizard";
 import { type SyncSource } from "../feedback/SyncPanel";
 import { Button } from "../actions/Button";
+import { why } from "../actions/useWrite";
 import { SkeletonButton } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
 
@@ -107,7 +108,7 @@ export function SourcesConnectorWizard({
       } catch (err) {
         setSync({
           ...base, state: "error",
-          error: err instanceof Error ? err.message : "The source could not be connected.",
+          error: why(err, "The source could not be connected."),
         });
       }
     })();

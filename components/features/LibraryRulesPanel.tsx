@@ -15,7 +15,9 @@ import { SkeletonCard, SkeletonStat, SkeletonTable } from "../data-display/Skele
 import { type RuleRow, type RuleStatus, type RuleSeverity } from "../data-display/RulesPanel";
 import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
+import { useResync } from "../actions/useResync";
 
 /* LibraryRulesPanel — the Library › Rules tab.
    Configures the deterministic prose engine: rules across four families
@@ -176,7 +178,10 @@ export function LibraryRulesPanel({ workspace, docs, query = "", actions, loadin
   const [grammar, setGrammar] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [saveErr, setSaveErr] = useState<string | null>(null);
+  /* Saving the rule config goes through the one write hook: `busy` disables
+     Save so a slow write cannot be double-submitted, and `failed` carries the
+     server's own message (actions/useWrite.ts). */
+  const write = useWrite();
   const [status, setStatus] = useState<Record<string, RuleStatus>>({});
   const [ignore, setIgnore] = useState<Set<string>>(new Set());
   const [zero, setZero] = useState<Set<string>>(new Set(["inclusive.guys", "inclusive.whitelist"]));
@@ -186,6 +191,20 @@ export function LibraryRulesPanel({ workspace, docs, query = "", actions, loadin
   const [text, setText] = useState(doc ? doc.text : "");
   const [checked, setChecked] = useState(false);
   const [findings, setFindings] = useState<Finding[]>([]);
+
+  /* The check-a-document box picked its document once, at mount. The panel
+     mounts while `docs` is still loading, so `docId` and `text` were pinned to
+     "" for the life of the page and the checker had nothing to run against
+     (C1). Keyed on the ids rather than the array: `LibraryPage` re-derives the
+     collections inline on every render, so identity churns as soon as the
+     reader types in the library search box. `text` is an editable textarea, so
+     this only reseeds while it is untouched — once a check has run or the
+     reader has edited the sample, the panel keeps what is on screen. */
+  useResync(docs, (d) => {
+    const first = d[0];
+    setDocId(first ? first.id : "");
+    setText(first ? first.text : "");
+  }, { hold: docId !== "" || checked || dirty, key: docs.map((d) => d.id).join() });
 
   const onStatusChange = (id: string, s: RuleStatus) => {
     setStatus((prev) => ({ ...prev, [id]: s }));
@@ -210,18 +229,14 @@ export function LibraryRulesPanel({ workspace, docs, query = "", actions, loadin
 
   /* Only ever called where `saveRuleConfig` exists — the button is not drawn
      otherwise, so "Saved" is never shown over a write that did not happen. */
-  const save = async () => {
-    if (!actions?.saveRuleConfig) return;
-    setSaveErr(null);
-    try {
-      await actions.saveRuleConfig({ pack, grammar, statuses: status });
+  const save = () => write.run(
+    actions?.saveRuleConfig && (() => actions.saveRuleConfig!({ pack, grammar, statuses: status })),
+    () => {
       setDirty(false);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1800);
-    } catch (e) {
-      setSaveErr(e instanceof Error && e.message ? e.message : "That configuration could not be saved.");
-    }
-  };
+    },
+  );
 
   const score = Math.min(100, findings.reduce((s, f) => s + SEV_WEIGHT[f.severity], 0));
   const band = score < 12 ? "clean" : score < 30 ? "light" : score < 60 ? "moderate" : "heavy";
@@ -271,7 +286,7 @@ export function LibraryRulesPanel({ workspace, docs, query = "", actions, loadin
           <div className="ml-auto flex items-center gap-3">
             {actions?.saveRuleConfig ? (
               <>
-                <Button variant="primary" compact disabled={!dirty} onClick={() => void save()}>Save</Button>
+                <Button variant="primary" compact disabled={!dirty || write.busy} onClick={() => void save()}>Save</Button>
                 <span className="w-[3.5rem] font-term text-[11.5px] text-moss">{saved ? "Saved" : ""}</span>
               </>
             ) : (
@@ -281,7 +296,11 @@ export function LibraryRulesPanel({ workspace, docs, query = "", actions, loadin
             )}
           </div>
         </div>
-        {saveErr && <div className="mt-2"><FieldError>{saveErr}</FieldError></div>}
+        {/* A refused save has no single input to accuse: it is the banner (§8),
+            not a caption under a field that did nothing wrong. */}
+        {write.failed && (
+          <div className="mt-2"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
+        )}
       </Card>
 
       {/* Family grid */}

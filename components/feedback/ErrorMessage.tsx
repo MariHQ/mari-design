@@ -32,7 +32,12 @@ export function ErrorMessage({
   );
 }
 
-/* Inline, field-level error. Sits directly under an input. */
+/* Inline, field-level error. Sits directly under the input it accuses.
+
+   XA-02: this was doing duty as the failure surface for page ACTIONS in 24
+   files, where there is no input under which to sit and 12px of red text next
+   to a button reads as a caption rather than a refused save. Use <WriteError>
+   for those; this stays for validation on a named field. */
 export function FieldError({ id, children }: { id?: ErrorId; children?: ReactNode }) {
   const text = children ?? (id ? ERRORS[id].title : null);
   if (!text) return null;

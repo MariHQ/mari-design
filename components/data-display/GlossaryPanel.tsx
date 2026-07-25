@@ -6,6 +6,8 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
 import { EmptyState } from "./EmptyState";
+import { ResultCount } from "./Pagination";
+import { ShowRest } from "./ShowRest";
 import { Scrollable } from "./Scrollable";
 
 /** Terms rendered before "Show all", and the row count past which the list
@@ -108,19 +110,16 @@ export function GlossaryPanel({
           </div>
         ) : (
           <>
-            {/* Count strip above the list it describes (§13). */}
-            <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 py-2">
-              <span className="font-term text-[11.5px] text-ink/65">
-                {capped && !showAll
-                  ? `Showing ${shown.length} of ${entries.length.toLocaleString()} terms`
-                  : `Showing all ${entries.length.toLocaleString()} ${entries.length === 1 ? "term" : "terms"}`}
-              </span>
-              {capped && (
-                <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-                  {showAll ? "Show fewer" : "Show all"}
-                </Button>
-              )}
-            </div>
+            {/* Count strip above the list it describes (§13). XA-05/XA-08: the
+                sentence and the toggle were hand-rolled, so this card said
+                "Showing all 25 terms" where its neighbours said "25 terms". */}
+            <ResultCount
+              from={1}
+              to={shown.length}
+              total={entries.length}
+              noun="terms"
+              actions={capped ? <ShowRest expanded={showAll} total={entries.length} onToggle={() => setShowAll((v) => !v)} /> : undefined}
+            />
             {/* A glossary runs to hundreds of terms: it scrolls in place with a
                 visible scrollbar rather than growing the card forever (§20). */}
             {shown.length > BOUND_AT

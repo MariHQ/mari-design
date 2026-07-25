@@ -1,4 +1,13 @@
 import { useCallback, useState } from "react";
+import { ERRORS } from "../feedback/errors";
+
+/* XA-04: this exact line was written out byte-identically in ten files and
+   inlined at ~25 more sites. It belongs next to the hook whose contract it
+   implements: a handler may throw anything, and what the reader is shown is
+   the message the server actually sent, falling back to catalog copy only
+   when the throw carried none. */
+export const why = (e: unknown, fallback: string) =>
+  (e instanceof Error && e.message ? e.message : fallback);
 
 /* The one way a control performs a page action (pages/types.ts, CONVENTIONS §8).
  *
@@ -26,15 +35,19 @@ export function useWrite() {
     call: (() => unknown | Promise<unknown>) | undefined,
     echo?: () => void,
   ): Promise<boolean> => {
+    /* ACT-15: this branch used to `return` before clearing `failed`, so a
+       banner from an earlier attempt outlived a subsequent successful local
+       echo and the control reported a failure it had just recovered from. */
+    setFailed(null);
     if (!call) { echo?.(); return true; }
     setBusy(true);
-    setFailed(null);
     try {
       await call();
       echo?.();
       return true;
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "That change could not be saved.");
+      // ACT-14: the fallback is catalog copy (§8), not a second wording of it.
+      setFailed(why(e, ERRORS["generic.saveFailed"].body));
       return false;
     } finally {
       setBusy(false);
@@ -44,13 +57,18 @@ export function useWrite() {
   /** Same contract, for a write whose RESULT the control has to show (a
       one-time secret, a test report). Resolves to the value on success and to
       undefined on failure, with `failed` set. */
-  const runFor = useCallback(async <T,>(call: () => T | Promise<T>): Promise<T | undefined> => {
-    setBusy(true);
+  const runFor = useCallback(async <T,>(
+    call: (() => T | Promise<T>) | undefined,
+  ): Promise<T | undefined> => {
+    /* ACT-15: `run` has this branch and `runFor` did not, so the same optional
+       `actions` slot that `run` tolerates made `runFor` throw on the canvas. */
     setFailed(null);
+    if (!call) return undefined;
+    setBusy(true);
     try {
       return await call();
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "That change could not be saved.");
+      setFailed(why(e, ERRORS["generic.saveFailed"].body));
       return undefined;
     } finally {
       setBusy(false);

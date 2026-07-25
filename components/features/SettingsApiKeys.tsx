@@ -18,6 +18,7 @@ import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { fmtDate } from "../tokens/format";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
+import { useResync } from "../actions/useResync";
 
 /* Settings — API keys ─────────────────────────────────────────────────────
    Create and revoke programmatic-access keys (CI, bots, the MCP gateway).
@@ -109,8 +110,20 @@ export function SettingsApiKeys({
 
   /* The list is seeded from a prop, and `useState` reads its seed once, so
      after a refetch this table kept rendering the first response (C1). */
-  const [seenKeys, setSeenKeys] = useState(initialKeys);
-  if (seenKeys !== initialKeys) { setSeenKeys(initialKeys); setKeys(initialKeys); }
+  useResync(initialKeys, setKeys);
+
+  /* The same bug on the two props the first sentinel missed. `revealToken` is
+     the one that mattered: the page hands the freshly minted secret down after
+     the create round-trips, and a token read once at mount meant the panel
+     showed nothing — the only time this secret is ever displayable. The create
+     form holds while the reader is filling it in. Both props come off the
+     memoised page data in `web/src/data/settings.ts`; `draft` is compared by
+     its two fields because the page rebuilds that small object inline. */
+  useResync(revealToken, setToken);
+  useResync(draft, (d) => {
+    setName(d?.name ?? "");
+    setScopes(d?.scopes ? parseScopes(d.scopes) : ["search:read"]);
+  }, { hold: creating || saving, key: `${draft?.name ?? ""}\u0000${draft?.scopes ?? ""}` });
 
   /* Create and revoke both go through `write`: with no `actions` they are the
      local-state changes this panel has always made (which is what the design

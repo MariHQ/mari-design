@@ -12,7 +12,7 @@ export type ComboboxOption = { value: string; label: string };
    plain Select.
 
    No native Radix combobox primitive exists, so this composes Popover +
-   a hand-rolled listbox (same pattern as CommandPalette, smaller scope).
+   a hand-rolled listbox (same pattern as GlobalSearch, smaller scope).
 
    Option labels are canonical strings, not hand-typed ones: for servers and
    regions pass `REGION_OPTIONS` from tokens/regions.ts so "US West

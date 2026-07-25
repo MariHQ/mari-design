@@ -1,19 +1,21 @@
 import { useState } from "react";
-import { Clipboard, Check, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Clipboard, Check, Trash2 } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { Avatar } from "../data-display/Avatar";
 import { Pill } from "../data-display/Pill";
-import { Chip, CountChip } from "../data-display/Chip";
+import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { SkeletonLine, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { SortHeader, useSort, thPad, tdPad } from "../data-display/sortable";
-import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { focusRing } from "../tokens/focusRing";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
+import { useResync } from "../actions/useResync";
 
 /* Overview — Today's review (task inbox) ──────────────────────────────────
    The open/near-term task inbox, rendered as a real table so it spaces and
@@ -72,6 +74,25 @@ export function OverviewTodayReview({
 }: OverviewTodayReviewProps) {
   const [rows, setRows] = useState<ReviewTask[]>(tasks ?? []);
   const [expanded, setExpanded] = useState(defaultExpanded);
+
+  /* The queue was copied once, at mount. The overview polls, so every later
+     answer — a task someone else closed, one that just opened — was fetched
+     and then thrown away (C1).
+
+     `touched` is the guard, and it is doing more work than usual: this card
+     has no `actions`, so checking a box and "Clear done" mutate `rows` and
+     nothing else. Those check-offs are unsaved by construction, and a poll
+     landing underneath would silently un-check them, which is exactly the
+     failure worth avoiding. So the card follows the server until the reader
+     touches it, then stops. (That the check-off persists nowhere is a separate
+     problem — this card needs `actions` before it can honestly claim to.)
+
+     Compared on `tasks` itself, which is stable: `web/src/data/overview.ts`
+     memoises the mapped page data on the raw query answer. It is deliberately
+     NOT compared on `tasks ?? []`, which would mint a fresh array every render
+     while the prop is undefined and resync forever. */
+  const [touched, setTouched] = useState(false);
+  useResync(tasks, (t) => setRows(t ?? []), { hold: touched });
   // Long task text clamps to two lines with an explicit expand toggle, so one
   // verbose task cannot unbalance the row against its sibling boxes (§15).
   const [textOpen, setTextOpen] = useState<Set<number>>(new Set());
@@ -85,9 +106,11 @@ export function OverviewTodayReview({
     status: (t) => (t.done ? 1 : 0),
   });
 
-  const toggle = (id: number) =>
+  const toggle = (id: number) => {
+    setTouched(true);
     setRows((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  const clearDone = () => setRows((ts) => ts.filter((t) => !t.done));
+  };
+  const clearDone = () => { setTouched(true); setRows((ts) => ts.filter((t) => !t.done)); };
 
   /* Expanding renders one page inside a capped scroll region rather than
      laying out a 400-row inbox and pushing the page below it off screen. */
@@ -110,12 +133,9 @@ export function OverviewTodayReview({
       title="Today's review"
       /* A table's action button lives in the top right (§3). */
       actions={
-        !loading && !offline && hidden > 0 ? (
-          <Button compact onClick={viewAll}>
-            {expanded ? <><ChevronUp size={14} /> Show fewer</> : <><ChevronDown size={14} /> View all tasks</>}
-            <CountChip count={rows.length} />
-          </Button>
-        ) : undefined
+        !loading && !offline && hidden > 0
+          ? <ShowRest expanded={expanded} total={rows.length} onToggle={viewAll} />
+          : undefined
       }
     >
       {loading ? (
@@ -131,19 +151,19 @@ export function OverviewTodayReview({
         </div>
       ) : offline ? (
         /* §8: failure copy comes from the catalog, never a bespoke string. */
-        <div className="px-4 pb-4"><ErrorMessage id="server.unavailable" onAction={onRetry} /></div>
+        <div className="px-4 pb-4"><ReadError onRetry={onRetry} /></div>
       ) : (
         <>
-        {/* Result/stat strip above the list it describes (§13). */}
+        {/* Result/stat strip above the list it describes (§13). The count and
+            the "open" tally used to be two bespoke spans in a bespoke bar. */}
         {rows.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink/10 px-4 pb-2.5">
-            <span className="font-term text-[11.5px] text-ink/65">
-              {visible.length < rows.length
-                ? `Showing ${visible.length} of ${rows.length.toLocaleString()} tasks`
-                : `Showing all ${rows.length.toLocaleString()} task${rows.length === 1 ? "" : "s"}`}
-            </span>
-            <span className="font-term text-[11.5px] text-ink/65">{openCount.toLocaleString()} open</span>
-          </div>
+          <ResultCount
+            from={1}
+            to={visible.length}
+            total={rows.length}
+            noun="tasks"
+            note={`${openCount.toLocaleString("en-US")} open`}
+          />
         )}
         <Scrollable axis="both" style={{ maxHeight: visible.length > 8 ? 440 : undefined }}>
           <table className="w-full border-collapse text-left">
@@ -177,8 +197,10 @@ export function OverviewTodayReview({
                           {textOpen.has(t.id)
                             ? <span className="break-words">{t.text}</span>
                             : <Truncate lines={2}>{t.text}</Truncate>}
+                          {/* Names what it opens, so it cannot be mistaken for
+                              the list-level <ShowRest> in the strip above. */}
                           <span className="mt-0.5 block font-term text-[11px] text-biscay-2">
-                            {textOpen.has(t.id) ? "Show less" : "Show more"}
+                            {textOpen.has(t.id) ? "Clamp this task" : "Read the full task"}
                           </span>
                         </button>
                       ) : (

@@ -8,6 +8,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { SettingsApiKeys, API_SCOPES, type ApiKey, type SettingsApiKeysActions } from "../features/SettingsApiKeys";
 import type { PropertyItem } from "../data-display/PropertyList";
@@ -29,7 +30,7 @@ export type { SettingsApiKeysActions };
 const STATES = [
   { id: "default", label: "Keys list" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No keys yet" },
   { id: "single", label: "Single key" },
   { id: "many", label: "Many keys" },
@@ -118,9 +119,8 @@ function Body({ data, error, actions, createOpen, onCreateOpenChange }: {
   createOpen: boolean;
   onCreateOpenChange: (open: boolean) => void;
 }) {
-  if (error) {
-    return <EmptyState icon={<KeyRound size={22} />} title="API offline">{error}</EmptyState>;
-  }
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data)) {
     return (
       <EmptyState icon={<KeyRound size={22} />} title="No keys yet">

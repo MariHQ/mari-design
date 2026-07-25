@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { ComponentSpec } from "./types";
 import {
   SettingsMembersTable, SettingsApiKeys, SettingsAuditLog, SettingsModelsConfig,
-  BrandingEditor, AuthSession, PublishSiteEditor, PublishMcpServers,
+  BrandingEditor, AuthSession, PublishMcpServers,
   TagPickerFeature, TokenRevealFeature, ImpactPanelFeature, DecisionCardFeature,
   GlobalIconsArt, ChatDockFeature,
 } from "../../features";
@@ -10,7 +10,6 @@ import {
   MEMBERS_ROWS, MEMBERS_WORKSPACE, MEMBERS_GITHUB_TEAM, API_KEYS,
   AUDIT_EVENTS, AUDIT_EVENT_TOTAL, MODELS_CONFIG, BRANDING, MCP_SERVERS,
   FACT_IMPACT, DECISIONS_ROWS,
-  EDITOR_SITE,
 
   TAG_PICKER_DOCS, TOKEN_REVEAL_KEYS,
 
@@ -86,33 +85,6 @@ const MANY_SERVERS = Array.from({ length: 60 }, (_, i) => ({
   status: (i % 2 === 0 ? "connected" : "idle") as "connected" | "idle",
   capabilities: i === 3 ? [] : ["search", "facts", "glossary", "chat", "lineage", "answers"].slice(0, (i % 6) + 1),
 }));
-
-const BIG_SITE = {
-  id: 7,
-  name: "Acme Docs",
-  domain: "docs.acme.com",
-  status: "live" as const,
-  docs: 18420,
-  warnings: 312,
-  sources: ["canonical", "customer-facing", "verified", "internal", "needs-review", "stale", "deprecated", "runbook", "draft", "decision", "policy", "reference"],
-  gates: Array.from({ length: 40 }, (_, i) => ({
-    name: i % 8 === 0 ? LONG : `Gate ${i + 1}: every fact verified`,
-    ok: i % 3 !== 0,
-    note: i % 3 !== 0 ? `${1000 + i}/${1000 + i} verified` : `${i} terms undefined`,
-  })),
-  nav: Array.from({ length: 120 }, (_, i) => ({
-    label: i % 10 === 0 ? LONG : `Section ${i + 1}`,
-    active: i === 0,
-    children: i % 4 === 0 ? Array.from({ length: 6 }, (_, j) => `Page ${i + 1}.${j + 1}`) : undefined,
-  })),
-  releases: Array.from({ length: 300 }, (_, i) => ({
-    id: 300 - i,
-    version: `v${300 - i}`,
-    status: i === 0 ? "live" : "superseded",
-    deployed: "2026-07-19T09:55:00",
-    notes: i % 6 === 0 ? LONG : "Deployed to S3 · acme-docs-prod",
-  })),
-};
 
 const MANY_DOCS = Array.from({ length: 120 }, (_, i) => ({
   id: `d${i}`,
@@ -257,19 +229,6 @@ export const ADMIN: ComponentSpec[] = [
       { id: "stress", label: "Volume: maximal identity strings", node: (
         <AuthSession signedInAs={AUTH_IDENTITY} initialUser={{ name: `${person(4)} ${person(5)}`, email: `${HUGE}@team.com`, role: LONG, initials: "AK", provider: "github" }} />) },
       { id: "narrow", label: "Narrow frame (320)", width: 320, node: <AuthSession signedInAs={AUTH_IDENTITY} /> },
-    ],
-  },
-  {
-    id: "PublishSiteEditor", title: "PublishSiteEditor", width: 1100,
-    states: [
-      { id: "default", label: "Default (theme tab)", node: <PublishSiteEditor site={EDITOR_SITE} /> },
-      { id: "loading", label: "Loading", node: <PublishSiteEditor site={EDITOR_SITE} loading /> },
-      { id: "content", label: "Variant: Content tab", node: <PublishSiteEditor site={EDITOR_SITE} defaultTab="content" /> },
-      { id: "deploy", label: "Variant: Deploy tab", node: <PublishSiteEditor site={EDITOR_SITE} defaultTab="deploy" /> },
-      { id: "stress", label: "Volume: 300 releases (Deploy tab)", node: <PublishSiteEditor defaultTab="deploy" site={BIG_SITE} /> },
-      { id: "stress-nav", label: "Volume: 120 nav entries (Nav tab)", node: <PublishSiteEditor defaultTab="nav" site={BIG_SITE} /> },
-      { id: "stress-content", label: "Volume: 40 gates, 12 source tags (Content tab)", node: <PublishSiteEditor defaultTab="content" site={BIG_SITE} /> },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <PublishSiteEditor site={EDITOR_SITE} /> },
     ],
   },
   {

@@ -35,14 +35,20 @@ export type BandKey = "fresh" | "aging" | "stale";
 
 /* One band = one colour AND one texture. The texture is drawn with CSS
    gradients so it needs no asset and survives any bar height. */
+/* XA-25: "Stale" was espelette (#B23A1E, the failure red) here and clay
+   attention in every chip that spells the same word, so one document state had
+   two colours on two pages a reader flips between. Stale takes the chip's clay.
+   Aging then moves off clay to a tint of it: the two "not fresh" bands stay an
+   ordinal ramp within one hue, and the textures (§6's non-colour channel) still
+   separate them. Fresh keeps moss, which is what "ok" is everywhere. */
 const BAND: Record<BandKey, { label: string; color: string; pattern?: string; size?: string }> = {
   fresh: { label: "Fresh", color: "#2C6E49" },
   aging: {
-    label: "Aging", color: "#A05E1C",
+    label: "Aging", color: "#CFA265",
     pattern: "repeating-linear-gradient(45deg, rgba(255,255,255,0.85) 0 2px, rgba(255,255,255,0) 2px 5px)",
   },
   stale: {
-    label: "Stale", color: "#B23A1E",
+    label: "Stale", color: "#A05E1C",
     pattern: "radial-gradient(rgba(255,255,255,0.9) 1.1px, rgba(255,255,255,0) 1.2px)",
     size: "5px 5px",
   },

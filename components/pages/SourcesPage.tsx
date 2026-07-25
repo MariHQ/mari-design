@@ -13,13 +13,14 @@ import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
 import { PropertyList } from "../data-display/PropertyList";
 import { Button } from "../actions/Button";
+import { useWrite, why } from "../actions/useWrite";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Textarea } from "../forms/Textarea";
 import { SectionLabel } from "../forms/SectionLabel";
-import { Alert } from "../feedback/Alert";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
 import { Spinner } from "../data-display/Spinner";
 import { focusRing } from "../tokens/focusRing";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
@@ -245,7 +246,9 @@ function ConfigureBody({ c, values, onChange, tested }: {
           <CheckCircle2 size={14} /> Connection OK. Credentials verified.
         </div>
       )}
-      {tested && !tested.ok && <FieldError>{tested.error}</FieldError>}
+      {/* XA-02: a failed connection TEST accuses no one field, it reports that
+          the whole credential set was refused, so it is a WriteError. */}
+      {tested && !tested.ok && <WriteError>{tested.error}</WriteError>}
     </div>
   );
 }
@@ -298,7 +301,7 @@ function ConnectFlow({ c, phase, uploadFiles, actions }: {
       const r = await actions.testConnection({ provider: c.key, config: values });
       setTested({ ok: r.ok, error: r.error ?? "Validation failed without details." });
     } catch (err) {
-      setTested({ ok: false, error: err instanceof Error ? err.message : "The connection test failed." });
+      setTested({ ok: false, error: why(err, "The connection test failed.") });
     } finally {
       setBusy(null);
     }
@@ -318,7 +321,7 @@ function ConnectFlow({ c, phase, uploadFiles, actions }: {
     } catch (err) {
       // Verbatim: "Bad credentials" and "Repository not found" are the whole
       // point of this message.
-      setFailed(err instanceof Error ? err.message : "The source could not be connected.");
+      setFailed(why(err, "The source could not be connected."));
     } finally {
       setBusy(null);
     }
@@ -348,7 +351,9 @@ function ConnectFlow({ c, phase, uploadFiles, actions }: {
             : <SyncPanel sources={[connectorSyncSource(c, effective === "done" ? "done" : "sync")]} />}
         </div>
 
-        {failed && <div className="mt-4"><Alert tone="blocked" title="Could not connect">{failed}</Alert></div>}
+        {/* XA-02: a refused connect is a failed WRITE, so it renders through
+            the one banner every other refused write on the console uses. */}
+        {failed && <div className="mt-4"><WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError></div>}
 
         {/* Primary bottom LEFT, secondaries to its right (§2). */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-4">
@@ -422,7 +427,7 @@ const STATES = [
   { id: "connect-upload-sync", label: "Upload · Processing" },
   // Shared
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No sources connected" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -466,7 +471,7 @@ function ScheduleCard({ sources, onSet }: {
     try {
       await onSet(s, minutes);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "That schedule could not be saved.");
+      setFailed(why(err, "That schedule could not be saved."));
     } finally {
       setBusy(null);
     }
@@ -491,7 +496,9 @@ function ScheduleCard({ sources, onSet }: {
           </li>
         ))}
       </ul>
-      {failed && <FieldError>{failed}</FieldError>}
+      {/* XA-02: the message accuses no single input (any row's select can have
+          been the one that failed), so it is a WriteError, not a FieldError. */}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
     </div>
   );
 }
@@ -563,22 +570,13 @@ function wizardCatalog(catalog: WizardProviderSpec[], hasUpload: boolean): Wizar
 /** Files straight into the ingest pipeline. Sits beside "Add source" because
     it is the same intent with no credentials attached. */
 function UploadSourceButton({ onUpload }: { onUpload: (files: File[]) => void | Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  // XA-04: was a hand-rolled busy/failed/try-catch pair around one awaited call.
+  const write = useWrite();
   const [added, setAdded] = useState(0);
 
   const choose = async (files: File[]) => {
     if (files.length === 0) return;
-    setBusy(true);
-    setFailed(null);
-    try {
-      await onUpload(files);
-      setAdded(files.length);
-    } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Those files could not be ingested.");
-    } finally {
-      setBusy(false);
-    }
+    await write.run(() => onUpload(files), () => setAdded(files.length));
   };
 
   return (
@@ -586,10 +584,11 @@ function UploadSourceButton({ onUpload }: { onUpload: (files: File[]) => void | 
       <label className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper px-3 text-[13px] font-medium text-ink/80 hover:border-ink/45 ${focusRing}`}>
         <input type="file" multiple className="sr-only" accept=".md,.mdx,.markdown,.txt"
           onChange={(e) => void choose(Array.from(e.target.files ?? []))} />
-        {busy ? <><Spinner size="sm" /> Uploading…</> : <><UploadCloud size={14} /> Upload files</>}
+        {write.busy ? <><Spinner size="sm" /> Uploading…</> : <><UploadCloud size={14} /> Upload files</>}
       </label>
-      {failed && <FieldError>{failed}</FieldError>}
-      {!failed && added > 0 && (
+      {/* XA-02: a refused upload has no input to sit under. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+      {!write.failed && added > 0 && (
         <p className="mt-1 text-right text-[12px] text-moss">{added} file{added === 1 ? "" : "s"} ingested into Uploads.</p>
       )}
     </div>
@@ -604,7 +603,8 @@ function isEmpty(d: SourcesData): boolean {
 function Body({ data, error, tab, actions }: {
   data: SourcesData; error: string | null; tab: Tab; actions?: SourcesActions;
 }): ReactNode {
-  if (error) return <EmptyState title="API offline">{error}</EmptyState>;
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data)) {
     /* A workspace with nothing connected is the one state where the empty box
        must not be a dead end: the wizard is the whole path out of it. */

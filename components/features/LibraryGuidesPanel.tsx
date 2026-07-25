@@ -14,6 +14,7 @@ import { ResultCount } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
+import { useResync } from "../actions/useResync";
 
 /* LibraryGuidesPanel — the Library › Style guides tab.
    Pick a trusted built-in style pack as the project default, then layer
@@ -71,13 +72,22 @@ export function LibraryGuidesPanel({
   const [custom, setCustom] = useState(false);
   const [layer, setLayer] = useState<Layer>(initialLayer);
   const [saved, setSaved] = useState(false);
+  /* Both were read once, at mount, so the pack another admin made default —
+     and a voice layer saved from another tab — never reached this panel (C1).
+     `defaultPack` is a plain string; `layer` holds while the reader has an
+     unsaved edit, which `setField` marks by clearing `saved`. `web/src/data/
+     library.ts` memoises the mapped page data on the raw query answer, and
+     `LibraryPage` passes both through untouched, so identity is stable. */
+  const [voiceDirty, setVoiceDirty] = useState(false);
+  useResync(defaultPack, setActive);
+  useResync(initialLayer, setLayer, { hold: voiceDirty });
 
-  const setField = <K extends keyof Layer>(k: K, v: Layer[K]) => { setLayer((l) => ({ ...l, [k]: v })); setSaved(false); };
+  const setField = <K extends keyof Layer>(k: K, v: Layer[K]) => { setLayer((l) => ({ ...l, [k]: v })); setSaved(false); setVoiceDirty(true); };
 
   const write = useWrite();
   const save = () => write.run(
     actions?.saveVoice && (() => actions.saveVoice!(layer)),
-    () => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); },
+    () => { setSaved(true); setVoiceDirty(false); window.setTimeout(() => setSaved(false), 1800); },
   );
   const setDefault = (key: string) => write.run(
     actions?.setDefaultPack && (() => actions.setDefaultPack!(key)),

@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import type { ChipTone } from "./Chip";
 import { SkeletonLine } from "./Skeleton";
 import { Scrollable } from "./Scrollable";
-import { Button } from "../actions/Button";
+import { ResultCount } from "./Pagination";
+import { ShowRest } from "./ShowRest";
 
 /* Timeline — a vertical event timeline: a hairline rail with tone-colored
    nodes, each carrying a title, optional time, description and icon. Distinct
@@ -109,18 +110,17 @@ export function Timeline({ items, className = "", loading = false, max = 25, max
 
   return (
     <div className={`flex min-w-0 flex-col gap-2 ${className}`.trim()}>
-      {/* Count strip above the events it describes (§13). */}
+      {/* Count strip above the events it describes (§13). XA-05/XA-08: the
+          count sentence and the toggle were both hand-rolled here, worded
+          differently from the three other copies of the same strip. */}
       {capped && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-term text-[11.5px] text-ink/65">
-            {expanded
-              ? `Showing all ${items.length.toLocaleString()} events`
-              : `Showing ${shown.length} of ${items.length.toLocaleString()} events`}
-          </span>
-          <Button variant="link" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "Show fewer" : "Show all"}
-          </Button>
-        </div>
+        <ResultCount
+          from={1}
+          to={shown.length}
+          total={items.length}
+          noun="events"
+          actions={<ShowRest expanded={expanded} total={items.length} onToggle={() => setExpanded((v) => !v)} />}
+        />
       )}
       {bounded
         ? <Scrollable axis="y" style={{ maxHeight }} scrollerClassName="pr-2">{list}</Scrollable>

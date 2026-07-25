@@ -3,9 +3,12 @@ import { CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardSection } from "../layout/CardShell";
 import { Button } from "../actions/Button";
-import { btn } from "../actions/buttons";
-import { Link as NavLink } from "../navigation/Link";
-import { FieldError } from "../feedback/ErrorMessage";
+import { OpenDocumentButton } from "../actions/RepeatedActions";
+import { why } from "../actions/useWrite";
+import { useNavigate } from "../navigation/Link";
+import { WriteError } from "../feedback/WriteError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { SectionLabel } from "../forms/SectionLabel";
 import { TagPicker } from "../forms/TagPicker";
 import { Tabs } from "../navigation/Tabs";
@@ -16,6 +19,7 @@ import { fmtDate } from "../tokens/format";
 import { ConnectionRow, type RelKey } from "./LineageDataModel";
 import { SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
+import { useResync } from "../actions/useResync";
 
 /* KnowledgeInspector — the sticky right-rail describing the selected search
    result: title/source, editable tags, a two-tab view (Document summary vs.
@@ -66,9 +70,6 @@ export type KnowledgeInspectorActions = {
   toggleWatch?: (args: { id: string }) => Promise<boolean>;
 };
 
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
-
 const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
 
 /* The document's own address: the library's Doc Review route (its `route` in
@@ -86,21 +87,26 @@ const RELATED_PAGE = 4;
 const REVISIONS_PAGE = 3;
 const BOUND_AT = 8;
 
+/* The rail's three count strips were a hand-rolled sentence plus a bespoke
+   "Show all"/"Show fewer" link (XA-08). Both come from one place now: the
+   strip is <ResultCount>, the toggle is <ShowRest>, and §13 keeps them above
+   the list they describe. Kept as a local adapter only because the rail says
+   the same thing three times. */
 function CountLine({
   shown, total, noun, expanded, onToggle,
 }: { shown: number; total: number; noun: string; expanded?: boolean; onToggle?: () => void }) {
   if (total <= shown && !expanded) return null;
   return (
-    <div className="mb-1.5 flex flex-wrap items-center gap-2">
-      <span className="font-term text-[11px] text-ink/65">
-        {shown < total ? `Showing ${shown} of ${total.toLocaleString()} ${noun}` : `Showing all ${total.toLocaleString()} ${noun}`}
-      </span>
-      {onToggle && (
-        <Button variant="link" aria-expanded={Boolean(expanded)} onClick={onToggle}>
-          {expanded ? "Show fewer" : "Show all"}
-        </Button>
+    <ResultCount
+      className="mb-1.5"
+      from={total === 0 ? 0 : 1}
+      to={shown}
+      total={total}
+      noun={noun}
+      actions={onToggle && (
+        <ShowRest expanded={Boolean(expanded)} total={total} onToggle={onToggle} />
       )}
-    </div>
+    />
   );
 }
 
@@ -117,6 +123,7 @@ export type KnowledgeInspectorProps = {
 };
 
 export function KnowledgeInspector({ doc, loading = false, actions, className = "" }: KnowledgeInspectorProps) {
+  const navigate = useNavigate();
   const [insTab, setInsTab] = useState<InsTab>("document");
   const [tags, setTags] = useState<string[]>(doc.tags);
   // Both rail links used to be inert. They now drive real state: the history
@@ -132,6 +139,16 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
   const [watched, setWatched] = useState(doc.watched ?? false);
   const [watching, setWatching] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+
+  /* Tags and the watch flag were copied out of `doc` once, at mount. Selecting
+     a different document in the browser re-renders this inspector with a new
+     `doc` and it kept showing the FIRST document's tags — attributing one
+     document's labels to another (C1). Keyed on `doc.id` rather than on `doc`
+     itself: a refetch of the same document must not silently discard a tag
+     the reader has just picked but not yet saved, whereas moving to another
+     document always has to reload. `web/src/data/knowledge.ts` returns
+     `docQ.data` straight through, so `doc` is referentially stable anyway. */
+  useResync(doc, (d) => { setTags(d.tags); setWatched(d.watched ?? false); }, { key: doc.id });
 
   const toggleWatch = async () => {
     if (watching) return;
@@ -219,15 +236,12 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
             {metaRow("Watched", watched ? "Yes" : "No")}
             <div className="mt-4 flex flex-col items-start gap-2">
               {watchButton}
-              <FieldError>{failed}</FieldError>
-              {/* "Open document" was a <button> with no handler: the one
-                  control on this rail whose whole job is to take you to the
-                  document did nothing. It is an anchor at the document's own
-                  address now, so it opens, opens in a new tab, and can be
-                  copied. */}
-              <NavLink href={docHref(doc.id)} className={`${btn} w-full`}>
-                Open document <ArrowRight size={14} />
-              </NavLink>
+              <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
+              {/* XA-23: this said "Open document" with an ArrowRight at h-9
+                  beside an h-7 Watch button. One component owns the label, the
+                  ExternalLink glyph and the size now; `compact` matches its
+                  sibling so the group keeps one height (§13). */}
+              <OpenDocumentButton compact block href={docHref(doc.id)} onOpen={navigate ? () => navigate(docHref(doc.id)) : undefined} />
             </div>
           </div>
         ) : (
@@ -327,7 +341,7 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
                 <ul className="flex min-w-0 flex-col gap-2">
                   {revisions.map((r, i) => (
                     <li key={i} className="break-words text-[12px] text-ink/75">
-                      <b className="font-term text-[11px] text-ink/65 block">{r.at}</b>
+                      <b className="font-term text-[11px] text-ink/65 block">{fmtDate(r.at)}</b>
                       {r.verb}, {r.actor}
                     </li>
                   ))}
@@ -366,7 +380,7 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
                   leading icon (CONVENTIONS.md §16). */}
               <div className="mt-2 flex flex-col items-start gap-1.5">
                 {watchButton}
-                <FieldError>{failed}</FieldError>
+                <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
                 <Button variant="link" onClick={() => setFullHistory((v) => !v)}>
                   {fullHistory ? "Show recent revisions" : `View full history (${doc.timeline.length})`} <ArrowRight size={12} />
                 </Button>

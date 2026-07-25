@@ -13,6 +13,7 @@ import { Spinner } from "../data-display/Spinner";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
+import { WriteError } from "../feedback/WriteError";
 
 /* ConnectorWizard — a 3-step connect flow in a centered modal, ported from
    pages/sources/ConnectorWizard.tsx: pick provider → configure credentials →
@@ -239,9 +240,13 @@ export function ConnectorWizard({
               <CheckCircle2 size={14} /> Connection OK: credentials verified.
             </div>
           )}
+          {/* XA-02: the refused test was a bespoke red box here and a slightly
+              different bespoke red box in ConnectDrawer, for one event. */}
           {test.ok === false && (
-            <div className="mt-3 rounded-[4px] border border-espelette/30 bg-espelette/[0.05] px-3 py-2 text-[12.5px] text-espelette" role="alert">
-              {test.error || "Validation failed without details."}
+            <div className="mt-3">
+              <WriteError onDismiss={() => setTest(IDLE_TEST)}>
+                {test.error || "The connection test failed without details."}
+              </WriteError>
             </div>
           )}
         </div>

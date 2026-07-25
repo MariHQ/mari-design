@@ -10,6 +10,8 @@ import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { FieldError } from "../feedback/ErrorMessage";
+import { CreateReviewTaskButton } from "../actions/RepeatedActions";
+import { why } from "../actions/useWrite";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Facts verification audit — a client-side audit derived entirely from the
@@ -28,7 +30,13 @@ export type Fact = {
   claim: string;
   source: string;
   owner: string;
-  status: "Verified" | "Needs evidence" | "Draft" | string;
+  /* XA-25: this union used to advertise "Needs evidence", a spelling that
+     appears in no chip table and that FactsPage's FACT_STATUS has to alias
+     onto `unsupported`. The suggestions are now the console's own status
+     vocabulary (data-display/Chip.tsx), which is what the chips actually
+     render; the trailing `string` stays because a ledger may spell a status
+     however it likes and `factStatusKey` below is what normalises it. */
+  status: "verified" | "unsupported" | "draft" | "retired" | "contradiction" | string;
   verified?: DateInput | null;
 };
 
@@ -109,7 +117,7 @@ export function FactsVerificationAudit({
       setTasks((t) => ({ ...t, [f.id]: `TASK-${1200 + Object.keys(t).length + 1}` }));
     } catch (err) {
       setTaskState((s) => ({ ...s, [f.id]: "error" }));
-      setFailed((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "Couldn’t reach Mari." }));
+      setFailed((e) => ({ ...e, [f.id]: why(err, "Couldn’t reach Mari.") }));
     }
   };
 
@@ -198,17 +206,24 @@ export function FactsVerificationAudit({
                       </td>
                       <td className={`${td} whitespace-nowrap text-right align-top`}>
                         {stale && (
-                          state === "error" ? (
-                            <FieldError>{failed[fact.id] ?? "Couldn’t reach Mari."}</FieldError>
-                          ) : (
-                            <Button
-                              variant="primary" compact
-                              disabled={state === "creating" || state === "done"}
+                          <div className="flex flex-col items-end gap-1">
+                            {/* XA-23: this was the table copy of "Create review
+                                task", drawn with no icon and a done word
+                                ("Task created") the drawers spelled differently.
+                                One component owns label, glyph and both states. */}
+                            <CreateReviewTaskButton
+                              compact
+                              state={state === "done" ? "done" : state === "creating" ? "busy" : "idle"}
                               onClick={() => void createReviewTask(fact)}
-                            >
-                              {state === "done" ? "Task created" : state === "creating" ? "Creating" : "Create review task"}
-                            </Button>
-                          )
+                            />
+                            {/* XA-02 keeps <FieldError> for exactly this case: a
+                                <WriteError> banner inside an action cell would
+                                blow the row height apart and shove every other
+                                column out of line (§3). The message still sits
+                                beside the control that failed, and the button
+                                stays clickable so the reader can retry. */}
+                            {state === "error" && <FieldError>{failed[fact.id] ?? "Couldn’t reach Mari."}</FieldError>}
+                          </div>
                         )}
                       </td>
                     </tr>

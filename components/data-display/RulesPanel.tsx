@@ -1,9 +1,10 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Card } from "../layout/Card";
-import { Button } from "../actions/Button";
 import { Chip, type ChipTone } from "./Chip";
 import { EmptyState } from "./EmptyState";
+import { ResultCount } from "./Pagination";
+import { ShowRest } from "./ShowRest";
 import { Scrollable } from "./Scrollable";
 import { SortHeader, useSort, thPad, tdPad } from "./sortable";
 
@@ -128,25 +129,26 @@ export function RulesPanel({
             <Chip key={f} label={f} tone={family === f ? "info" : "neutral"} selected={family === f} onClick={() => setFamily(f)} />
           ))}
           {(hiddenFamilies > 0 || allFamilies) && (
-            <Button variant="link" aria-expanded={allFamilies} onClick={() => setAllFamilies((v) => !v)}>
-              {allFamilies ? "Show fewer families" : `${hiddenFamilies} more families`}
-            </Button>
+            /* XA-08: "12 more families" / "Show fewer families" was a ninth
+               phrasing of the one show-the-rest toggle. */
+            <ShowRest expanded={allFamilies} total={families.length} onToggle={() => setAllFamilies((v) => !v)} />
           )}
         </div>
 
-        {/* Result count above the list, below the search and filter bar (§13). */}
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="font-term text-[11.5px] text-ink/65">
-            {capped && !showAll
-              ? `Showing ${rows.length} of ${sorted.length.toLocaleString()} rules`
-              : `Showing ${sorted.length.toLocaleString()} of ${rules.length.toLocaleString()} rules`}
-          </span>
-          {capped && (
-            <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer" : "Show all"}
-            </Button>
-          )}
-        </div>
+        {/* Result count above the list, below the search and filter bar (§13).
+            XA-05: hand-rolled, and the uncapped branch read "Showing 3 of 3
+            rules" — a count that says "showing" when nothing is hidden. The
+            shared strip says "3 rules" there, and the filter is stated as a
+            note instead of being smuggled into the count. */}
+        <ResultCount
+          className="-mx-4 mb-3"
+          from={1}
+          to={rows.length}
+          total={sorted.length}
+          noun="rules"
+          note={sorted.length < rules.length ? `filtered from ${rules.length.toLocaleString("en-US")}` : undefined}
+          actions={capped ? <ShowRest expanded={showAll} total={sorted.length} onToggle={() => setShowAll((v) => !v)} /> : undefined}
+        />
 
         <Scrollable axis="both" style={{ maxHeight: rows.length > BOUND_AT ? 520 : undefined }}>
           {/* Explicit min width (not a utility class) so the fixed layout always has

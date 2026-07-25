@@ -5,7 +5,7 @@ import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { StatusChip } from "../data-display/Chip";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { fmtDateTime } from "../tokens/format";
 
@@ -41,7 +41,7 @@ export type FeedItem = {
 
 const isNoise = (e: FeedItem) => /slack/i.test(`${e.kind} ${e.text}`);
 
-/** Events on screen before the feed's own "Show all". */
+/** Events on screen before the feed's own expand control takes over. */
 const FEED_ROWS = 8;
 
 export type OverviewLiveActivityProps = {
@@ -103,7 +103,7 @@ export function OverviewLiveActivity({
         </div>
       ) : offline ? (
         /* §8: failure copy comes from the catalog, never a bespoke string. */
-        <ErrorMessage id="server.unavailable" onAction={onRetry} />
+        <ReadError onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <p className="py-4 text-[13px] text-ink/70">Quiet for now, nothing running.</p>
       ) : (

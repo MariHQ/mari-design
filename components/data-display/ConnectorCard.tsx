@@ -6,6 +6,7 @@ import { Sparkline } from "./Sparkline";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Menu, MenuItem } from "../navigation/Menu";
+import { WriteError } from "../feedback/WriteError";
 import { Skeleton, SkeletonLine, SkeletonCircle, SkeletonChip } from "./Skeleton";
 
 /* ConnectorCard — one connected-source pulse card: provider mark, name, a
@@ -117,15 +118,12 @@ export function ConnectorCard({
           <Sparkline values={bars} width={150} height={20} tone={SPARK_TONE[health]} />
         </div>
       )}
-      {/* The server's own words, not a generic apology: "bad credentials" and
-          "repository not found" are the two things a connector fails on, and
-          both tell the user exactly what to change. */}
-      {actionError && (
-        <p role="alert" className="mt-3 flex min-w-0 items-start gap-1.5 text-[12px] font-medium text-espelette">
-          <XCircle size={13} aria-hidden className="mt-[2px] shrink-0" />
-          <span className="min-w-0 [overflow-wrap:anywhere]">{actionError}</span>
-        </p>
-      )}
+      {/* XA-02: a refused sync or disconnect is a failed WRITE, and it was
+          rendered here as a bespoke 12px red line while the same event is a
+          banner everywhere else. The body is still the server's own words, not
+          a generic apology: "bad credentials" and "repository not found" both
+          tell the user exactly what to change. */}
+      {actionError && <div className="mt-3"><WriteError>{actionError}</WriteError></div>}
       {onDisconnect && (
         <div className="mt-3 border-t border-ink/10 pt-3">
           <ConfirmButton compact disabled={busy} confirmLabel="Disconnect this source?" onConfirm={onDisconnect}>

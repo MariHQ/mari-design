@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Check, X, Clock, CornerDownRight, RefreshCw, Eye, Bell } from "lucide-react";
 import { Button } from "../actions/Button";
 import { Spinner } from "../data-display/Spinner";
-import { StatusChip, DryChip, type ChipStatus } from "../data-display/Chip";
+import { StatusChip, DryChip } from "../data-display/Chip";
 import { SkeletonList, SkeletonCard, SkeletonLine } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { ResultCount } from "../data-display/Pagination";
 import { Scrollable } from "../data-display/Scrollable";
+import { why } from "../actions/useWrite";
 import { type RunStatus, type WorkflowRun } from "../workflow/RunHistory";
+import { RUN_STATUS_CHIP } from "../tokens/runStatus";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { fmtDateTime } from "../tokens/format";
@@ -21,22 +24,18 @@ import { fmtDateTime } from "../tokens/format";
    status chip, and the affirmative "Approve & resume" sits bottom-left under
    the re-run row (CONVENTIONS §2). Renders standalone. */
 
-/** Engine status → the one console chip vocabulary. */
-export const RUN_CHIP: Record<RunStatus, ChipStatus> = {
-  passed: "approved",
-  running: "running",
-  waiting: "needs-review",
-  failed: "failed",
-  skipped: "skipped",
-  pending: "queued",
-};
+/* The engine→chip map used to live here as a local `RUN_CHIP` that spelled
+   `passed` as "approved", so a finished run read "Approved" in Flows and
+   "Succeeded" in Facts, Decisions and Audit. Approval is a GATE outcome — a
+   person said yes — and says nothing about whether the steps under it
+   succeeded, so the map is now the shared one (tokens/runStatus, X2). */
 
 /** Run lifecycle chips. Dry marker LEFT of the status chip, everywhere. */
 export function RunStatusChips({ status, dry }: { status: RunStatus; dry?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       {dry && <DryChip />}
-      <StatusChip status={RUN_CHIP[status]} />
+      <StatusChip status={RUN_STATUS_CHIP[status]} />
     </span>
   );
 }
@@ -101,7 +100,9 @@ export function RunInspector({
   if (!run) {
     return (
       <div className={`${card} flex items-center gap-2 px-5 py-6 text-[13px] text-ink/70 ${className}`}>
-        <Spinner size="sm" label="Waiting" /> Select a run to inspect its steps.
+        {/* No spinner here: nothing is loading, and a lone ring read as a radio
+            button waiting to be picked (§6). */}
+        Select a run to inspect its steps.
       </div>
     );
   }
@@ -208,7 +209,9 @@ export function RunInspector({
               </Button>
             </div>
           )}
-          {error && <FieldError>{error}</FieldError>}
+          {/* A refused approve or re-run is a failed WRITE with no input to
+              point at, so it gets the banner and not a field caption (§8). */}
+          <WriteError>{error}</WriteError>
           {note && !error && <span className="font-term text-[11.5px] text-moss">{note}</span>}
         </div>
       )}
@@ -309,7 +312,7 @@ export function FlowsRunPanel({
       setApproved((a) => (a.includes(r.id) ? a : [...a, r.id]));
       setNote(`Approved run #${r.number}: the run is resuming.`);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : `Could not approve run #${r.number}.`);
+      setFailed(why(err, `Could not approve run #${r.number}.`));
     } finally {
       setBusy(false);
     }
@@ -327,7 +330,7 @@ export function FlowsRunPanel({
       await actions!.rerunRun!(r.id, dry);
       setNote(`Re-run of ${r.workflowName} started${dry ? " as a test" : ""}. It appears in this list when the runs reload.`);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : `Could not re-run ${r.workflowName}.`);
+      setFailed(why(err, `Could not re-run ${r.workflowName}.`));
     } finally {
       setBusy(false);
     }
@@ -354,13 +357,7 @@ export function FlowsRunPanel({
         {/* Count strip above the list (§13); the list itself scrolls in place
             rather than growing to the height of the run history (§20). */}
         {runs.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 py-2">
-            <span className="font-term text-[11.5px] text-ink/65">
-              {visible.length < runs.length
-                ? `Showing ${visible.length} of ${runs.length.toLocaleString()} runs`
-                : `Showing all ${runs.length.toLocaleString()} run${runs.length === 1 ? "" : "s"}`}
-            </span>
-          </div>
+          <ResultCount from={1} to={visible.length} total={runs.length} noun="runs" />
         )}
         <Scrollable axis="y" style={{ maxHeight: visible.length > 8 ? 520 : undefined }}>
         <ul className="divide-y divide-ink/10">

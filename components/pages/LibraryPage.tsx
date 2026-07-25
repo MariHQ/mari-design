@@ -8,7 +8,9 @@ import { Button } from "../actions/Button";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { SearchField } from "../navigation/SearchField";
 import { EmptyState } from "../data-display/EmptyState";
+import { ResultCount } from "../data-display/Pagination";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { ReadError } from "../feedback/ReadError";
 import { LibraryTagsPanel, type TagDef, type LibraryTagsActions } from "../features/LibraryTagsPanel";
 import {
   LibraryRulesPanel, RULE_COUNT, rulesMatching,
@@ -87,7 +89,7 @@ const STATES = [
   { id: "templates-empty", label: "Templates · empty" },
   { id: "guides-empty", label: "Style guides · empty" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty / new workspace" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -203,7 +205,9 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
     body = (
       <div className="mt-6">
         <Card>
-          <EmptyState title="API offline">{error}</EmptyState>
+          {/* XA-01: an EmptyState here told the reader their editorial system
+              was empty when the truth was that the request did not come back. */}
+          <ReadError>{error}</ReadError>
         </Card>
       </div>
     );
@@ -228,12 +232,20 @@ function LibraryPage({ data, loading = false, error = null, actions, chrome, mob
           className={mobile ? "w-full" : "w-[420px]"}
         />
         <Tabs<LibraryTab> ariaLabel="Library sections" variant="underline" options={tabOptions} value={tab} onChange={setTab} />
+        {/* XA-05: this was a hand-rolled count sentence with its own pluralising
+            ternaries. The strip reports what the ACTIVE tab is about to render
+            out of every match in the library, and names the tabs holding the
+            rest so the search still doubles as navigation. */}
         {query.trim() && (
-          <p className="font-term text-[11.5px] text-ink/65">
-            {matches === 0
-              ? `No matches for "${query.trim()}".`
-              : `${matches.toLocaleString("en-US")} match${matches === 1 ? "" : "es"} across ${matchedTabs.length} tab${matchedTabs.length === 1 ? "" : "s"}: ${matchedTabs.map((t) => t.label.toLowerCase()).join(", ")}.`}
-          </p>
+          <ResultCount
+            from={counts[tab] ? 1 : 0}
+            to={counts[tab]}
+            total={matches}
+            noun="matches"
+            note={matches === 0
+              ? `for "${query.trim()}"`
+              : `in ${matchedTabs.map((t) => t.label.toLowerCase()).join(", ")}`}
+          />
         )}
         <Panel tab={tab} data={data} narrowed={narrowed} query={query} mobile={mobile} actions={actions} />
       </div>

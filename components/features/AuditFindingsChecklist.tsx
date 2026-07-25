@@ -11,7 +11,10 @@ import { CountChip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
 import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
+import { why } from "../actions/useWrite";
 import { PageHeader } from "../layout/PageHeader";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -148,7 +151,7 @@ export function AuditFindingsChecklist({
       await actions.fixFinding({ id: f.id, memberName });
     } catch (err) {
       setOverrides((o) => { const n = { ...o }; delete n[f.id]; return n; });
-      setRowErr((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "That fix did not apply." }));
+      setRowErr((e) => ({ ...e, [f.id]: why(err, "That fix did not apply.") }));
     }
   };
 
@@ -160,7 +163,7 @@ export function AuditFindingsChecklist({
       await actions.dismissFinding(f.id);
     } catch (err) {
       setOverrides((o) => { const n = { ...o }; delete n[f.id]; return n; });
-      setRowErr((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : "That finding could not be dismissed." }));
+      setRowErr((e) => ({ ...e, [f.id]: why(err, "That finding could not be dismissed.") }));
     }
   };
 
@@ -178,7 +181,7 @@ export function AuditFindingsChecklist({
       await actions.fixAllFindings({ kind: k });
     } catch (err) {
       setOverrides((o) => { const n = { ...o }; for (const f of open) delete n[f.id]; return n; });
-      setKindErr((e) => ({ ...e, [k]: err instanceof Error ? err.message : "Those fixes did not apply." }));
+      setKindErr((e) => ({ ...e, [k]: why(err, "Those fixes did not apply.") }));
     } finally {
       setFixingKind(null);
     }
@@ -236,9 +239,12 @@ export function AuditFindingsChecklist({
             )}
           >
             Run a repository audit to see findings grouped by kind.
-            {scanError && <FieldError>{scanError}</FieldError>}
           </EmptyState>
         </Card>
+        {/* XA-02: a scan that would not start is a refused ACTION, not a caption
+            under the empty state's prose. Banner, outside the box, so the empty
+            state keeps saying only "nothing here yet". */}
+        <WriteError>{scanError}</WriteError>
       </div>
     );
   }
@@ -281,7 +287,7 @@ export function AuditFindingsChecklist({
           </div>
         )}
       </div>
-      {scanError && <FieldError>{scanError}</FieldError>}
+      <WriteError>{scanError}</WriteError>
 
       {/* Progress header */}
       <div className={`${card} flex flex-wrap items-center gap-4 px-4 py-3`}>
@@ -316,7 +322,13 @@ export function AuditFindingsChecklist({
                 </Button>
               )}
             </div>
-            {kindErr[k] && <div className="px-4 pb-3"><FieldError>{kindErr[k]}</FieldError></div>}
+            {kindErr[k] && (
+              /* A refused "Fix all" names no input, so it is a banner beside the
+                 control that fired (XA-02). */
+              <div className="px-4 pb-3">
+                <WriteError onDismiss={() => setKindErr((e) => { const n = { ...e }; delete n[k]; return n; })}>{kindErr[k]}</WriteError>
+              </div>
+            )}
 
             {!isCollapsed && (
               <div className="border-t border-ink/10">
@@ -324,19 +336,22 @@ export function AuditFindingsChecklist({
                   <div className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-moss"><Check size={14} /> All handled.</div>
                 ) : (
                   <>
-                  <div className="flex items-center gap-3 border-b border-ink/10 bg-flysch/40 px-4 py-2 font-term text-[11.5px] text-ink/65">
-                    <span className="min-w-0 truncate">
-                      {hidden > 0
-                        ? `Showing ${shown.length} of ${visible.length} findings`
-                        : `${visible.length} finding${visible.length === 1 ? "" : "s"}`}
-                    </span>
-                    {(hidden > 0 || showAll) && (
-                      <Button variant="link" compact className="ml-auto" onClick={() =>
-                        setExpandedKind((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; })}>
-                        {showAll ? "Show fewer" : `Show all ${visible.length}`}
-                      </Button>
+                  {/* XA-08/XA-09: the strip and its expand toggle were written
+                      out here; both come from the shared pair now, so this
+                      section counts and expands exactly like every other list. */}
+                  <ResultCount
+                    from={visible.length === 0 ? 0 : 1}
+                    to={shown.length}
+                    total={visible.length}
+                    noun="findings"
+                    actions={(hidden > 0 || showAll) && (
+                      <ShowRest
+                        expanded={showAll}
+                        total={visible.length}
+                        onToggle={() => setExpandedKind((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; })}
+                      />
                     )}
-                  </div>
+                  />
                   <ul className="divide-y divide-ink/10">
                     {shown.map((f) => {
                       const st = statusOf(f);
@@ -349,7 +364,14 @@ export function AuditFindingsChecklist({
                             <Truncate lines={2} className="mt-0.5 text-[12.5px] leading-snug text-ink/70">{f.detail}</Truncate>
                             {st === "fixed" && <div className="mt-1 font-term text-[11.5px] text-moss">→ {ov && "summary" in ov ? ov.summary : summaryFor(f)}</div>}
                             {st === "dismissed" && <div className="mt-1 font-term text-[11.5px] text-ink/65">dismissed</div>}
-                            {rowErr[f.id] && <FieldError>{rowErr[f.id]}</FieldError>}
+                            {rowErr[f.id] && (
+                              /* A rejected fix accuses no input on the row, so it
+                                 gets the same banner every other refused write
+                                 gets (XA-02). */
+                              <div className="mt-1.5">
+                                <WriteError onDismiss={() => setRowErr((e) => { const n = { ...e }; delete n[f.id]; return n; })}>{rowErr[f.id]}</WriteError>
+                              </div>
+                            )}
                           </div>
                           {st === "open" && (
                             <div className="flex max-w-[45%] shrink-0 flex-wrap items-center justify-end gap-1.5 [&_*]:max-w-full [&_button]:[overflow-wrap:anywhere]">

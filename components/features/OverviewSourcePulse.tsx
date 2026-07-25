@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { SourceMark } from "../icons/marks";
-import { Button } from "../actions/Button";
 import { Scrollable } from "../data-display/Scrollable";
 
 /* Overview — Source pulse ─────────────────────────────────────────────────
@@ -132,26 +133,22 @@ export function OverviewSourcePulse({
         </div>
       ) : offline ? (
         /* §8: failure copy comes from the catalog, never a bespoke string. */
-        <ErrorMessage id="server.unavailable" onAction={onRetry} />
+        <ReadError onRetry={onRetry} />
       ) : tiles.length === 0 ? (
         <EmptyState>No sources connected yet. Connect one in Sources.</EmptyState>
       ) : (
         <>
-          {/* Count strip + the control that changes it, above the grid (§13). */}
-          <div className="mb-2.5 flex flex-wrap items-center gap-2">
-            <span className="font-term text-[11.5px] text-ink/65">
-              {visible.length < tiles.length
-                ? `Showing ${visible.length} of ${tiles.length.toLocaleString()} sources`
-                : `Showing all ${tiles.length.toLocaleString()} connected source${tiles.length === 1 ? "" : "s"}`}
-            </span>
-            {hidden > 0 && (
-              <Button compact onClick={viewAll} aria-expanded={expanded}>
-                {expanded
-                  ? <><ChevronUp size={14} /> Show fewer sources</>
-                  : <><ChevronDown size={14} /> View all sources</>}
-              </Button>
-            )}
-          </div>
+          {/* Count strip + the control that changes it, above the grid (§13).
+              Both used to be hand-rolled here: a fourth spelling of "Showing N
+              of M" beside a fifth spelling of "show me the rest". */}
+          <ResultCount
+            from={1}
+            to={visible.length}
+            total={tiles.length}
+            noun="sources"
+            className="mb-2.5 rounded-[4px] border border-ink/10"
+            actions={hidden > 0 && <ShowRest expanded={expanded} total={tiles.length} onToggle={viewAll} />}
+          />
           {/* A workspace can connect dozens of sources: the grid scrolls inside
               a capped region instead of running past the fold (§20). */}
           <Scrollable axis="y" style={{ maxHeight: visible.length > 8 ? 380 : undefined }} scrollerClassName="pr-1">

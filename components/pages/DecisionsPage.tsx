@@ -3,7 +3,9 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Feather, Workflow } from "lucide-react";
 import { DecisionCardFeature, type Decision, type DecisionLedgerActions } from "../features/DecisionCardFeature";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite, why } from "../actions/useWrite";
 import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { DecisionCard } from "../data-display/DecisionCard";
 import { SourceMark } from "../icons/marks";
@@ -47,7 +49,7 @@ const STATES = [
   { id: "filtered", label: "Filtered · Ratified" },
   { id: "empty", label: "No decisions yet" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -117,9 +119,6 @@ export type DecisionsActions = DecisionLedgerActions & {
       without it the page shows the run once and does not follow it. */
   scanProgress?: (id: string) => ScanRun | Promise<ScanRun>;
 };
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /** Everything the Decisions page renders. */
 export type DecisionsData = {
@@ -263,7 +262,9 @@ function Rail({ howItWorks, decisions, actions }: {
             ))}
           </ul>
         )}
-        <FieldError>{failed}</FieldError>
+        {/* A refused sign-off has no input to sit under, so it is a banner
+            beside the control that fired (XA-02). */}
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       </Card>
       <Card variant="plain" title="How this works">
         <p className="text-[12.5px] leading-relaxed text-ink/70">{howItWorks}</p>
@@ -298,24 +299,19 @@ function Composer({ composer, actions, onClose }: {
   const [statement, setStatement] = useState(composer.statement);
   const [context, setContext] = useState(composer.context);
   const [source, setSource] = useState(composer.source);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  /* One hook for the busy/failed pair the composer used to keep by hand
+     (XA-04): with no handler the capture closes the form immediately, with one
+     the form only closes once the server has accepted it. */
+  const write = useWrite();
 
-  const saving = composer.saving || busy;
+  const saving = composer.saving || write.busy;
 
   const capture = async () => {
     if (!statement.trim() || saving) return;
-    if (!actions?.capture) { onClose(); return; }
-    setBusy(true);
-    setFailed(null);
-    try {
-      await actions.capture({ statement: statement.trim(), context: context.trim(), source: source.trim() });
-      onClose();
-    } catch (e) {
-      setFailed(why(e, "That decision could not be captured."));
-    } finally {
-      setBusy(false);
-    }
+    await write.run(
+      actions?.capture && (() => actions.capture!({ statement: statement.trim(), context: context.trim(), source: source.trim() })),
+      onClose,
+    );
   };
 
   return (
@@ -350,7 +346,9 @@ function Composer({ composer, actions, onClose }: {
             onChange={(e) => setSource(e.target.value)}
           />
         </FormField>
-        <FieldError>{failed}</FieldError>
+        {/* A refused capture accuses no single field, so it is a banner beside
+            the button rather than a FieldError under an input (XA-02). */}
+        <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
         <div className="flex items-center gap-2">
           <Button variant="primary" disabled={saving || !statement.trim()} onClick={capture}>
             {saving ? "Capturing…" : "Capture"}
@@ -370,24 +368,14 @@ function Composer({ composer, actions, onClose }: {
    button of its own: a decision the pane cannot sign shows no control (§2). */
 function RatifyPane({ card, actions }: { card: RatifyCard; actions?: DecisionsActions }) {
   const [status, setStatus] = useState<Decision["status"]>(card.status);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const write = useWrite();
   const [seenCard, setSeenCard] = useState(card);
-  if (seenCard !== card) { setSeenCard(card); setStatus(card.status); setFailed(null); }
+  if (seenCard !== card) { setSeenCard(card); setStatus(card.status); write.setFailed(null); }
 
   const id = card.id;
   const ratify = async () => {
-    if (id === undefined || busy) return;
-    setBusy(true);
-    setFailed(null);
-    try {
-      if (actions?.ratify) await actions.ratify({ id });
-      setStatus("ratified");
-    } catch (e) {
-      setFailed(why(e, "That decision could not be ratified."));
-    } finally {
-      setBusy(false);
-    }
+    if (id === undefined || write.busy) return;
+    await write.run(actions?.ratify && (() => actions.ratify!({ id })), () => setStatus("ratified"));
   };
 
   return (
@@ -411,14 +399,16 @@ function RatifyPane({ card, actions }: { card: RatifyCard; actions?: DecisionsAc
               compact
               confirmVariant="success"
               confirmLabel="Ratify this decision?"
-              disabled={busy}
+              disabled={write.busy}
               onConfirm={() => void ratify()}
             >
-              {busy ? "Ratifying…" : "Ratify"}
+              {write.busy ? "Ratifying…" : "Ratify"}
             </ConfirmButton>
           ) : undefined}
         />
-        <FieldError>{failed}</FieldError>
+        {/* Same surface a failed read gets: losing a ratification matters at
+            least as much as failing to load one (XA-02). */}
+        <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       </div>
     </div>
   );
@@ -437,7 +427,10 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   if (seenFilter !== data.filter) { setSeenFilter(data.filter); setFilter(data.filter); }
 
   const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter };
-  if (error) return <EmptyState title="API offline">{error}</EmptyState>;
+  /* An EmptyState is the "nothing here yet" surface: reporting a failed read
+     through one told the reader the ledger was empty when the request simply
+     did not come back (§8, XA-01). */
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data) && !composerOpen) {
     return (
       <EmptyState title="No decisions yet">
@@ -472,28 +465,23 @@ function ScanButton({ scan, onStarted }: {
   scan: NonNullable<DecisionsActions["scan"]>;
   onStarted: (run: ScanRun) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  // `runFor` because the run itself is the result the page has to follow.
+  const write = useWrite();
   const run = async () => {
-    if (busy) return;
-    setBusy(true);
-    setFailed(null);
-    try {
-      const started = await scan();
-      // A handler that answers with a run gets followed; one that only
-      // succeeds keeps the old fire-and-forget behaviour, which is what the
-      // canvas renders.
-      if (started && typeof started === "object" && "id" in started) onStarted(started as ScanRun);
-    } catch (e) {
-      setFailed(why(e, "The scan could not be run."));
-    } finally { setBusy(false); }
+    if (write.busy) return;
+    const started = await write.runFor(scan);
+    // A handler that answers with a run gets followed; one that only
+    // succeeds keeps the old fire-and-forget behaviour, which is what the
+    // canvas renders.
+    if (started && typeof started === "object" && "id" in started) onStarted(started as ScanRun);
   };
   return (
     <span className="inline-flex flex-col items-start">
-      <Button variant="default" compact disabled={busy} onClick={run}>
-        <Workflow size={15} /> {busy ? "Starting…" : "Scan for decisions"}
+      <Button variant="default" compact disabled={write.busy} onClick={run}>
+        <Workflow size={15} /> {write.busy ? "Starting…" : "Scan for decisions"}
       </Button>
-      <FieldError>{failed}</FieldError>
+      {/* A scan that would not start is a failed write, not a bad field. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
     </span>
   );
 }

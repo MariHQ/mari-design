@@ -16,6 +16,10 @@ import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate } from "../data-display/Truncate";
 import { Alert } from "../feedback/Alert";
 import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite, why } from "../actions/useWrite";
+import { CreateReviewTaskButton } from "../actions/RepeatedActions";
 import { Drawer } from "../layout/Drawer";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { FormField } from "../forms/FormField";
@@ -51,7 +55,7 @@ const STATES = [
   { id: "many", label: "Many facts" },
   { id: "empty", label: "No facts yet" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -242,7 +246,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
       await run();
       settle();
     } catch (err) {
-      setFailed((e) => ({ ...e, [f.id]: err instanceof Error ? err.message : floor }));
+      setFailed((e) => ({ ...e, [f.id]: why(err, floor) }));
     } finally {
       setBusy(null);
     }
@@ -294,6 +298,11 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
                     status column one cell to the left already says so — the
                     word used to be repeated in this cell, twice per row.
                     Edit and Retire are drawn only when a handler exists (§2). */}
+                {/* The one place a page-action failure stays a <FieldError>:
+                    this is a TABLE ROW cell, and a banner here would blow the
+                    row height apart and pull every neighbouring column out of
+                    plumb (§3, XA-02's stated exception). The message still
+                    reaches the reader, in the cell the action fired from. */}
                 {failed[f.id] ? (
                   <FieldError>{failed[f.id]}</FieldError>
                 ) : isRetired ? null : (
@@ -336,21 +345,16 @@ function FactDrawer({ fact, onSave, onClose }: {
   const [claim, setClaim] = useState(fact?.claim ?? "");
   const [source, setSource] = useState(fact?.source ?? "");
   const [owner, setOwner] = useState(fact?.owner ?? "");
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  /* One hook for the busy/failed pair the drawer used to keep by hand: no
+     handler closes the drawer immediately, a handler is awaited first (XA-04). */
+  const write = useWrite();
   const editing = fact !== null;
 
   const submit = async () => {
-    setBusy(true);
-    setFailed(null);
-    try {
-      await onSave?.({ claim: claim.trim(), source: source.trim(), owner: owner.trim() });
-      onClose();
-    } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Could not save that claim.");
-    } finally {
-      setBusy(false);
-    }
+    await write.run(
+      onSave && (() => onSave({ claim: claim.trim(), source: source.trim(), owner: owner.trim() })),
+      onClose,
+    );
   };
 
   return (
@@ -363,8 +367,8 @@ function FactDrawer({ fact, onSave, onClose }: {
       footer={
         <>
           {/* Primary bottom left, secondary to its right (§2). */}
-          <Button variant="primary" disabled={busy || !claim.trim() || !source.trim()} onClick={() => void submit()}>
-            {busy ? "Saving…" : editing ? "Save changes" : "Add fact"}
+          <Button variant="primary" disabled={write.busy || !claim.trim() || !source.trim()} onClick={() => void submit()}>
+            {write.busy ? "Saving…" : editing ? "Save changes" : "Add fact"}
           </Button>
           <Button onClick={onClose}>Cancel</Button>
         </>
@@ -381,7 +385,9 @@ function FactDrawer({ fact, onSave, onClose }: {
         <FormField label="Owner">
           <Input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Maya Chen" className="w-full" />
         </FormField>
-        {failed && <FieldError>{failed}</FieldError>}
+        {/* A refused save accuses the whole claim, not one of the three fields
+            above it, so it is a banner rather than a FieldError (XA-02). */}
+        <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
         {!editing && (
           <div className="text-[11.5px] text-ink/65">
             A new claim starts as Needs review until someone verifies it.
@@ -424,9 +430,16 @@ function ReviewTaskAudit({ task }: { task: FactTaskAudit }) {
           <td className="px-4 py-3 align-top"><Chip label={task.statusLabel} tone="attention" dot /></td>
           <td className="px-4 py-3 align-top text-right">
             {task.phase === "error" ? (
-              <span className="font-term text-[11.5px] text-espelette">{task.errorText}</span>
+              /* Same table-row exception as FactsTable: a banner in this cell
+                 would wreck the row height, so the failure stays a FieldError
+                 here rather than a bespoke espelette span (§3, XA-02). */
+              <FieldError>{task.errorText}</FieldError>
             ) : (
-              <Button compact disabled>{task.phase === "done" ? "Task created" : "Creating…"}</Button>
+              /* One "Create review task" everywhere, with one icon, one busy
+                 word and one done word: this cell spelled the done state
+                 "Task created" while the drawers said "Review task created"
+                 (§16, XA-23). */
+              <CreateReviewTaskButton compact state={task.phase === "done" ? "done" : "busy"} />
             )}
           </td>
         </tr>
@@ -485,7 +498,9 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
   if (error) {
     return (
       <div className="mt-6">
-        <EmptyState title="API offline">{error}</EmptyState>
+        {/* A ledger that did not load is not a ledger with nothing in it: an
+            EmptyState here reported a failure as emptiness (§8, XA-01). */}
+        <ReadError>{error}</ReadError>
       </div>
     );
   }
@@ -568,8 +583,13 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
      `{ fact }` = correcting an existing one. */
   const [editing, setEditing] = useState<{ fact: Fact | null } | null>(null);
   const [scan, setScan] = useState<FactScan | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [scanFailed, setScanFailed] = useState<string | null>(null);
+  /* The scan's busy/failed pair, from the one hook (XA-04). The poll below
+     reports through the same surface, so a run that starts and then stops
+     answering has one banner, not two. */
+  const scanWrite = useWrite();
+  // Stable identity for the poll effect below: the hook's object is new every
+  // render, its setter is not.
+  const { setFailed: setScanFailed } = scanWrite;
 
   /* Follow a run that is still going. The poll is an effect (not a chain of
      timeouts inside the click) so it stops when the page unmounts and never
@@ -585,12 +605,12 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           const next = await progress(runId);
           if (alive) setScan(next);
         } catch (err) {
-          if (alive) setScanFailed(err instanceof Error ? err.message : "The scan could not be read.");
+          if (alive) setScanFailed(why(err, "The scan could not be read."));
         }
       })();
     }, SCAN_POLL_MS);
     return () => { alive = false; window.clearInterval(tick); };
-  }, [runId, progress]);
+  }, [runId, progress, setScanFailed]);
 
   if (loading) {
     return (
@@ -603,16 +623,10 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
   const scanFacts = actions?.scanFacts;
 
   const startScan = async () => {
-    if (!scanFacts || starting || runId) return;
-    setStarting(true);
-    setScanFailed(null);
-    try {
-      setScan(await scanFacts());
-    } catch (err) {
-      setScanFailed(err instanceof Error ? err.message : "The scan could not be started.");
-    } finally {
-      setStarting(false);
-    }
+    if (!scanFacts || scanWrite.busy || runId) return;
+    // `runFor`: the run itself is the result the page then follows.
+    const started = await scanWrite.runFor(scanFacts);
+    if (started) setScan(started);
   };
 
   const headerActions = (
@@ -623,8 +637,8 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           to fabricate a progress bar that climbed to a "passed" nothing had
           run (P-FA-5, §2). */}
       {scanFacts && (
-        <Button variant="default" disabled={starting || Boolean(runId)} onClick={() => void startScan()}>
-          <Workflow size={14} /> {starting || runId ? "Scanning…" : "Scan for facts"}
+        <Button variant="default" disabled={scanWrite.busy || Boolean(runId)} onClick={() => void startScan()}>
+          <Workflow size={14} /> {scanWrite.busy || runId ? "Scanning…" : "Scan for facts"}
         </Button>
       )}
       <Button variant="default" aria-expanded={auditOpen} onClick={() => setAuditOpen((v) => !v)}>
@@ -644,7 +658,11 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           actions={mobile ? undefined : headerActions}
         />
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
-        {scanFailed && <div className="mt-3"><FieldError>{scanFailed}</FieldError></div>}
+        {/* A scan that would not start, or would not answer, is a failed write
+            beside a button, not a bad value in an input (XA-02). */}
+        <div className="mt-3 empty:mt-0">
+          <WriteError onDismiss={() => scanWrite.setFailed(null)}>{scanWrite.failed}</WriteError>
+        </div>
         <Body
           data={data}
           error={error}

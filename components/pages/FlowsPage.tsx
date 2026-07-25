@@ -8,7 +8,7 @@ import type { WorkflowRun } from "../workflow/RunHistory";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
 
 /* Flows (pages/flows.md). The automation surface — a single route that swaps
    between three surfaces: the list view (template gallery + flow list + run
@@ -36,7 +36,7 @@ const STATES = [
   { id: "trigger-schedule", label: "Trigger editor · schedule" },
   { id: "trigger-document", label: "Trigger editor · document" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No flows yet" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -143,7 +143,10 @@ const runSplit = (mobile: boolean) =>
 function Body({ data, error, actions, mobile }: {
   data: FlowsData; error: string | null; actions?: FlowsActions; mobile: boolean;
 }) {
-  if (error) return <ErrorMessage id="server.unavailable" />;
+  /* XA-01: §8-correct, but it dropped `error` on the floor: the reader was
+     told the service was unavailable and never what the server actually said.
+     ReadError is that same catalog banner with the message carried through. */
+  if (error) return <ReadError>{error}</ReadError>;
 
   /* A workspace with no flows used to get a page-level empty state and nothing
      else — the one screen where creating a flow matters most had no way to do

@@ -22,8 +22,7 @@ import { Spinner } from "../data-display/Spinner";
 import { TagChip } from "../data-display/TagChip";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { Alert } from "../feedback/Alert";
-import { ERRORS } from "../feedback/errors";
+import { ReadError } from "../feedback/ReadError";
 import { Switch } from "../forms/Switch";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers, type McpServer, type PublishMcpActions } from "../features/PublishMcpServers";
@@ -31,6 +30,7 @@ import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
 import { Link } from "../navigation/Link";
 import { siteUrl } from "../tokens/siteUrl";
+import { fmtDate } from "../tokens/format";
 
 /* Publish (pages/publish.md). The doc-site product: turn the knowledge base
    into a static documentation website, or expose it to Claude/agents over MCP.
@@ -83,8 +83,9 @@ export type PublishGate = { name: string; ok: boolean; note: string };
 export type SiteTheme = { key: string; name: string; accent: string; bg: string };
 /** One section of the site's navigation tree. */
 export type NavSection = { label: string; docs: number };
-/** A past deploy. */
-export type SiteRelease = { version: string; note: string };
+/** A past deploy. `date` is optional because not every adapter records one;
+    a row without it says nothing rather than inventing a day (§5). */
+export type SiteRelease = { version: string; note: string; date?: string };
 
 /** The doc site being edited. */
 export type DocSite = {
@@ -197,7 +198,7 @@ const STATES = [
   { id: "mcp-token", label: "MCP · Token created" },
   { id: "mcp-empty", label: "MCP · No servers" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Nothing published yet" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -619,8 +620,12 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
         <div className="flex items-start gap-3 px-4 pt-4 pb-2">
           <div className="min-w-0 flex-1">
             <h3 className="text-[15px] font-semibold text-ink">Doc sites</h3>
+            {/* XA-05: this hand-rolled its own count with a pluralising
+                ternary, directly above the ResultCount strip that already
+                reports one. The summary keeps the sentence, the strip keeps
+                the number. */}
             <div className="mt-0.5 text-[12px] text-ink/70">
-              {rows.length === 1 ? "1 site" : `${rows.length} sites`}. Each one publishes the documents its source tags allow.
+              Each site publishes the documents its source tags allow.
             </div>
           </div>
           <Button variant="primary" compact onClick={() => setCreating(true)}><Plus size={13} /> New site</Button>
@@ -840,6 +845,10 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
               <span className="w-2 h-2 rounded-full bg-ink/30" />
               <span className="text-[13px] font-medium text-ink">{r.version}</span>
               <span className="font-term text-[11.5px] text-ink/65 flex-1">{r.note}</span>
+              {/* Release history rendered with NO date at all, so "v12" gave the
+                  reader no way to tell last week's deploy from last year's.
+                  Through fmtDate, so it carries a year like every other date. */}
+              {r.date && <span className="whitespace-nowrap font-term text-[11.5px] text-ink/65">{fmtDate(r.date)}</span>}
               {/* Rolling a live site back to an older build is destructive:
                   it must not fire on first click (CONVENTIONS §2). */}
               <ConfirmButton compact confirmLabel="Roll back?" disabled={write.busy} onConfirm={() => void rollback(r.version)}>
@@ -854,9 +863,10 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
 }
 
 function Body({ data, error, mobile, actions }: { data: PublishData; error: string | null; mobile: boolean; actions?: PublishActions }): ReactNode {
-  /* The catalog owns the heading and the tone (§8); the body is the message
-     the server actually sent, so the user sees the real failure. */
-  if (error) return <Alert tone="blocked" title={ERRORS["server.unavailable"].title}>{error}</Alert>;
+  /* XA-01: this was the closest of the eight hand-rolled read-failure
+     surfaces, but it was still a copy. One surface, shared with every other
+     page: catalog heading and tone, the server's own message underneath. */
+  if (error) return <ReadError>{error}</ReadError>;
 
   const siteList = (
     <SiteList sites={data.sites} tagOptions={data.tagOptions} createOpen={data.view === "site-new"} actions={actions} />

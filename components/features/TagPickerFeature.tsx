@@ -6,6 +6,7 @@ import { TagChip } from "../data-display/TagChip";
 import { SourceMark } from "../icons/marks";
 import { card } from "../tokens/card";
 import { fmtAgo } from "../tokens/format";
+import { useResync } from "../actions/useResync";
 
 /* TagPickerFeature — the document-surface context where the shared <TagPicker>
    (aliased TagPickerUI) is used: a knowledge-document header showing its
@@ -23,8 +24,18 @@ export type TagPickerFeatureProps = {
 
 export function TagPickerFeature({ docs, className = "" }: TagPickerFeatureProps) {
   const [rows, setRows] = useState<Doc[]>(docs);
-  const setTags = (id: string, tags: string[]) =>
+
+  /* The table was copied once, at mount, so a document list that refetched
+     never reached it (C1). The tag edits live in `rows` themselves and this
+     feature has no action props to save them through, so `touched` stops a
+     later answer from silently reverting a tag the reader just picked. */
+  const [touched, setTouched] = useState(false);
+  useResync(docs, setRows, { hold: touched });
+
+  const setTags = (id: string, tags: string[]) => {
+    setTouched(true);
     setRows((cur) => cur.map((d) => (d.id === id ? { ...d, tags } : d)));
+  };
 
   return (
     <div className={`max-w-[680px] ${className}`.trim()}>

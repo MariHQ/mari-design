@@ -13,6 +13,7 @@ import { SourceMark, GithubMark } from "../icons/marks";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
 import { fmtAgo } from "../tokens/format";
+import { useResync } from "../actions/useResync";
 
 /* WelcomeSyncPanel — the Welcome wizard's live sync read-out for just-connected
    sources.
@@ -71,6 +72,12 @@ export type WelcomeSyncPanelProps = {
 
 export function WelcomeSyncPanel({ sources, loading = false, className = "" }: WelcomeSyncPanelProps) {
   const [items, setItems] = useState<Row[]>(sources);
+
+  /* A sync panel is the one surface guaranteed to be watched while it changes,
+     and it read its rows once, at mount: every progress update the poll
+     fetched was discarded and the bars sat where they started (C1). Nothing
+     here is editable, so there is nothing to hold. */
+  useResync(sources, setItems);
 
   const { sort, onSort, sorted } = useSort(items, {
     source: (s) => s.name,

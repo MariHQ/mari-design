@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Tag, Clock, ArrowRight, Settings, AlertTriangle, Trash2, Palette } from "lucide-react";
+import { Tag, Clock, ArrowRight, AlertTriangle, Trash2, Palette } from "lucide-react";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
@@ -13,9 +13,9 @@ import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { Combobox } from "../forms/Combobox";
 import { normalizeTimezone, timezoneOptions } from "../tokens/timezones";
-import { EmptyState } from "../data-display/EmptyState";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { ReadError } from "../feedback/ReadError";
 import { Alert } from "../feedback/Alert";
 import type { Branding, BrandHarvest, BrandPreviewStat } from "../features/BrandingEditor";
 import { useWrite } from "../actions/useWrite";
@@ -34,7 +34,7 @@ import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 const STATES = [
   { id: "default", label: "Default (saved)" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "editing", label: "Dirty / unsaved" },
   { id: "saving", label: "Saving…" },
   { id: "saved", label: "Just saved" },
@@ -317,11 +317,8 @@ function Body({ data, error, actions, onNavigate }: {
   data: SettingsGeneralData; error: string | null; actions?: SettingsGeneralActions;
   onNavigate?: (pageId: string) => void;
 }) {
-  if (error) {
-    return (
-      <EmptyState icon={<Settings size={22} />} title="API offline">{error}</EmptyState>
-    );
-  }
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   /* Branding used to render the real BrandingEditor here with NO `actions`, so
      every control in it was a control that could not save (§2) — and the same
      editor already lives on Settings → Design & brand, where it does have

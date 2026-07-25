@@ -201,8 +201,14 @@ function useGlobalSearch(chrome?: ShellChrome) {
   return { node, onOpen: onSearch ? () => setOpen(true) : undefined };
 }
 
-/** Signed out, or not yet loaded: name the state, never invent a person. */
-const NO_USER: ShellUser = { name: "Signed out", initials: "—", detail: "" };
+/** Signed out, or not yet loaded: name the state, never invent a person.
+
+    The initials are what the topbar Avatar RENDERS, so they are user-visible
+    copy and an em dash there breaks §5 twice over: it is a forbidden glyph,
+    and a dash in an avatar reads as a rendering fault rather than as a state.
+    "?" is the honest mark for "we do not know who you are" and keeps the
+    frame's promise not to invent a person to fill the circle. */
+const NO_USER: ShellUser = { name: "Signed out", initials: "?", detail: "" };
 
 function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigate?: (id: string) => void }) {
   return (

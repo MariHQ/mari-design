@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { ChevronsUpDown, Layers, ClipboardCheck, Download } from "lucide-react";
+import { ChevronsUpDown, Layers } from "lucide-react";
 import { Button } from "../actions/Button";
+import { CreateReviewTaskButton, ExportButton } from "../actions/RepeatedActions";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
+import { ResultCount } from "../data-display/Pagination";
 import { Scrollable } from "../data-display/Scrollable";
 import { GithubMark } from "../icons";
 import { fmtDate } from "../tokens/format";
@@ -138,15 +140,13 @@ export function LineageGroupDrawer({
           {/* CONVENTIONS §2: primary bottom LEFT, export to its right. */}
           <CardActions
             className="pt-0"
-            primary={
-              <Button variant="primary" onClick={() => setTaskMade(true)}>
-                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
-              </Button>
-            }
+            primary={<CreateReviewTaskButton state={taskMade ? "done" : "idle"} onClick={() => setTaskMade(true)} />}
             secondary={
               // Writes the file. "Exported" used to be a label change and
               // nothing else.
-              <Button
+              <ExportButton
+                format="CSV"
+                state={exported ? "done" : "idle"}
                 onClick={() => {
                   const csv = [
                     "document,owner,date,links",
@@ -157,9 +157,7 @@ export function LineageGroupDrawer({
                   setExported(true);
                 }}
                 className={exported ? lgToggleOn : ""}
-              >
-                <Download size={13} /> {exported ? "Exported" : "Export"}
-              </Button>
+              />
             }
           />
         </div>
@@ -208,19 +206,21 @@ export function LineageGroupDrawer({
           )}
         </CardSection>
 
-        <CardSection
-          label="Members"
-          count={totalMembers}
-          action={
-            <span className="font-term text-[11px] text-ink/65">
-              {shown.length === 0 ? "None listed" : `Showing ${shown.length} of ${ranked.length} listed`}
-            </span>
-          }
-        >
+        <CardSection label="Members" count={totalMembers}>
           {shown.length === 0 ? (
             <EmptyState title="No members">Nothing in this bucket matches the current filters.</EmptyState>
           ) : (
             <>
+              {/* One count strip, above the list it describes (§13). It used to
+                  be a bespoke span in the section header saying "Showing N of M
+                  listed", which is a fourth spelling of the same sentence. */}
+              <ResultCount
+                from={1}
+                to={shown.length}
+                total={ranked.length}
+                noun="members"
+                className="mb-2 rounded-[4px] border border-ink/10"
+              />
               {/* Bounded region, always with a visible bar once it scrolls. */}
               <Scrollable axis="y" className={scrolls ? "max-h-[236px]" : ""} scrollerClassName={scrolls ? "pr-1" : ""}>
                 {shown.map((m) => (

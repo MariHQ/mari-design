@@ -4,7 +4,9 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Shield, RotateCw } from "lucide-react";
 import { AuditFindingsChecklist, type AuditActions, type AuditFinding } from "../features/AuditFindingsChecklist";
 import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
@@ -42,7 +44,7 @@ const STATES = [
   { id: "hide-resolved", label: "Hide-resolved · mostly handled" },
   { id: "clear", label: "Run cleared: all clear" },
   { id: "loading", label: "Scanning" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No repo connected" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -186,7 +188,9 @@ function Body({ data, error, actions, mobile, scan, scanning, onReaudit, onDismi
   if (error) {
     return (
       <div className="mt-6">
-        <EmptyState title="API offline">{error}</EmptyState>
+        {/* An audit that did not load is not an audit with nothing in it: an
+            EmptyState here reported a failure as emptiness (§8, XA-01). */}
+        <ReadError>{error}</ReadError>
       </div>
     );
   }
@@ -263,9 +267,9 @@ function Body({ data, error, actions, mobile, scan, scanning, onReaudit, onDismi
 const SCAN_POLL_MS = 1500;
 
 function AuditPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<AuditData, AuditActions>) {
-  const [starting, setStarting] = useState(false);
   const [scan, setScan] = useState<ScanRun | null>(null);
-  const [scanFailed, setScanFailed] = useState<string | null>(null);
+  // The re-audit's busy/failed pair, from the one hook (XA-04).
+  const audit = useWrite();
 
   /* Follow a run that is still going, exactly as Facts and Decisions do: the
      poll is an effect, so it stops when the page unmounts and never outlives
@@ -288,20 +292,13 @@ function AuditPage({ data, loading = false, error = null, actions, chrome, mobil
      followed through <ScanRunCard>; one that only succeeds keeps the older
      fire-and-forget behaviour. */
   const runAudit = actions?.runAudit;
-  const scanning = starting || Boolean(runId);
+  const scanning = audit.busy || Boolean(runId);
   const reaudit = runAudit
     ? async () => {
         if (scanning) return;
-        setStarting(true);
-        setScanFailed(null);
-        try {
-          const started = await runAudit(data.provider);
-          if (started && typeof started === "object" && "id" in started) setScan(started);
-        } catch (err) {
-          setScanFailed(err instanceof Error ? err.message : "The audit could not run.");
-        } finally {
-          setStarting(false);
-        }
+        // `runFor`: the run itself is the result the page then follows.
+        const started = await audit.runFor(() => runAudit(data.provider));
+        if (started && typeof started === "object" && "id" in started) setScan(started);
       }
     : undefined;
 
@@ -331,7 +328,11 @@ function AuditPage({ data, loading = false, error = null, actions, chrome, mobil
           actions={mobile ? undefined : headerActions || undefined}
         />
         {mobile && headerActions && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
-        {scanFailed && <div className="mt-3"><FieldError>{scanFailed}</FieldError></div>}
+        {/* An audit that would not start is a failed write beside a button,
+            not a bad value in an input (XA-02). */}
+        <div className="mt-3 empty:mt-0">
+          <WriteError onDismiss={() => audit.setFailed(null)}>{audit.failed}</WriteError>
+        </div>
         <Body
           data={data}
           error={error}

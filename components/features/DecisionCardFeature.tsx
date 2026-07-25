@@ -5,11 +5,9 @@ import { ImpactPanel as ImpactPanelUI, type ImpactDoc } from "../data-display/Im
 import { EmptyState } from "../data-display/EmptyState";
 import { SourceMark } from "../icons/marks";
 import { Button } from "../actions/Button";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /* DecisionCardFeature — the Decisions ledger column: a timeline of decision
    cards, each composing the data-display <DecisionCard> (aliased DecisionCardUI)
@@ -182,7 +180,9 @@ export function DecisionCardFeature({ decisions, loading = false, actions, class
         </p>
       </div>
 
-      <FieldError>{failed}</FieldError>
+      {/* Ratify, impact and task creation all report here. None of them accuses
+          an input, so the failure gets a banner, not a field caption (XA-02). */}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
 
       {shown.length === 0 && (
         <EmptyState title="Nothing in this filter">No decisions match the selected filter yet.</EmptyState>

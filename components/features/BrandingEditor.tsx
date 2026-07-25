@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
@@ -14,6 +15,7 @@ import { Swatch } from "../data-display/Swatch";
 import { Spinner } from "../data-display/Spinner";
 import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
+import { useResync } from "../actions/useResync";
 
 /* Branding editor (bring-your-own-branding) ───────────────────────────────
    The proof that tokens ARE the brand: set accent/green/blue/gold colors,
@@ -136,6 +138,14 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
   const [evidence, setEvidence] = useState<BrandHarvest | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
+  /* The draft was taken once, at mount, so a brand saved from another tab —
+     or the page's own refetch after Save — never reached the fields (C1).
+     `dirty` is the guard: adopting mid-edit would throw away the brand the
+     reader is in the middle of writing, which is a worse bug than the stale
+     one. Identity is safe here: `web/src/data/settings-design.ts` memoises
+     `branding` on the raw query answer, which `useQuery` holds in state. */
+  useResync(branding, setDraft, { hold: dirty });
+
   const patch = (p: Branding) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const clearKey = (key: keyof Branding) => { setDraft((d) => { const next = { ...d }; delete next[key]; return next; }); setDirty(true); };
 
@@ -152,7 +162,7 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
       setEvidence(found);
       patch({ accent: found.themeColor, displayFont: found.fonts[0], bodyFont: found.fonts[2] });
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : `Could not read ${host}.`);
+      setFailed(why(e, `Could not read ${host}.`));
     } finally {
       setImporting(false);
     }
@@ -167,7 +177,7 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
       setTimeout(() => setSaved(false), 1600);
     } catch (e) {
       // The brand stays dirty, so the unsaved work is still on screen.
-      setFailed(e instanceof Error ? e.message : "That brand could not be saved.");
+      setFailed(why(e, "That brand could not be saved."));
     }
   };
   const doReset = () => { setDraft({}); setDirty(false); setEvidence(null); };
@@ -262,7 +272,7 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
           <ConfirmButton confirmLabel="Reset all?" onConfirm={doReset}>Reset to defaults</ConfirmButton>
           {saved && <span className="font-term text-[11.5px] text-moss">✓ Saved</span>}
         </div>
-        <WriteError>{failed}</WriteError>
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       </Card>
 
       {/* 3 — Live preview (scoped, inline-styled by the draft) */}

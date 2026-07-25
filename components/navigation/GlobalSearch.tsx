@@ -4,9 +4,10 @@ import { Search, Clock, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react"
 import { Kbd } from "./Kbd";
 import { Scrollable } from "../data-display/Scrollable";
 
-/* GlobalSearch — the scoped, grouped search overlay. It's the higher-level
-   sibling of CommandPalette (navigation/CommandPalette.tsx): same Radix
-   Dialog shell + hand-rolled listbox with arrow-key nav, but it searches
+/* GlobalSearch — the scoped, grouped search overlay, and the library's only
+   ⌘K surface. A `CommandPalette` twin used to sit beside it with the same
+   Radix Dialog shell and the same hand-rolled listbox, claiming the same
+   shortcut and reachable from nothing; this is the survivor. It searches
    ACROSS scopes (Docs, People, Sources, Actions…) and renders grouped
    result sections with per-result icon / title / subtitle / meta, a scope
    filter, and a recent-searches empty state. Grounded in the console's

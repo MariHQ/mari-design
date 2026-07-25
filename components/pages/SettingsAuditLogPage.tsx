@@ -1,17 +1,18 @@
 import { useState, type ReactNode } from "react";
-import { ScrollText, RefreshCw } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
-import { Button } from "../actions/Button";
 import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { SettingsAuditLog, type AuditEvent, type AuditDetail } from "../features/SettingsAuditLog";
 import { useWrite } from "../actions/useWrite";
+import { RefreshButton } from "../actions/RepeatedActions";
 import { WriteError } from "../feedback/WriteError";
+import { ReadError } from "../feedback/ReadError";
 import type { PropertyItem } from "../data-display/PropertyList";
 
 /** Re-exported so an app types its rows off the page it renders. `detail` now
@@ -35,7 +36,7 @@ export type { AuditDetail };
 const STATES = [
   { id: "default", label: "Event log" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No events yet" },
   { id: "filtered-actor", label: "Filtered by actor" },
   { id: "filtered-action", label: "Filtered by action" },
@@ -127,9 +128,10 @@ function isEmpty(d: SettingsAuditLogData): boolean {
 }
 
 function Body({ data, error, actions }: { data: SettingsAuditLogData; error: string | null; actions?: SettingsAuditLogActions }) {
-  if (error) {
-    return <EmptyState icon={<ScrollText size={22} />} title="API offline">{error}</EmptyState>;
-  }
+  /* XA-01: this was an EmptyState titled "API offline" — the "nothing here
+     yet" surface reporting a failure, under a string §8 forbids and that is a
+     second spelling of ERRORS["server.unavailable"].title. */
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data)) {
     return (
       <EmptyState icon={<ScrollText size={22} />} title="No events yet">
@@ -191,10 +193,9 @@ function SettingsAuditLogPage({ data, loading = false, error = null, actions, ch
             title="Access log"
             description="Every workspace change: actor, action, target, and time."
             actions={
-              <Button variant="default" disabled={write.busy} onClick={() => void refresh()}>
-                <RefreshCw size={15} className={write.busy ? "animate-spin" : undefined} />
-                {write.busy ? "Refreshing…" : `Refresh${reloads > 0 ? ` (${reloads})` : ""}`}
-              </Button>
+              /* XA-23: the same Refresh is spelled once, here and in the
+                 embedded log below (§16). */
+              <RefreshButton busy={write.busy} count={reloads} onClick={() => void refresh()} />
             }
           />
           <div className="mt-5"><SettingsTabs active="audit" onNavigate={chrome?.onNavigate} /></div>

@@ -5,6 +5,7 @@ import { ConnectorCard as ConnectorCardUI, type ConnectorHealth } from "../data-
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { Button } from "../actions/Button";
+import { why } from "../actions/useWrite";
 import { SourceMark } from "../icons/marks";
 import { Truncate } from "../data-display/Truncate";
 import { fmtDateTime } from "../tokens/format";
@@ -146,7 +147,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         await handler(s);
         patch(id, { state: "running", phase: "listing" });
       } catch (err) {
-        setFailed((f) => ({ ...f, [id]: err instanceof Error ? err.message : "Sync could not be started." }));
+        setFailed((f) => ({ ...f, [id]: why(err, "Sync could not be started.") }));
       } finally {
         setBusy((b) => ({ ...b, [id]: false }));
       }
@@ -163,7 +164,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         await actions.disconnect!(s);
         patch(id, { state: "paused" });
       } catch (err) {
-        setFailed((f) => ({ ...f, [id]: err instanceof Error ? err.message : "Disconnect failed." }));
+        setFailed((f) => ({ ...f, [id]: why(err, "Disconnect failed.") }));
       } finally {
         setBusy((b) => ({ ...b, [id]: false }));
       }

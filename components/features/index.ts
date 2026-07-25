@@ -112,7 +112,6 @@ export { BrandingEditor } from "./BrandingEditor";
 export { AuthSession } from "./AuthSession";
 
 // Publish
-export { PublishSiteEditor } from "./PublishSiteEditor";
 export { PublishMcpServers } from "./PublishMcpServers";
 
 // Misc (macro versions of single primitives, in page context)

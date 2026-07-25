@@ -1,6 +1,6 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
-import { Sparkles, Download } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import {
   InsightsWidgets,
   type InsightStat, type ReadRow, type GlossRow, type InsightsActivity, type InsightsWidgetsActions,
@@ -9,10 +9,10 @@ import { InsightsFreshnessChart, type Freshness, type BandKey } from "../feature
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
-import { Button } from "../actions/Button";
 import { DateRangePicker, dateRangeLabel, type DateRange } from "../data-display/DateRangePicker";
 import { PageHeader } from "../layout/PageHeader";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { ExportButton } from "../actions/RepeatedActions";
 import { fmtDate } from "../tokens/format";
 
 /* Insights (pages/insights.md). Read-mostly dashboard proving the knowledge
@@ -31,7 +31,7 @@ const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading (full page)" },
   { id: "widgets-loading", label: "Per-widget loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty / no data" },
   { id: "no-freshness", label: "Freshness unavailable" },
   { id: "freshness-empty", label: "Freshness: no sources" },
@@ -188,9 +188,11 @@ function Body({ data, error, actions, mobile, headerActions }: {
     return (
       <>
         <BareHeader />
-        {/* Error copy is catalogued, not composed per page (§8). No controls
+        {/* Error copy is catalogued, not composed per page (§8). <ReadError>
+            is that catalog entry plus the message the server actually sent, so
+            every failed read on every page reads the same (XA-01). No controls
             beside a header whose page could not load. */}
-        <div className="mt-6"><ErrorMessage id="server.unavailable" /></div>
+        <div className="mt-6"><ReadError>{error}</ReadError></div>
       </>
     );
   }
@@ -244,15 +246,16 @@ function InsightsPage({ data, loading = false, error = null, actions, chrome, mo
         <DateRangePicker value={data.range} onChange={actions.setRange} align="end" compact />
       )}
       {exportable && (
-        <Button
+        /* One export control, one glyph, one label (§16, XA-23): four
+           spellings of this button were in use across the console. */
+        <ExportButton
           compact
+          format="CSV"
           onClick={() => downloadCsv(
             `insights-${new Date().toISOString().slice(0, 10)}.csv`,
             insightsCsv(w!, data.freshness),
           )}
-        >
-          <Download size={14} /> Export CSV
-        </Button>
+        />
       )}
     </>
   ) : undefined;

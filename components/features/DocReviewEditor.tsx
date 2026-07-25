@@ -39,6 +39,7 @@ import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
+import { ShowRest } from "../data-display/ShowRest";
 
 /* ————— ported local helpers (browser-only; use the DOM) ————— */
 
@@ -299,7 +300,9 @@ const RAW_LABEL: Record<RawKind, string> = {
 /** What the block-type trigger shows for the focused block. */
 const blockLabel = (b: Block | null): string => {
   if (!b) return "¶";
-  if (b.raw !== undefined) return "—";
+  // §5: an em dash is not a label. A raw block is not a paragraph or a
+  // heading, and the trigger has to say which of those it is.
+  if (b.raw !== undefined) return "Raw";
   if (b.type === "code") return "‹›";
   if (b.type === "li") return /^\d/.test(b.marker ?? "-") ? "1." : "•";
   if (b.type === "p") return "¶";
@@ -996,9 +999,9 @@ export function DocReviewEditor({
               className={compact ? "" : "absolute left-3 right-0"}
               style={compact ? undefined : { top: railBottom }}
             >
-              <Button variant="link" onClick={() => setShowAllAnnots((v) => !v)}>
-                {hiddenAnnots > 0 ? `Show ${hiddenAnnots} more` : "Show fewer"}
-              </Button>
+              {/* XA-08: one wording for "show the rest of this list", margin
+                  annotations included. */}
+              <ShowRest expanded={showAllAnnots} total={annots.length} onToggle={() => setShowAllAnnots((v) => !v)} />
             </div>
           )}
         </div>

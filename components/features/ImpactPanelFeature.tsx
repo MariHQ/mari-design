@@ -9,6 +9,7 @@ import { Button } from "../actions/Button";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { card } from "../tokens/card";
 import { fmtAgo } from "../tokens/format";
+import { useResync } from "../actions/useResync";
 
 /* ImpactPanelFeature — the Facts-page context around the shared <ImpactPanel>.
    A verified fact row, expanded, offering "Run impact analysis": Mari traces
@@ -41,6 +42,12 @@ export function ImpactPanelFeature({
 }: ImpactPanelFeatureProps) {
   type Phase = "idle" | "loading" | "done";
   const [phase, setPhase] = useState<Phase>(analyzed ? "done" : "idle");
+  /* `analyzed` was read once, at mount. A panel that opens before the impact
+     query answers therefore stayed on "idle" — offering to run an analysis
+     the server had already finished — for as long as it was on screen (C1).
+     A boolean, so identity is its value; nothing is held because there is no
+     edit to lose, only a phase to correct. */
+  useResync(analyzed, (a) => setPhase(a ? "done" : "idle"));
   const [made, setMade] = useState(false);
   const { busy, failed, run: write } = useWrite();
   const make = () => write(onCreateTasks && (() => onCreateTasks(docs)), () => setMade(true));

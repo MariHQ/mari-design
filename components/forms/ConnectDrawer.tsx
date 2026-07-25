@@ -9,6 +9,7 @@ import { Spinner } from "../data-display/Spinner";
 import { Chip } from "../data-display/Chip";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
+import { WriteError } from "../feedback/WriteError";
 import type { ConnectorField, ConnectTestResult } from "./ConnectorWizard";
 
 /* ConnectDrawer — a slide-over connect flow, ported from
@@ -178,9 +179,14 @@ export function ConnectDrawer({
               <CheckCircle2 size={16} /> Connection test passed. <Chip label="Valid" tone="ok" caps />
             </div>
           )}
+          {/* XA-02: a refused connection test is a failed write beside a
+              button, not a note under any one field, and this bespoke red box
+              was a fifth rendering of that same event. */}
           {test.ok === false && (
-            <div className="mt-3 rounded-[4px] border border-espelette/30 bg-espelette/[0.05] px-3 py-2 text-[12.5px] text-espelette" role="alert">
-              <b className="font-semibold">Connection test failed.</b> {test.error}
+            <div className="mt-3">
+              <WriteError onDismiss={() => setTest({ busy: false, ok: null, error: "" })}>
+                {test.error || "The connection test failed without details."}
+              </WriteError>
             </div>
           )}
           {note && (

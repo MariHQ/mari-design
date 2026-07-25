@@ -10,6 +10,7 @@ import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { fmtDate } from "../tokens/format";
 import { useWrite } from "../actions/useWrite";
+import { useResync, listSig } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
 
 /* LibraryGlossaryPanel — the Library › Glossary tab.
@@ -54,6 +55,17 @@ export function LibraryGlossaryPanel({ terms, actions, loading = false, classNam
   const [editDef, setEditDef] = useState("");
   const [newTerm, setNewTerm] = useState("");
   const [newDef, setNewDef] = useState("");
+
+  /* The working copy was taken once, at mount: a term someone else defined,
+     or this panel's own refetch after a save, never appeared (C1). Compared
+     by signature rather than identity because `LibraryPage` re-filters the
+     collection inline on every render, so the prop is a fresh array whenever
+     the reader is typing in the library search box. `hold` protects a row
+     being edited and a term being added. */
+  useResync(terms, setRows, {
+    hold: editId !== null || newTerm.trim() !== "" || newDef.trim() !== "",
+    key: listSig(terms, (t: Term) => `${t.id}:${t.term}:${t.definition}:${t.owner}:${t.updated}`),
+  });
 
   /* A shared glossary grows to hundreds of terms. It pages, so the card stays
      a card instead of a scroll of the whole vocabulary (CONVENTIONS §13).

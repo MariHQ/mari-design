@@ -8,7 +8,9 @@ import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
 import { CodeBlock } from "../data-display/CodeBlock";
-import { Alert } from "../feedback/Alert";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonPage } from "../data-display/Skeletons";
 /* The password rule is imported, not restated. Setup, Login's register mode
@@ -30,7 +32,7 @@ const STATES = [
   { id: "default", label: "Token step" },
   { id: "admin", label: "Admin account" },
   { id: "saving", label: "Setting up…" },
-  { id: "error", label: "Invalid token" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "success", label: "Complete" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -109,28 +111,19 @@ function TokenStep({ data, error, claim, set, onNext, actions }: {
   set: (patch: Partial<Claim>) => void; onNext: () => void; actions?: SetupActions;
 }) {
   const [help, setHelp] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [rejected, setRejected] = useState<string | null>(null);
-
   /* Check the token HERE when the server offers a way to. It used to be
      carried forward unchecked, so a token off by one character was reported
      only after a name, an email, a password and a workspace name had been
-     typed, and the form gave no clue which of the five fields was wrong. */
-  const next = async () => {
-    setRejected(null);
-    if (!actions?.checkToken) { onNext(); return; }
-    setChecking(true);
-    try {
-      await actions.checkToken(claim.token.trim());
-      onNext();
-    } catch (err) {
-      setRejected(err instanceof Error ? err.message : "That token was not accepted.");
-    } finally {
-      setChecking(false);
-    }
-  };
+     typed, and the form gave no clue which of the five fields was wrong.
 
-  const shown = rejected ?? error;
+     XA-04: the hand-rolled checking/rejected/try-catch pair around one
+     optional handler is exactly what useWrite is. */
+  const write = useWrite();
+  const next = () => write.run(
+    actions?.checkToken && (() => actions.checkToken!(claim.token.trim())),
+    onNext,
+  );
+
   return (
     <div className="space-y-4">
       <p className="text-[13.5px] leading-relaxed text-ink/70">
@@ -147,12 +140,17 @@ function TokenStep({ data, error, claim, set, onNext, actions }: {
       </Field>
       {/* The token step is exactly where a rejected token has to be reported;
           this branch used to drop `error`, so "Invalid token" — a state this
-          page declares — rendered as a silently unchanged form. */}
-      {shown && <Alert tone="blocked" title="Token rejected">{shown}</Alert>}
+          page declares — rendered as a silently unchanged form.
+
+          XA-01/XA-02: two different failures were merged into one bespoke
+          Alert. A refused check is a failed WRITE; what the host handed the
+          page is the read surface every other page uses. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+      {!write.failed && error && <ReadError>{error}</ReadError>}
       {/* Next-step action bottom LEFT (§2). */}
       <div className={AUTH_ACTIONS}>
-        <Button variant="primary" disabled={!claim.token.trim() || checking} onClick={() => void next()}>
-          {checking ? <><Spinner size="sm" /> Checking token…</> : <>Continue <ArrowRight size={14} /></>}
+        <Button variant="primary" disabled={!claim.token.trim() || write.busy} onClick={() => void next()}>
+          {write.busy ? <><Spinner size="sm" /> Checking token…</> : <>Continue <ArrowRight size={14} /></>}
         </Button>
         <Button variant="link" onClick={() => setHelp((h) => !h)}>Where do I find this?</Button>
       </div>
@@ -168,8 +166,12 @@ function TokenStep({ data, error, claim, set, onNext, actions }: {
   );
 }
 
-function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
-  error: string | null; claim: Claim; set: (patch: Partial<Claim>) => void;
+function AdminStep({ error, failed, onDismissFailed, claim, set, busy, onBack, onSubmit }: {
+  error: string | null;
+  /** What `claimWorkspace` threw. A refused write, not a failed read. */
+  failed: string | null;
+  onDismissFailed: () => void;
+  claim: Claim; set: (patch: Partial<Claim>) => void;
   busy: boolean; onBack: () => void; onSubmit: () => void;
 }) {
   /* Confirmation lives here rather than on `Claim`, because it never leaves
@@ -187,13 +189,17 @@ function AdminStep({ error, claim, set, busy, onBack, onSubmit }: {
       <p className="text-[13.5px] leading-relaxed text-ink/70">
         Create the admin account and name your workspace.
       </p>
-      {/* The server's own rejection is the alert title; the recovery step under
-          it is ours, so it reads the same however the server phrases it (§8). */}
-      {error && (
-        <Alert tone="blocked" title={error}>
-          The server rejected that token. It may be mistyped or already used:
+      {/* XA-01: this was `<Alert tone="blocked" title={error}>` — the SERVER'S
+          text used as the heading, so whatever a rejection happened to say
+          replaced the catalog's wording at the one moment §5 and §8 matter
+          most. The catalog owns the heading; the server's message and our
+          recovery step are the detail underneath it. */}
+      <WriteError onDismiss={onDismissFailed}>{failed}</WriteError>
+      {!failed && error && (
+        <ReadError>
+          {error} The server rejected that token. It may be mistyped or already used:
           copy it fresh from the <code className="font-term">admin token:</code> log line.
-        </Alert>
+        </ReadError>
       )}
       <div className={FORM_GRID}>
         <Field label="Your name">
@@ -260,26 +266,17 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
   const [step, setStep] = useState<SetupStep>(data.step);
   const [seen, setSeen] = useState(data.step);
   if (seen !== data.step) { setSeen(data.step); setStep(data.step); }
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  /* XA-04: a busy flag, a failed string and a try/catch around one optional
+     handler. "Invalid setup token, check the server logs." is the message that
+     makes this recoverable, and useWrite passes it through unchanged. */
+  const write = useWrite();
 
   const set = (patch: Partial<Claim>) => setClaim((c) => ({ ...c, ...patch }));
 
-  const submit = async () => {
-    if (!actions?.claimWorkspace) { setStep("done"); return; } // canvas
-    setBusy(true);
-    setFailed(null);
-    try {
-      await actions.claimWorkspace(claim);
-      setStep("done");
-    } catch (err) {
-      // "Invalid setup token, check the server logs." is the message that
-      // makes this recoverable; it reaches the user unchanged.
-      setFailed(err instanceof Error ? err.message : "Setup could not be completed.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const submit = () => write.run(
+    actions?.claimWorkspace && (() => actions.claimWorkspace!(claim)),
+    () => setStep("done"),
+  );
 
   if (loading) {
     return (
@@ -290,7 +287,6 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
   }
 
   const done = step === "done";
-  const shown = failed ?? error;
   return (
     <div className={AUTH_SHELL}>
       <AuthBackdrop />
@@ -304,8 +300,8 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
             <Stepper labels={["Token", "Admin account"]} current={step === "token" ? 0 : 1} ariaLabel="Setup steps" />
           </div>
           {done ? <SuccessStep workspace={claim.workspace || data.workspace} actions={actions} />
-            : step === "token" ? <TokenStep data={data} error={shown} claim={claim} set={set} actions={actions} onNext={() => setStep("admin")} />
-            : <AdminStep error={shown} claim={claim} set={set} busy={busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
+            : step === "token" ? <TokenStep data={data} error={error} claim={claim} set={set} actions={actions} onNext={() => setStep("admin")} />
+            : <AdminStep error={error} failed={write.failed} onDismissFailed={() => write.setFailed(null)} claim={claim} set={set} busy={write.busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
         </Card>
       </div>
     </div>

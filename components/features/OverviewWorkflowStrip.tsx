@@ -10,6 +10,7 @@ import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 import { CardSection } from "../layout/CardShell";
 import { Truncate } from "../data-display/Truncate";
 import { Button } from "../actions/Button";
+import { runStatusChip } from "../tokens/runStatus";
 import { fmtDateTime } from "../tokens/format";
 
 /* Overview — Workflow strip ───────────────────────────────────────────────
@@ -118,17 +119,13 @@ export type WfFlow = {
 
 export type WfRun = { started: string; outcome: string } | null;
 
-/* Run outcomes arrive as free text from the API. Map the known words onto the
-   shared StatusChip vocabulary; anything unrecognized still renders as a real
-   chip (never a bare span) rather than being dropped. */
-const OUTCOME_STATUS: Record<string, ChipStatus> = {
-  passed: "succeeded", succeeded: "succeeded", success: "succeeded", ok: "succeeded",
-  failed: "failed", error: "failed",
-  skipped: "skipped", queued: "queued", running: "running",
-};
-
+/* Run outcomes arrive as free text from the API. The local word→chip table that
+   stood here is now the shared one (tokens/runStatus, X2): it agreed on values
+   but was a fourth independent copy of the same vocabulary, and it knew fewer
+   spellings than the engines emit. An unrecognized word still renders as a real
+   chip (never a bare span) rather than being dropped or guessed at. */
 function OutcomeChip({ outcome }: { outcome: string }) {
-  const status = OUTCOME_STATUS[outcome.trim().toLowerCase()];
+  const status = runStatusChip(outcome);
   if (status) return <StatusChip status={status} />;
   return <Chip label={outcome} tone="neutral" className="max-w-[240px] truncate" />;
 }

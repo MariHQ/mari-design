@@ -5,6 +5,7 @@ import { EmptyState } from "../data-display/EmptyState";
 import { Button } from "../actions/Button";
 import { card } from "../tokens/card";
 import { fmtAgo } from "../tokens/format";
+import { useResync } from "../actions/useResync";
 
 /* TokenRevealFeature — the Settings → API keys context that mints a secret and
    shows it exactly once through the shared <TokenReveal> (aliased TokenRevealUI).
@@ -27,6 +28,11 @@ export type TokenRevealFeatureProps = {
 export function TokenRevealFeature({ keys, className = "" }: TokenRevealFeatureProps) {
   const [rows, setRows] = useState<KeyRow[]>(keys);
   const [fresh, setFresh] = useState<string | null>(null);
+
+  /* The list was read once, at mount, so a refetched key set never landed
+     (C1). Held while a freshly minted token is still on screen: adopting then
+     would drop the row the reader is about to keep. */
+  useResync(keys, setRows, { hold: fresh !== null });
 
   const create = () => setFresh(mintToken());
 

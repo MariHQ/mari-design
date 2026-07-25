@@ -19,6 +19,7 @@ import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { fmtDate } from "../tokens/format";
 import { GithubMark } from "../icons/marks";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
+import { useResync } from "../actions/useResync";
 
 /* Settings — Members table & provisioning ────────────────────────────────
    Manage who can access the workspace: invite teammates, list members with
@@ -114,12 +115,20 @@ export function SettingsMembersTable({
 
   /* The roster is seeded from a prop and `useState` reads its seed once, so
      after a refetch this table kept rendering the first response (C1). */
-  const [seenMembers, setSeenMembers] = useState(initialMembers);
-  if (seenMembers !== initialMembers) { setSeenMembers(initialMembers); setMembers(initialMembers); }
+  useResync(initialMembers, setMembers);
 
   const [gh, setGh] = useState(githubTeam);
   const [ghDraft, setGhDraft] = useState(githubTeam.team);
   const [ghEditing, setGhEditing] = useState(false);
+
+  /* Same bug, two fields the first sentinel did not cover: the workspace name
+     and the GitHub team were also read once, so renaming the workspace in
+     another tab left this row showing the old name indefinitely. Both hold
+     while their inline editor is open — adopting mid-rename would delete what
+     the reader had typed. `web/src/data/settings.ts` memoises the mapped page
+     data on the raw query answer, so both props are referentially stable. */
+  useResync(workspaceName, (n) => { setName(n); setNameDraft(n); }, { hold: editingName });
+  useResync(githubTeam, (t) => { setGh(t); setGhDraft(t.team); }, { hold: ghEditing });
   const ghConnected = gh.connected && Boolean(gh.team);
 
   /* Every mutator below goes through `write`: with no `actions` it is the same

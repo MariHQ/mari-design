@@ -8,6 +8,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { PropertyList } from "../data-display/PropertyList";
 import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { SettingsMembersTable, type Member, type GithubTeamSync, type SettingsMembersActions } from "../features/SettingsMembersTable";
@@ -30,7 +31,7 @@ export type { SettingsMembersActions };
 const STATES = [
   { id: "default", label: "Members list" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No members yet" },
   { id: "single", label: "Single member" },
   { id: "many", label: "Many members" },
@@ -120,9 +121,8 @@ function Body({ data, error, actions, inviteOpen, onInviteOpenChange, sentTo, on
   sentTo: string | null;
   onInvited: (invite: { name: string; email: string; role: string }) => void;
 }) {
-  if (error) {
-    return <EmptyState icon={<Users size={22} />} title="API offline">{error}</EmptyState>;
-  }
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data)) {
     return (
       <EmptyState icon={<Users size={22} />} title="No members yet">

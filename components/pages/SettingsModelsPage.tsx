@@ -4,6 +4,7 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Card } from "../layout/Card";
 import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -29,7 +30,7 @@ export type { SettingsModelsActions };
 const STATES = [
   { id: "default", label: "Model config" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Not configured" },
   { id: "editing-embedding", label: "Editing embedding model" },
   { id: "editing-llm", label: "Editing LLM provider" },
@@ -110,9 +111,8 @@ function isEmpty(d: SettingsModelsData): boolean {
 }
 
 function Body({ data, error, actions }: { data: SettingsModelsData; error: string | null; actions?: SettingsModelsActions }) {
-  if (error) {
-    return <EmptyState icon={<Layers size={22} />} title="API offline">{error}</EmptyState>;
-  }
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   if (isEmpty(data)) {
     return (
       <EmptyState icon={<Layers size={22} />} title="No models configured">

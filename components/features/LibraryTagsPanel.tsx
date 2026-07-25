@@ -17,6 +17,7 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonStat } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { useWrite } from "../actions/useWrite";
+import { useResync, listSig } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
 
 /* LibraryTagsPanel — the Library › Tags tab (default tab).
@@ -95,6 +96,19 @@ export function LibraryTagsPanel({ tags, actions, totalDocs, loading = false, co
   const [draftWeight, setDraftWeight] = useState("1");
   const [weightEditId, setWeightEditId] = useState<string | null>(null);
   const [weightVal, setWeightVal] = useState("");
+
+  /* `rows` was taken once, at mount, so a tag another person added — or the
+     panel's own refetch after a save — never reached the table (C1).
+     Signature, not identity: `LibraryPage` narrows the collections with an
+     inline `.filter()` on every render, so the array the panel receives is a
+     new object each time the reader touches the library search box. Comparing
+     identity there would resync on every keystroke and wipe the open row
+     editor. `hold` keeps a row being edited, or a tag being composed, out of
+     the way of an answer that lands underneath it. */
+  useResync(tags, setRows, {
+    hold: editId !== null || weightEditId !== null || composerOpen,
+    key: listSig(tags, (t: TagDef) => `${t.id}:${t.name}:${t.description}:${t.tone}:${t.weight}:${t.usage}:${t.behaviors.join()}`),
+  });
 
   const visible = useMemo(
     () => rows.filter((t) => `${t.name} ${t.description} ${t.behaviors.join(" ")}`.toLowerCase().includes(query.toLowerCase())),

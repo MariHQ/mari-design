@@ -13,10 +13,32 @@ import { CheckCircle2, Info, XCircle } from "lucide-react";
 export type ToastTone = "default" | "success" | "error";
 type Item = { id: number; text: string; tone: ToastTone };
 
-const ToastCtx = createContext<(text: string, tone?: ToastTone) => void>(() => {});
+/* The default is deliberately NOT a silent no-op. `<Toaster>` is mounted in
+   exactly one place in this repo — the preview canvas — so every `useToast()`
+   in a real app was firing into nothing, and a control whose whole visible
+   effect is a toast looked wired and did nothing (§2). A control that cannot
+   act must not be drawn; the way to find out is to be told, not to ship it. */
+const ToastCtx = createContext<((text: string, tone?: ToastTone) => void) | null>(null);
 
 export function useToast() {
-  return useContext(ToastCtx);
+  const fire = useContext(ToastCtx);
+  return useCallback(
+    (text: string, tone: ToastTone = "default") => {
+      if (!fire) {
+        // Loud in development, harmless in production: never swallow the fact
+        // that the feedback the caller asked for did not happen.
+        if (typeof console !== "undefined") {
+          console.error(
+            `useToast(): no <Toaster> is mounted, so this toast was dropped: ${text}. ` +
+            "Wrap the app root in <Toaster> or give the control a visible effect that does not need one.",
+          );
+        }
+        return;
+      }
+      fire(text, tone);
+    },
+    [fire],
+  );
 }
 
 const TONE: Record<ToastTone, { border: string; icon: ReactNode }> = {

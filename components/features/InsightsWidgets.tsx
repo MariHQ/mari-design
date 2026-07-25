@@ -9,7 +9,10 @@ import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
 import { ActivityFeed, type ActivityItem } from "../data-display/ActivityFeed";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
+import { useWrite, why } from "../actions/useWrite";
 import { Skeleton, SkeletonLine, SkeletonStat, SkeletonCard } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { PageHeader } from "../layout/PageHeader";
@@ -63,6 +66,8 @@ const td = `${tdPad} text-[13px] text-ink/75 border-b border-ink/[0.06] align-mi
 
 /** Rows revealed per page in the readability table and the glossary list. */
 const PAGE = 25;
+/** Events the activity feed shows before the reader asks for the rest. */
+const ACTIVITY_CAP = 8;
 
 /** What the Insights widgets can DO. Every handler may throw; the widget that
     owns the control shows the message beside it. Optional throughout: with no
@@ -105,44 +110,21 @@ export function InsightsWidgets({
   stats, readability, glossary, activity, since, headerActions, periodLabel,
   actions, loading = false, className = "",
 }: InsightsWidgetsProps) {
-  const [scoring, setScoring] = useState(false);
-  const [harvesting, setHarvesting] = useState(false);
   const [hidden, setHidden] = useState<number[]>([]);
-  /* Write failures sit next to the control that failed, never in a toast that
-     scrolls away: a failed write is as visible as a failed read. */
-  const [scoreErr, setScoreErr] = useState<string | null>(null);
-  const [harvestErr, setHarvestErr] = useState<string | null>(null);
+  /* XA-04: both long-running runs were the same hand-rolled busy + failed pair
+     around an optional handler. One hook each now, so `busy` disables the
+     control and `failed` carries whatever the server said. The canvas keeps its
+     visible echo: with no handler wired the hook awaits the same 900ms pause
+     the widget always used, rather than settling before the eye can see it. */
+  const scoreW = useWrite();
+  const harvestW = useWrite();
+  /* Still local: the glossary row leaves optimistically and comes BACK on a
+     rejection, which is the inverse of useWrite's echo-after-success. */
   const [glossErr, setGlossErr] = useState<string | null>(null);
 
-  /* No action wired (the canvas) leaves the original local echo intact: the
-     button still says it is working and then settles. */
-  const score = async () => {
-    if (scoring) return;
-    setScoring(true);
-    setScoreErr(null);
-    try {
-      if (actions?.scoreReadability) await actions.scoreReadability();
-      else await new Promise((r) => setTimeout(r, 900));
-    } catch (err) {
-      setScoreErr(err instanceof Error ? err.message : "Scoring failed.");
-    } finally {
-      setScoring(false);
-    }
-  };
-
-  const harvest = async () => {
-    if (harvesting) return;
-    setHarvesting(true);
-    setHarvestErr(null);
-    try {
-      if (actions?.harvestGlossary) await actions.harvestGlossary();
-      else await new Promise((r) => setTimeout(r, 900));
-    } catch (err) {
-      setHarvestErr(err instanceof Error ? err.message : "Harvest failed.");
-    } finally {
-      setHarvesting(false);
-    }
-  };
+  const pause = () => new Promise((r) => setTimeout(r, 900));
+  const score = () => void scoreW.run(actions?.scoreReadability ?? pause);
+  const harvest = () => void harvestW.run(actions?.harvestGlossary ?? pause);
 
   const readSort = useSort(readability, {
     title: (r) => r.title,
@@ -163,7 +145,7 @@ export function InsightsWidgets({
       await actions.resolveGlossaryTerm({ id: c.id, accept });
     } catch (err) {
       setHidden((h) => h.filter((id) => id !== c.id));
-      setGlossErr(err instanceof Error ? err.message : "Could not save that term.");
+      setGlossErr(why(err, "Could not save that term."));
     }
   };
 
@@ -172,6 +154,7 @@ export function InsightsWidgets({
      unreachable. Both page a screenful at a time and say what they are
      holding back (§13: the count strip sits above the list). */
   const [readShown, setReadShown] = useState(PAGE);
+  const [allActivity, setAllActivity] = useState(false);
   const [glossShown, setGlossShown] = useState(PAGE);
   const readRows = readSort.sorted.slice(0, readShown);
   const glossRows = candidates.slice(0, glossShown);
@@ -228,18 +211,34 @@ export function InsightsWidgets({
         <Card
           icon={<IconRing tone="info"><Search size={15} /></IconRing>}
           title="LLM readability"
-          actions={<Button compact disabled={scoring} onClick={score}>{scoring ? "Scoring…" : "Score docs"}</Button>}
+          actions={<Button compact disabled={scoreW.busy} onClick={score}>{scoreW.busy ? "Scoring…" : "Score docs"}</Button>}
           variant="flush"
         >
-          {scoreErr && <div className="px-4 pb-1"><FieldError>{scoreErr}</FieldError></div>}
+          {/* XA-02: a refused re-score names no input, so it is a banner beside
+              the control that fired. */}
+          <div className="px-4 pb-1 empty:hidden">
+            <WriteError onDismiss={() => scoreW.setFailed(null)}>{scoreW.failed}</WriteError>
+          </div>
           {readability.length === 0 ? (
             <EmptyState icon={<Search size={24} />} title="Nothing scored yet">Score your documents to see readability grades.</EmptyState>
           ) : (
             <>
-            {/* §13: the count strip renders above the rows it describes. */}
-            <p className="px-4 pb-2 font-term text-[11px] text-ink/65">
-              Showing {readRows.length.toLocaleString("en-US")} of {readSort.sorted.length.toLocaleString("en-US")} scored documents
-            </p>
+            {/* XA-09: the count sentence and its "Show N more" were written out
+                here; both come from the shared strip now, still above the rows
+                they describe (§13). */}
+            <ResultCount
+              from={readSort.sorted.length === 0 ? 0 : 1}
+              to={readRows.length}
+              total={readSort.sorted.length}
+              noun="scored documents"
+              actions={readSort.sorted.length > PAGE && (
+                <ShowRest
+                  expanded={readShown >= readSort.sorted.length}
+                  total={readSort.sorted.length}
+                  onToggle={() => setReadShown((n) => (n >= readSort.sorted.length ? PAGE : readSort.sorted.length))}
+                />
+              )}
+            />
             <Scrollable>
               <table className="w-full border-collapse text-left">
                 <thead>
@@ -276,13 +275,6 @@ export function InsightsWidgets({
                 </tbody>
               </table>
             </Scrollable>
-            {readShown < readSort.sorted.length && (
-              <div className="px-4 pt-3">
-                <Button compact onClick={() => setReadShown((n) => n + PAGE)}>
-                  Show {Math.min(PAGE, readSort.sorted.length - readShown)} more
-                </Button>
-              </div>
-            )}
             </>
           )}
           <p className="px-4 py-3 text-[12px] text-ink/70">Deterministic A to C grades from the local model. Re-run scoring after big edits.</p>
@@ -292,21 +284,36 @@ export function InsightsWidgets({
         <Card
           icon={<IconRing tone="ok"><BookOpen size={15} /></IconRing>}
           title="Glossary health"
-          actions={<Button compact disabled={harvesting} onClick={harvest}>{harvesting ? "Harvesting…" : "Harvest terms"}</Button>}
+          actions={<Button compact disabled={harvestW.busy} onClick={harvest}>{harvestW.busy ? "Harvesting…" : "Harvest terms"}</Button>}
         >
-          {(harvestErr ?? glossErr) && <FieldError>{harvestErr ?? glossErr}</FieldError>}
-          {harvesting && (
+          {/* Both writes on this card report through one banner: neither a
+              refused harvest nor a refused accept/dismiss accuses an input. */}
+          <WriteError onDismiss={() => { harvestW.setFailed(null); setGlossErr(null); }}>
+            {harvestW.failed ?? glossErr}
+          </WriteError>
+          {harvestW.busy && (
             <div className="mb-3 flex items-center gap-2 font-term text-[12px] text-ink/70">
               <Sparkles size={13} className="text-biscay-2" /> Scanning documents for candidate terms…
             </div>
           )}
-          {candidates.length === 0 && !harvesting ? (
+          {candidates.length === 0 && !harvestW.busy ? (
             <EmptyState icon={<BookOpen size={24} />} title="All clear">No inconsistencies pending. Harvest to re-check.</EmptyState>
           ) : (
             <>
-            <p className="pb-2 font-term text-[11px] text-ink/65">
-              Showing {glossRows.length.toLocaleString("en-US")} of {candidates.length.toLocaleString("en-US")} candidate terms
-            </p>
+            <ResultCount
+              className="-mx-4 mb-2"
+              from={candidates.length === 0 ? 0 : 1}
+              to={glossRows.length}
+              total={candidates.length}
+              noun="candidate terms"
+              actions={candidates.length > PAGE && (
+                <ShowRest
+                  expanded={glossShown >= candidates.length}
+                  total={candidates.length}
+                  onToggle={() => setGlossShown((n) => (n >= candidates.length ? PAGE : candidates.length))}
+                />
+              )}
+            />
             <ul className="flex flex-col divide-y divide-ink/10">
               {glossRows.map((c) => (
                 <li key={c.id} className="flex items-start gap-3 py-3 first:pt-0">
@@ -326,13 +333,6 @@ export function InsightsWidgets({
                 </li>
               ))}
             </ul>
-            {glossShown < candidates.length && (
-              <div className="pt-3">
-                <Button compact onClick={() => setGlossShown((n) => n + PAGE)}>
-                  Show {Math.min(PAGE, candidates.length - glossShown)} more
-                </Button>
-              </div>
-            )}
             </>
           )}
         </Card>
@@ -350,10 +350,19 @@ export function InsightsWidgets({
           /* The slice used to be silent: 400 events in, 8 rendered, nothing
              said so. Cutting data is fine; hiding that you cut it is not. */
           <>
-            <p className="pb-2 font-term text-[11px] text-ink/65">
-              Showing {Math.min(8, shownActivity.length)} of {shownActivity.length.toLocaleString("en-US")} events
-            </p>
-            <ActivityFeed items={shownActivity.slice(0, 8)} />
+            {/* The feed capped at eight with no way to see the rest; the strip
+                now carries the standard expand control (XA-08/XA-09). */}
+            <ResultCount
+              className="-mx-4 mb-2"
+              from={shownActivity.length === 0 ? 0 : 1}
+              to={allActivity ? shownActivity.length : Math.min(ACTIVITY_CAP, shownActivity.length)}
+              total={shownActivity.length}
+              noun="events"
+              actions={shownActivity.length > ACTIVITY_CAP && (
+                <ShowRest expanded={allActivity} total={shownActivity.length} onToggle={() => setAllActivity((v) => !v)} />
+              )}
+            />
+            <ActivityFeed items={allActivity ? shownActivity : shownActivity.slice(0, ACTIVITY_CAP)} />
           </>
         )}
       </Card>

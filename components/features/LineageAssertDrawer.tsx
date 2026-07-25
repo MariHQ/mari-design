@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
-import { Sparkles, Send, Globe, ChevronDown } from "lucide-react";
+import { Sparkles, Globe, ChevronDown } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
+import { ExportButton } from "../actions/RepeatedActions";
+import { why } from "../actions/useWrite";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
 import { AvatarGroup } from "../data-display/AvatarGroup";
+import { ResultCount } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
 import { SkeletonCircle, SkeletonLine, SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
@@ -98,7 +101,7 @@ export function LineageAssertDrawer({
       setResult(next);
       setAnalyzedAt("just now");
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "The analysis could not run.");
+      setFailed(why(err, "The analysis could not run."));
     } finally {
       setRunning(false);
     }
@@ -165,9 +168,9 @@ export function LineageAssertDrawer({
               </Button>
             }
             secondary={
-              <Button onClick={() => setExported(true)}>
-                <Send size={13} /> {exported ? "Report exported" : "Export report"}
-              </Button>
+              // <Send> said "this goes somewhere else"; the report lands on the
+              // reader's own machine, so it carries the Download glyph (§16).
+              <ExportButton format="report" state={exported ? "done" : "idle"} onClick={() => setExported(true)} />
             }
           />
           <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/65">
@@ -191,7 +194,10 @@ export function LineageAssertDrawer({
             <Sparkles size={14} /> {running ? "Analyzing…" : "Analyze"}
           </Button>
         </div>
-        {failed && <FieldError>{failed}</FieldError>}
+        {/* A refused analysis is a failed ACTION, not bad input: nothing the
+            reader retypes in the assertion field fixes it, so it gets the
+            banner every other failed write gets, not a field caption (§8). */}
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
 
         {/* Slots 4 + 5: the claim under analysis and what came back. */}
         <CardTitleBlock
@@ -202,9 +208,13 @@ export function LineageAssertDrawer({
         <CardMeta
           source={<Chip label="All reachable documents" tone="neutral" icon={<Globe size={11} />} />}
           status={
+            /* XA-25: "running" was clay/attention here and moss/ok-pulsing in
+               StatusChip, the console's declared source of truth for status
+               pills. Clay means "a person has to look at this"; a running
+               analysis needs nobody. Same tone as every other running thing. */
             <Chip
               label={stateWord}
-              tone={state === "running" ? "attention" : state === "completed" ? "ok" : "neutral"}
+              tone={state === "ready" ? "neutral" : "ok"}
               dot
               pulse={state === "running"}
             />
@@ -260,6 +270,15 @@ export function LineageAssertDrawer({
             </p>
           ) : (
             <>
+              {/* One count strip, and it sits ABOVE the rows it counts (§13).
+                  It used to be a bespoke span under the list. */}
+              <ResultCount
+                from={1}
+                to={shown.length}
+                total={matching.length}
+                noun="documents"
+                className="mb-2 rounded-[4px] border border-ink/10"
+              />
               {shown.map((d, i) => (
                 <div key={i} className="border-b border-ink/10 py-2 last:border-0">
                   <div className="flex items-center gap-2">
@@ -272,16 +291,13 @@ export function LineageAssertDrawer({
                   </div>
                 </div>
               ))}
-              <div className="mt-2.5 flex items-center gap-3">
-                {hiddenDocs > 0 && (
+              {hiddenDocs > 0 && (
+                <div className="mt-2.5">
                   <Button compact onClick={() => setDocPage((p) => p + 1)}>
                     Show {Math.min(hiddenDocs, DOC_PAGE)} more
                   </Button>
-                )}
-                <span className="font-term text-[11px] text-ink/65">
-                  Showing {shown.length} of {matching.length} documents
-                </span>
-              </div>
+                </div>
+              )}
             </>
           )}
         </CardSection>

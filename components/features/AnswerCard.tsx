@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -9,7 +8,9 @@ import { StatusChip, Chip, type ChipStatus } from "../data-display/Chip";
 import { Avatar } from "../data-display/Avatar";
 import { Sparkline } from "../data-display/Sparkline";
 import { Truncate } from "../data-display/Truncate";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
+import { ShowRest } from "../data-display/ShowRest";
+import { why } from "../actions/useWrite";
 import { SourceMark } from "../icons/marks";
 import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
@@ -57,9 +58,6 @@ export type AnswerActions = {
   /** Replace the set of channels that serve this answer. */
   setChannels?: (args: { id: number; channels: Channel[] }) => void | Promise<void>;
 };
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 export type AnswerCardProps = {
   answer: Answer;
@@ -195,7 +193,9 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
             {n.toLocaleString("en-US")} characters
             {n > LONG_ANSWER ? `. Over ${LONG_ANSWER} characters, most chat clients fold the answer behind "see more".` : ""}
           </p>
-          <FieldError>{failed}</FieldError>
+          {/* XA-02: a refused save has no single input to sit under, so it is a
+              banner beside the control that fired, not 12px under the textarea. */}
+          <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
           <div className="flex items-center gap-2">
             <Button variant="primary" compact disabled={!editQ.trim() || !editA.trim() || busy === "save"} onClick={saveEdit}>{busy === "save" ? "Saving…" : "Save"}</Button>
             <Button compact onClick={() => setEditing(false)}>Cancel</Button>
@@ -226,10 +226,14 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
                 /* Expanded on request: the reader asked for the whole value, so
                    it wraps rather than truncates (CONVENTIONS.md §12). */
                 : <span className="block [overflow-wrap:anywhere]">{a.answer}</span>}
+              {/* XA-08: "Show more"/"Show less" was a ninth spelling of the one
+                  expand affordance. Same control, same words, everywhere. */}
               {long && (
-                <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-1 inline-flex items-center gap-1 font-term text-[11.5px] text-biscay-2 hover:text-ink">
-                  {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}{expanded ? "Show less" : "Show more"}
-                </button>
+                <ShowRest
+                  className="mt-1"
+                  expanded={expanded}
+                  onToggle={() => setExpanded((v) => !v)}
+                />
               )}
             </>
           )}
@@ -304,7 +308,9 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
           </CardSection>
         )}
 
-        <FieldError>{failed}</FieldError>
+        {/* Approve/Retire and the channel toggles all report here; none of them
+            accuses an input, so all of them are WriteErrors (XA-02). */}
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
 
         {/* 11 + 12 — buttons, biggest action last */}
         <CardActions

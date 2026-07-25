@@ -10,7 +10,9 @@ import { DocReviewFindingsPanel, type DocClaim, type DocFinding, type FindingsAc
 import { PageHeader, Card, Button, Chip, Tabs, EmptyState, Alert, TagChip } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate } from "../data-display/Truncate";
-import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
 
 /* Doc Review workspace (pages/doc-review.md). A multi-pane editor: outline +
    revisions on the left, the block editor in the centre, refine on the right,
@@ -34,7 +36,7 @@ const STATES = [
   { id: "applied", label: "Saved" },
   { id: "offline-dirty", label: "Offline · unsaved" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty document" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -89,9 +91,6 @@ export type DocReviewActions = ChangeQueueActions & RefineActions & FindingsActi
   openLibrary?: () => void;
 };
 
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
-
 /** Everything the Doc Review page renders. */
 export type DocReviewData = {
   title: string;
@@ -139,7 +138,10 @@ function HeaderActions({ save, onSave, onWatch, onShare, watched, tags }: {
   const applied = save === "applied";
 
   const statusChip = offlineDirty ? (
-    <span className="text-[12px] font-medium text-espelette">API offline: can't save</span>
+    /* A document that will not save is a failed WRITE, and it gets the same
+       surface every other failed write gets. This was a bespoke inline span
+       carrying its own error string, which §8 forbids (XA-02). */
+    <WriteError>Changes are kept locally until the connection returns.</WriteError>
   ) : saving ? (
     <Chip label="Saving…" tone="info" dot />
   ) : dirty ? (
@@ -266,9 +268,11 @@ function Body({ data, error, actions, mobile, onBodyChange, onSave }: {
 }) {
   const doc = data.doc;
   if (error) {
+    /* An empty state says "nothing here yet"; a failed read says the request
+       did not come back. They are not the same sentence (§8, XA-01). */
     return (
       <Card>
-        <EmptyState title="API offline">{error}</EmptyState>
+        <ReadError>{error}</ReadError>
       </Card>
     );
   }
@@ -354,7 +358,11 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
   const [save, setSave] = useState<SaveState | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const [watch, setWatch] = useState<boolean | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
+  /* One hook for both writes on this page (XA-04). `save` keeps its own
+     five-value lifecycle — "saving" and "applied" are states the header reads,
+     not just "not busy" — so the hook supplies the failure surface and the
+     lifecycle stays where it was. */
+  const write = useWrite();
 
   const saveState = save ?? data.save;
   /* Seeded from the document, not from `false`: a document you already watch
@@ -372,24 +380,15 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
   const onSave = async () => {
     if (!actions?.save || body === null) return;
     setSave("saving");
-    setFailed(null);
-    try {
-      await actions.save({ body });
-      setSave("applied");
-    } catch (e) {
-      setSave("dirty");
-      setFailed(why(e, "This document could not be saved."));
-    }
+    const ok = await write.run(() => actions.save!({ body }), () => setSave("applied"));
+    if (!ok) setSave("dirty");
   };
 
   const onWatch = async () => {
     if (!actions?.toggleWatch) { setWatch((v) => !(v ?? data.watched ?? false)); return; }
-    setFailed(null);
-    try {
-      setWatch(await actions.toggleWatch());
-    } catch (e) {
-      setFailed(why(e, "That subscription could not be changed."));
-    }
+    // `runFor`: the new watched state is the server's answer, not an assumption.
+    const next = await write.runFor(actions.toggleWatch);
+    if (next !== undefined) setWatch(next);
   };
 
   const headerActions = (
@@ -421,7 +420,9 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
         />
         <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">{data.subtitle}</Truncate>
         {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
-        <FieldError>{failed}</FieldError>
+        {/* A failed save or a refused subscription accuses no input, so it is a
+            banner beside the header's controls (XA-02). */}
+        <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
         <div className="mt-6 flex flex-col gap-5">
           <Body
             data={{ ...data, save: saveState }}

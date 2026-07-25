@@ -10,6 +10,7 @@ import { Skeleton, SkeletonLine, SkeletonCircle } from "../data-display/Skeleton
 import { Logo } from "../shell/Logo";
 import { GithubMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
+import { useResync } from "../actions/useResync";
 
 /* Auth session (AuthProvider / useAuth) ───────────────────────────────────
    The cookie-session identity feature, rendered here as a SELF-CONTAINED
@@ -48,6 +49,14 @@ export type AuthSessionProps = {
 
 export function AuthSession({ initialUser = null, signedInAs, bypassEnabled = true, oauth = { github: true, google: false }, loading = false, className = "" }: AuthSessionProps) {
   const [user, setUser] = useState<AuthUser | null>(initialUser);
+
+  /* The session was read once, at mount. A session that resolves after the
+     first paint — which is the normal case, since the identity call is
+     asynchronous — therefore never signed the reader in, and the panel kept
+     offering a sign-in form to somebody already signed in (C1). The sign-in
+     form's own fields are separate state, so adopting `user` cannot clobber a
+     half-typed credential and nothing is held. */
+  useResync(initialUser, setUser);
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

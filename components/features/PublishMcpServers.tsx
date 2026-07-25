@@ -10,6 +10,7 @@ import { Select } from "../forms/Select";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Chip, ChipList, CountChip } from "../data-display/Chip";
 import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { CodeBlock } from "../data-display/CodeBlock";
 import { EmptyState } from "../data-display/EmptyState";
@@ -18,6 +19,7 @@ import { Skeleton, SkeletonLine, SkeletonButton, SkeletonCard } from "../data-di
 import { focusRing } from "../tokens/focusRing";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
+import { useResync } from "../actions/useResync";
 
 /* Publish · MCP servers ───────────────────────────────────────────────────
    Expose the curated knowledge base to Claude and other agents as
@@ -133,6 +135,18 @@ export function PublishMcpServers({
   const [showAll, setShowAll] = useState(false);
   const PAGE = 8;
 
+  /* All three were read once, at mount (C1). `revealServer` is the one that
+     bit: the page hands the newly minted token down after `createServer`
+     round-trips, and a value captured at mount meant the panel never showed
+     the secret at the only moment it is showable. The roster follows the
+     server unless the create form is open, which would orphan the draft the
+     reader is filling in. `web/src/data/publish.ts` memoises the mapped page
+     data on the raw query answer, so `servers` is referentially stable;
+     `revealServer` is a small object the page rebuilds inline, so it is
+     compared on the token it carries. */
+  useResync(initialServers, setServers, { hold: creating });
+  useResync(revealServer, setFresh, { key: revealServer?.token ?? null });
+
   const toggleCap = (setter: (fn: (c: string[]) => string[]) => void) => (k: string) =>
     setter((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
 
@@ -223,9 +237,7 @@ export function PublishMcpServers({
               from={1} to={showAll ? servers.length : Math.min(PAGE, servers.length)} total={servers.length} noun="servers"
               className="border-b-0"
               actions={servers.length > PAGE && (
-                <Button variant="link" compact onClick={() => setShowAll((v) => !v)}>
-                  {showAll ? "Show fewer" : `Show all ${servers.length}`}
-                </Button>
+                <ShowRest expanded={showAll} total={servers.length} onToggle={() => setShowAll((v) => !v)} />
               )}
             />
           </div>
@@ -257,6 +269,15 @@ function ServerCard({ server, freshToken, onDelete, onSave, onTest }: {
   const [testing, setTesting] = useState(false);
   const [draftScope, setDraftScope] = useState<McpScope>(normalizeScope(server.scope));
   const [draftCaps, setDraftCaps] = useState<string[]>(server.capabilities);
+
+  /* The configure drawer's drafts were copied out of `server` once, so a card
+     re-rendered with a reconfigured server kept offering the old scope and
+     capabilities (C1). Held while the drawer is open: adopting mid-configure
+     would discard the change the reader is about to save. */
+  useResync(server, (sv) => { setDraftScope(normalizeScope(sv.scope)); setDraftCaps(sv.capabilities); }, {
+    hold: open === "configure",
+    key: `${server.scope}\u0000${server.capabilities.join()}`,
+  });
 
   const runTest = async () => {
     setOpen("test");

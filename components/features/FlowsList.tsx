@@ -9,6 +9,9 @@ import { Truncate } from "../data-display/Truncate";
 import { EmptyState } from "../data-display/EmptyState";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
+import { why } from "../actions/useWrite";
 import { Switch } from "../forms/Switch";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
@@ -19,7 +22,7 @@ import { Menu, MenuItem } from "../navigation/Menu";
 import { type RunStatus } from "../workflow/RunHistory";
 import { RunStatusChips } from "./FlowsRunPanel";
 import { Skeleton, SkeletonLine, SkeletonCard, SkeletonList } from "../data-display/Skeleton";
-import { FieldError } from "../feedback/ErrorMessage";
+import { WriteError } from "../feedback/WriteError";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { fmtDateTime, type DateInput } from "../tokens/format";
@@ -269,7 +272,7 @@ export function FlowsList({
     } catch (err) {
       setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, status: f.status } : r)));
       setNote(null);
-      setFailed(err instanceof Error ? err.message : `Could not turn ${f.name} ${enabled ? "on" : "off"}.`);
+      setFailed(why(err, `Could not turn ${f.name} ${enabled ? "on" : "off"}.`));
     }
   };
 
@@ -283,7 +286,7 @@ export function FlowsList({
     } catch (err) {
       setRows((rs) => (rs.some((r) => r.id === f.id) ? rs : [...rs, f]));
       setNote(null);
-      setFailed(err instanceof Error ? err.message : `Could not delete ${f.name}.`);
+      setFailed(why(err, `Could not delete ${f.name}.`));
     }
   };
 
@@ -297,7 +300,7 @@ export function FlowsList({
       else await new Promise((r) => setTimeout(r, 600));
       setNote(`Started ${f.name}${dryRun ? " as a test run" : ""}. Watch the run marks for its result.`);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : `Could not start ${f.name}.`);
+      setFailed(why(err, `Could not start ${f.name}.`));
     } finally {
       setRunning(null);
     }
@@ -328,7 +331,7 @@ export function FlowsList({
     } catch (err) {
       setRows((rs) => rs.filter((r) => r.id !== id));
       setNote(null);
-      setFailed(err instanceof Error ? err.message : `Could not create "${name}".`);
+      setFailed(why(err, `Could not create "${name}".`));
     }
   };
 
@@ -343,7 +346,7 @@ export function FlowsList({
     } catch (err) {
       setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, trigger: f.trigger } : r)));
       setNote(null);
-      setFailed(err instanceof Error ? err.message : `Could not save the trigger for ${f.name}.`);
+      setFailed(why(err, `Could not save the trigger for ${f.name}.`));
     }
   };
 
@@ -397,18 +400,15 @@ export function FlowsList({
           <>
           {/* Row count above the table it describes (§13). A workspace can hold
               hundreds of flows; the table renders a page of them and scrolls. */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 px-4 pb-2.5">
-            <span className="font-term text-[11.5px] text-ink/65">
-              {visible.length < sorted.length
-                ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} flows`
-                : `Showing all ${sorted.length.toLocaleString()} flow${sorted.length === 1 ? "" : "s"}`}
-            </span>
-            {sorted.length > PAGE && (
-              <Button variant="link" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-                {showAll ? "Show fewer" : "Show all"}
-              </Button>
-            )}
-          </div>
+          <ResultCount
+            from={1}
+            to={visible.length}
+            total={sorted.length}
+            noun="flows"
+            actions={sorted.length > PAGE
+              ? <ShowRest expanded={showAll} total={sorted.length} onToggle={() => setShowAll((v) => !v)} />
+              : undefined}
+          />
           <Scrollable axis="both" style={{ maxHeight: visible.length > 8 ? 540 : undefined }}>
             <table className="w-full border-collapse text-left" style={{ minWidth: 760 }}>
               <thead>
@@ -491,7 +491,10 @@ export function FlowsList({
           </Scrollable>
           </>
         )}
-        {failed && <div className="border-t border-ink/10 px-4 py-2.5"><FieldError>{failed}</FieldError></div>}
+        {/* A refused toggle, delete, run, create or trigger save is a failed
+            WRITE, not one named input being wrong, so it gets the banner and
+            not a field caption (§8). */}
+        {failed && <div className="border-t border-ink/10 px-4 py-2.5"><WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError></div>}
         {note && !failed && <div className="border-t border-ink/10 px-4 py-2.5 font-term text-[11.5px] text-moss">{note}</div>}
       </div>
 

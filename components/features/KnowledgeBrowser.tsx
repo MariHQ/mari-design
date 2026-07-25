@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Search, X, Bookmark, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, X, Bookmark, ArrowUpDown } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -15,6 +15,8 @@ import { fmtDate } from "../tokens/format";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle, SkeletonChip } from "../data-display/Skeleton";
 import { Truncate } from "../data-display/Truncate";
 import { Scrollable } from "../data-display/Scrollable";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 
 /* KnowledgeBrowser — the filter rail + results feed of the Knowledge page.
    A faceted filter rail, a debounced search box, result-type tabs, sort, and
@@ -95,10 +97,10 @@ function FacetGroup({ name, rows }: { name: string; rows: FacetRowData[] }) {
     <div>
       <h4 className="font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink/65 mb-1.5">{name}</h4>
       <div>{shown.map((r) => <FacetRow key={r.label} row={r} />)}</div>
+      {/* XA-08: the rail had its own "Show more"/"Show fewer" wording and its
+          own chevrons. One control, one phrasing, everywhere. */}
       {rows.length > 4 && (
-        <button type="button" onClick={() => setOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 font-term text-[11px] text-biscay-2 hover:text-ink">
-          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{open ? "Show fewer" : "Show more"}
-        </button>
+        <ShowRest className="mt-1" expanded={open} total={rows.length} onToggle={() => setOpen((v) => !v)} />
       )}
     </div>
   );
@@ -420,22 +422,17 @@ export function KnowledgeBrowser({
         {/* KnowledgeResult count above the list (§13). A real corpus returns hundreds of
             documents, so the feed renders one page at a time and says how many
             of how many it is showing rather than laying out 400 cards. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-term text-[11.5px] text-ink/65">
-            {sorted.length === 0
-              ? "No results"
-              : paged
-                /* Two different numbers, never conflated: how many of the
-                   loaded rows the filters left, and how many the search
-                   matched corpus-wide. */
-                ? sorted.length < loaded
-                  ? `Showing ${sorted.length.toLocaleString()} of ${loaded.toLocaleString()} loaded · ${total!.toLocaleString()} match this search`
-                  : `Showing ${loaded.toLocaleString()} of ${total!.toLocaleString()} result${total === 1 ? "" : "s"}`
-                : visible.length < sorted.length
-                  ? `Showing ${visible.length} of ${sorted.length.toLocaleString()} results`
-                  : `Showing all ${sorted.length.toLocaleString()} result${sorted.length === 1 ? "" : "s"}`}
-          </span>
-          {paged
+        {/* XA-09: five hand-rolled count sentences with their own pluralisation
+            and thousands separators. The shared strip owns all of that; the two
+            numbers that must never be conflated (rows the filters left, rows the
+            search matched corpus-wide) stay apart as the count and its note. */}
+        <ResultCount
+          from={sorted.length === 0 ? 0 : 1}
+          to={visible.length}
+          total={paged ? total! : sorted.length}
+          noun="results"
+          note={paged && sorted.length < loaded ? `${loaded.toLocaleString("en-US")} loaded so far` : undefined}
+          actions={paged
             ? loaded < total! && onShowMore && (
               <Button variant="link" onClick={onShowMore}>
                 Show {Math.min(PAGE, total! - loaded)} more
@@ -453,7 +450,7 @@ export function KnowledgeBrowser({
                 )}
               </>
             )}
-        </div>
+        />
 
         {sorted.length === 0 ? (
           <Card><EmptyState icon={<Search size={20} />} title="No results">No results match these filters.</EmptyState></Card>

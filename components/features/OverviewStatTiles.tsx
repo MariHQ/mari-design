@@ -39,7 +39,7 @@ export type OverviewStatTilesProps = {
   stats: OverviewStats | null;
   /** Force the loading (spinner) state. */
   loading?: boolean;
-  /** No data + not loading → "API offline" placeholders. */
+  /** No data + not loading → unavailable placeholders. */
   offline?: boolean;
   /** Show the solid accent line on the tile's left edge. */
   swatch?: boolean;

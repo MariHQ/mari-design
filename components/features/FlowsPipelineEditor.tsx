@@ -8,6 +8,8 @@ import {
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { DryChip } from "../data-display/Chip";
+import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { Truncate } from "../data-display/Truncate";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
@@ -333,16 +335,16 @@ export function FlowsPipelineEditor({
           {/* Step count above the spine (§13). A long flow renders one page of
               steps rather than a spine thousands of pixels tall. */}
           {steps.length > STEP_PAGE && (
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="font-term text-[11.5px] text-ink/65">
-                {allSteps
-                  ? `Showing all ${steps.length.toLocaleString()} steps`
-                  : `Showing ${STEP_PAGE} of ${steps.length.toLocaleString()} steps`}
-              </span>
-              <Button variant="link" aria-expanded={allSteps} onClick={() => setAllSteps((v) => !v)}>
-                {allSteps ? "Show fewer" : "Show all"}
-              </Button>
-            </div>
+            /* Counts what is actually on the spine. It used to name the STEP_PAGE
+               constant, which is a number about the cap rather than the render. */
+            <ResultCount
+              from={1}
+              to={visibleSteps.length}
+              total={steps.length}
+              noun="steps"
+              className="mb-2 rounded-[4px] border border-ink/10"
+              actions={<ShowRest expanded={allSteps} total={steps.length} onToggle={() => setAllSteps((v) => !v)} />}
+            />
           )}
           <ol className="flex flex-col gap-1">
             {visibleSteps.map((s, i) => {

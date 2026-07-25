@@ -14,10 +14,10 @@ import { Switch } from "../forms/Switch";
 import { normalizeTimezone, timezoneOptions } from "../tokens/timezones";
 import { Avatar } from "../data-display/Avatar";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
-import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Alert } from "../feedback/Alert";
 import { useWrite } from "../actions/useWrite";
+import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 
 /* Preferences — the signed-in person's own account.
@@ -37,7 +37,7 @@ import { WriteError } from "../feedback/WriteError";
 const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "editing", label: "Dirty / unsaved" },
   { id: "saved", label: "Just saved" },
   { id: "oauth", label: "OAuth account (no password)" },
@@ -359,7 +359,8 @@ function AccountDangerZone({ actions }: { actions?: PreferencesActions }) {
 }
 
 function Body({ data, error, actions }: { data: PreferencesData; error: string | null; actions?: PreferencesActions }) {
-  if (error) return <EmptyState icon={<UserRound size={22} />} title="API offline">{error}</EmptyState>;
+  // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
+  if (error) return <ReadError>{error}</ReadError>;
   return (
     <>
       <ProfileCard data={data} actions={actions} />

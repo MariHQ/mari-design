@@ -28,12 +28,9 @@ import {
   ImpactPanel, DecisionCard, DigestCard, ConnectorCard, TokenReveal, TagChip,
   // chat (wave 1)
   ChatDock, type ChatMessageData,
-  // workflow (wave 1)
-  PipelineView, RunHistory, RunPanel, WorkflowScreen,
-  type WorkflowStep, type WorkflowRun,
   // navigation
   Tabs, Menu, MenuItem, MenuCheckboxItem, MenuLabel, MenuSeparator,
-  Popover, Tooltip, Breadcrumb, CommandPalette, NotificationBell,
+  Popover, Tooltip, Breadcrumb, NotificationBell,
   ContextMenu, ContextMenuItem, ContextMenuSeparator,
   // feedback
   Toaster, useToast, Alert,
@@ -139,42 +136,6 @@ const CHAT_SEED: ChatMessageData[] = [
     ],
   },
   { id: "w1", role: "warning", content: "Running in local mode — gemma3, your own permissions." },
-];
-
-const wfSteps: WorkflowStep[] = [
-  { id: "trigger", section: "when", label: "When docs change", summary: "Watches docs matching “authentication” · scheduled scan" },
-  { id: "fetch", section: "do", label: "Fetch docs", summary: "matching “authentication” · top 3" },
-  { id: "refine", section: "do", label: "Refine prose", summary: "Mari skill: tighten — proposes edits", llm: true },
-  { id: "factcheck", section: "do", label: "Verify facts", summary: "against accepted facts · reports contradictions", llm: true },
-  { id: "cond", section: "check", label: "Contradictions?", summary: "branch when contradictions > 0" },
-  { id: "task", section: "then", label: "Create task", summary: "“Resolve contradictions” → Aki K.", branch: true, branchLabel: "if contradictions > 0" },
-  { id: "notify", section: "then", label: "Notify", summary: "“Docs guardrail ran” → team" },
-];
-const wfRuns: WorkflowRun[] = [
-  {
-    id: "r-104", number: 104, workflowName: "Docs guardrail", status: "waiting",
-    started: "2026-07-21T14:57:00", duration: "00:00:42", triggeredBy: "docs/auth.md updated",
-    headline: "Paused — 2 contradictions need review",
-    rows: [
-      { step: "When docs change", status: "passed", detail: "12 docs in scope", duration: "<1s" },
-      { step: "Fetch docs", status: "passed", detail: "3 docs fetched", duration: "1s" },
-      { step: "Verify facts", status: "passed", detail: "2 contradictions found", duration: "6s" },
-      { step: "Approval", status: "waiting", detail: "Aki K. must approve before tasks open" },
-      { step: "Create task", status: "pending", detail: "waiting on approval" },
-    ],
-    stats: [{ label: "Edits", value: 4 }, { label: "Contradictions", value: 2, bad: true }, { label: "Facts", value: 18 }],
-  },
-  {
-    id: "r-103", number: 103, workflowName: "Docs guardrail", status: "passed",
-    started: "2026-07-21T11:30:00", duration: "00:00:31", headline: "No contradictions — clean pass", dry: true,
-    rows: [
-      { step: "Fetch docs", status: "passed", detail: "3 docs fetched", duration: "1s" },
-      { step: "Verify facts", status: "passed", detail: "0 contradictions", duration: "5s" },
-      { step: "Create task", status: "skipped", detail: "yes-branch not taken" },
-    ],
-    stats: [{ label: "Edits", value: 3 }, { label: "Contradictions", value: 0 }],
-  },
-  { id: "r-102", number: 102, workflowName: "Docs guardrail", status: "failed", started: "2026-07-20T09:12:00", duration: "00:00:08", headline: "API offline — fetch failed" },
 ];
 
 const cardImpactDocs = [
@@ -588,7 +549,6 @@ function Gallery() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [inlineOpen, setInlineOpen] = useState(true);
-  const [cmdOpen, setCmdOpen] = useState(false);
   const [check1, setCheck1] = useState(true);
 
   // wave-1 state
@@ -600,9 +560,6 @@ function Gallery() {
   const [tblSelected, setTblSelected] = useState<TblDoc[]>([]);
   const [mdDoc, setMdDoc] = useState(mdSample);
   const [cardTags, setCardTags] = useState<string[]>(["canonical", "customer-facing"]);
-  const [wfStage, setWfStage] = useState<string | null>("fetch");
-  const [wfRunId, setWfRunId] = useState<string | null>(null);
-  const wfRun = wfRuns.find((r) => r.id === wfRunId) ?? null;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
@@ -902,9 +859,6 @@ function Gallery() {
             { id: "2", title: "New comment", time: "1h" },
           ]} />
         </Row>
-        <Row label="CommandPalette">
-          <Button compact onClick={() => setCmdOpen(true)}><Search size={14} /> Open palette</Button>
-        </Row>
       </Section>
 
       {/* FEEDBACK */}
@@ -1068,32 +1022,6 @@ function Gallery() {
         </Row>
       </Section>
 
-      {/* WORKFLOW / FLOWS (wave 1) */}
-      <Section id="workflow" title="Workflow / Flows">
-        <Row label="WorkflowScreen">
-          <div className="w-full">
-            <WorkflowScreen
-              name="Docs guardrail"
-              description="Never merge a PR that contradicts your facts."
-              steps={wfSteps}
-              runs={wfRuns}
-              defaultStageId="fetch"
-              onApprove={(r) => toast(`Approved run #${r.number}`, "success")}
-              onRerun={(r, dry) => toast(`Re-running #${r.number}${dry ? " as test" : ""}`)}
-            />
-          </div>
-        </Row>
-        <Row label="PipelineView">
-          <div className="w-full"><PipelineView steps={wfSteps} selectedId={wfStage} onSelect={setWfStage} /></div>
-        </Row>
-        <Row label="RunHistory">
-          <div className="w-full"><RunHistory runs={wfRuns} selectedId={wfRunId} onSelect={(r) => setWfRunId(r.id)} /></div>
-        </Row>
-        <Row label="RunPanel">
-          <div className="w-full max-w-[380px]"><RunPanel run={wfRun} onClose={() => setWfRunId(null)} onApprove={(r) => toast(`Approved #${r.number}`, "success")} onRerun={() => {}} /></div>
-        </Row>
-      </Section>
-
       {/* WAVE 2 — app shell, search, icons, connect/sync, insights, generics */}
       <ShellDemo />
       <SearchDemo />
@@ -1108,11 +1036,6 @@ function Gallery() {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Details" subtitle="Slide-over panel" icon={<FileText size={16} />} footer={<Button variant="primary" onClick={() => setDrawerOpen(false)}>Done</Button>}>
         <p className="text-[13px] text-ink/70">Drawer body content.</p>
       </Drawer>
-      <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} items={[
-        { id: "1", label: "Go to Deployments", icon: <Rocket size={14} />, onSelect: () => toast("Deployments") },
-        { id: "2", label: "New project", icon: <Plus size={14} />, onSelect: () => toast("New project") },
-        { id: "3", label: "Settings", icon: <Settings size={14} />, onSelect: () => toast("Settings") },
-      ]} />
     </main>
   );
 }

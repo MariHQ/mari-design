@@ -11,6 +11,9 @@ import { Alert } from "../feedback/Alert";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { GithubMark } from "../icons/marks";
 import { FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite, why } from "../actions/useWrite";
 import { focusRing } from "../tokens/focusRing";
 import { btnDisabled } from "../actions/buttons";
 
@@ -253,7 +256,7 @@ function TwoFactorForm({ digits, error, actions }: {
     try {
       await actions.verifyCode(value, trust);
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "That code was not accepted.");
+      setFailed(why(e, "That code was not accepted."));
     } finally {
       setBusy(false);
     }
@@ -288,7 +291,11 @@ function TwoFactorForm({ digits, error, actions }: {
         <input type="checkbox" className="accent-biscay" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
         Trust this browser and skip codes here
       </label>
-      {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
+      {/* XA-01/XA-02: one FieldError carried two different events. A refused
+          code or a failed resend is a write, and neither is a complaint about
+          one box; what the host handed the page is the read surface. */}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
+      {!failed && error && <ReadError>{error}</ReadError>}
       {resent && <div className="mt-3"><Alert tone="ok" title="New code sent">Enter the most recent code. Earlier codes no longer work.</Alert></div>}
       <div className={`mt-4 ${AUTH_ACTIONS}`}>
         <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
@@ -307,7 +314,7 @@ function TwoFactorForm({ digits, error, actions }: {
               setFailed(null);
               void (async () => {
                 try { await send(); setResent(true); }
-                catch (e) { setFailed(e instanceof Error ? e.message : "That code could not be sent."); }
+                catch (e) { setFailed(why(e, "That code could not be sent.")); }
                 finally { setResending(false); }
               })();
             }}
@@ -333,34 +340,24 @@ function TwoFactorForm({ digits, error, actions }: {
 }
 
 function BypassRow({ actions }: { actions?: LoginActions }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  // XA-04: hand-rolled busy/failed pair around one optional handler.
+  const write = useWrite();
   return (
     <>
       <div className={`my-3.5 ${DIVIDER}`}>or</div>
       <Button
         variant="default"
         className="w-full justify-center"
-        disabled={busy}
-        onClick={async () => {
-          if (!actions?.bypass) return;
-          setBusy(true);
-          setFailed(null);
-          try {
-            await actions.bypass();
-          } catch (e) {
-            setFailed(e instanceof Error ? e.message : "Could not sign in.");
-          } finally {
-            setBusy(false);
-          }
-        }}
+        disabled={write.busy}
+        onClick={() => { if (actions?.bypass) void write.run(() => actions.bypass!()); }}
       >
-        <KeyRound size={15} /> {busy ? "Signing in…" : "Continue as workspace admin"}
+        <KeyRound size={15} /> {write.busy ? "Signing in…" : "Continue as workspace admin"}
       </Button>
       <p className="mt-1.5 text-center text-[12px] text-ink/65">
-        Sign-in bypass is enabled on this server — anyone who can reach it has admin.
+        Sign-in bypass is enabled on this server: anyone who can reach it has admin.
       </p>
-      {failed && <FieldError>{failed}</FieldError>}
+      {/* XA-02: a refused sign-in sits beside a button, not under an input. */}
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
     </>
   );
 }
@@ -432,7 +429,7 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
       await send(email.trim());
       setSent(kind);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "That email could not be sent.");
+      setFailed(why(err, "That email could not be sent."));
     } finally {
       setSending(null);
     }
@@ -446,7 +443,7 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
     try {
       await run({ name, email, password, workspace: ws });
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Sign in failed.");
+      setFailed(why(err, "Sign in failed."));
     } finally {
       setBusy(false);
     }
@@ -485,7 +482,12 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
         </Field>
       )}
       {badEmail && <FieldError id="field.invalidEmail" />}
-      {(failed ?? error) && <FieldError>{failed ?? error}</FieldError>}
+      {/* XA-01/XA-02: `badEmail` above genuinely accuses the Email box and
+          stays a FieldError. This one is a refused sign-in, register or link
+          send, which no single box can fix, plus whatever the host handed the
+          page. Two events, two surfaces. */}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
+      {!failed && error && <ReadError>{error}</ReadError>}
       {sent === "magic" && (
         <Alert tone="ok" title="Sign-in link sent">
           We emailed a one-time sign-in link to {email.trim()}. Open it in this browser to finish signing in.

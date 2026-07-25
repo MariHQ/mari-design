@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { Shuffle } from "lucide-react";
 import { Card } from "../layout/Card";
 import { SourceMark } from "../icons/marks";
 import { Chip } from "./Chip";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
 import { SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
-import { Button } from "../actions/Button";
+import { ReadError } from "../feedback/ReadError";
+import { RefreshButton } from "../actions/RepeatedActions";
 
 /* DigestCard: Mari's weekly summary of what changed, surfaced on the Overview
    dashboard. Each topic lists where it surfaced (source chips), a one-line
@@ -47,11 +47,9 @@ export function DigestCard({
     <Card
       className={className}
       title={title}
-      actions={onRefresh && (
-        <Button compact onClick={onRefresh} disabled={regenerating}>
-          <Shuffle size={14} /> {regenerating ? "Refreshing…" : "Refresh digest"}
-        </Button>
-      )}
+      /* XA-23: a fourth spelling of Refresh, carrying a <Shuffle> glyph that
+         says "reorder these" rather than "fetch this again". */
+      actions={onRefresh && <RefreshButton compact busy={regenerating} onClick={onRefresh} />}
     >
       {regenerating && (
         <div className="mb-3 flex items-center gap-2 font-display italic text-[13px] text-moss">
@@ -69,7 +67,11 @@ export function DigestCard({
           ))}
         </div>
       ) : error ? (
-        <EmptyState>API offline. The digest is unavailable.</EmptyState>
+        /* XA-01: this was an EmptyState reading "API offline", which told the
+           reader there was no digest when the truth is the request did not come
+           back — and diagnosed the cause from a bare boolean. `error` carries no
+           detail, so the catalog copy stands alone and Refresh becomes Retry. */
+        <ReadError onRetry={onRefresh} />
       ) : topics.length === 0 ? (
         <EmptyState>No digest yet. Refresh to have Mari read the week.</EmptyState>
       ) : (

@@ -4,6 +4,7 @@ import { KnowledgeBrowser, type KnowledgeResult } from "../features/KnowledgeBro
 import { KnowledgeInspector, type KnowledgeDoc, type KnowledgeInspectorActions } from "../features/KnowledgeInspector";
 import { PageHeader, Card, EmptyState } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { ReadError } from "../feedback/ReadError";
 
 /* Knowledge search surface (pages/knowledge.md). A workspace that pairs the
    faceted results browser (filter rail + search + result cards + footer stats)
@@ -25,7 +26,7 @@ const STATES = [
   { id: "inspector-slack", label: "Inspector · Slack thread-chunk" },
   { id: "no-selection", label: "Nothing selected" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No results" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -90,7 +91,17 @@ function EmptyBox({ title, children }: { title: string; children: React.ReactNod
 function Feed({ data, error, mobile, actions }: {
   data: KnowledgeData; error: string | null; mobile: boolean; actions?: KnowledgeActions;
 }) {
-  if (error) return <EmptyBox title="API offline">{error}</EmptyBox>;
+  /* EmptyBox is the "nothing here yet" surface, and it stays that for the two
+     genuinely-empty cases below. A failed search is a different sentence: the
+     query did not come back (§8, XA-01). The wrapper is kept so the feed keeps
+     the height of its populated self and of the inspector beside it (§15). */
+  if (error) {
+    return (
+      <Card>
+        <div className="grid place-items-center py-16"><ReadError>{error}</ReadError></div>
+      </Card>
+    );
+  }
   /* When the app owns the query, a search that matched nothing must keep the
      search box on screen — replacing the browser with an empty card leaves the
      reader no way to change the query that emptied it. The browser draws its

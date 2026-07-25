@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Chip } from "./Chip";
+import { ResultCount } from "./Pagination";
+import { ShowRest } from "./ShowRest";
 import { Scrollable } from "./Scrollable";
 import { SortHeader, useSort, tdPad } from "./sortable";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonChip } from "./Skeleton";
@@ -60,7 +62,7 @@ export function ImpactPanel({
   boxed = false,
   className = "",
 }: ImpactPanelProps) {
-  const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState(false);
   const { sort, onSort, sorted } = useSort(docs, {
     title: (d) => d.title,
     source: (d) => d.source,
@@ -68,7 +70,10 @@ export function ImpactPanel({
     reason: (d) => d.reason,
   });
 
-  const shown = sorted.slice(0, DOC_ROWS * page);
+  /* An analysis over a real graph returns hundreds of documents. The panel
+     caps at DOC_ROWS until the reader asks for the rest, and the expanded list
+     scrolls in place rather than growing past the fold (§17, §20). */
+  const shown = expanded ? sorted : sorted.slice(0, DOC_ROWS);
   const hidden = sorted.length - shown.length;
 
   const wrap = [
@@ -112,12 +117,22 @@ export function ImpactPanel({
           sit under the table, next to the pager, where it read as a footnote
           on the button rather than a fact about the list. */}
       {docs.length > 0 && (
-        <p className="mt-2 font-term text-[11px] text-ink/65">
-          Showing {shown.length.toLocaleString("en-US")} of {sorted.length.toLocaleString("en-US")} documents
-        </p>
+        <ResultCount
+          className="mt-2 border-t border-ink/10"
+          from={1}
+          to={shown.length}
+          total={sorted.length}
+          noun="documents"
+          /* XA-08: the expand control used to sit UNDER the table saying "Show
+             8 more", so the strip and the way to act on it were at opposite
+             ends of the panel and worded independently. */
+          actions={hidden > 0 || expanded
+            ? <ShowRest expanded={expanded} total={sorted.length} onToggle={() => setExpanded((v) => !v)} />
+            : undefined}
+        />
       )}
       {docs.length > 0 && (
-        <Scrollable className="mt-2">
+        <Scrollable className="mt-2" axis="both" style={{ maxHeight: expanded ? 420 : undefined }}>
           {/* table-fixed + a colgroup: column widths are declared, not derived
               from the longest word, so one unbroken token can neither widen
               the table nor squeeze its neighbours to a letter per line. */}
@@ -158,13 +173,6 @@ export function ImpactPanel({
             </tbody>
           </table>
         </Scrollable>
-      )}
-      {/* An analysis over a real graph returns hundreds of documents. Page the
-          table rather than growing the panel past the fold (CONVENTIONS §17). */}
-      {hidden > 0 && (
-        <div className="mt-2">
-          <Button compact onClick={() => setPage((p) => p + 1)}>Show {Math.min(hidden, DOC_ROWS)} more</Button>
-        </div>
       )}
       {footer && <div className="mt-2.5 flex flex-wrap items-center gap-2">{footer}</div>}
     </div>

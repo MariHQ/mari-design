@@ -9,7 +9,9 @@ import { Tabs } from "../navigation/Tabs";
 import { Combobox } from "../forms/Combobox";
 import { FormField } from "../forms/FormField";
 import { ConfirmButton } from "../actions/ConfirmButton";
-import { ErrorMessage, FieldError } from "../feedback/ErrorMessage";
+import { ReadError } from "../feedback/ReadError";
+import { WriteError } from "../feedback/WriteError";
+import { useWrite } from "../actions/useWrite";
 import { fmtDate, type DateInput } from "../tokens/format";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
@@ -32,7 +34,7 @@ const STATES = [
   { id: "composer-open", label: "Composer · drafting" },
   { id: "saving", label: "Adding task…" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "No tasks" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
@@ -131,9 +133,6 @@ const KINDS: { id: string; label: string }[] = [
   { id: "factcheck", label: "Fact check" },
   { id: "stale", label: "Stale" },
 ];
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 /** Everything the Tasks page renders. */
 export type TasksData = {
@@ -263,7 +262,6 @@ function Body({ data, error, actions, who, mobile }: {
   const [assignee, setAssignee] = useState<string | null>(null);
   const [priority, setPriority] = useState("");
   const [due, setDue] = useState("");
-  const [adding, setAdding] = useState(false);
   const [view, setView] = useState<"all" | "mine" | "overdue">("all");
   const [sort, setSort] = useState<"due" | "title" | "priority">("due");
 
@@ -280,11 +278,13 @@ function Body({ data, error, actions, who, mobile }: {
   const assignees = data.assignees ?? [];
   const priorities = data.priorities ?? [];
   /* A failed write is as visible as a failed read (PageProps.actions): the
-     server's own message lands under the control that tried it. */
-  const [composerFailed, setComposerFailed] = useState<string | null>(null);
-  const [boardFailed, setBoardFailed] = useState<string | null>(null);
+     server's own message lands beside the control that tried it. Two hooks
+     because the composer and the board are two independent surfaces with two
+     banners (XA-04). */
+  const composer = useWrite();
+  const board = useWrite();
 
-  const saving = data.saving || adding;
+  const saving = data.saving || composer.busy;
   // The composer reads as "active" whenever it holds a draft or is submitting
   // one — a mode derived from the content, not a separate flag.
   const composing = Boolean(draft.trim()) || saving;
@@ -299,13 +299,10 @@ function Body({ data, error, actions, who, mobile }: {
     const done = !row.done;
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done } : t)));
     if (!actions?.setDone) return;
-    setBoardFailed(null);
-    try {
-      await actions.setDone({ id, done });
-    } catch (e) {
-      setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !done } : t)));
-      setBoardFailed(why(e, "That task could not be updated."));
-    }
+    // `run` answers whether the write landed, so the optimistic row can go back
+    // where it was when it did not.
+    const ok = await board.run(() => actions.setDone!({ id, done }));
+    if (!ok) setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !done } : t)));
   };
 
   const add = async () => {
@@ -336,38 +333,30 @@ function Body({ data, error, actions, who, mobile }: {
       setDue("");
     };
 
-    if (!actions?.create) { settle(localRow()); return; }
-    setAdding(true);
-    setComposerFailed(null);
-    try {
-      // The row the server wrote, when it answers with one; otherwise the
-      // optimistic row the next refetch replaces.
-      const created = await actions.create({
-        title, kind, kindLabel,
-        assignee: picked?.id,
-        priority: pickedPriority?.id,
-        priorityLabel: pickedPriority?.label,
-        due: due || undefined,
-      });
-      settle(created ?? localRow());
-    } catch (e) {
-      setComposerFailed(why(e, "That task could not be added."));
-    } finally {
-      setAdding(false);
-    }
+    // The row the server wrote, when it answers with one; otherwise the
+    // optimistic row the next refetch replaces. With no handler the echo is the
+    // whole story, which is what the canvas renders.
+    let created: Task | void = undefined;
+    await composer.run(
+      actions?.create && (async () => {
+        created = await actions.create!({
+          title, kind, kindLabel,
+          assignee: picked?.id,
+          priority: pickedPriority?.id,
+          priorityLabel: pickedPriority?.label,
+          due: due || undefined,
+        });
+      }),
+      () => settle(created ?? localRow()),
+    );
   };
 
   const clearDone = async () => {
     const cleared = tasks.filter((t) => t.done);
     setTasks((ts) => ts.filter((t) => !t.done));
     if (!actions?.clearDone) return;
-    setBoardFailed(null);
-    try {
-      await actions.clearDone();
-    } catch (e) {
-      setTasks((ts) => [...ts, ...cleared]);
-      setBoardFailed(why(e, "Done tasks could not be cleared."));
-    }
+    const ok = await board.run(() => actions.clearDone!());
+    if (!ok) setTasks((ts) => [...ts, ...cleared]);
   };
 
   const offline = Boolean(error);
@@ -407,9 +396,11 @@ function Body({ data, error, actions, who, mobile }: {
   ];
 
   const listBody = (rows: Task[], emptyText: string) => {
-    // One banner for the page, not one per column: the same alert twice reads
-    // as two separate failures.
-    if (error) return <div className="py-6 text-center text-[13px] text-ink/70">{error}</div>;
+    /* One banner for the page, not one per column: the same failure twice reads
+       as two separate failures. The column used to echo the raw `error` string
+       as bare centred text, a ninth rendering of the same prop (XA-01), so the
+       page banner just above the columns now carries it alone. */
+    if (error) return null;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
     return rows.map((t) => (
       <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenDoc={actions?.openDoc} />
@@ -483,7 +474,9 @@ function Body({ data, error, actions, who, mobile }: {
             </div>
           )}
 
-          {composerFailed && <FieldError>{composerFailed}</FieldError>}
+          {/* The composer collects five fields; a refused create accuses none
+              of them in particular, so it is a banner, not a FieldError. */}
+          <WriteError onDismiss={() => composer.setFailed(null)}>{composer.failed}</WriteError>
           <div>
             <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
               <Plus size={15} /> {saving ? "Adding…" : "Add task"}
@@ -492,8 +485,11 @@ function Body({ data, error, actions, who, mobile }: {
         </div>
       </Card>
 
-      {offline && <ErrorMessage id="server.unavailable" />}
-      {boardFailed && <FieldError>{boardFailed}</FieldError>}
+      {/* Catalog heading, the server's own message underneath as detail. */}
+      {offline && <ReadError>{error}</ReadError>}
+      {/* A rejected toggle or a refused Clear done accuses no input: it is a
+          banner beside the board, at the weight a failed read gets (XA-02). */}
+      <WriteError onDismiss={() => board.setFailed(null)}>{board.failed}</WriteError>
 
       {/* Filter left, sort on the SAME line (§13). */}
       <div className="flex flex-wrap items-center gap-3">
@@ -553,7 +549,10 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
-          <Body data={data} error={error} actions={actions} who={chrome?.user?.initials ?? "—"} mobile={mobile} />
+          {/* No session, no initials: a neutral marker, not an em dash. Dashes
+              are out of rendered copy (§5) and inventing a person here would
+              file every new task to somebody who is not signed in. */}
+          <Body data={data} error={error} actions={actions} who={chrome?.user?.initials ?? "?"} mobile={mobile} />
         </div>
       </div>
       )}

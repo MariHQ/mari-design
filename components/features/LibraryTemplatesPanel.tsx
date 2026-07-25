@@ -10,11 +10,13 @@ import { Truncate } from "../data-display/Truncate";
 import { Badge } from "../data-display/Badge";
 import { EmptyState } from "../data-display/EmptyState";
 import { ResultCount } from "../data-display/Pagination";
+import { ShowRest } from "../data-display/ShowRest";
 import { Scrollable } from "../data-display/Scrollable";
 import { SkeletonLine, SkeletonChip, SkeletonButton, SkeletonCard } from "../data-display/Skeleton";
 import { Tabs } from "../navigation/Tabs";
 import { Menu, MenuItem } from "../navigation/Menu";
 import { useWrite } from "../actions/useWrite";
+import { useResync, listSig } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
 
 /* LibraryTemplatesPanel — the Library › Templates tab.
@@ -88,6 +90,18 @@ export function LibraryTemplatesPanel({ templates, actions, loading = false, com
   const [cat, setCat] = useState("Engineering");
   const [desc, setDesc] = useState("");
   const [count, setCount] = useState("5");
+
+  /* The gallery was seeded once, at mount, so a template added elsewhere —
+     or this panel's own refetch after a save — never showed up (C1).
+     Signature, not identity: `LibraryPage` narrows `templates` with an inline
+     `.filter()` on every render, so identity churns on every keystroke in the
+     library search box. `hold` is the open composer, whose draft fields are
+     separate state and would otherwise be orphaned by a list swapping under
+     the reader mid-compose. */
+  useResync(templates, setRows, {
+    hold: composerOpen,
+    key: listSig(templates, (t: Template) => `${t.id}:${t.name}:${t.category}:${t.description}:${t.standard}:${t.icon}:${t.sections.join()}`),
+  });
   /* A gallery of 300 scaffolds is 100 rows of cards. Show a screenful, then
      let the reader ask for the rest, with the real total on screen the whole
      time (CONVENTIONS §13, §15). */
@@ -225,9 +239,7 @@ export function LibraryTemplatesPanel({ templates, actions, loading = false, com
             note={category === "All" ? undefined : `category: ${category}`}
             className="mt-3 border-t"
             actions={visible.length > PAGE && (
-              <Button variant="link" compact onClick={() => setShowAll((v) => !v)}>
-                {showAll ? "Show fewer" : `Show all ${visible.length}`}
-              </Button>
+              <ShowRest expanded={showAll} total={visible.length} onToggle={() => setShowAll((v) => !v)} />
             )}
           />
           <div className="flex flex-wrap gap-3 p-4">

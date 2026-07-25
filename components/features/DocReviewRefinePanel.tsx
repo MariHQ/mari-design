@@ -11,10 +11,8 @@ import { Button } from "../actions/Button";
 import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
 import { fmtDateTime } from "../tokens/format";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
-import { FieldError } from "../feedback/ErrorMessage";
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
 
 type Skill = { name: string; sub: string; api: string };
 type RefineScope = "Whole document" | "Current selection";
@@ -175,7 +173,9 @@ export function DocReviewRefinePanel({
       <Button variant="primary" block className="mt-4" onClick={run} disabled={refining || needsSelection}>
         <Sparkles size={15} /> {refining ? "Mari is editing…" : "Run refinement"}
       </Button>
-      <FieldError>{failed}</FieldError>
+      {/* A refinement the server refused accuses no input on this rail, so it
+          gets the banner every other failed write gets (XA-02). */}
+      <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       <p className="mt-2 text-[11.5px] text-ink/70">
         {refining
           ? `Running ${skill.toLowerCase()} on ${scope.toLowerCase()}. This can take up to a minute.`

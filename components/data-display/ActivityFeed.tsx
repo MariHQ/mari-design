@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { SkeletonLine } from "./Skeleton";
 import { Scrollable } from "./Scrollable";
-import { Button } from "../actions/Button";
+import { ResultCount } from "./Pagination";
+import { ShowRest } from "./ShowRest";
 import { Truncate } from "./Truncate";
 
 export type ActivityItem = { id: string; actor?: string; action: string; time: string; icon?: ReactNode };
@@ -84,18 +85,17 @@ export function ActivityFeed({ items, loading = false, max = 25, maxHeight = 420
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      {/* Count strip above the list it describes (§13). */}
+      {/* Count strip above the list it describes (§13). XA-05/XA-08: this was a
+          hand-rolled count sentence beside a hand-rolled toggle, one of four
+          copies with its own wording; both now come from the shared pair. */}
       {capped && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-term text-[11.5px] text-ink/65">
-            {expanded
-              ? `Showing all ${items.length.toLocaleString()} events`
-              : `Showing ${shown.length} of ${items.length.toLocaleString()} events`}
-          </span>
-          <Button variant="link" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-            {expanded ? "Show fewer" : "Show all"}
-          </Button>
-        </div>
+        <ResultCount
+          from={1}
+          to={shown.length}
+          total={items.length}
+          noun="events"
+          actions={<ShowRest expanded={expanded} total={items.length} onToggle={() => setExpanded((v) => !v)} />}
+        />
       )}
       {shown.length > BOUND_AT ? (
         <Scrollable axis="y" style={{ maxHeight }} scrollerClassName="pr-2">{list}</Scrollable>

@@ -6,11 +6,11 @@
 // jump handler is optional (defaults to highlighting the clicked outline item).
 
 import { useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { parseMarkdown } from "../data-display/markdown";
 import { Card } from "../layout/Card";
-import { Button } from "../actions/Button";
 import { Avatar } from "../data-display/Avatar";
+import { ShowRest } from "../data-display/ShowRest";
+import { fmtDate } from "../tokens/format";
 import { Chip } from "../data-display/Chip";
 import { SkeletonLine, SkeletonCircle } from "../data-display/Skeleton";
 
@@ -148,7 +148,7 @@ export function DocReviewOutlinePanel({
                   <span className="min-w-0 truncate">{r.actor}</span>
                   {i === 0 && <span className="shrink-0"><Chip label="Current" tone="ok" dot pulse /></span>}
                 </span>
-                <span className="mt-0.5 block break-words text-[11px] text-ink/70">{r.verb} · {r.at}</span>
+                <span className="mt-0.5 block break-words text-[11px] text-ink/70">{r.verb} · {fmtDate(r.at)}</span>
               </span>
             </div>
           ))}
@@ -156,11 +156,11 @@ export function DocReviewOutlinePanel({
             <div className="text-[12.5px] text-ink/70">No revisions yet. Edits show up here as soon as they are saved.</div>
           )}
         </div>
+        {/* XA-08: "View all N revisions" was one of eight spellings of this one
+            control. Same words, same chevron, every list. */}
         {revisions.length > 4 && (
           <div className="mt-3">
-            <Button variant="link" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer revisions" : `View all ${revisions.length} revisions`} <ArrowRight size={12} />
-            </Button>
+            <ShowRest expanded={showAll} total={revisions.length} onToggle={() => setShowAll((v) => !v)} />
           </div>
         )}
       </Card>

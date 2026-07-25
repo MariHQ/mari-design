@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link } from "../navigation/Link";
 import { docHref } from "../tokens/routes";
 import { Unlink } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
-import { ExternalLink, ClipboardCheck, Download } from "lucide-react";
-import { focusRing } from "../tokens/focusRing";
-import { Button } from "../actions/Button";
+import { CreateReviewTaskButton, ExportButton, OpenDocumentButton } from "../actions/RepeatedActions";
+import { useResync } from "../actions/useResync";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Chip } from "../data-display/Chip";
 import { fmtDate } from "../tokens/format";
@@ -50,7 +48,14 @@ export function LineageEdgeDrawer({
   nodes, edges, edgeId, onSelectNode, onOpenDocument, onClose, loading = false, className = "",
 }: LineageEdgeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
-  const [openId] = useState(edgeId);
+  const [openId, setOpenId] = useState(edgeId);
+  /* C1: this was `const [openId] = useState(edgeId)` — seeded once, with no
+     setter at all — so tapping a different edge kept the first one on screen.
+     Identity mode: `edgeId` is a string (`drawerFor` in web/src/data/lineage.ts
+     passes `edge.id`, itself `String(e.id)`), so `Object.is` compares its value
+     and the sentinel fires exactly when the reader picks another edge. No
+     `hold`: this drawer holds no unsaved edit, only an export latch. */
+  useResync(edgeId, setOpenId);
   const [taskMade, setTaskMade] = useState(false);
   const [result, setResult] = useState<{ title: string; body: string } | null>(null);
 
@@ -113,15 +118,25 @@ export function LineageEdgeDrawer({
           {/* CONVENTIONS §2: primary bottom LEFT, secondary to its right. */}
           <CardActions
             className="pt-0"
-            primary={
-              <Button compact variant="primary" onClick={() => setTaskMade(true)}>
-                <ClipboardCheck size={13} /> {taskMade ? "Review task created" : "Create review task"}
-              </Button>
-            }
+            primary={<CreateReviewTaskButton compact state={taskMade ? "done" : "idle"} onClick={() => setTaskMade(true)} />}
             secondary={
               <>
-                <Button
+                {/* An edge joins two documents, so "the" document is ambiguous:
+                    this opens the SOURCE end, which is the one the relationship
+                    is stated about. Hidden when that node carries no document
+                    id, rather than linking to "#". Compact like the primary
+                    beside it, so the group is one height (§13). */}
+                {fromDocId != null && (
+                  <OpenDocumentButton
+                    compact
+                    href={docHref(fromDocId)}
+                    onOpen={onOpenDocument && (() => onOpenDocument(fromDocId))}
+                  />
+                )}
+                <ExportButton
                   compact
+                  format="CSV"
+                  state={result ? "done" : "idle"}
                   className={result ? lgToggleOn : ""}
                   /* The file is written now. The button used to announce a CSV
                      that was "ready to download" and never produce one. */
@@ -135,22 +150,7 @@ export function LineageEdgeDrawer({
                     downloadText(name, csv, "text/csv");
                     setResult({ title: "Exported 1 relationship", body: `Downloaded as ${name}.` });
                   }}
-                >
-                  <Download size={13} /> {result ? "Exported" : "Export"}
-                </Button>
-                {/* An edge joins two documents, so "the" document is
-                    ambiguous — this opens the SOURCE end, which is the one the
-                    relationship is stated about. Hidden when that node carries
-                    no document id, rather than linking to "#". */}
-                {fromDocId != null && (
-                  <Link
-                    href={docHref(fromDocId)}
-                    onClick={onOpenDocument && ((e) => { e.preventDefault(); onOpenDocument(fromDocId); })}
-                    className="inline-flex h-8 items-center gap-1 rounded-[4px] border border-ink/25 bg-paper px-3 text-[12.5px] font-medium text-biscay-2 hover:border-ink/45 active:bg-ink/[0.05]"
-                  >
-                    Open document <ExternalLink size={12} />
-                  </Link>
-                )}
+                />
               </>
             }
           />

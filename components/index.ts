@@ -87,7 +87,6 @@ export { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuLa
 export { Popover, type PopoverProps } from "./navigation/Popover";
 export { Tooltip } from "./navigation/Tooltip";
 export { Breadcrumb, type Crumb } from "./navigation/Breadcrumb";
-export { CommandPalette, type CommandItem } from "./navigation/CommandPalette";
 export { NotificationBell, type NotificationItem } from "./navigation/NotificationBell";
 export { ContextMenu, ContextMenuItem, ContextMenuCheckboxItem, ContextMenuSeparator } from "./navigation/ContextMenu";
 
@@ -106,10 +105,7 @@ export { TypingIndicator } from "./chat/TypingIndicator";
 export { type ChatRole, type ChatMessageData, type ToolCallData } from "./chat/types";
 
 // Workflow / flows
-export { PipelineView, type WorkflowStep, type WorkflowSection, type PipelineViewProps } from "./workflow/PipelineView";
-export { RunHistory, RunStatusChip, fmtStarted, type WorkflowRun, type RunStatus, type RunStepRow, type RunStat, type RunHistoryProps } from "./workflow/RunHistory";
-export { RunPanel, type RunPanelProps } from "./workflow/RunPanel";
-export { WorkflowScreen, type WorkflowScreenProps } from "./workflow/WorkflowScreen";
+export type { WorkflowRun, RunStatus, RunStepRow, RunStat } from "./workflow/RunHistory";
 
 /* ══════════════ Wave 2 — app shell, search, icons, connect/sync, more ══════════════ */
 
@@ -159,6 +155,24 @@ export { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "./
 // Canonical error copy.
 export { ERRORS, ERROR_LIST, type ErrorId, type ErrorSpec, type ErrorTone } from "./feedback/errors";
 export { ErrorMessage, FieldError } from "./feedback/ErrorMessage";
+/* The two failure surfaces, and the one hook that drives them (XA-01, XA-02,
+   XA-03): <ReadError> for a failed read, <WriteError> for a failed page
+   action, `useWrite` for the busy/failed pair behind the second. */
+export { ReadError } from "./feedback/ReadError";
+export { WriteError } from "./feedback/WriteError";
+export { useWrite, why } from "./actions/useWrite";
+/* The one resync sentinel (C1, XA-21): adopt a prop into local state when it
+   changes, without clobbering an edit the reader has open. */
+export { useResync, listSig } from "./actions/useResync";
+// The one run-status vocabulary (XA-25, X2).
+export { RUN_STATUS_CHIP, toRunStatus, runStatusChip } from "./tokens/runStatus";
+// The one result-count strip and the one "show the rest" toggle (§13, §16).
+export { ResultCount, PagerBar, usePaged } from "./data-display/Pagination";
+export { ShowRest } from "./data-display/ShowRest";
+// Actions that appear on more than one pane, spelled once (§16).
+export {
+  CreateReviewTaskButton, OpenDocumentButton, ExportButton, RefreshButton,
+} from "./actions/RepeatedActions";
 // Canonical server/region vocabulary.
 export { REGIONS, REGION_OPTIONS, regionLabel, regionShort, type RegionCode } from "./tokens/regions";
 /* Canonical timezone vocabulary — one list, shared by Preferences and Settings

@@ -15,10 +15,9 @@ import { Tabs } from "../navigation/Tabs";
 import { SkeletonLine } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
-import { FieldError } from "../feedback/ErrorMessage";
-
-/** Whatever the server said, or a floor when the failure carried no message. */
-const why = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+import { WriteError } from "../feedback/WriteError";
+import { why } from "../actions/useWrite";
+import { useResync } from "../actions/useResync";
 
 /* ————— ported diff helpers ————— */
 
@@ -82,6 +81,17 @@ export function DocReviewChangeQueue({
   const [bodyText, setBodyText] = useState(body);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+
+  /* Both copies were taken once, at mount, so re-running the refinement pass —
+     or opening a different document — left the queue showing the previous
+     document's proposed edits against the previous document's body (C1).
+     `bodyText` is mutated locally by Accept, and `isApplied` reads it to
+     decide which rows are already folded in, so the two have to move
+     together: adopting a new `changes` without its matching `body` would
+     mislabel every row. Held while a write is in flight. `web/src/data/
+     doc-review.ts` maps inside `useQuery`, whose result is held in state, so
+     both props are referentially stable. */
+  useResync(initialChanges, (c) => { setChanges(c); setBodyText(body); }, { hold: busy });
 
   const pending = changes.filter((c) => c.state === "pending");
   const visible = tab === "review" ? pending : changes;
@@ -267,7 +277,9 @@ export function DocReviewChangeQueue({
         <Button variant="primary" onClick={acceptAll} disabled={busy || pending.length === 0}>
           {busy ? "Applying…" : `Accept all ${pending.length || ""} changes`.replace(/\s+/g, " ")}
         </Button>
-        <FieldError>{failed}</FieldError>
+        {/* Accept, Reject and Accept-all all report here; none of them accuses
+            an input, so a refused write is a banner (XA-02). */}
+        <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>
       </div>
     </Card>
   );

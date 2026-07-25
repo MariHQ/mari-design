@@ -3,7 +3,7 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { SettingsTabs } from "./SettingsTabs";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
-import { EmptyState } from "../data-display/EmptyState";
+import { ReadError } from "../feedback/ReadError";
 import { Alert } from "../feedback/Alert";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -32,7 +32,7 @@ import {
 const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading" },
-  { id: "error", label: "API offline" },
+  { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Still on the defaults" },
   { id: "branded", label: "Brand already set" },
   { id: "imported", label: "Imported from a site" },
@@ -83,7 +83,9 @@ function SettingsDesignPage({
           <div className={mobile ? "mt-6 flex flex-col gap-5" : `mt-6 ${SPLIT[320]}`}>
             <div className="flex min-w-0 flex-col gap-5">
               {error ? (
-                <EmptyState icon={<Palette size={22} />} title="API offline">{error}</EmptyState>
+                /* XA-01: a failed read is a blocked banner, never the
+                   "nothing here yet" surface. */
+                <ReadError>{error}</ReadError>
               ) : (
                 <>
                   {/* The editor cannot say "nothing is set here yet" about
