@@ -1,6 +1,6 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH3, SPAN } from "./PageFrame";
-import { Sprout } from "lucide-react";
+import { ArrowRight, PlugZap, Sprout } from "lucide-react";
 import { OverviewStatTiles, type OverviewStats } from "../features/OverviewStatTiles";
 import { OverviewDigestCard, type DigestTopic } from "../features/OverviewDigestCard";
 import { OverviewRecentDocs, type RecentDoc } from "../features/OverviewRecentDocs";
@@ -11,9 +11,10 @@ import { OverviewWorkflowStrip, type WfFlow, type WfRun } from "../features/Over
 import { EmptyState } from "../data-display/EmptyState";
 import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { CardCollapseScope } from "../layout/Card";
+import { Card, CardCollapseScope } from "../layout/Card";
 import { Truncate } from "../data-display/Truncate";
 import { DateRangePicker, type DateRange } from "../data-display/DateRangePicker";
+import { Button } from "../actions/Button";
 
 /* Overview dashboard (pages/overview.md). Composes the overview features into
    the two-track grid, inside the console frame.
@@ -144,6 +145,9 @@ export type OverviewActions = {
   /** Change the window the dashboard counts over. Without it the page draws no
       range control at all — a picker that cannot re-query is decoration (§2). */
   setRange?: (range: DateRange) => void;
+  /** Open first-run source onboarding. Omitted: the empty-source card keeps
+      its explanation but draws no dead button. */
+  connectSources?: () => void;
 };
 
 function OverviewPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<OverviewData, OverviewActions>) {
@@ -187,6 +191,24 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
               </div>
             )}
           </div>
+          {data.sources.length === 0 && (
+            <Card
+              className="mt-6 border-biscay/25 bg-biscay/[0.035]"
+              icon={<span className="grid h-9 w-9 place-items-center rounded-md bg-biscay/10 text-biscay"><PlugZap size={19} /></span>}
+              title="Connect your first source"
+              hint="No sources connected"
+              actions={actions?.connectSources ? (
+                <Button variant="primary" onClick={actions.connectSources}>
+                  Browse connectors <ArrowRight size={14} />
+                </Button>
+              ) : undefined}
+            >
+              <p className="text-[13px] leading-relaxed text-ink/70">
+                Bring in GitHub, Slack, Notion, Google Drive, uploaded files, or another
+                connector to start building this workspace.
+              </p>
+            </Card>
+          )}
           <div className="mt-6">
             {/* Mobile collapses every titled widget behind its header, so the
                 dashboard scans as a list instead of a forever scroll (§17). */}
@@ -209,11 +231,7 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                     </EmptyState>
                     <OverviewSourcePulse tiles={data.sources} />
                   </div>
-                ) : (
-                  <EmptyState title="Nothing here yet">
-                    Connect a source to start building your knowledge base.
-                  </EmptyState>
-                )
+                ) : null
               ) : (
                 mobile ? (
                   /* One column, timeliest first (§17). The tracks below are a
