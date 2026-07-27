@@ -235,7 +235,7 @@ function Hero({ data }: { data: WelcomeData }) {
 /** Tiles onboarding has a dedicated step for. Everything else in the catalog
     is set up on Sources, which carries the full wizard. */
 const TILE_STEP: Record<string, WelcomeStep> = {
-  github: "connect-github", slack: "connect-slack", notion: "connect-notion",
+  slack: "connect-slack", notion: "connect-notion",
   gdrive: "connect-gdrive", upload: "connect-upload",
 };
 
