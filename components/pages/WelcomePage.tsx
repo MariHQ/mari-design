@@ -46,6 +46,7 @@ const STATES = [
   { id: "connect-slack", label: "Connect · Slack" },
   { id: "connect-notion", label: "Connect · Notion" },
   { id: "connect-gdrive", label: "Connect · Google Drive" },
+  { id: "connect-generic", label: "Connect · connector" },
   { id: "connect-upload", label: "Connect · Upload" },
   { id: "connect-syncing", label: "Connect · Syncing" },
   { id: "guide", label: "Style guide" },
@@ -59,22 +60,40 @@ const STATES = [
 /** Which onboarding step is on screen. An app drives it from its own route. */
 export type WelcomeStep =
   | "hero" | "connect" | "connect-github" | "connect-slack" | "connect-notion"
-  | "connect-gdrive" | "connect-upload" | "connect-syncing"
+  | "connect-gdrive" | "connect-generic" | "connect-upload" | "connect-syncing"
   | "guide" | "glossary" | "finish" | "done";
 
 /** Which of the five Stepper positions a step sits at. */
 const STEP_INDEX: Record<WelcomeStep, number> = {
   hero: 0,
   connect: 1, "connect-github": 1, "connect-slack": 1, "connect-notion": 1,
-  "connect-gdrive": 1, "connect-upload": 1, "connect-syncing": 1,
+  "connect-gdrive": 1, "connect-generic": 1, "connect-upload": 1, "connect-syncing": 1,
   guide: 2, glossary: 3, finish: 4, done: 4,
 };
 
 /** One connector tile on the Connect step. `key` selects the brand mark. */
-export type Tile = { key: string; name: string; blurb: string; connected?: boolean; active?: boolean };
+export type Tile = {
+  key: string;
+  name: string;
+  blurb: string;
+  connected?: boolean;
+  active?: boolean;
+  docsUrl?: string;
+  fields?: CField[];
+};
 
 /** One credential field on a connector's setup form. */
-export type CField = { key: string; label: string; secret?: boolean; multiline?: boolean; placeholder?: string; help?: string; value?: string };
+export type CField = {
+  key: string;
+  label: string;
+  secret?: boolean;
+  multiline?: boolean;
+  placeholder?: string;
+  help?: string;
+  value?: string;
+  /** Defaults to true. Optional fields never gate Test or Connect. */
+  required?: boolean;
+};
 
 /** A repository the GitHub token can reach. */
 export type Repo = { name: string; desc: string; priv: boolean; branch: string };
@@ -104,6 +123,8 @@ export type WelcomeActions = {
       question every connector step actually gets asked (P-WE-4). The APP owns
       the URL, the same way it owns routing. */
   openDocs?: (provider: string) => void;
+  /** Validate credentials without creating a source. */
+  testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
   /** Create a GitHub source from a repo the token can see, and start syncing. */
   connectGithubRepo?: (v: { repo: string; paths: string }) => void | Promise<void>;
   /** Create any catalog connector from its credential fields. */
@@ -232,14 +253,12 @@ function Hero({ data }: { data: WelcomeData }) {
 
 /* ── Step 1: connector grid ───────────────────────────────────────────── */
 
-/** Tiles onboarding has a dedicated step for. Everything else in the catalog
-    is set up on Sources, which carries the full wizard. */
-const TILE_STEP: Record<string, WelcomeStep> = {
-  slack: "connect-slack", notion: "connect-notion",
-  gdrive: "connect-gdrive", upload: "connect-upload",
-};
-
-function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]; connectorCount: number; nav: StepNav; onNavigate?: (href: string) => void }) {
+function ConnectGrid({ tiles, connectorCount, nav, onSelect }: {
+  tiles: Tile[];
+  connectorCount: number;
+  nav: StepNav;
+  onSelect: (provider: string) => void;
+}) {
   const cls = (active?: boolean) =>
     `flex w-full items-center gap-3 rounded-md border p-3 text-left ${focusRing} ${
       active ? "border-biscay-2 ring-1 ring-biscay-2/40 bg-biscay/[0.04]" : "border-ink/15 hover:border-ink/35"
@@ -252,22 +271,15 @@ function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]
           Pick a source to import. Connecting hits the live ingestion pipeline and shows real progress.
         </p>
       </div>
-      {/* XA-08: this step capped the catalog at the five providers onboarding
-          has a step for and closed with a "Show all {n} connectors" toggle
-          that expanded nothing: it navigated to Sources. There is genuinely
-          nowhere here to expand to, so the strip says what is on screen and
-          what is not (§13) and the control says where the rest live. */}
       <ResultCount
         from={1}
         to={tiles.length}
         total={connectorCount}
         noun="connectors"
-        note="the rest are set up on Sources"
-        actions={onNavigate ? <Button variant="link" onClick={() => onNavigate("/sources")}>Open Sources <ArrowRight size={13} aria-hidden /></Button> : undefined}
+        note="all available connectors"
       />
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {tiles.map((t) => {
-          const step = TILE_STEP[t.key];
           const inner = (
             <>
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-ink/12"><SourceMark provider={t.key} size={20} /></span>
@@ -280,13 +292,22 @@ function ConnectGrid({ tiles, connectorCount, nav, onNavigate }: { tiles: Tile[]
                 : <span className="shrink-0 font-term text-[11.5px] text-biscay-2">Connect →</span>}
             </>
           );
-          /* A tile onboarding has no step for still goes somewhere real:
-             Sources carries every connector in the catalog. A tile that only
-             looked clickable was the dead end that made this step useless. */
-          return step ? (
-            <button key={t.key} type="button" onClick={() => nav.go(step)} className={cls(t.active)}>{inner}</button>
-          ) : (
-            <button key={t.key} type="button" onClick={() => onNavigate?.("/sources")} className={cls(t.active)}>{inner}</button>
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => {
+                if (t.key === "upload") {
+                  nav.go("connect-upload");
+                  return;
+                }
+                onSelect(t.key);
+                nav.go("connect-generic");
+              }}
+              className={cls(t.active)}
+            >
+              {inner}
+            </button>
           );
         })}
       </div>
@@ -399,11 +420,16 @@ function useCredValues(fields: CField[]) {
   return {
     values,
     set: (key: string, value: string) => setValues((s) => ({ ...s, [key]: value })),
-    filled: fields.length === 0 || fields.every((f) => (values[f.key] ?? "").trim().length > 0),
+    filled: fields.filter((f) => f.required !== false)
+      .every((f) => (values[f.key] ?? "").trim().length > 0),
   };
 }
 
-type StepNav = { go: (step: WelcomeStep) => void };
+type StepNav = {
+  go: (step: WelcomeStep) => void;
+  selectProvider?: (provider: string) => void;
+  startSync?: (source: SyncRow) => void;
+};
 
 function GithubConnect({ data, actions, nav }: { data: WelcomeData; actions?: WelcomeActions; nav: StepNav }) {
   /* Which repo, and which glob: choices the user makes here. They used to be
@@ -460,18 +486,54 @@ function CredConnect({ provider, name, blurb, hint, fields, note, actions, nav }
   fields: CField[]; note?: ReactNode; actions?: WelcomeActions; nav: StepNav;
 }) {
   const cred = useCredValues(fields);
+  const [test, setTest] = useState<{ busy: boolean; ok: boolean | null; error: string }>({
+    busy: false, ok: null, error: "",
+  });
+  const setField = (key: string, value: string) => {
+    cred.set(key, value);
+    setTest({ busy: false, ok: null, error: "" });
+  };
+  const runTest = async () => {
+    if (!actions?.testConnection || !cred.filled || test.busy) return;
+    setTest({ busy: true, ok: null, error: "" });
+    try {
+      const result = await actions.testConnection({ provider, config: cred.values });
+      setTest({ busy: false, ok: result.ok, error: result.error ?? "" });
+    } catch (err) {
+      setTest({ busy: false, ok: false, error: why(err, "The connection test failed.") });
+    }
+  };
   return (
     <div className="space-y-4">
       <ConnectorHeader provider={provider} name={name} blurb={blurb}
         onDocs={actions?.openDocs ? () => actions.openDocs!(provider) : undefined} />
       <BackToConnectors onBack={() => nav.go("connect")} />
-      <CredFields fields={fields} values={cred.values} onChange={cred.set} />
+      <CredFields fields={fields} values={cred.values} onChange={setField} />
       {note}
+      {test.ok === true && (
+        <div className="inline-flex items-center gap-1.5 text-[12.5px] text-moss">
+          <CheckCircle2 size={14} /> Connection OK. Credentials verified.
+        </div>
+      )}
+      {test.ok === false && <WriteError>{test.error || "The connection test failed without details."}</WriteError>}
+      {actions?.testConnection && fields.length > 0 && (
+        <Button disabled={!cred.filled || test.busy} onClick={() => void runTest()}>
+          {test.busy ? <><Spinner size="sm" /> Testing…</> : "Test connection"}
+        </Button>
+      )}
       <ConnectFooter
         hint={hint}
         disabled={!cred.filled}
         run={actions?.connectSource ? () => actions.connectSource!({ provider, config: cred.values }) : undefined}
-        onDone={() => nav.go("connect-syncing")}
+        onDone={() => {
+          nav.startSync?.({
+            id: `pending-${provider}`,
+            provider,
+            name,
+            state: "syncing",
+          });
+          nav.go("connect-syncing");
+        }}
       />
     </div>
   );
@@ -688,11 +750,40 @@ function DoneStep({ summary, onNavigate }: { summary: WelcomeSummary; onNavigate
 
 /* ── Body dispatch ────────────────────────────────────────────────────── */
 
-function StepBody({ data, current, actions, nav }: {
-  data: WelcomeData; current: WelcomeStep; actions?: WelcomeActions; nav: StepNav;
+function StepBody({ data, current, actions, nav, selectedTile, connectRow, finishRows }: {
+  data: WelcomeData;
+  current: WelcomeStep;
+  actions?: WelcomeActions;
+  nav: StepNav;
+  selectedTile: Tile | null;
+  connectRow: SyncRow;
+  finishRows: SyncRow[];
 }) {
   switch (current) {
-    case "connect": return <ConnectGrid onNavigate={actions?.navigate} tiles={data.tiles} connectorCount={data.connectorCount} nav={nav} />;
+    case "connect":
+      return <ConnectGrid
+        tiles={data.tiles}
+        connectorCount={data.connectorCount}
+        nav={nav}
+        onSelect={(provider) => nav.selectProvider?.(provider)}
+      />;
+    case "connect-generic":
+      return selectedTile ? (
+        <CredConnect
+          provider={selectedTile.key}
+          name={selectedTile.name}
+          blurb={selectedTile.blurb}
+          hint={`Mari validates ${selectedTile.name} before starting its first sync.`}
+          fields={selectedTile.fields ?? []}
+          actions={actions}
+          nav={nav}
+        />
+      ) : <ConnectGrid
+        tiles={data.tiles}
+        connectorCount={data.connectorCount}
+        nav={nav}
+        onSelect={(provider) => nav.selectProvider?.(provider)}
+      />;
     case "connect-github": return <GithubConnect data={data} actions={actions} nav={nav} />;
     case "connect-slack":
       return <CredConnect provider="slack" name="Slack"
@@ -716,10 +807,10 @@ function StepBody({ data, current, actions, nav }: {
         hint="Google Docs are exported to Markdown on sync."
         fields={data.gdriveFields} actions={actions} nav={nav} />;
     case "connect-upload": return <UploadConnect data={data} actions={actions} nav={nav} />;
-    case "connect-syncing": return <ConnectSyncing row={data.connectSync} nav={nav} />;
+    case "connect-syncing": return <ConnectSyncing row={connectRow} nav={nav} />;
     case "guide": return <GuideStep packs={data.packs} actions={actions} />;
     case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} actions={actions} />;
-    case "finish": return <FinishStep rows={data.syncRows} actions={actions} onDone={() => nav.go("done")} />;
+    case "finish": return <FinishStep rows={finishRows} actions={actions} onDone={() => nav.go("done")} />;
     case "done": return <DoneStep summary={data.doneSummary} onNavigate={actions?.navigate} />;
     default: return <Hero data={data} />;
   }
@@ -740,7 +831,7 @@ const SPINE: WelcomeStep[] = ["hero", "connect", "guide", "glossary", "finish"];
  *  been missed (§2, P-WE-1). */
 const OWNS_PRIMARY = new Set<WelcomeStep>([
   "connect-github", "connect-slack", "connect-notion", "connect-gdrive",
-  "connect-upload", "connect-syncing", "finish",
+  "connect-generic", "connect-upload", "connect-syncing", "finish",
 ]);
 
 function WelcomePage({ data, loading = false, error = null, actions, mobile = false }: PageProps<WelcomeData, WelcomeActions>) {
@@ -749,6 +840,8 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
      which meant Continue and Back did nothing at all and onboarding could
      never leave its first screen. */
   const [current, setCurrent] = useState<WelcomeStep>(data.step);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [sessionSync, setSessionSync] = useState<SyncRow | null>(null);
   const [seen, setSeen] = useState(data.step);
   if (seen !== data.step) { setSeen(data.step); setCurrent(data.step); }
 
@@ -771,7 +864,19 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
   const nextLabel =
     done ? "Go to Overview" : step === 0 ? "Set up my workspace" : step === last ? "Finish setup" : "Continue";
 
-  const nav: StepNav = { go: setCurrent };
+  const nav: StepNav = {
+    go: setCurrent,
+    selectProvider: setSelectedProvider,
+    startSync: setSessionSync,
+  };
+  const selectedTile = data.tiles.find((tile) => tile.key === selectedProvider) ?? null;
+  const liveSelected = selectedProvider
+    ? data.syncRows.find((row) => row.provider === selectedProvider) ?? null
+    : null;
+  const connectRow = liveSelected ?? sessionSync ?? data.connectSync;
+  const finishRows = sessionSync && !data.syncRows.some((row) => row.provider === sessionSync.provider)
+    ? [sessionSync, ...data.syncRows]
+    : data.syncRows;
   const advance = () => {
     if (done) { actions?.navigate?.("/"); return; }
     if (step === last) { setCurrent("done"); return; }
@@ -810,7 +915,15 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
             </div>
           )}
 
-          <StepBody data={data} current={current} actions={actions} nav={nav} />
+          <StepBody
+            data={data}
+            current={current}
+            actions={actions}
+            nav={nav}
+            selectedTile={selectedTile}
+            connectRow={connectRow}
+            finishRows={finishRows}
+          />
 
           {/* Primary bottom LEFT, secondary to its right (§2). On a step that
               owns its primary action the footer contributes only the way back

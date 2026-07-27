@@ -67,6 +67,10 @@ export type LineageNodeDrawerProps = {
   onWatch?: (docId: number) => void | Promise<void>;
   /** Follow through to the document itself. */
   onOpenDocument?: (docId: number) => void;
+  /** Make this node the graph's focal neighborhood. */
+  onSetFocal?: (nodeId: string) => void;
+  /** Whether this node is already the graph's focal node. */
+  isFocal?: boolean;
   /** Open a review task on this document. */
   onCreateReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
   onClose?: () => void;
@@ -77,7 +81,7 @@ export type LineageNodeDrawerProps = {
 
 export function LineageNodeDrawer({
   nodes, edges, nodeId, history, onLoadHistory, onPin, onUnpin, onWatch, onOpenDocument,
-  onCreateReviewTask, onClose, loading = false, className = "",
+  onSetFocal, isFocal = false, onCreateReviewTask, onClose, loading = false, className = "",
 }: LineageNodeDrawerProps) {
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [openId, setOpenId] = useState(nodeId);
@@ -92,7 +96,6 @@ export function LineageNodeDrawer({
   const [tab, setTab] = useState<Tab>("overview");
   const [watched, setWatched] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [focal, setFocal] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [taskMade, setTaskMade] = useState(false);
   /** Tags past the preview cap need somewhere to go: a bare "+N more" span
@@ -259,8 +262,12 @@ export function LineageNodeDrawer({
         <div className="flex w-full flex-col gap-2">
           {/* Secondary controls first; each latches visibly when it is on. */}
           <div className="flex flex-wrap gap-2">
-            <Button compact onClick={() => setFocal((f) => !f)} className={focal ? lgToggleOn : ""}>
-              <Target size={13} /> {focal ? "Focal" : "Set focal"}
+            <Button
+              compact
+              onClick={() => onSetFocal?.(node.id)}
+              className={isFocal ? lgToggleOn : ""}
+            >
+              <Target size={13} /> {isFocal ? "Focal" : "Set focal"}
             </Button>
             <Button compact disabled={write.busy} onClick={togglePin} className={pinned ? lgToggleOn : ""}>
               <Pin size={13} /> {pinned ? "Pinned" : "Pin"}

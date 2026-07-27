@@ -25,6 +25,8 @@ import { WriteError } from "../feedback/WriteError";
 export type ConnectorField = {
   key: string;
   label: string;
+  /** Defaults to true. Optional fields never gate Test or Connect. */
+  required?: boolean;
   secret?: boolean;
   placeholder?: string;
   help?: string;
@@ -111,7 +113,10 @@ export function ConnectorWizard({
 
   const chosen = providers.find((p) => p.key === provider) ?? null;
   const stepLabels = ["Choose source", "Configure", "Sync"];
-  const filled = chosen ? chosen.fields.every((f) => (config[f.key] ?? "").trim().length > 0) : false;
+  const filled = chosen
+    ? chosen.fields.filter((f) => f.required !== false)
+        .every((f) => (config[f.key] ?? "").trim().length > 0)
+    : false;
 
   const pick = (key: string) => {
     setProvider(key);

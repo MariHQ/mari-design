@@ -67,6 +67,8 @@ export type LineageActions = {
   watchDocument?: (docId: number) => void | Promise<void>;
   /** Follow a lineage node through to the document it stands for. */
   openDocument?: (docId: number) => void;
+  /** Persist the focal node in the route while the page filters locally. */
+  setFocalNode?: (nodeId: string) => void;
   /** Open a review task on a document. */
   createReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
   /** Ask Mari to propose new edges across the corpus. Long-running. Return the
@@ -163,9 +165,12 @@ function railFor(data: LineageData, drawer: LineageDrawer | null): number | null
   return drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ data, drawer, actions, onClose }: {
+function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal }: {
   data: LineageData; drawer: LineageDrawer | null;
-  actions?: LineageActions; onClose?: () => void;
+  actions?: LineageActions;
+  onClose?: () => void;
+  focalId: string | null;
+  onSetFocal: (nodeId: string) => void;
 }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
@@ -186,6 +191,8 @@ function Drawer({ data, drawer, actions, onClose }: {
         onUnpin={actions?.unpinNode}
         onWatch={actions?.watchDocument}
         onOpenDocument={actions?.openDocument}
+        onSetFocal={onSetFocal}
+        isFocal={focalId === d.nodeId}
         onCreateReviewTask={actions?.createReviewTask}
         onClose={onClose}
       />
@@ -297,6 +304,17 @@ function Body({ data, error, actions, mobile }: {
   const [seenDrawer, setSeenDrawer] = useState(data.drawer);
   if (seenDrawer !== data.drawer) { setSeenDrawer(data.drawer); setPicked(undefined); }
   const drawerFor = picked === undefined ? data.drawer : picked;
+  const [focalId, setFocalId] = useState<string | null>(data.focalId);
+  const [seenFocal, setSeenFocal] = useState(data.focalId);
+  if (seenFocal !== data.focalId) {
+    setSeenFocal(data.focalId);
+    setFocalId(data.focalId);
+  }
+  const setFocal = (nodeId: string) => {
+    setFocalId(nodeId);
+    setLineageControls({ scope: "focus" });
+    actions?.setFocalNode?.(nodeId);
+  };
 
   /* One search on this page, and it lives in the toolbar. `data.search` seeds
      the shared control store the toolbar reads, so a deep-linked query still
@@ -356,7 +374,14 @@ function Body({ data, error, actions, mobile }: {
   const rail = mobile ? null : railFor(data, drawerFor);
   const railBody = data.extras
     ? <Extras extras={data.extras} />
-    : <Drawer data={data} drawer={drawerFor} actions={actions} onClose={() => setPicked(null)} />;
+    : <Drawer
+        data={data}
+        drawer={drawerFor}
+        actions={actions}
+        onClose={() => setPicked(null)}
+        focalId={focalId}
+        onSetFocal={setFocal}
+      />;
 
   return (
     <div className="mt-6 flex flex-col gap-5">
@@ -383,7 +408,7 @@ function Body({ data, error, actions, mobile }: {
               lens={data.lens}
               layout={data.layout}
               trace={data.trace}
-              focalId={data.focalId}
+              focalId={focalId}
               onPinNode={actions?.pinNode}
               onSelectNode={openNode}
               onSelectEdge={(id) => setPicked({ kind: "edge", edgeId: id })}
