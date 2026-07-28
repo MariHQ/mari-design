@@ -49,11 +49,14 @@ export type KnowledgeData = {
 };
 
 /** What the Knowledge page can DO. Search, facets, sort and bookmarks are all
-    reads or local view state; the one write this surface offers is watching the
-    document in the inspector rail.
+    reads or local view state; the writes this surface offers are watching a
+    document and editing its tags, both in the inspector rail (the latter is
+    how a document becomes eligible for the Publish flow's 'customer-facing'
+    tag — see KnowledgeInspectorActions.setTag).
 
-    Optional, as always: with no actions the watch toggle keeps its local
-    behaviour, which is what the design canvas renders. */
+    Optional, as always: with no actions wired, the watch toggle and tag
+    picker both keep their local behaviour, which is what the design canvas
+    renders. */
 export type KnowledgeActions = KnowledgeInspectorActions & {
   /** Inspect this result. Selection outlives this page — it decides what the
       rail describes and should survive a reload — so the page reports which

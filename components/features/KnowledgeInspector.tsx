@@ -68,6 +68,13 @@ export type KnowledgeInspectorActions = {
   /** Watch or unwatch this document. Resolves to the new watched state, which
       is the server's answer rather than the rail's guess. */
   toggleWatch?: (args: { id: string }) => Promise<boolean>;
+  /** Add (`on: true`) or remove (`on: false`) one tag on this document.
+      Resolves to the document's full tag list after the change — the same
+      "server's answer, not the rail's guess" pattern as `toggleWatch`.
+      Optional: with no action wired, the picker only ever changes its own
+      local state, which is indistinguishable from tagging that silently
+      does not save. */
+  setTag?: (args: { id: string; tag: string; on: boolean }) => Promise<string[]>;
 };
 
 const REL_CYCLE: RelKey[] = ["derived", "references", "discussed"];
@@ -169,6 +176,29 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
       {watched ? <><EyeOff size={13} /> Unwatch</> : <><Eye size={13} /> Watch</>}
     </Button>
   );
+
+  // TagPicker hands back the WHOLE next list; it only ever toggles one tag at
+  // a time, so the changed tag is whichever entry differs from current state.
+  const [tagsBusy, setTagsBusy] = useState(false);
+  const changeTags = async (next: string[]) => {
+    if (!actions?.setTag) { setTags(next); return; }
+    const added = next.find((t) => !tags.includes(t));
+    const removed = tags.find((t) => !next.includes(t));
+    const tag = added ?? removed;
+    if (!tag || tagsBusy) return;
+    const prev = tags;
+    setTags(next);
+    setTagsBusy(true);
+    setFailed(null);
+    try {
+      setTags(await actions.setTag({ id: doc.id, tag, on: Boolean(added) }));
+    } catch (e) {
+      setTags(prev);
+      setFailed(why(e, "That tag could not be changed."));
+    } finally {
+      setTagsBusy(false);
+    }
+  };
 
   const facts = doc.facts;
   const factList = facts ? (allFacts ? facts : facts.slice(0, FACTS_PAGE)) : [];
@@ -317,7 +347,7 @@ export function KnowledgeInspector({ doc, loading = false, actions, className = 
               ) : (
                 <>
                   {tags.map((t) => <Pill key={t} kind={t} />)}
-                  <TagPicker compact tags={tags} onChange={setTags} onManage={() => undefined} />
+                  <TagPicker compact tags={tags} onChange={changeTags} onManage={() => undefined} />
                 </>
               )}
             </div>
