@@ -19,6 +19,7 @@ const THEMES: SiteTheme[] = [
 ];
 
 const SITE: DocSite = {
+  id: 1,
   name: "Acme Docs",
   domain: "docs.acme.com",
   status: "live",

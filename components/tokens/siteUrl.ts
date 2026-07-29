@@ -10,3 +10,14 @@ export function siteUrl(domain: string): string {
   if (!d) return "";
   return /^https?:\/\//i.test(d) ? d : `https://${d}`;
 }
+
+/* The address of a site's latest BUILD, before or regardless of deploy.
+
+   The server mounts every build at /sites/site_{id}/ (app.py's StaticFiles
+   mount), and the console's dev proxy forwards /sites to it, so a relative
+   URL works from the console origin in every environment. This is the "see it
+   before you publish it" link: a draft site has a perfectly good build here
+   even though its own domain serves nothing yet. */
+export function sitePreviewUrl(id: number): string {
+  return `/sites/site_${id}/`;
+}

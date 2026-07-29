@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Truncate } from "../data-display/Truncate";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { Send, ExternalLink, FileText, Check, Plus, ArrowUp, ArrowDown, X } from "lucide-react";
+import { Send, ExternalLink, Eye, FileText, Check, Plus, ArrowUp, ArrowDown, X } from "lucide-react";
 import { Drawer } from "../layout/Drawer";
 import { Field } from "../forms/Field";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
@@ -30,7 +30,7 @@ import { useWrite } from "../actions/useWrite";
 import { useResync } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
 import { Link } from "../navigation/Link";
-import { siteUrl } from "../tokens/siteUrl";
+import { siteUrl, sitePreviewUrl } from "../tokens/siteUrl";
 import { fmtDate } from "../tokens/format";
 
 /* Publish (pages/publish.md). The doc-site product: turn the knowledge base
@@ -100,6 +100,9 @@ export type SiteRelease = { version: string; note: string; date?: string };
 
 /** The doc site being edited. */
 export type DocSite = {
+  /** The server's id for this site, which is also where its latest build is
+      served from (`/sites/site_{id}/`) — the preview link needs it. */
+  id: number;
   name: string;
   domain: string;
   /** Whether a release of this site is actually serving. A draft has never
@@ -529,10 +532,12 @@ function SiteEditorInline({ initialTab, site, mobile, actions }: { initialTab: E
           <>
             <Chip label={site.status === "live" ? "Live" : "Draft"} tone={site.status === "live" ? "ok" : "neutral"} dot pulse={site.status === "live"} caps />
             <span className="hidden font-term text-[12px] text-ink/70 sm:inline">{site.domain}</span>
-            {/* The published site itself, on its own domain — a genuinely
-                external destination, so a real new-tab link. A draft has never
-                been deployed: that domain serves nothing, so there is no link
-                to offer (§2). */}
+            {/* Two destinations, and the difference is the point. Preview is
+                the latest build on this server — what Deploy WOULD ship — and
+                exists for drafts precisely because their own domain serves
+                nothing yet. Open site is the published site on its own domain,
+                so it only appears once there is one (§2). */}
+            <Link href={sitePreviewUrl(site.id)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><Eye size={14} /> Preview</Link>
             {site.status === "live" && (
               <Link href={siteUrl(site.domain)} external className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[4px] border border-ink/20 bg-paper text-[13px] font-medium text-ink/80 hover:border-ink/45 hover:text-ink"><ExternalLink size={14} /> Open site</Link>
             )}
@@ -689,6 +694,8 @@ function SiteList({ sites, tagOptions, createOpen, actions }: {
                   </td>
                   <td className={`${tdPad} whitespace-nowrap border-b border-ink/[0.06] text-right align-middle`}>
                     <span className="inline-flex items-center gap-1.5">
+                      {/* The build on this server, viewable before any deploy. */}
+                      <Link href={sitePreviewUrl(s.id)} external className={`inline-flex h-7 items-center gap-1 rounded-[3px] border border-ink/20 bg-paper px-2 text-[12px] font-medium text-ink/75 hover:border-ink/45 hover:text-ink ${focusRing}`}><Eye size={12} /> Preview</Link>
                       {actions?.openSite && <Button compact onClick={() => actions.openSite!(s.id)}>Open</Button>}
                       {/* Publish had no way to delete a site anywhere, so a
                           mistyped domain was permanent. */}
