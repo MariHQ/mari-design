@@ -470,7 +470,7 @@ function GithubConnect({ data, actions, nav }: { data: WelcomeData; actions?: We
         <Input className="w-full font-term" value={glob} onChange={(e) => setGlob(e.target.value)} placeholder="docs/**" />
       </Field>
       <ConnectFooter
-        hint="Mari Cloud syncs Markdown docs read-only."
+        hint="Mari syncs Markdown docs read-only."
         disabled={!selected}
         run={actions?.connectGithubRepo ? () => actions.connectGithubRepo!({ repo: selected, paths: glob }) : undefined}
         onDone={() => nav.go("connect-syncing")}
