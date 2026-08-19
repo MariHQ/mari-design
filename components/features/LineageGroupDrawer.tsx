@@ -13,7 +13,7 @@ import { SkeletonCircle, SkeletonLine, SkeletonChip, SkeletonText, SkeletonList 
 import {
   LgDrawerShell, LgResultPanel, LG_DRAWER_W, lgToggleOn, ConnectionRow, groupParts, groupKindWord,
   LgAuthor, LgOwners, LgSourceChip, GROUP_PAGE_SIZE,
-  nodeById, downloadText, type LNode, type LEdge,
+  nodeById, downloadText, NodeGlyph, type LNode, type LEdge,
 } from "./LineageDataModel";
 
 /** Rows shown before the list becomes its own bounded, scrolling region. */
@@ -76,9 +76,10 @@ export function LineageGroupDrawer({
 
   /* Edges that leave the bucket: the group's References / Endpoints. */
   const graphById = useMemo(() => nodeById(nodes), [nodes]);
+  const macroId = `grp:${groupId}`;
   const references = useMemo(
-    () => edges.filter((e) => e.id.startsWith("ge:") || e.from.startsWith("grp:")),
-    [edges],
+    () => edges.filter((e) => e.from === macroId || e.to === macroId),
+    [edges, macroId],
   );
 
   const owners = useMemo(() => {
@@ -126,7 +127,7 @@ export function LineageGroupDrawer({
       className={className}
       onClose={onClose}
       width={LG_DRAWER_W}
-      icon={<GithubMark size={19} />}
+      icon={members[0] ? <NodeGlyph node={members[0]} size={19} /> : <GithubMark size={19} />}
       title="Rolled-up group"
       summary="One card standing in for a whole bucket of nodes."
       footer={
@@ -196,9 +197,9 @@ export function LineageGroupDrawer({
                 <ConnectionRow
                   key={e.id}
                   rel={e.rel}
-                  dir="out"
+                  dir={e.from === macroId ? "out" : "in"}
                   dashed={e.dashed}
-                  title={graphById[e.to]?.title ?? e.to}
+                  title={graphById[e.from === macroId ? e.to : e.from]?.title ?? (e.from === macroId ? e.to : e.from)}
                   subline={e.count && e.count > 1 ? `${e.count} rolled-up links` : "1 link"}
                 />
               ))}

@@ -16,6 +16,7 @@ import {
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
   nodeById, tracePath, nodeEditedAfter, edgeCreatedAfter, nodeStatusKey,
   buildOverviewGraph, buildFocusedGraph, isLineageRelation,
+  LINEAGE_RELATIONS,
   type LNode, type LEdge, type Lens, type LayoutMode, type LineageMode,
 } from "./LineageDataModel";
 
@@ -462,13 +463,16 @@ export function LineageGraph({
   const hiddenCount = nodes.length - passing.length;
   const cappedCount = passing.length - visibleNodes.length;
   const quietEdges = visibleEdges.length > LABEL_LIMIT;
+  const legendRelations = mode === "overview"
+    ? REL_ORDER.filter((rel) => visibleEdges.some((edge) => edge.rel === rel))
+    : mode ? LINEAGE_RELATIONS : REL_ORDER;
 
   return (
     <div className={`${card} min-w-[560px] overflow-hidden font-display ${className}`.trim()}>
       {/* legend: color + dash + code, three channels per relation */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-ink/10 px-3.5 py-2">
         <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Relations</span>
-        {REL_ORDER.map((k) => {
+        {legendRelations.map((k) => {
           const on = !controls.rels || controls.rels.includes(k);
           return (
             <span key={k} className={`inline-flex items-center gap-1.5 text-[12px] ${on ? "text-ink/75" : "text-ink/35 line-through"}`}>
@@ -480,6 +484,9 @@ export function LineageGraph({
             </span>
           );
         })}
+        {legendRelations.length === 0 && (
+          <span className="text-[12px] text-ink/65">No cross-group dependencies</span>
+        )}
         {/* The volume readout lives in the header, not over the canvas: a badge
             floating top-left would sit on the first lane of cards. */}
         <span className="ml-auto flex min-w-0 items-center gap-2">
