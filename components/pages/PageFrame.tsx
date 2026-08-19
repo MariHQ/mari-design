@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Home, BookOpen, CheckCircle2, Feather, Tag, Network, Shield, Workflow,
-  Send, Sparkles, Settings, Menu as MenuIcon, Search, UserRound, KeyRound,
-  ListChecks, ClipboardCheck, GitBranch,
+  Home, BookOpen, Workflow, Send, Sparkles, Settings, Menu as MenuIcon,
+  Search, UserRound, KeyRound, ListChecks, Database,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -34,26 +33,17 @@ const SKIP_LINK = `sr-only focus:not-sr-only focus:absolute focus:left-3 focus:t
 
 export const NAV: NavSection[] = [
   { heading: "Workspace", items: [
-    { id: "overview", label: "Overview", icon: <Home size={18} /> },
-    /* Tasks was reachable only by finding the back-link on Overview, which
-       made the console's own work queue the one page you had to already know
-       about. It is a workspace destination like any other, so it is in the
-       rail. */
-    { id: "tasks", label: "Tasks", icon: <ListChecks size={18} /> },
+    /* These are product areas, not a flat inventory of every routed screen.
+       The ids deliberately reuse each area's existing landing page so the app
+       can keep resolving navigation through its page registry. Detail and
+       legacy routes fold back into these areas in navFor below. */
+    { id: "overview", label: "Home", icon: <Home size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
-    { id: "answers", label: "Answers", icon: <CheckCircle2 size={18} /> },
-    { id: "decisions", label: "Decisions", icon: <Feather size={18} /> },
-    { id: "library", label: "Library", icon: <Tag size={18} /> },
-    { id: "lineage", label: "Lineage", icon: <Network size={18} /> },
-    { id: "facts", label: "Facts", icon: <Shield size={18} /> },
-    /* /audit was linked from nothing at all: no nav entry, no page body, no
-       menu. A routed page with no entry point is a page that does not exist.
-       It sits next to Facts because it is the same subject seen per run. */
-    { id: "audit", label: "Repository audit", icon: <ClipboardCheck size={18} /> },
-    { id: "flows", label: "Flows", icon: <Workflow size={18} /> },
-    { id: "publish", label: "Publish", icon: <Send size={18} /> },
-    { id: "insights", label: "Insights", icon: <Sparkles size={18} /> },
-    { id: "trajectories", label: "Agent trajectories", icon: <GitBranch size={18} /> },
+    { id: "tasks", label: "Review", icon: <ListChecks size={18} /> },
+    { id: "flows", label: "Automations", icon: <Workflow size={18} /> },
+    { id: "publish", label: "Destinations", icon: <Send size={18} /> },
+    { id: "insights", label: "Analytics", icon: <Sparkles size={18} /> },
+    { id: "sources", label: "Sources", icon: <Database size={18} /> },
   ] },
   { divider: true, items: [
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
@@ -193,12 +183,9 @@ function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigat
     a few off-nav routes map onto the closest nav entry. */
 export function navFor(pageId: string): string {
   if (pageId.startsWith("settings") || pageId === "lookbook") return "settings";
-  // Tasks and Repository Audit have their own rail entries now, so they
-  // highlight themselves rather than borrowing Overview's and Facts'.
-  // Doc Review stays a DETAIL route: you arrive at it from a document, never
-  // from the rail, so it highlights the page you came from.
-  if (pageId === "doc-review") return "knowledge";
-  if (pageId === "sources") return "settings";
+  if (["facts", "decisions", "answers", "library", "lineage", "doc-review"].includes(pageId)) return "knowledge";
+  if (pageId === "audit") return "tasks";
+  if (pageId === "trajectories") return "insights";
   // Preferences is reached from the account menu, not the sidebar, and it is
   // about YOU rather than the workspace — so it deliberately highlights no nav
   // item instead of borrowing Settings', which is a different subject.
@@ -207,10 +194,9 @@ export function navFor(pageId: string): string {
 }
 
 /** The page a nav item opens. The inverse of `navFor`, which is many-to-one:
-    five Settings pages, Sources and Lookbook all report the "settings" nav id,
-    so "settings" is not itself a page id. Looking the nav id up directly in
-    PAGES therefore found nothing and the Settings menu item did nothing at
-    all. The library owns the nav structure, so it owns this mapping too. */
+    the Settings pages and Lookbook all report the "settings" nav id, so
+    "settings" is not itself a page id. All other product areas deliberately
+    use the id of their existing landing page. */
 export function landingPageFor(navId: string): string {
   if (navId === "settings") return "settings-general";
   return navId;

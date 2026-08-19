@@ -28,15 +28,15 @@ const STATES = [
   { id: "default", label: "Default · mixed" },
   { id: "open-only", label: "All open" },
   { id: "all-done", label: "All caught up" },
-  { id: "single", label: "Single task" },
-  { id: "many", label: "Many tasks" },
+  { id: "single", label: "Single review item" },
+  { id: "many", label: "Many review items" },
   { id: "overdue", label: "Overdue" },
   { id: "assigned-to-me", label: "Assigned to me" },
   { id: "composer-open", label: "Composer · drafting" },
-  { id: "saving", label: "Adding task…" },
+  { id: "saving", label: "Adding review item…" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
-  { id: "empty", label: "No tasks" },
+  { id: "empty", label: "No review items" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -422,7 +422,7 @@ function Body({ data, error, actions, who, mobile }: {
         <div className="flex flex-col gap-4">
           <div className="flex items-end gap-3">
             <span className="min-w-0 flex-1">
-              <FormField label="Task">
+              <FormField label="Review item">
                 <Input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -482,7 +482,7 @@ function Body({ data, error, actions, who, mobile }: {
           <WriteError onDismiss={() => composer.setFailed(null)}>{composer.failed}</WriteError>
           <div>
             <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
-              <Plus size={15} /> {saving ? "Adding…" : "Add task"}
+              <Plus size={15} /> {saving ? "Adding…" : "Add review item"}
             </Button>
           </div>
         </div>
@@ -496,7 +496,7 @@ function Body({ data, error, actions, who, mobile }: {
 
       {/* Filter left, sort on the SAME line (§13). */}
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs ariaLabel="Filter tasks" options={views} value={view} onChange={setView} />
+        <Tabs ariaLabel="Filter review items" options={views} value={view} onChange={setView} />
         <span className="ml-auto flex items-center gap-2">
           <label className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65" htmlFor="tasks-sort">Sort</label>
           <Select id="tasks-sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="w-44">
@@ -514,7 +514,7 @@ function Body({ data, error, actions, who, mobile }: {
           level, not via a component breakpoint (§10). */}
       <div className={mobile ? "grid grid-cols-1 gap-5" : DASH2}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
-          <ResultCount from={openPager.from} to={openPager.to} total={openPager.total} noun="open tasks" whenTruncated />
+          <ResultCount from={openPager.from} to={openPager.to} total={openPager.total} noun="open review items" whenTruncated />
           {/* The empty line names the filter, so a hidden backlog never reads
               as an empty inbox. */}
           {listBody(openPager.pageRows, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
@@ -533,8 +533,8 @@ function Body({ data, error, actions, who, mobile }: {
             ) : null
           }
         >
-          <ResultCount from={donePager.from} to={donePager.to} total={donePager.total} noun="done tasks" whenTruncated />
-          {listBody(donePager.pageRows, view === "all" ? "No completed tasks yet." : "No completed tasks in this filter.")}
+          <ResultCount from={donePager.from} to={donePager.to} total={donePager.total} noun="completed review items" whenTruncated />
+          {listBody(donePager.pageRows, view === "all" ? "No completed review items yet." : "No completed review items in this filter.")}
           {donePager.paged && <PagerBar page={donePager.page} pageCount={donePager.pageCount} onChange={donePager.setPage} />}
         </Column>
       </div>
@@ -544,13 +544,13 @@ function Body({ data, error, actions, who, mobile }: {
 
 function TasksPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<TasksData, TasksActions>) {
   return (
-    <PageFrame chrome={chrome} active={navFor("tasks")} title="Tasks" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("tasks")} title="Review" mobile={mobile}>
       {loading ? (
         <SkeletonPage
           variant="board"
-          eyebrow="Tasks"
-          title="Tasks"
-          description="Everything Mari opened for a human: fact checks, approvals, stale docs, and canonical tagging."
+          eyebrow="Review queue"
+          title="Review"
+          description="Everything Mari needs a person to check: facts, approvals, stale documents, and canonical tags."
           /* The board's two columns are the workflow itself, never a query
              result, so they name themselves while the cards are still bars. */
           sections={["Open", "Done"]}
@@ -560,9 +560,9 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
-          eyebrow="Tasks"
-          title="Tasks"
-          description="Everything Mari opened for a human: fact checks, approvals, stale docs, and canonical tagging."
+          eyebrow="Review queue"
+          title="Review"
+          description="Everything Mari needs a person to check: facts, approvals, stale documents, and canonical tags."
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
@@ -579,7 +579,7 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
 
 export const page: PageModule<TasksData, TasksActions> = {
   id: "tasks",
-  title: "Tasks",
+  title: "Review",
   route: "/tasks",
   component: TasksPage,
   states: STATES.map((s) => ({ ...s })),

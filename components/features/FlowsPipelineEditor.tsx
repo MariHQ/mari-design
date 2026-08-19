@@ -71,7 +71,7 @@ type KindMeta = { name: string; desc: string; llm?: boolean; defLabel: string; d
 
 const I = (n: ReactNode) => n;
 const KIND_META: Record<StepKind, KindMeta> = {
-  trigger: { name: "Source event", desc: "Watches a scope of documents. The flow runs on its cadence or when you press Run.", defLabel: "When docs change", defConfig: { label: "", query: "" }, icon: I(<Bell size={15} />) },
+  trigger: { name: "Source event", desc: "Watches a scope of documents. The automation runs on its cadence or when you press Run.", defLabel: "When docs change", defConfig: { label: "", query: "" }, icon: I(<Bell size={15} />) },
   fetch_docs: { name: "Fetch docs", desc: "Pulls matching documents into the run by query, tag, or both, capped at k.", defLabel: "Fetch docs", defConfig: { query: "", k: 3 }, icon: I(<Search size={15} />) },
   refine: { name: "Prose refine", llm: true, desc: "Runs a Mari writing skill over each fetched doc and proposes edits as findings.", defLabel: "Refine prose", defConfig: { skill: "tighten" }, icon: I(<Sparkles size={15} />) },
   fact_check: { name: "Fact check", llm: true, desc: "Checks claims against accepted facts and reports contradictions with citations.", defLabel: "Verify facts", defConfig: {}, icon: I(<CheckSquare size={15} />) },
@@ -80,7 +80,7 @@ const KIND_META: Record<StepKind, KindMeta> = {
   derive_links: { name: "Derive links", llm: true, desc: "Suggests lineage links between the fetched docs and related knowledge.", defLabel: "Derive links", defConfig: {}, icon: I(<GitBranch size={15} />) },
   condition: { name: "Condition", desc: "Branches on a run stat (for example contradictions > 0). Yes-branch steps run when it passes.", defLabel: "Contradictions?", defConfig: { field: "contradictions", greater_than: 0 }, icon: I(<Filter size={15} />) },
   approval: { name: "Approval", desc: "Pauses the run as waiting until the assignee approves it from the run panel.", defLabel: "Approval", defConfig: { assignee: "Aki K." }, icon: I(<CheckSquare size={15} />) },
-  create_task: { name: "Create task", desc: "Opens a task on the Tasks board. Dry runs preview the task.", defLabel: "Create task", defConfig: { title: "", kind: "review", kind_label: "Review" }, icon: I(<CheckSquare size={15} />) },
+  create_task: { name: "Create review item", desc: "Opens an item in Review. Dry runs preview the item.", defLabel: "Create review item", defConfig: { title: "", kind: "review", kind_label: "Review" }, icon: I(<CheckSquare size={15} />) },
   notify: { name: "Notify", desc: "Sends an in-app notification. Dry runs preview the message.", defLabel: "Notify", defConfig: { text: "", detail: "" }, icon: I(<Bell size={15} />) },
   deploy_site: { name: "Deploy site", desc: "Publishes a documentation site version. Dry runs report what would deploy.", defLabel: "Deploy site", defConfig: { site_id: 1 }, icon: I(<Globe size={15} />) },
   sync_source: { name: "Sync source", desc: "Re-syncs a connected source so the run sees the latest.", defLabel: "Sync source", defConfig: { source_id: 0 }, icon: I(<RefreshCw size={15} />) },
@@ -135,8 +135,8 @@ const NEEDS_FETCH: StepKind[] = ["fact_check", "summarize", "derive_links", "ref
     what the SERVER rejected, and the server rejects none of these. */
 export function validateFlow(name: string, steps: EditorStep[]): string[] {
   const problems: string[] = [];
-  if (!name.trim()) problems.push("The flow has no name. Name it above the pipeline.");
-  if (steps.length === 0) problems.push("The flow has no steps.");
+  if (!name.trim()) problems.push("The automation has no name. Name it above the pipeline.");
+  if (steps.length === 0) problems.push("The automation has no steps.");
   else if (steps[0].kind !== "trigger") {
     problems.push(`Step 1 is "${KIND_META[steps[0].kind].name}". Every flow starts with its source event.`);
   }
@@ -304,9 +304,9 @@ export function FlowsPipelineEditor({
     <div className={`flex flex-col gap-5 ${className}`}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="link" className="text-ink/60" onClick={onBack}><ChevronLeft size={15} /> Flows</Button>
+        <Button variant="link" className="text-ink/60" onClick={onBack}><ChevronLeft size={15} /> Automations</Button>
         <span className="font-term text-[12px] text-ink/65">/</span>
-        <span className="text-[14px] font-semibold text-ink">{flowName || "Untitled flow"}</span>
+        <span className="text-[14px] font-semibold text-ink">{flowName || "Untitled automation"}</span>
         <span className="flex-1" />
         <Switch checked={enabled} onCheckedChange={setEnabled} label={enabled ? "Enabled" : "Paused"} />
         <Button compact disabled={write.busy} onClick={() => void run(true)}><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
@@ -317,12 +317,12 @@ export function FlowsPipelineEditor({
       <div className={`${card} px-5 py-4`}>
         <input
           value={flowName} onChange={(e) => { setFlowName(e.target.value); setDirty(true); }}
-          placeholder="Name this flow"
+          placeholder="Name this automation"
           className={`w-full bg-transparent font-display text-[22px] font-bold tracking-[-0.01em] text-ink outline-none placeholder:text-ink/30 rounded-[3px] ${focusRing}`}
         />
         <input
           value={desc} onChange={(e) => { setDesc(e.target.value); setDirty(true); }}
-          placeholder="What does this flow guarantee? One sentence."
+          placeholder="What does this automation guarantee? One sentence."
           className={`mt-1 w-full bg-transparent text-[13px] text-ink/60 outline-none placeholder:text-ink/30 rounded-[3px] ${focusRing}`}
         />
       </div>
@@ -442,7 +442,7 @@ export function FlowsPipelineEditor({
       )}
       <WriteError>{write.failed}</WriteError>
       <div className={`${card} flex flex-wrap items-center gap-2 px-5 py-3`}>
-        <Button variant="primary" compact disabled={!dirty || write.busy} onClick={() => void save()}>Save flow</Button>
+        <Button variant="primary" compact disabled={!dirty || write.busy} onClick={() => void save()}>Save automation</Button>
         <Button compact disabled={write.busy} onClick={() => void run(true)}><Eye size={13} /> {dirty ? "Save & test run" : "Test run"}</Button>
         <Button compact disabled={write.busy} onClick={() => void run(false)}><Play size={13} /> {dirty ? "Save & run" : "Run"}</Button>
         <DryChip />

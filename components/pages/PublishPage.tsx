@@ -209,9 +209,9 @@ const STATES = [
   { id: "site-theme", label: "Site · Theme" },
   { id: "site-preview", label: "Site · Preview" },
   { id: "site-domains", label: "Site · Domains" },
-  { id: "publish-draft", label: "Publish · Draft" },
-  { id: "publish-publishing", label: "Publish · Publishing" },
-  { id: "publish-published", label: "Publish · Published" },
+  { id: "publish-draft", label: "Destinations · Draft" },
+  { id: "publish-publishing", label: "Destinations · Publishing" },
+  { id: "publish-published", label: "Destinations · Published" },
   { id: "mcp", label: "MCP · Server list" },
   { id: "mcp-add", label: "MCP · Add server" },
   { id: "mcp-token", label: "MCP · Token created" },
@@ -951,12 +951,12 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
 
   if (loading) {
     return (
-      <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
+      <PageFrame chrome={chrome} active={navFor("publish")} title="Destinations" mobile={mobile}>
         <SkeletonPage
           variant="table"
           eyebrow="Doc site"
-          title="Publish"
-          description="Turn the knowledge base into a documentation website, or expose it to AI tools and agents over MCP."
+          title="Destinations"
+          description="Deliver the knowledge base as documentation websites or expose it to AI tools and agents over MCP."
           /* The icon is what puts the loaded title at x=288; without it the
              loading title started at x=250 and slid right on load. */
           icon={<span className="text-moss"><Send size={24} /></span>}
@@ -970,20 +970,20 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
   }
 
   return (
-    <PageFrame chrome={chrome} active={navFor("publish")} title="Publish" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("publish")} title="Destinations" mobile={mobile}>
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         {/* The eyebrow follows the tab. It was pinned to "Doc site" and kept
             saying so with the MCP tab underlined — left over from the tab
             repair, which fixed the panel and not the label above it. */}
         <PageHeader
           eyebrow={tab === "mcp" ? "MCP" : "Doc site"}
-          title="Publish"
-          description="Turn the knowledge base into a documentation website, or expose it to AI tools and agents over MCP."
+          title="Destinations"
+          description="Deliver the knowledge base as documentation websites or expose it to AI tools and agents over MCP."
           icon={<span className="text-moss"><Send size={24} /></span>}
         />
         <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
           {!bare && (
-            <Tabs<PublishSection> ariaLabel="Publish sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={pickTab} />
+            <Tabs<PublishSection> ariaLabel="Destination sections" variant="underline" options={TAB_OPTIONS} value={tab} onChange={pickTab} />
           )}
           <Body data={data} section={tab} error={error} mobile={mobile} actions={actions} />
         </div>
@@ -994,7 +994,7 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
 
 export const page: PageModule<PublishData, PublishActions> = {
   id: "publish",
-  title: "Publish",
+  title: "Destinations",
   route: "/publish",
   component: PublishPage,
   states: STATES.map((s) => ({ ...s })),
