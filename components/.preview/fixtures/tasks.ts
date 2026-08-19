@@ -10,8 +10,8 @@ import {
 } from "./stress";
 
 const SEED: Task[] = [
-  { id: 1, title: "Verify the new proration rule in the billing runbook", who: "DR", kind: "factcheck", kindLabel: "Fact check", done: false, due: "2026-07-28", priority: "High", doc: { id: "d-114", title: "Billing runbook" } },
-  { id: 2, title: "Approve the SSO onboarding guide for publish", who: "MG", kind: "approval", kindLabel: "Approval", done: false, due: "2026-07-30", doc: { id: "d-208", title: "SSO onboarding guide" } },
+  { id: 1, title: "Verify the new proration rule in the billing runbook", who: "DR", kind: "factcheck", kindLabel: "Fact check", done: false, due: "2026-07-28", priority: "High", subject: { type: "document", id: "d-114", title: "Billing runbook", href: "/knowledge/doc?id=d-114" } },
+  { id: 2, title: "Approve the SSO onboarding guide for publish", who: "MG", kind: "approval", kindLabel: "Approval", done: false, due: "2026-07-30", subject: { type: "fact", id: "f-208", title: "SSO onboarding is ready", href: "/facts?fact=f-208" } },
   { id: 3, title: "Review the incident escalation ladder", who: "SL", kind: "needs-review", kindLabel: "Needs review", done: false, priority: "Low" },
   { id: 4, title: "Retire two stale screenshots in auth/README", who: "PK", kind: "stale", kindLabel: "Stale", done: true },
   { id: 5, title: "Tag the pricing FAQ as canonical", who: "DR", kind: "canonical", kindLabel: "Canonical", done: true },

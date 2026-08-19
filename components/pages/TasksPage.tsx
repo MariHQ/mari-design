@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock, FileText } from "lucide-react";
+import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock, FileText, Link2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { Tabs } from "../navigation/Tabs";
+import { Link } from "../navigation/Link";
 import { Combobox } from "../forms/Combobox";
 import { FormField } from "../forms/FormField";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -41,6 +42,17 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/** The product object a review item is about. `type` is deliberately an open
+    string: workspaces can attach reviews to documents, facts, decisions,
+    automation runs, or product-specific objects without widening this type. */
+export type TaskSubject = {
+  type: string;
+  id: string | number;
+  title: string;
+  /** A durable destination when the presenter can navigate without an action. */
+  href?: string;
+};
+
 /** One row of the inbox. */
 export type Task = {
   id: number;
@@ -57,9 +69,11 @@ export type Task = {
       compares `due` against the reader's own midnight — a stated timezone
       rather than the unstated one the flag used to carry. */
   overdue?: boolean;
-  /** What the task is about. Rendered as a link only when the page can open it
-      (`actions.openDoc`); a task with no way back to its document is where the
-      inbox used to dead-end (P-TA-5). */
+  /** What the review is about. It is a real contextual link when either its
+      own `href` or `actions.openSubject` supplies a destination. */
+  subject?: TaskSubject;
+  /** @deprecated Use `subject` with `type: "document"`. Kept as a migration
+      bridge for consumers that have not adopted typed subjects yet. */
   doc?: { id: string; title: string };
   /** How urgent, in the workspace's own words ("High"). Display text, like
       `kindLabel`, so a workspace with no priority vocabulary shows none. */
@@ -121,8 +135,9 @@ export type TasksActions = {
   }) => Task | void | Promise<Task | void>;
   /** Empty the Done column. Destructive: goes through ConfirmButton. */
   clearDone?: () => void | Promise<void>;
-  /** Open the document a task is about. Without it a task's document is text,
-      not a link that goes nowhere (§2). */
+  /** Open the typed product object a review item is about. */
+  openSubject?: (subject: TaskSubject) => void;
+  /** @deprecated Use `openSubject`. */
   openDoc?: (docId: string) => void;
 };
 
@@ -162,12 +177,16 @@ export type TasksData = {
    it used to `[overflow-wrap:anywhere]`, which is exactly the "pack it in"
    the rule names (§12, C4). The full title rides the title attribute. The done
    marker is a SQUARE checkbox: a circle reads as "pick one" (§6). */
-function TaskRow({ task, overdue, onToggle, onOpenDoc }: {
+function TaskRow({ task, overdue, onToggle, onOpenSubject }: {
   task: Task;
   overdue: boolean;
   onToggle: (id: number) => void;
-  onOpenDoc?: (docId: string) => void;
+  onOpenSubject?: (subject: TaskSubject) => void;
 }) {
+  const subject: TaskSubject | undefined = task.subject ?? (task.doc
+    ? { type: "document", id: task.doc.id, title: task.doc.title }
+    : undefined);
+  const subjectIcon = subject?.type === "document" ? <FileText size={12} /> : <Link2 size={12} />;
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5">
       <button
@@ -187,13 +206,27 @@ function TaskRow({ task, overdue, onToggle, onOpenDoc }: {
         >
           {task.title}
         </Truncate>
-        {task.doc && (
-          onOpenDoc ? (
-            <Button variant="link" compact className="mt-0.5" onClick={() => onOpenDoc(task.doc!.id)}>
-              <FileText size={12} /> <TruncateInline className="max-w-[220px]">{task.doc.title}</TruncateInline>
+        {subject && (
+          onOpenSubject && (subject.href || subject.type === "document") ? (
+            <Button
+              variant="link"
+              compact
+              className="mt-0.5"
+              aria-label={`Open ${subject.type}: ${subject.title}`}
+              onClick={() => onOpenSubject(subject)}
+            >
+              {subjectIcon} <TruncateInline className="max-w-[220px]">{subject.title}</TruncateInline>
             </Button>
+          ) : subject.href ? (
+            <Link
+              href={subject.href}
+              aria-label={`Open ${subject.type}: ${subject.title}`}
+              className="mt-0.5 inline-flex max-w-full items-center gap-1 font-term text-[12px] font-medium text-biscay-2 hover:underline"
+            >
+              {subjectIcon} <TruncateInline className="max-w-[220px]">{subject.title}</TruncateInline>
+            </Link>
           ) : (
-            <Truncate className="mt-0.5 text-[12px] text-ink/70">{task.doc.title}</Truncate>
+            <Truncate className="mt-0.5 text-[12px] text-ink/70">{subject.title}</Truncate>
           )
         )}
       </span>
@@ -398,6 +431,10 @@ function Body({ data, error, actions, who, mobile }: {
     { id: "overdue" as const, label: "Overdue", count: tasks.filter((t) => isOverdue(t, floor)).length },
   ];
 
+  const openSubject = actions?.openSubject ?? (actions?.openDoc
+    ? (subject: TaskSubject) => actions.openDoc!(String(subject.id))
+    : undefined);
+
   const listBody = (rows: Task[], emptyText: string) => {
     /* One banner for the page, not one per column: the same failure twice reads
        as two separate failures. The column used to echo the raw `error` string
@@ -406,7 +443,7 @@ function Body({ data, error, actions, who, mobile }: {
     if (error) return null;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
     return rows.map((t) => (
-      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenDoc={actions?.openDoc} />
+      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenSubject={openSubject} />
     ));
   };
 
