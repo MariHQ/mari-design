@@ -55,7 +55,9 @@ export type TaskSubject = {
 
 /** One row of the inbox. */
 export type Task = {
-  id: number;
+  id: string | number;
+  /** Stable cross-kind id (`fact:42`, `workflow:7`) from the Review projection. */
+  reviewId?: string;
   title: string;
   who: string;
   kind: string;
@@ -78,6 +80,9 @@ export type Task = {
   /** How urgent, in the workspace's own words ("High"). Display text, like
       `kindLabel`, so a workspace with no priority vocabulary shows none. */
   priority?: string;
+  status?: string;
+  source?: string;
+  assignee?: string;
 };
 
 /** Someone a task can be filed to. */
@@ -122,6 +127,10 @@ export type TaskStrip = {
 export type TasksActions = {
   /** Check / uncheck one row. */
   setDone?: (args: { id: number; done: boolean }) => void | Promise<void>;
+  /** Run the centralized deterministic policy for a projected Review item. */
+  evaluate?: (args: { id: string; dryRun?: boolean }) =>
+    { outcome: string; explanation: string } | void |
+    Promise<{ outcome: string; explanation: string } | void>;
   /** Add the composer's draft to the inbox.
 
       `assignee`, `priority` and `due` are only sent when the composer collected
@@ -177,28 +186,35 @@ export type TasksData = {
    it used to `[overflow-wrap:anywhere]`, which is exactly the "pack it in"
    the rule names (§12, C4). The full title rides the title attribute. The done
    marker is a SQUARE checkbox: a circle reads as "pick one" (§6). */
-function TaskRow({ task, overdue, onToggle, onOpenSubject }: {
+function TaskRow({ task, overdue, onToggle, onOpenSubject, onEvaluate }: {
   task: Task;
   overdue: boolean;
-  onToggle: (id: number) => void;
+  onToggle: (id: string | number) => void;
   onOpenSubject?: (subject: TaskSubject) => void;
+  onEvaluate?: (id: string) => void;
 }) {
   const subject: TaskSubject | undefined = task.subject ?? (task.doc
     ? { type: "document", id: task.doc.id, title: task.doc.title }
     : undefined);
   const subjectIcon = subject?.type === "document" ? <FileText size={12} /> : <Link2 size={12} />;
+  const actionLabel = ({ fact: "Verify", decision: "Ratify", answer: "Approve",
+    change: "Approve", finding: "Review", workflow: "Review" } as Record<string, string>)[task.kind] ?? "Evaluate";
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5">
-      <button
-        type="button"
-        aria-label={task.done ? "Mark not done" : "Mark done"}
-        onClick={() => onToggle(task.id)}
-        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[4px] border transition-colors ${
-          task.done ? "border-moss bg-moss text-white" : "border-ink/30 text-transparent hover:border-ink/50"
-        }`}
-      >
-        <Check size={12} />
-      </button>
+      {task.reviewId ? (
+        !task.done && onEvaluate ? <Button compact variant="default" onClick={() => onEvaluate(task.reviewId!)}>{actionLabel}</Button> : null
+      ) : (
+        <button
+          type="button"
+          aria-label={task.done ? "Mark not done" : "Mark done"}
+          onClick={() => onToggle(task.id)}
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[4px] border transition-colors ${
+            task.done ? "border-moss bg-moss text-white" : "border-ink/30 text-transparent hover:border-ink/50"
+          }`}
+        >
+          <Check size={12} />
+        </button>
+      )}
       <span className="min-w-[9rem] flex-1">
         <Truncate
           lines={2}
@@ -231,6 +247,7 @@ function TaskRow({ task, overdue, onToggle, onOpenSubject }: {
         )}
       </span>
       <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+        {task.source && <Chip label={task.source} tone="neutral" />}
         {task.priority && <Chip label={task.priority} tone={overdue ? "attention" : "neutral"} />}
         {task.due && !task.done && (
           <Chip
@@ -298,6 +315,10 @@ function Body({ data, error, actions, who, mobile }: {
   const [due, setDue] = useState("");
   const [view, setView] = useState<"all" | "mine" | "overdue">("all");
   const [sort, setSort] = useState<"due" | "title" | "priority">("due");
+  const [kindFilter, setKindFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [policyNote, setPolicyNote] = useState("");
 
   /* The board is the page's most-mutated state, and it was seeded from `data`
      ONCE: every refetch landed behind it, so a task someone else closed stayed
@@ -327,12 +348,12 @@ function Body({ data, error, actions, who, mobile }: {
      actions that local move is the whole behaviour (the canvas renders this
      page with no server); with actions it is an optimistic echo the refetch
      confirms, and a rejected write puts the row back where it was. */
-  const toggle = async (id: number) => {
+  const toggle = async (id: string | number) => {
     const row = tasks.find((t) => t.id === id);
     if (!row) return;
     const done = !row.done;
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done } : t)));
-    if (!actions?.setDone) return;
+    if (!actions?.setDone || typeof id !== "number") return;
     // `run` answers whether the write landed, so the optimistic row can go back
     // where it was when it did not.
     const ok = await board.run(() => actions.setDone!({ id, done }));
@@ -402,6 +423,9 @@ function Body({ data, error, actions, who, mobile }: {
   const floor = startOfToday();
   const shown = useMemo(() => {
     const kept = tasks.filter((t) => {
+      if (kindFilter && t.kind !== kindFilter) return false;
+      if (sourceFilter && t.source !== sourceFilter) return false;
+      if (assigneeFilter && t.assignee !== assigneeFilter) return false;
       if (view === "mine") return t.who === who;
       if (view === "overdue") return isOverdue(t, floor);
       return true;
@@ -418,7 +442,7 @@ function Body({ data, error, actions, who, mobile }: {
       const bv = b.due ? new Date(String(b.due)).getTime() : Infinity;
       return av - bv;
     });
-  }, [tasks, view, sort, who, floor, priorities]);
+  }, [tasks, view, sort, who, floor, priorities, kindFilter, sourceFilter, assigneeFilter]);
 
   const open = shown.filter((t) => !t.done);
   const done = shown.filter((t) => t.done);
@@ -434,6 +458,15 @@ function Body({ data, error, actions, who, mobile }: {
   const openSubject = actions?.openSubject ?? (actions?.openDoc
     ? (subject: TaskSubject) => actions.openDoc!(String(subject.id))
     : undefined);
+  const evaluate = actions?.evaluate
+    ? (id: string) => { void board.run(async () => {
+        const result = await actions.evaluate!({ id, dryRun: false });
+        if (result) setPolicyNote(`${result.outcome}: ${result.explanation}`);
+      }); }
+    : undefined;
+  const kinds = [...new Set(tasks.map((t) => t.kind))].sort();
+  const sources = [...new Set(tasks.map((t) => t.source).filter(Boolean) as string[])].sort();
+  const owners = [...new Set(tasks.map((t) => t.assignee).filter(Boolean) as string[])].sort();
 
   const listBody = (rows: Task[], emptyText: string) => {
     /* One banner for the page, not one per column: the same failure twice reads
@@ -443,7 +476,8 @@ function Body({ data, error, actions, who, mobile }: {
     if (error) return null;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
     return rows.map((t) => (
-      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenSubject={openSubject} />
+      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle}
+        onOpenSubject={openSubject} onEvaluate={evaluate} />
     ));
   };
 
@@ -530,10 +564,27 @@ function Body({ data, error, actions, who, mobile }: {
       {/* A rejected toggle or a refused Clear done accuses no input: it is a
           banner beside the board, at the weight a failed read gets (XA-02). */}
       <WriteError onDismiss={() => board.setFailed(null)}>{board.failed}</WriteError>
+      {policyNote && (
+        <div role="status" className="rounded-[4px] border border-ink/15 bg-flysch/50 px-3 py-2 text-[13px] text-ink">
+          {policyNote}
+        </div>
+      )}
 
       {/* Filter left, sort on the SAME line (§13). */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3" aria-label="Review filters">
         <Tabs ariaLabel="Filter review items" options={views} value={view} onChange={setView} />
+        <Select aria-label="Kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} className="w-36">
+          <option value="">All kinds</option>
+          {kinds.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
+        <Select aria-label="Source" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-36">
+          <option value="">All sources</option>
+          {sources.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
+        <Select aria-label="Assignee" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="w-40">
+          <option value="">All assignees</option>
+          {owners.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
         <span className="ml-auto flex items-center gap-2">
           <label className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65" htmlFor="tasks-sort">Sort</label>
           <Select id="tasks-sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="w-44">
