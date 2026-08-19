@@ -10,7 +10,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
 import {
-  SettingsModelsConfig, type ChunkRow, type ProviderKeys, type SettingsModelsActions,
+  SettingsModelsConfig, type ChunkRow, type GatewaySettings, type ProviderKeys, type SettingsModelsActions,
 } from "../features/SettingsModelsConfig";
 
 /** What Settings → Models can do. Defined with the panel that renders the
@@ -63,6 +63,7 @@ export type SettingsModelsData = {
   /** Per-source chunking table. */
   chunking: ChunkRow[];
   keys: ProviderKeys;
+  gateway?: GatewaySettings;
   /** Corpus line appended to a healthy connection test. */
   indexSummary: string;
   /** Detail lines the last connection test produced. */
@@ -136,6 +137,7 @@ function Body({ data, error, actions }: { data: SettingsModelsData; error: strin
       llmOptions={data.llmOptions}
       chunking={data.chunking}
       keys={data.keys}
+      gateway={data.gateway}
       actions={actions}
       indexSummary={data.indexSummary}
       unsaved={data.phase === "editing-embedding" ? "embedding" : data.phase === "editing-llm" ? "llm" : null}
