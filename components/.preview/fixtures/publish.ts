@@ -109,6 +109,8 @@ const BASE: PublishData = {
   serverCount: 3,
   draft: DRAFT,
   created: CREATED,
+  slack: { configured: true, teamName: "Acme HQ", lastEventAt: "2026-07-21T13:58:00" },
+  github: { webhookConfigured: true, repos: ["acme/handbook", "acme/api"] },
 };
 
 /** A workspace that publishes nothing: no site, no server. The site list is
@@ -174,6 +176,7 @@ export const FIXTURES: PageFixtures<PublishData> = {
   "mcp-add": { data: { ...BASE, view: "mcp-add" } },
   "mcp-token": { data: { ...BASE, view: "mcp-token", serverCount: 4 } },
   "mcp-empty": { data: { ...BASE, view: "mcp-list", servers: [], serverCount: 0 } },
+  bots: { data: { ...BASE, view: "bots" } },
   loading: { data: BASE, loading: true },
   error: { data: BASE, error: "Mari is temporarily unreachable. We are retrying automatically." },
   empty: { data: EMPTY },

@@ -16,13 +16,12 @@ import { Tabs, type TabOption } from "../navigation/Tabs";
  */
 
 export type SettingsTab =
-  | "general" | "members" | "models" | "sources" | "api-keys" | "audit" | "design";
+  | "general" | "members" | "models" | "api-keys" | "audit" | "design";
 
 const TABS: TabOption<SettingsTab>[] = [
   { id: "general", label: "General" },
   { id: "members", label: "Members" },
   { id: "models", label: "Models" },
-  { id: "sources", label: "Sources" },
   { id: "api-keys", label: "API keys" },
   { id: "audit", label: "Audit log" },
   { id: "design", label: "Design & brand" },
@@ -35,9 +34,7 @@ const TABS: TabOption<SettingsTab>[] = [
     the loaded one. */
 export const SETTINGS_TAB_LABELS = TABS.map((t) => t.label);
 
-/** Tab -> the page id it opens. Sources is the odd one out: a top-level page
-    that Settings borrows. Keeping the mapping here is what lets it live in the
-    row without every page inventing its own routing rules.
+/** Tab -> the page id it opens.
 
     "design" pointed at `lookbook` — the component CATALOG, which documents
     this design system rather than the workspace's brand, and which crashed in
@@ -46,7 +43,6 @@ const PAGE_FOR: Record<SettingsTab, string> = {
   general: "settings-general",
   members: "settings-members",
   models: "settings-models",
-  sources: "sources",
   "api-keys": "settings-api-keys",
   audit: "settings-audit-log",
   design: "settings-design",

@@ -204,11 +204,12 @@ export const ANSWER_ONE = ANSWERS_ROWS[0];
 /* ── Sources ────────────────────────────────────────────────────────────── */
 
 const sources = SOURCES.default.data;
+const destinations = PUBLISH.default.data;
 
 export const SOURCES_ROWS = sources.sources;
 export const SOURCES_CATALOG = sources.catalog;
-export const SOURCES_SLACK = sources.slack;
-export const SOURCES_GITHUB = sources.github;
+export const DESTINATIONS_SLACK = destinations.slack;
+export const DESTINATIONS_GITHUB = destinations.github;
 
 /* ── Onboarding ─────────────────────────────────────────────────────────── */
 
@@ -401,7 +402,7 @@ export const FEATURE_PROPS: Record<string, Record<string, unknown>> = {
 
   SourcesConnectorCard: { sources: SOURCES_ROWS },
   SourcesConnectorWizard: { providers: SOURCES_CATALOG, defaultOpen: false },
-  SourcesBots: { slack: SOURCES_SLACK, github: SOURCES_GITHUB, defaultOpen: null },
+  SourcesBots: { slack: DESTINATIONS_SLACK, github: DESTINATIONS_GITHUB, defaultOpen: null },
 
   WelcomeGithubConnect: { repos: WELCOME_REPOS, defaultOpen: false },
   WelcomeGenericConnect: { defaultOpen: false },

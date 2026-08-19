@@ -18,7 +18,7 @@ import { fmtDateTime } from "../tokens/format";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
 
-/* SourcesBots — the Sources page "Bots" tab: self-serve setup for the two
+/* SourcesBots — the Destinations page "Bots" tab: self-serve setup for the two
    push-into-Mari integrations (Slack answering bot + GitHub push webhook).
    Two honest status cards ("Waiting for first event" is a real state) each
    open a guided-setup Drawer with a Stepper. Composes Card/Drawer/Stepper/
@@ -28,7 +28,7 @@ import { WriteError } from "../feedback/WriteError";
 export type SlackStatus = { configured: boolean; teamName?: string; lastEventAt?: string; lastError?: string };
 export type GithubStatus = { webhookConfigured: boolean; lastDeliveryAt?: string; repos: string[] };
 
-/** What the Bots tab can DO. The tab used to be handed status and nothing
+/** What the Bots destination can DO. The presenter used to be handed status and nothing
  *  else, so every credential it collected died in local state: "Saved" was a
  *  word, not a write.
  *
@@ -370,7 +370,7 @@ export function SourcesBots({
           <div className="flex flex-wrap gap-1.5">
             {github.repos.length > 0
               ? github.repos.map((r) => <Chip key={r} label={r} tone="neutral" icon={<GitFork size={11} />} className="max-w-full [&>span]:truncate" />)
-              : <span className="text-[12.5px] text-ink/70">Connect a repo on the Connectors tab.</span>}
+              : <span className="text-[12.5px] text-ink/70">Connect a repository in Sources.</span>}
           </div>
         </Field>
         <Button variant="primary" compact className="self-start" onClick={() => setDrawer("github")}>

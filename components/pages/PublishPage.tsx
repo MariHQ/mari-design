@@ -26,6 +26,7 @@ import { ReadError } from "../feedback/ReadError";
 import { Switch } from "../forms/Switch";
 import { Tabs, type TabOption } from "../navigation/Tabs";
 import { PublishMcpServers, type McpServer, type PublishMcpActions } from "../features/PublishMcpServers";
+import { SourcesBots, type GithubStatus, type SlackStatus, type SourcesBotsActions } from "../features/SourcesBots";
 import { useWrite } from "../actions/useWrite";
 import { useResync } from "../actions/useResync";
 import { WriteError } from "../feedback/WriteError";
@@ -48,23 +49,24 @@ import { fmtDate } from "../tokens/format";
    `data`. A workspace with no sites renders the list's own empty state, under
    the list's own "New site" — the create path this page used to lack. */
 
-/** Which of the two surfaces the top-level tab strip is on. */
-export type PublishSection = "sites" | "mcp";
+/** Which destination surface the top-level tab strip is on. */
+export type PublishSection = "sites" | "mcp" | "bots";
 
 const TAB_OPTIONS: TabOption<PublishSection>[] = [
   { id: "sites", label: "Doc sites" },
   { id: "mcp", label: "MCP servers" },
+  { id: "bots", label: "Bots" },
 ];
 
 /** Which editor tab of a doc site is open. */
 export type EditorTab = "content" | "theme" | "preview" | "domains";
 /** Where a deploy has got to. */
 export type PublishPhase = "draft" | "publishing" | "published";
-/** Which screen of Publish is on: the site editor, the deploy flow, or one of
-    the three MCP screens. An app drives it from its own route. */
+/** Which Destinations screen is on: the site editor, deploy flow, one of the
+    three MCP screens, or bot setup. An app drives it from its own route. */
 export type PublishView =
   | "site-list" | "site-new" | "site-editor" | "publish-flow"
-  | "mcp-list" | "mcp-add" | "mcp-token";
+  | "mcp-list" | "mcp-add" | "mcp-token" | "bots";
 
 /** Which tab a deep-linked view belongs under. The top strip used to be driven
     off `data.view` alone, so clicking a tab moved the underline and nothing
@@ -73,6 +75,7 @@ export type PublishView =
 const SECTION_OF: Record<PublishView, PublishSection> = {
   "site-list": "sites", "site-new": "sites", "site-editor": "sites", "publish-flow": "sites",
   "mcp-list": "mcp", "mcp-add": "mcp", "mcp-token": "mcp",
+  bots: "bots",
 };
 
 /** A doc site as the site list shows it. The workspace has as many as it has
@@ -153,7 +156,7 @@ export type McpCreated = {
     `setSiteNav` takes the whole tree because that is what the nav editor
     edits: adding, removing and reordering a section are all one write of the
     new order. Without it the tree keeps its local echo (the canvas). */
-export type PublishActions = PublishMcpActions & {
+export type PublishActions = PublishMcpActions & SourcesBotsActions & {
   /** The reader switched the top-level tab. Like Knowledge's `setQuery`, the
       page reports it and the app decides where it lives — in the URL, so a
       Publish tab survives a reload and can be linked. Without the handler the
@@ -199,6 +202,9 @@ export type PublishData = {
   serverCount: number;
   draft: McpDraft;
   created: McpCreated;
+  /** Bot delivery endpoints and their observed connection state. */
+  slack: SlackStatus;
+  github: GithubStatus;
 };
 
 const STATES = [
@@ -216,6 +222,7 @@ const STATES = [
   { id: "mcp-add", label: "MCP · Add server" },
   { id: "mcp-token", label: "MCP · Token created" },
   { id: "mcp-empty", label: "MCP · No servers" },
+  { id: "bots", label: "Bots · Slack + GitHub" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Nothing published yet" },
@@ -893,6 +900,9 @@ function Body({ data, section, error, mobile, actions }: {
      decides which SCREEN of that surface, and only when it belongs to it.
      This switched on `data.view` alone, so the tab strip above set state that
      nothing here read: the underline moved and the panel never changed. */
+  if (section === "bots") {
+    return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} actions={actions} />;
+  }
   if (section === "mcp") {
     /* All three MCP screens are the same component. They used to be two static
        copies of it plus the real one, so "Create server", "Cancel" and both
@@ -956,11 +966,11 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
           variant="table"
           eyebrow="Doc site"
           title="Destinations"
-          description="Deliver the knowledge base as documentation websites or expose it to AI tools and agents over MCP."
+          description="Deliver the knowledge base through documentation websites, MCP servers, and Slack or GitHub bots."
           /* The icon is what puts the loaded title at x=288; without it the
              loading title started at x=250 and slid right on load. */
           icon={<span className="text-moss"><Send size={24} /></span>}
-          tabs={["Doc sites", "MCP servers"]}
+          tabs={["Doc sites", "MCP servers", "Bots"]}
           columns={["Site", "Docs", "Status", "Actions"]}
           actions={0}
           mobile={mobile}
@@ -976,9 +986,9 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
             saying so with the MCP tab underlined — left over from the tab
             repair, which fixed the panel and not the label above it. */}
         <PageHeader
-          eyebrow={tab === "mcp" ? "MCP" : "Doc site"}
+          eyebrow={tab === "mcp" ? "MCP" : tab === "bots" ? "Bots" : "Doc site"}
           title="Destinations"
-          description="Deliver the knowledge base as documentation websites or expose it to AI tools and agents over MCP."
+          description="Deliver the knowledge base through documentation websites, MCP servers, and Slack or GitHub bots."
           icon={<span className="text-moss"><Send size={24} /></span>}
         />
         <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
