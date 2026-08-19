@@ -171,12 +171,13 @@ export function overviewGroupId(node: LNode): string {
 }
 
 function overviewGroupTitle(groupId: string, members: LNode[]): string {
+  const count = members.length.toLocaleString("en-US");
   if (groupId.startsWith("gh:")) {
     const { repo, kind } = groupParts(groupId);
-    return `${repo} · ${groupKindWord(kind, members.length)}`;
+    return `${repo} · ${count} ${groupKindWord(kind, members.length)}`;
   }
   const source = groupId.replace(/^source:/, "");
-  return `${SOURCE_LABELS[source] ?? source} · ${members.length} document${members.length === 1 ? "" : "s"}`;
+  return `${SOURCE_LABELS[source] ?? source} · ${count} document${members.length === 1 ? "" : "s"}`;
 }
 
 export type OverviewGraph = {
