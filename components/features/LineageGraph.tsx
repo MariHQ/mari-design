@@ -15,7 +15,8 @@ import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
   nodeById, tracePath, nodeEditedAfter, edgeCreatedAfter, nodeStatusKey,
-  type LNode, type LEdge, type Lens, type LayoutMode,
+  buildOverviewGraph, buildFocusedGraph, isLineageRelation,
+  type LNode, type LEdge, type Lens, type LayoutMode, type LineageMode,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -54,11 +55,17 @@ export type LineageGraphProps = {
   focalId?: string | null;
   /** Show the "Impact of …" trace summary + dim everything outside it. */
   trace?: { originId: string; direction: "down" | "up" } | null;
+  /** The user question this canvas answers. Overview aggregates; the two
+      focused modes traverse only directional lineage relations. */
+  mode?: LineageMode;
+  /** Maximum dependency hops in provenance / impact mode. */
+  hopDepth?: number;
   /** Hard cap on how many node cards the canvas will draw at once. Past this
    *  the graph keeps the best-connected nodes and says how many it dropped,
    *  rather than painting an unreadable hairball. */
   maxNodes?: number;
   onSelectNode?: (id: string) => void;
+  onSelectGroup?: (groupId: string) => void;
   onSelectEdge?: (id: string) => void;
   /** Persist where a node was dragged to, so the position survives a reload.
       May throw; the canvas shows the message over the graph. Omitted = the
@@ -89,9 +96,11 @@ function accentWord(node: LNode, lens: Lens): string {
 /** Directed BFS closure over edges (down = impact, up = provenance). */
 function traceClosure(originId: string, dir: "down" | "up", edges: LEdge[]): Set<string> {
   const adj = new Map<string, string[]>();
-  for (const e of edges) {
-    const key = dir === "down" ? e.from : e.to;
-    const val = dir === "down" ? e.to : e.from;
+  for (const e of edges.filter((edge) => isLineageRelation(edge.rel))) {
+    // Stored direction is dependent -> source. Provenance follows it; impact
+    // walks it backwards from a source to the documents that depend on it.
+    const key = dir === "up" ? e.from : e.to;
+    const val = dir === "up" ? e.to : e.from;
     (adj.get(key) ?? adj.set(key, []).get(key)!).push(val);
   }
   const seen = new Set<string>([originId]);
@@ -172,10 +181,20 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 }
 
 export function LineageGraph({
-  nodes, edges, layout, lens, focalId = "n1",
+  nodes: rawNodes, edges: rawEdges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
-  onSelectNode, onSelectEdge, onPinNode, loading = false, className = "",
+  mode, hopDepth = 1,
+  onSelectNode, onSelectGroup, onSelectEdge, onPinNode, loading = false, className = "",
 }: LineageGraphProps) {
+  const graph = useMemo(() => {
+    if (mode === "overview") return buildOverviewGraph(rawNodes, rawEdges);
+    if (mode === "provenance" || mode === "impact") {
+      return buildFocusedGraph(rawNodes, rawEdges, focalId, mode, hopDepth);
+    }
+    return { nodes: rawNodes, edges: rawEdges };
+  }, [rawNodes, rawEdges, focalId, mode, hopDepth]);
+  const nodes = graph.nodes;
+  const edges = graph.edges;
   const byId = useMemo(() => nodeById(nodes), [nodes]);
   const [controls, setControls] = useLineageControls();
   const [sel, setSel] = useState<{ kind: "node" | "edge"; id: string } | null>(
@@ -219,6 +238,7 @@ export function LineageGraph({
   const timeline = useMemo(() => timelinePositions(nodes), [nodes]);
 
   const focusSet = useMemo(() => {
+    if (mode) return null;
     if (controls.scope !== "focus" || !focalId) return null;
     const keep = new Set<string>([focalId]);
     for (const e of edges) {
@@ -226,7 +246,7 @@ export function LineageGraph({
       if (e.to === focalId) keep.add(e.from);
     }
     return keep;
-  }, [controls.scope, focalId, edges]);
+  }, [controls.scope, focalId, edges, mode]);
 
   const passing = useMemo(
     () => nodes.filter((n) => nodePasses(n, controls) && (!focusSet || focusSet.has(n.id))),
@@ -353,6 +373,12 @@ export function LineageGraph({
       const picks = controls.path ?? [];
       if (picks.length === 1 && picks[0] === id) return; // same node twice is not a path
       setControls({ path: picks.length >= 2 ? [id] : [...picks, id] });
+      return;
+    }
+    const node = byId[id];
+    if (node?.macro) {
+      setSel({ kind: "node", id });
+      onSelectGroup?.(node.group);
       return;
     }
     setSel({ kind: "node", id });
@@ -536,7 +562,7 @@ export function LineageGraph({
                     stroke={s.color}
                     strokeWidth={selEdge || onPath ? s.width + 1.6 : s.width}
                     strokeDasharray={s.dash}
-                    markerEnd="url(#lg-arrow)"
+                    markerEnd={isLineageRelation(e.rel) ? "url(#lg-arrow)" : undefined}
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />

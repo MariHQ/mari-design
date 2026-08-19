@@ -446,8 +446,17 @@ export function LineageToolbar({
         </div>
       </Row>
 
+      {/* The resting surface answers the common question with search and
+          filters. Layout, coloring, saved views, and graph-building actions
+          are expert controls, so they disclose together instead of competing
+          with the task selector above the graph. */}
+      <details className="border-t border-ink/10 pt-2.5">
+        <summary className={`w-fit cursor-pointer rounded-[3px] font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/70 hover:text-ink ${focusRing}`}>
+          Graph options and actions
+        </summary>
+        <div className="mt-2.5 flex flex-col gap-2.5">
       {/* ── row 2: view ────────────────────────────────────────────────── */}
-      <Row label="View" divide>
+      <Row label="View">
         <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.lens} label="Color by" value={lensValue} />}>
           <MenuRadioGroup value={controls.lens} onValueChange={(v) => setControls({ lens: v as Lens })}>
             {LENSES.map((l) => <MenuRadioItem key={l.key} value={l.key}>{l.label}</MenuRadioItem>)}
@@ -597,6 +606,8 @@ export function LineageToolbar({
           )}
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 }
