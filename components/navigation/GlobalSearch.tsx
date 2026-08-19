@@ -134,6 +134,7 @@ export function GlobalSearch({
             <Search size={16} className="text-ink/65 shrink-0" />
             <input
               autoFocus
+              aria-label="Search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={placeholder}

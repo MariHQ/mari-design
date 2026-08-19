@@ -631,7 +631,7 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
 function LoginPage({ data, loading = false, error = null, actions, mobile = false }: PageProps<LoginData, LoginActions>) {
   if (loading) {
     return (
-      <div className={AUTH_SHELL}>
+      <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
         <SkeletonPage
           variant="auth"
           /* The sign-in headline is `data.title`: a workspace can brand it,
@@ -639,17 +639,17 @@ function LoginPage({ data, loading = false, error = null, actions, mobile = fals
           label="sign in"
           mobile={mobile}
         />
-      </div>
+      </main>
     );
   }
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader title={headingFor(data)} sub={data.sub} />
         <Body data={data} error={error} actions={actions} />
       </div>
-    </div>
+    </main>
   );
 }
 

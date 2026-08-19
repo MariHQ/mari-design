@@ -280,20 +280,20 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
 
   if (loading) {
     return (
-      <div className={AUTH_SHELL}>
+      <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
         <SkeletonPage
           variant="auth"
           title="Welcome to Mari"
           description="Claim this workspace and create the admin account."
           mobile={mobile}
         />
-      </div>
+      </main>
     );
   }
 
   const done = step === "done";
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader
@@ -309,7 +309,7 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
             : <AdminStep error={error} failed={write.failed} onDismissFailed={() => write.setFailed(null)} claim={claim} set={set} busy={write.busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
 

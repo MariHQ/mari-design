@@ -5,7 +5,7 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
 import { MarkdownEditor } from "../data-display/MarkdownEditor";
-import { ResultCount } from "../data-display/Pagination";
+import { Pagination, ResultCount, usePaged } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ReadError } from "../feedback/ReadError";
@@ -142,6 +142,7 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
   data: AnswersData; filter: AnswersFilter; answers: Answer[];
   error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
 }) {
+  const pager = usePaged(answers, 24);
   if (error) {
     /* A failed read is not an empty library: an EmptyState here told the reader
        they had curated nothing when the truth was that the request did not come
@@ -183,8 +184,12 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
      basis-[520px]` means a short last row stretches instead of leaving a dead
      bottom-right corner. Siblings in a row share a height (§15). */
   return (
-    <div className="flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[520px]">
-      {answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
+    <div className="flex flex-col gap-3">
+      {pager.paged && <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="answers" />}
+      <div className="flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[520px]">
+        {pager.pageRows.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
+      </div>
+      {pager.paged && <Pagination page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
     </div>
   );
 }

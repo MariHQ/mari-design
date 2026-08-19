@@ -226,7 +226,7 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
             row and crushed the button until "Import" wrapped to "Impor / t"
             (CONVENTIONS.md §12 — truncate, do not pack). */}
         <div className="flex items-center gap-2">
-          <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void runImport(); }} placeholder="https://yourcompany.com" className="w-full min-w-0" />
+          <Input aria-label="Website URL" type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void runImport(); }} placeholder="https://yourcompany.com" className="w-full min-w-0" />
           <Button variant="primary" className="shrink-0 whitespace-nowrap" disabled={importing || !url.trim()} onClick={() => void runImport()}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import"}</Button>
         </div>
         {evidence && (

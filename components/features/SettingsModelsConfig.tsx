@@ -375,12 +375,12 @@ export function SettingsModelsConfig({
                           a strategy name from a stored config (user data) drove
                           the cell 696px past the table. The control is bounded;
                           the option text ellipsises inside it. */}
-                      <Select value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
+                      <Select aria-label={`${r.source} chunk strategy`} value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
                         {opts.map((v) => <option key={v} value={v}>{strategyLabel(v)}</option>)}
                       </Select>
                     </td>
-                    <td className={`${tdPad} text-center`}><Input type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
-                    <td className={`${tdPad} text-center`}><Input type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input aria-label={`${r.source} maximum tokens`} type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input aria-label={`${r.source} token overlap`} type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
                   </tr>
                 );
               })}

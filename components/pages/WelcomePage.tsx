@@ -894,7 +894,7 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
   };
 
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Five steps, all of them real." />
@@ -938,7 +938,7 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
           </div>
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
 

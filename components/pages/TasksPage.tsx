@@ -13,6 +13,7 @@ import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite } from "../actions/useWrite";
 import { fmtDate, type DateInput } from "../tokens/format";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -388,6 +389,8 @@ function Body({ data, error, actions, who, mobile }: {
 
   const open = shown.filter((t) => !t.done);
   const done = shown.filter((t) => t.done);
+  const openPager = usePaged(open, 25);
+  const donePager = usePaged(done, 25);
 
   const views = [
     { id: "all" as const, label: "All", count: tasks.length },
@@ -511,9 +514,11 @@ function Body({ data, error, actions, who, mobile }: {
           level, not via a component breakpoint (§10). */}
       <div className={mobile ? "grid grid-cols-1 gap-5" : DASH2}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
+          <ResultCount from={openPager.from} to={openPager.to} total={openPager.total} noun="open tasks" whenTruncated />
           {/* The empty line names the filter, so a hidden backlog never reads
               as an empty inbox. */}
-          {listBody(open, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
+          {listBody(openPager.pageRows, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
+          {openPager.paged && <PagerBar page={openPager.page} pageCount={openPager.pageCount} onChange={openPager.setPage} />}
         </Column>
         <Column
           title="Done"
@@ -528,7 +533,9 @@ function Body({ data, error, actions, who, mobile }: {
             ) : null
           }
         >
-          {listBody(done, view === "all" ? "No completed tasks yet." : "No completed tasks in this filter.")}
+          <ResultCount from={donePager.from} to={donePager.to} total={donePager.total} noun="done tasks" whenTruncated />
+          {listBody(donePager.pageRows, view === "all" ? "No completed tasks yet." : "No completed tasks in this filter.")}
+          {donePager.paged && <PagerBar page={donePager.page} pageCount={donePager.pageCount} onChange={donePager.setPage} />}
         </Column>
       </div>
     </div>

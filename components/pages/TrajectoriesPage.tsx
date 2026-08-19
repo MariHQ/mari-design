@@ -150,7 +150,7 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
   );
   return (
     <PageFrame chrome={chrome} active={navFor("trajectories")} title="Agent trajectories" mobile={mobile}>
-      <main className="mx-auto max-w-[1200px] px-5 py-6 sm:px-8">
+      <div className="mx-auto max-w-[1200px] px-5 py-6 sm:px-8">
         <PageHeader eyebrow="AI monitoring" title="Agent trajectories" description="Grounded workflow abstractions and coarse-to-fine intent paths." />
         {error ? <ReadError>{error}</ReadError> : (
           <>
@@ -180,7 +180,7 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
             )}
           </>
         )}
-      </main>
+      </div>
     </PageFrame>
   );
 }
