@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Home, BookOpen, Workflow, Send, Sparkles, Settings, Menu as MenuIcon,
-  Search, UserRound, KeyRound, ListChecks, Database,
+  Search, UserRound, KeyRound, ListChecks, Database, FolderKanban,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -59,6 +59,7 @@ export type ShellUser = { name: string; initials: string; detail: string };
 export type ShellNotification = {
   id: string; title: string; body: string; time: string; unread?: boolean;
 };
+export type ShellProject = { id: string | number; name: string; detail?: string };
 
 /** Chrome the frame shows around every page. Optional so the canvas can render
     a page with no session behind it. */
@@ -84,6 +85,9 @@ export type ShellChrome = {
   searchScopes?: SearchScope[];
   /** Recent queries, shown before anything is typed. */
   recentSearches?: string[];
+  projects?: ShellProject[];
+  activeProjectId?: string | number;
+  onSelectProject?: (project: ShellProject) => void;
 };
 
 /** The search overlay behind the topbar trigger and ⌘K.
@@ -165,9 +169,19 @@ function useGlobalSearch(chrome?: ShellChrome) {
     frame's promise not to invent a person to fill the circle. */
 const NO_USER: ShellUser = { name: "Signed out", initials: "?", detail: "" };
 
-function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigate?: (id: string) => void }) {
+function UserMenu({ onSignOut, onNavigate, projects = [], activeProjectId, onSelectProject }: {
+  onSignOut?: () => void; onNavigate?: (id: string) => void;
+  projects?: ShellProject[]; activeProjectId?: string | number;
+  onSelectProject?: (project: ShellProject) => void;
+}) {
   return (
     <>
+      {projects.length > 0 && projects.map((project) => (
+        <MenuItem key={project.id} icon={<FolderKanban size={14} />} onSelect={() => onSelectProject?.(project)}>
+          {project.name}{String(project.id) === String(activeProjectId) ? " · Current" : ""}
+        </MenuItem>
+      ))}
+      {projects.length > 0 && <MenuSeparator />}
       {/* Your account, not the workspace. These were pointing at Settings →
           Workspace, which is an admin's page about a different subject. */}
       <MenuItem icon={<UserRound size={14} />} onSelect={() => onNavigate?.("preferences")}>Preferences</MenuItem>
@@ -240,7 +254,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
               <Avatar initials={user.initials} />
             </button>
           )} align="end">
-            <UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />
+            <UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />
           </Menu>
         </div>
       </header>
@@ -371,7 +385,7 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
           onSearch={search.onOpen}
           actions={<NotificationBell items={chrome?.notifications ?? []} />}
           user={user}
-          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />}
         />
         {search.node}
         <main id="main-content" tabIndex={-1} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
@@ -422,7 +436,7 @@ function DesktopFrame({ active, chrome, children }: { active: string; chrome?: S
           onSearch={search.onOpen}
           actions={<NotificationBell items={chrome?.notifications ?? []} />}
           user={user}
-          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />}
         />
       )}
     >
