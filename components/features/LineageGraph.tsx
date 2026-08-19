@@ -61,6 +61,8 @@ export type LineageGraphProps = {
   mode?: LineageMode;
   /** Maximum dependency hops in provenance / impact mode. */
   hopDepth?: number;
+  /** Minimum confidence for machine-proposed dependency edges. */
+  minConfidence?: number;
   /** Hard cap on how many node cards the canvas will draw at once. Past this
    *  the graph keeps the best-connected nodes and says how many it dropped,
    *  rather than painting an unreadable hairball. */
@@ -184,16 +186,16 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 export function LineageGraph({
   nodes: rawNodes, edges: rawEdges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
-  mode, hopDepth = 1,
+  mode, hopDepth = 1, minConfidence = 0.8,
   onSelectNode, onSelectGroup, onSelectEdge, onPinNode, loading = false, className = "",
 }: LineageGraphProps) {
   const graph = useMemo(() => {
-    if (mode === "overview") return buildOverviewGraph(rawNodes, rawEdges);
+    if (mode === "overview") return buildOverviewGraph(rawNodes, rawEdges, minConfidence);
     if (mode === "provenance" || mode === "impact") {
-      return buildFocusedGraph(rawNodes, rawEdges, focalId, mode, hopDepth);
+      return buildFocusedGraph(rawNodes, rawEdges, focalId, mode, hopDepth, minConfidence);
     }
     return { nodes: rawNodes, edges: rawEdges };
-  }, [rawNodes, rawEdges, focalId, mode, hopDepth]);
+  }, [rawNodes, rawEdges, focalId, mode, hopDepth, minConfidence]);
   const nodes = graph.nodes;
   const edges = graph.edges;
   const byId = useMemo(() => nodeById(nodes), [nodes]);

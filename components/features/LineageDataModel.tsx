@@ -77,6 +77,7 @@ export type LEdge = {
   count?: number;
   meta?: {
     derived?: string;
+    confidence?: number;
     note?: string;
     evidence?: string;
     status?: string;
@@ -187,7 +188,7 @@ export type OverviewGraph = {
 /** Collapse a corpus into a small, stable overview. Similarity is omitted:
     an embedding-neighbour relationship is not lineage and otherwise becomes
     the dominant source of cross-bucket noise at enterprise scale. */
-export function buildOverviewGraph(nodes: LNode[], edges: LEdge[]): OverviewGraph {
+export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence = 0.8): OverviewGraph {
   const membersByGroup = new Map<string, LNode[]>();
   for (const node of nodes.filter((n) => !n.macro)) {
     const key = overviewGroupId(node);
@@ -233,6 +234,7 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[]): OverviewGrap
   const aggregate = new Map<string, LEdge>();
   for (const edge of edges) {
     if (edge.rel === "similar") continue;
+    if (edge.llm && Number(edge.meta?.confidence ?? 0) < minConfidence) continue;
     const fromGroup = groupOf.get(edge.from);
     const toGroup = groupOf.get(edge.to);
     if (!fromGroup || !toGroup || fromGroup === toGroup) continue;
@@ -254,10 +256,11 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[]): OverviewGrap
     provenance follows the arrow, while impact walks it in reverse. */
 export function buildFocusedGraph(
   nodes: LNode[], edges: LEdge[], focalId: string | null,
-  mode: Exclude<LineageMode, "overview">, depth = 1,
+  mode: Exclude<LineageMode, "overview">, depth = 1, minConfidence = 0.8,
 ): { nodes: LNode[]; edges: LEdge[] } {
   if (!focalId || !nodes.some((n) => n.id === focalId)) return { nodes: [], edges: [] };
-  const semantic = edges.filter((edge) => isLineageRelation(edge.rel));
+  const semantic = edges.filter((edge) =>
+    isLineageRelation(edge.rel) && (!edge.llm || Number(edge.meta?.confidence ?? 0) >= minConfidence));
   const seen = new Set<string>([focalId]);
   let frontier = new Set<string>([focalId]);
   for (let hop = 0; hop < Math.max(1, depth); hop++) {

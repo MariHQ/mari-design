@@ -53,7 +53,7 @@ export type WorkspaceIdentity = {
   name: string; slug: string; plan: string; timezone: string; language: string;
 };
 
-export type LineageTuning = { maxNodes: number; hopDepth: number };
+export type LineageTuning = { maxNodes: number; hopDepth: number; minConfidence: number };
 
 /** What Settings → General can do.
 
@@ -270,14 +270,16 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
 function LineageTuningForm({ data, actions }: { data: SettingsGeneralData; actions?: SettingsGeneralActions }) {
   const [maxNodes, setMaxNodes] = useState(data.lineage.maxNodes);
   const [hopDepth, setHopDepth] = useState(data.lineage.hopDepth);
+  const [minConfidence, setMinConfidence] = useState(data.lineage.minConfidence);
   const [seen, setSeen] = useState(data.lineage);
   if (seen !== data.lineage) {
     setSeen(data.lineage);
     setMaxNodes(data.lineage.maxNodes);
     setHopDepth(data.lineage.hopDepth);
+    setMinConfidence(data.lineage.minConfidence);
   }
   const write = useWrite();
-  const dirty = maxNodes !== data.lineage.maxNodes || hopDepth !== data.lineage.hopDepth;
+  const dirty = maxNodes !== data.lineage.maxNodes || hopDepth !== data.lineage.hopDepth || minConfidence !== data.lineage.minConfidence;
   return (
     <Card title="Lineage defaults" hint="Safe workspace-wide limits for focused provenance and impact views.">
       <p className="mb-4 max-w-[720px] text-[12.5px] leading-relaxed text-ink/70">
@@ -296,13 +298,19 @@ function LineageTuningForm({ data, actions }: { data: SettingsGeneralData; actio
           </Select>
           <p className="mt-1 text-[11.5px] text-ink/65">How many upstream or downstream hops load initially.</p>
         </Field>
+        <Field label="Machine-link confidence">
+          <Select aria-label="Minimum lineage confidence" value={String(minConfidence)} onChange={(event) => setMinConfidence(Number(event.target.value))} className="w-full">
+            {[0.7, 0.8, 0.9].map((value) => <option key={value} value={value}>{Math.round(value * 100)}% or higher</option>)}
+          </Select>
+          <p className="mt-1 text-[11.5px] text-ink/65">Authored links are always shown; this threshold applies only to machine proposals.</p>
+        </Field>
       </div>
       {write.failed && <div className="mt-4"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
       <div className="mt-5 flex items-center gap-3 border-t border-ink/10 pt-4">
         <Button
           variant="primary"
           disabled={!dirty || write.busy || !actions?.saveLineageTuning}
-          onClick={() => void write.run(actions?.saveLineageTuning && (() => actions.saveLineageTuning!({ maxNodes, hopDepth })))}
+          onClick={() => void write.run(actions?.saveLineageTuning && (() => actions.saveLineageTuning!({ maxNodes, hopDepth, minConfidence })))}
         >
           {write.busy ? "Saving…" : "Save lineage defaults"}
         </Button>

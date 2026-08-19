@@ -132,7 +132,7 @@ export type LineageData = {
   mode: LineageMode;
   /** Workspace defaults. The page exposes these in Settings; the canvas
       consumes them without making every visit start with tuning controls. */
-  tuning: { maxNodes: number; hopDepth: number };
+  tuning: { maxNodes: number; hopDepth: number; minConfidence: number };
   focalId: string | null;
   trace: { originId: string; direction: "down" | "up" } | null;
   /** Scrubber position (index into `dates`); null = live / all time. The
@@ -436,7 +436,7 @@ function Body({ data, error, actions, mobile }: {
         </div>
         {data.mode !== "overview" && focalId && (
           <div className="mt-2 font-term text-[11px] text-ink/65">
-            Showing {data.tuning.hopDepth} dependency hop{data.tuning.hopDepth === 1 ? "" : "s"}; contextual similarity and discussion links are excluded.
+            Showing {data.tuning.hopDepth} dependency hop{data.tuning.hopDepth === 1 ? "" : "s"}; machine proposals below {Math.round(data.tuning.minConfidence * 100)}% confidence and contextual links are excluded.
           </div>
         )}
       </div>
@@ -463,6 +463,7 @@ function Body({ data, error, actions, mobile }: {
               layout={data.layout}
               mode={data.mode}
               hopDepth={data.tuning.hopDepth}
+              minConfidence={data.tuning.minConfidence}
               maxNodes={data.tuning.maxNodes}
               focalId={focalId}
               onPinNode={actions?.pinNode}
