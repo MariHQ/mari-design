@@ -14,6 +14,7 @@ import { page as audit } from "./AuditPage";
 import { page as flows } from "./FlowsPage";
 import { page as publish } from "./PublishPage";
 import { page as insights } from "./InsightsPage";
+import { page as trajectories } from "./TrajectoriesPage";
 import { page as tasks } from "./TasksPage";
 import { page as sources } from "./SourcesPage";
 import { page as preferences } from "./PreferencesPage";
@@ -41,6 +42,7 @@ export const PAGES: PageModule<any, any>[] = [
   flows,
   publish,
   insights,
+  trajectories,
   tasks,
   sources,
   preferences,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   Home, BookOpen, CheckCircle2, Feather, Tag, Network, Shield, Workflow,
   Send, Sparkles, Settings, Menu as MenuIcon, Search, UserRound, KeyRound,
-  ListChecks, ClipboardCheck,
+  ListChecks, ClipboardCheck, GitBranch,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -53,6 +53,7 @@ export const NAV: NavSection[] = [
     { id: "flows", label: "Flows", icon: <Workflow size={18} /> },
     { id: "publish", label: "Publish", icon: <Send size={18} /> },
     { id: "insights", label: "Insights", icon: <Sparkles size={18} /> },
+    { id: "trajectories", label: "Agent trajectories", icon: <GitBranch size={18} /> },
   ] },
   { divider: true, items: [
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
