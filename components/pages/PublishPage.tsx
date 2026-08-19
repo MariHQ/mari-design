@@ -34,7 +34,7 @@ import { siteUrl, sitePreviewUrl } from "../tokens/siteUrl";
 import { fmtDate } from "../tokens/format";
 
 /* Publish (pages/publish.md). The doc-site product: turn the knowledge base
-   into a static documentation website, or expose it to Claude/agents over MCP.
+   into a static documentation website, or expose it to AI tools over MCP.
    A top-level tab strip switches Doc sites ↔ MCP servers.
 
    States enumerate the whole surface inline: each site-editor tab
@@ -956,7 +956,7 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
           variant="table"
           eyebrow="Doc site"
           title="Publish"
-          description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
+          description="Turn the knowledge base into a documentation website, or expose it to AI tools and agents over MCP."
           /* The icon is what puts the loaded title at x=288; without it the
              loading title started at x=250 and slid right on load. */
           icon={<span className="text-moss"><Send size={24} /></span>}
@@ -978,7 +978,7 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
         <PageHeader
           eyebrow={tab === "mcp" ? "MCP" : "Doc site"}
           title="Publish"
-          description="Turn the knowledge base into a documentation website, or expose it to Claude and agents over MCP."
+          description="Turn the knowledge base into a documentation website, or expose it to AI tools and agents over MCP."
           icon={<span className="text-moss"><Send size={24} /></span>}
         />
         <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
