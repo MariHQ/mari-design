@@ -46,6 +46,7 @@ const BASE: SettingsGeneralData = {
   slugError: null,
   summary: SUMMARY,
   danger: false,
+  lineage: { maxNodes: 35, hopDepth: 2, minConfidence: 0.72 },
   branding: BRANDING,
   brandHarvest: HARVEST,
   brandPreviewStats: PREVIEW_STATS,

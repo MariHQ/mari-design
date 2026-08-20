@@ -262,8 +262,8 @@ function Extras({ extras }: { extras: LineageExtras }) {
    instrument can never push the drawer off-screen. LineageGraph has a hard
    720px minimum, so on a narrow console the *canvas alone* scrolls sideways
    inside its own column, leaving both outer edges of the page plumb. */
-function Rig({ rail, canvas, drawer }: {
-  rail: number | null; canvas: React.ReactNode; drawer?: React.ReactNode;
+function Rig({ rail, canvas, drawer, compact = false }: {
+  rail: number | null; canvas: React.ReactNode; drawer?: React.ReactNode; compact?: boolean;
 }) {
   // Every branch scrolls, including the full-width one. It used to skip the
   // scroller on the assumption that a rail-less canvas always clears its
@@ -274,7 +274,7 @@ function Rig({ rail, canvas, drawer }: {
   const column = (
     <div className="min-w-0">
       <Scrollable className="pb-1">
-        <div className="relative flex min-w-[720px] flex-col gap-5">{canvas}</div>
+        <div className={`relative flex flex-col gap-5 ${compact ? "min-w-0" : "min-w-[720px]"}`}>{canvas}</div>
       </Scrollable>
     </div>
   );
@@ -442,12 +442,14 @@ function Body({ data, error, actions, mobile }: {
       </div>
       <Rig
         rail={rail}
+        compact={mobile}
         canvas={(
           <>
             <LineageToolbar
               nodes={data.nodes}
               edges={data.edges}
               views={data.views}
+              compact={mobile}
               onDeriveLinks={actions?.deriveLinks}
               onSaveView={actions?.saveView}
             />

@@ -88,6 +88,10 @@ export type LineageToolbarProps = {
   views?: GraphView[];
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
+  /** Let the filters wrap within a phone viewport instead of making the
+      entire toolbar an 840px horizontal strip. The graph canvas may still
+      pan horizontally; its primary controls should not. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -128,7 +132,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 }
 
 export function LineageToolbar({
-  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, className = "",
+  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, compact = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
@@ -309,7 +313,7 @@ export function LineageToolbar({
       </span>
     );
     return (
-      <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
+      <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
         <Row label="Filter">
           <Skeleton width={168} height={32} rounded="rounded-[4px]" />
           <Pending accent={CONTROL_ACCENT.sources} label="Sources" />
@@ -331,7 +335,7 @@ export function LineageToolbar({
   }
 
   return (
-    <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
+    <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
       {/* ── row 1: filters ─────────────────────────────────────────────── */}
       <Row label="Filter">
         <div className="relative">

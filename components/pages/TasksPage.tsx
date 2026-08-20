@@ -491,7 +491,7 @@ function Body({ data, error, actions, who, mobile }: {
           carries the vocabulary to store it. */}
       <Card className={composing ? "ring-1 ring-biscay-2/40" : ""}>
         <div className="flex flex-col gap-4">
-          <div className="flex items-end gap-3">
+          <div className={mobile ? "flex flex-col items-stretch gap-3" : "flex items-end gap-3"}>
             <span className="min-w-0 flex-1">
               <FormField label="Review item">
                 <Input
@@ -503,7 +503,7 @@ function Body({ data, error, actions, who, mobile }: {
                 />
               </FormField>
             </span>
-            <span className="w-40 shrink-0">
+            <span className={mobile ? "w-full" : "w-40 shrink-0"}>
               <FormField label="Kind">
                 <Select value={kind} onChange={(e) => setKind(e.target.value)} className="w-full">
                   {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
@@ -513,9 +513,9 @@ function Body({ data, error, actions, who, mobile }: {
           </div>
 
           {(assignees.length > 0 || priorities.length > 0) && (
-            <div className="flex items-end gap-3">
+            <div className={mobile ? "flex flex-col items-stretch gap-3" : "flex items-end gap-3"}>
               {assignees.length > 0 && (
-                <span className="w-[220px] shrink-0">
+                <span className={mobile ? "w-full" : "w-[220px] shrink-0"}>
                   <FormField label="Owner">
                     {/* An assignee picker is always a searchable combobox,
                         never a plain select (§7, P-TA-2). */}
@@ -531,7 +531,7 @@ function Body({ data, error, actions, who, mobile }: {
                 </span>
               )}
               {priorities.length > 0 && (
-                <span className="w-40 shrink-0">
+                <span className={mobile ? "w-full" : "w-40 shrink-0"}>
                   <FormField label="Priority">
                     <Select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full">
                       <option value="">No priority</option>
@@ -540,7 +540,7 @@ function Body({ data, error, actions, who, mobile }: {
                   </FormField>
                 </span>
               )}
-              <span className="w-44 shrink-0">
+              <span className={mobile ? "w-full" : "w-44 shrink-0"}>
                 <FormField label="Due date">
                   <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-full" />
                 </FormField>

@@ -175,16 +175,16 @@ export type WelcomeData = {
    Kept identical to LoginPage / SetupPage: one backdrop, one 672px column, one
    centered logo/title/sub header, one card, primary-bottom-left actions.
    Deliberately OFF the 1400px console grid (§11): no sidebar here. */
-const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_SHELL = "relative h-full w-full overflow-x-hidden overflow-y-auto bg-paper";
 const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
 const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
 
 function AuthBackdrop() {
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
       <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
-    </>
+    </div>
   );
 }
 
