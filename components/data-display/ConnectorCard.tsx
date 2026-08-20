@@ -142,8 +142,8 @@ export function ConnectorCard({
       {actionError && <div className="mt-3"><WriteError>{actionError}</WriteError></div>}
       {onDisconnect && (
         <div className="mt-3 border-t border-ink/10 pt-3">
-          <ConfirmButton compact disabled={busy} confirmLabel="Disconnect this source?" onConfirm={onDisconnect}>
-            <Unplug size={13} /> Disconnect
+          <ConfirmButton compact disabled={busy} confirmLabel="Pause this source?" onConfirm={onDisconnect}>
+            <Unplug size={13} /> Pause
           </ConfirmButton>
         </div>
       )}
