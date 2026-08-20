@@ -658,7 +658,6 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
         />
         {!bare && showConnectorTools && (
           <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
-            {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
             <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
           </div>
         )}
