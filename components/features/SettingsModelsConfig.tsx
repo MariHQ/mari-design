@@ -26,14 +26,8 @@ import { WriteError } from "../feedback/WriteError";
    toggles), a live-ish connection test, and per-source chunking parameters.
    Source: web/src/pages/settings/Models.tsx. Every control writes through
    `actions` when the host supplies them; with none, each keeps the local echo
-   `useWrite` defines, and Test connection falls back to validating what is on
-   screen rather than claiming to have reached a provider. */
-
-/* Fallbacks for a caller that has no catalog of its own. A workspace's real
-   options arrive as props: this list is what the panel offers when nobody has
-   said what the deployment supports. */
-const EMB_OPTIONS = ["openai:text-embedding-3-small", "gateway:enterprise-embedding", "local:bge-base-en"];
-const LLM_OPTIONS = ["openai:gpt-4o", "openai:gpt-4o-mini", "gateway:enterprise-chat", "ollama:llama3.1"];
+   `useWrite` defines. Test connection reports that no live provider handler is
+   available rather than simulating a successful provider response. */
 const STRATEGIES = ["heading", "thread", "fixed"];
 /* Dropdown options that name a strategy are Capitalized (CONVENTIONS.md §7). */
 const strategyLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
@@ -45,11 +39,10 @@ const PROVIDER_ENDPOINT: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com/v1",
   ollama: "http://localhost:11434",
-  local: "",
   gateway: "",
 };
 
-const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", local: "Local", gateway: "Enterprise gateway", "sentence-transformers": "Sentence Transformers" };
+const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", gateway: "Enterprise gateway", "sentence-transformers": "Sentence Transformers" };
 function optionLabel(opt: string): string {
   const [prov, ...rest] = opt.split(":");
   return `${PROVIDER_LABEL[prov] ?? prov}: ${rest.join(":")}`;
@@ -263,8 +256,8 @@ export function SettingsModelsConfig({
   const setChunkField = (source: string, field: keyof ChunkRow, value: string) =>
     setChunk((c) => c.map((r) => (r.source === source ? { ...r, [field]: field === "strategy" ? value : Number(value) || 0 } : r)));
 
-  const embCatalog = embeddingOptions?.length ? embeddingOptions : EMB_OPTIONS;
-  const llmCatalog = llmOptions?.length ? llmOptions : LLM_OPTIONS;
+  const embCatalog = embeddingOptions ?? [];
+  const llmCatalog = llmOptions ?? [];
   const embOpts = embCatalog.includes(emb) ? embCatalog : [emb, ...embCatalog];
   const llmOpts = llmCatalog.includes(llmSel) ? llmCatalog : [llmSel, ...llmCatalog];
 
