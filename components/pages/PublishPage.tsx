@@ -124,7 +124,7 @@ function KnowledgeChats({ chats, selectedId, actions }: {
       <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
       <Card className="flex flex-col gap-4 p-5">
         <Field label="Destination name"><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Company knowledge" /></Field>
-        {creating ? <Field label="URL slug"><Input value={slug} onChange={(event) => setSlug(event.target.value.toLowerCase())} placeholder="company-knowledge" /><span className="text-[12px] text-ink/60">Lowercase letters, numbers, and hyphens.</span></Field>
+        {creating ? <Field label="URL slug"><Input value={slug} onChange={(event) => setSlug(event.target.value.toLowerCase())} placeholder="company-knowledge" /><span className="text-[12px] text-ink/70">Lowercase letters, numbers, and hyphens.</span></Field>
           : <Field label="Destination URL"><Input readOnly value={selected?.url ?? ""} /></Field>}
         <Field label="Assistant title"><Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ask Acme" /></Field>
         <Field label="Welcome message"><Input value={welcome} onChange={(event) => setWelcome(event.target.value)} placeholder="What would you like to know?" /></Field>

@@ -207,7 +207,7 @@ export function BrandingEditor({ branding, previewStats, actions, loading = fals
               width (the browser sizes it for the button plus a filename), so
               without a floor override it pushed ~48px out through the card at
               a narrow width. The filename ellipsises instead (§12). */}
-          <Field label="Logo"><input type="file" accept="image/*" className="w-full min-w-0 text-[12.5px] text-ink/60 file:mr-2 file:rounded-[4px] file:border file:border-ink/20 file:bg-paper file:px-2.5 file:py-1 file:text-[12px] file:text-ink/80" onChange={() => patch({ logo: "demo" })} /></Field>
+          <Field label="Logo"><input type="file" accept="image/*" className="w-full min-w-0 text-[12.5px] text-ink/80 file:mr-2 file:rounded-[4px] file:border file:border-ink/20 file:bg-paper file:px-2.5 file:py-1 file:text-[12px] file:text-ink/80" onChange={() => patch({ logo: "demo" })} /></Field>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button variant="primary" disabled={!dirty} onClick={() => void doSave()}>Save branding</Button>
