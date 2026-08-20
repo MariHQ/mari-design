@@ -335,6 +335,7 @@ export function SettingsModelsConfig({
         <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint={embChanged ? "Dimensions follow the model" : dims ? `${dims} dims` : undefined}>
           <Field label="Model">
             <Select
+              name="embedding-model"
               value={emb}
               onChange={(e) => setEmb(e.target.value)}
               className={`w-full ${embDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
@@ -358,6 +359,7 @@ export function SettingsModelsConfig({
         <Card icon={<Sparkles size={16} className="text-clay" />} title="LLM provider" hint={llmDirty ? "Unsaved changes" : undefined}>
           <Field label="Model">
             <Select
+              name="generation-model"
               value={llmSel}
               onChange={(e) => setLlmSel(e.target.value)}
               className={`w-full ${llmDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
@@ -375,35 +377,35 @@ export function SettingsModelsConfig({
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Gateway base URL">
-            <Input type="url" value={gatewayDraft.baseUrl} onChange={(e) => setGatewayField("baseUrl", e.target.value)} placeholder="https://gateway.example.com/v1" className="w-full font-term" />
+            <Input name="gateway-base-url" type="url" value={gatewayDraft.baseUrl} onChange={(e) => setGatewayField("baseUrl", e.target.value)} placeholder="https://gateway.example.com/v1" className="w-full font-term" />
           </Field>
           <Field label="Gateway token">
             <div className="flex items-center gap-1.5">
-              <Input type={showGatewayToken ? "text" : "password"} value={gatewayDraft.token} onChange={(e) => setGatewayField("token", e.target.value)} className="w-full font-term" />
+              <Input name="gateway-token" type={showGatewayToken ? "text" : "password"} value={gatewayDraft.token} onChange={(e) => setGatewayField("token", e.target.value)} className="w-full font-term" />
               <Button icon compact aria-pressed={showGatewayToken} aria-label={showGatewayToken ? "Hide gateway token" : "Reveal gateway token"} onClick={() => setShowGatewayToken((value) => !value)}>{showGatewayToken ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
           <Field label="Generation model">
-            <Input value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder={gatewayDraft.compatibility === "deepseek" ? "deepseek-v4-flash" : "enterprise-chat"} className="w-full font-term" />
+            <Input name="gateway-generation-model" value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder={gatewayDraft.compatibility === "deepseek" ? "deepseek-v4-flash" : "enterprise-chat"} className="w-full font-term" />
           </Field>
           <Field label="API compatibility">
-            <Select value={gatewayDraft.compatibility} onChange={(e) => setGatewayField("compatibility", e.target.value as GatewaySettings["compatibility"])} className="w-full">
+            <Select name="gateway-compatibility" value={gatewayDraft.compatibility} onChange={(e) => setGatewayField("compatibility", e.target.value as GatewaySettings["compatibility"])} className="w-full">
               <option value="openai">Standard OpenAI-compatible</option>
               <option value="deepseek">DeepSeek API</option>
             </Select>
             {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on Sentence Transformers, Ollama, or another embedding provider.</p>}
           </Field>
           <Field label="Model routing header">
-            <Input value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
+            <Input name="gateway-model-header" value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
           </Field>
           <Field label="Retry count">
-            <Input type="number" min={0} max={5} step={1} value={gatewayDraft.maxRetries} onChange={(e) => setGatewayField("maxRetries", Number(e.target.value))} className="w-full font-term" />
+            <Input name="gateway-retries" type="number" min={0} max={5} step={1} value={gatewayDraft.maxRetries} onChange={(e) => setGatewayField("maxRetries", Number(e.target.value))} className="w-full font-term" />
           </Field>
           <Field label="Routing headers (JSON)">
-            <Textarea short value={gatewayDraft.headersJson} onChange={(e) => setGatewayField("headersJson", e.target.value)} className="w-full font-term text-[12px]" />
+            <Textarea name="gateway-routing-headers" short value={gatewayDraft.headersJson} onChange={(e) => setGatewayField("headersJson", e.target.value)} className="w-full font-term text-[12px]" />
           </Field>
           <Field label="Request metadata (JSON)">
-            <Textarea short value={gatewayDraft.metadataJson} onChange={(e) => setGatewayField("metadataJson", e.target.value)} className="w-full font-term text-[12px]" />
+            <Textarea name="gateway-request-metadata" short value={gatewayDraft.metadataJson} onChange={(e) => setGatewayField("metadataJson", e.target.value)} className="w-full font-term text-[12px]" />
           </Field>
         </div>
         {gatewayError && <FieldError>{gatewayError}</FieldError>}
@@ -421,20 +423,20 @@ export function SettingsModelsConfig({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => { setOpenaiKey(e.target.value); setOpenaiDirty(true); }} className="w-full font-term" />
+              <Input name="openai-api-key" type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => { setOpenaiKey(e.target.value); setOpenaiDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showOpenai} aria-label={showOpenai ? "Hide key" : "Reveal key"} onClick={() => setShowOpenai((v) => !v)}>{showOpenai ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
           <Field label="Anthropic (sk-ant-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => { setAnthropicKey(e.target.value); setAnthropicDirty(true); }} className="w-full font-term" />
+              <Input name="anthropic-api-key" type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => { setAnthropicKey(e.target.value); setAnthropicDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showAnthropic} aria-label={showAnthropic ? "Hide key" : "Reveal key"} onClick={() => setShowAnthropic((v) => !v)}>{showAnthropic ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
         </div>
         <div className="mt-3">
           <Field label="Endpoint">
-            <Input type="url" value={endpoint} onChange={(e) => { setEndpoint(e.target.value); setHealth(null); }} placeholder="https://api.anthropic.com/v1" className="w-full font-term" />
+            <Input name="provider-endpoint" type="url" value={endpoint} onChange={(e) => { setEndpoint(e.target.value); setHealth(null); }} placeholder="https://api.anthropic.com/v1" className="w-full font-term" />
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -488,12 +490,12 @@ export function SettingsModelsConfig({
                           a strategy name from a stored config (user data) drove
                           the cell 696px past the table. The control is bounded;
                           the option text ellipsises inside it. */}
-                      <Select aria-label={`${r.source} chunk strategy`} value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
+                      <Select name={`chunk-strategy-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} chunk strategy`} value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
                         {opts.map((v) => <option key={v} value={v}>{strategyLabel(v)}</option>)}
                       </Select>
                     </td>
-                    <td className={`${tdPad} text-center`}><Input aria-label={`${r.source} maximum tokens`} type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
-                    <td className={`${tdPad} text-center`}><Input aria-label={`${r.source} token overlap`} type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input name={`chunk-max-tokens-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} maximum tokens`} type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input name={`chunk-overlap-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} token overlap`} type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
                   </tr>
                 );
               })}

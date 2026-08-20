@@ -348,6 +348,7 @@ export function LineageToolbar({
               onKeyDown={(e) => { if (e.key === "Escape") setControls({ query: "" }); }}
               placeholder="Search graph"
               aria-label="Search the graph"
+              name="lineage-search"
               className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65"
             />
             {controls.query && (
@@ -572,6 +573,7 @@ export function LineageToolbar({
             onKeyDown={(e) => { if (e.key === "Enter" && saveName.trim()) void saveView(saveName.trim()); }}
             placeholder="Name this view"
             aria-label="Name this view"
+            name="lineage-view-name"
             className="w-[220px]"
           />
           {/* Confirm action bottom left of the row, cancel to its right (§2). */}
