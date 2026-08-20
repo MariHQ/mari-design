@@ -210,8 +210,8 @@ export function PublishMcpServers({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      {/* Framed exactly like the Doc sites list next door: both tabs of one
-          page used to draw their heading differently — Doc sites inside a
+      {/* Framed consistently with the other destination panels. This list
+          used to draw its heading differently from adjacent destinations,
           bordered card, MCP as bare page text — so the plumb line jumped
           sideways when you switched tabs. The bare `<CountChip>` beside "New
           server" is gone with it: it restated the strip below on a populated

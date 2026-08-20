@@ -1,7 +1,7 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { FlowsList, type Flow, type FlowsListActions, type SourceRef } from "../features/FlowsList";
-import { FlowsPipelineEditor, type EditorStep, type SiteRef } from "../features/FlowsPipelineEditor";
+import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
 import { FlowsRunPanel, type FlowsRunActions } from "../features/FlowsRunPanel";
 import type { WorkflowRun } from "../workflow/RunHistory";
@@ -77,7 +77,6 @@ export type FlowsEditor = {
   steps: EditorStep[];
   runs: WorkflowRun[];
   members: string[];
-  sites: SiteRef[];
   tags: string[];
 };
 

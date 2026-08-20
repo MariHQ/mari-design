@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Fragment, useState } from "react";
-import { Workflow, Settings, Bell, FileText, Feather, ShieldCheck, Layers, Tag, GitFork, Clipboard, Send, Globe, RefreshCw, Calendar, type LucideIcon } from "lucide-react";
+import { Workflow, Settings, Bell, FileText, Feather, ShieldCheck, Layers, Tag, GitFork, Clipboard, Send, RefreshCw, Calendar, type LucideIcon } from "lucide-react";
 import { Card } from "../layout/Card";
 import { IconRing } from "../data-display/IconRing";
 import { Chip, StatusChip, type ChipStatus } from "../data-display/Chip";
@@ -29,7 +29,7 @@ import { fmtDateTime } from "../tokens/format";
 
 type StepKind =
   | "trigger" | "fetch_docs" | "refine" | "fact_check" | "condition" | "tag"
-  | "derive_links" | "create_task" | "approval" | "deploy_site" | "notify"
+  | "derive_links" | "create_task" | "approval" | "notify"
   | "summarize" | "sync_source" | "refresh_digest";
 
 type Section = "when" | "do" | "check" | "then";
@@ -39,13 +39,13 @@ const SECTION_OF: Record<StepKind, Section> = {
   fetch_docs: "do", refine: "do", fact_check: "do", summarize: "do", tag: "do",
   derive_links: "do", sync_source: "do", refresh_digest: "do",
   condition: "check", approval: "check",
-  create_task: "then", notify: "then", deploy_site: "then",
+  create_task: "then", notify: "then",
 };
 
 const KIND_ICON: Record<StepKind, LucideIcon> = {
   trigger: Bell, fetch_docs: FileText, refine: Feather, fact_check: ShieldCheck,
   summarize: Layers, tag: Tag, derive_links: GitFork, condition: Workflow,
-  approval: ShieldCheck, create_task: Clipboard, notify: Send, deploy_site: Globe,
+  approval: ShieldCheck, create_task: Clipboard, notify: Send,
   sync_source: RefreshCw, refresh_digest: Calendar,
 };
 

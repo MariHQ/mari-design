@@ -3,7 +3,7 @@
    their own. Nothing here is importable by a consuming app. */
 
 import type { Flow, SourceRef } from "../../features/FlowsList";
-import type { EditorStep, SiteRef } from "../../features/FlowsPipelineEditor";
+import type { EditorStep } from "../../features/FlowsPipelineEditor";
 import type { FlowsData, FlowsEditor, FlowsExtras } from "../../pages/FlowsPage";
 import type { WorkflowRun } from "../../workflow/RunHistory";
 import type { PageFixtures } from "./types";
@@ -50,7 +50,7 @@ const FLOWS: Flow[] = [
     id: 4, name: "Translation sync", color: "#2C6E49", status: "active",
     description: "Turns customer-facing edits into review-ready drafts.",
     whenLabel: "Document changed", trigger: { on: "document_changed", tag: "customer-facing" },
-    nodes: [{ label: "Doc changed" }, { label: "Fetch docs" }, { label: "Summarize" }, { label: "Approval" }, { label: "Deploy site" }],
+    nodes: [{ label: "Doc changed" }, { label: "Fetch docs" }, { label: "Summarize" }, { label: "Approval" }, { label: "Notify" }],
     lastRun: { status: "running", started: "2026-07-21T08:30:00", dry: true },
     recentRuns: [{ number: 201, status: "passed" }, { number: 205, status: "passed" }, { number: 209, status: "running", dry: true }],
   },
@@ -67,7 +67,6 @@ const FLOWS: Flow[] = [
 /* ── pipeline editor ──────────────────────────────────────────────────────── */
 
 const EDITOR_MEMBERS = ["Aki K.", "Dana R.", "Priya S."];
-const EDITOR_SITES: SiteRef[] = [{ id: 1, name: "Docs, production" }, { id: 2, name: "Docs, staging" }];
 const EDITOR_TAGS = ["needs-review", "customer-facing", "internal", "stale"];
 
 const EDITOR_STEPS: EditorStep[] = [
@@ -101,7 +100,6 @@ const editor = (over: Partial<FlowsEditor>): FlowsEditor => ({
   steps: EDITOR_STEPS,
   runs: EDITOR_RUNS,
   members: EDITOR_MEMBERS,
-  sites: EDITOR_SITES,
   tags: EDITOR_TAGS,
   ...over,
 });
@@ -118,7 +116,7 @@ const PANEL_RUNS: WorkflowRun[] = [
       { step: "Fetch docs", status: "passed", detail: "3 documents matched", duration: "0.8s" },
       { step: "Summarize", status: "passed", detail: "Draft written for review", duration: "42s" },
       { step: "Approval", status: "waiting", detail: "Waiting on Aki K." },
-      { step: "Deploy site", status: "pending" },
+      { step: "Notify", status: "pending" },
     ],
     stats: [
       { label: "Edits", value: 6 }, { label: "Contradictions", value: 0 },

@@ -3,7 +3,7 @@ import { WriteError } from "../feedback/WriteError";
 import { useState, type ReactNode } from "react";
 import {
   ChevronLeft, Play, Eye, Plus, ArrowUp, ArrowDown, Trash2, X, Sparkles,
-  Search, Filter, GitBranch, Tag, CheckSquare, Bell, FileText, Send, Globe, RefreshCw,
+  Search, Filter, GitBranch, Tag, CheckSquare, Bell, FileText, Send, RefreshCw,
 } from "lucide-react";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -36,7 +36,7 @@ import { focusRing } from "../tokens/focusRing";
    on screen with no settings behind it. */
 export const STEP_KINDS = [
   "trigger", "fetch_docs", "refine", "fact_check", "condition", "tag",
-  "derive_links", "create_task", "approval", "deploy_site", "notify",
+  "derive_links", "create_task", "approval", "notify",
   "summarize", "sync_source", "refresh_digest", "scan_facts",
 ] as const;
 
@@ -56,7 +56,7 @@ const SECTION_OF: Record<StepKind, Section> = {
   fetch_docs: "do", refine: "do", fact_check: "do", summarize: "do", tag: "do",
   derive_links: "do", sync_source: "do", refresh_digest: "do", scan_facts: "do",
   condition: "check", approval: "check",
-  create_task: "then", notify: "then", deploy_site: "then",
+  create_task: "then", notify: "then",
 };
 
 const SECTION_CHIP: Record<Section, string> = {
@@ -82,7 +82,6 @@ const KIND_META: Record<StepKind, KindMeta> = {
   approval: { name: "Approval", desc: "Pauses the run as waiting until the selected approver approves it from the run panel.", defLabel: "Approval", defConfig: { assignee: "" }, icon: I(<CheckSquare size={15} />) },
   create_task: { name: "Create review item", desc: "Opens an item in Review. Dry runs preview the item.", defLabel: "Create review item", defConfig: { title: "", kind: "review", kind_label: "Review" }, icon: I(<CheckSquare size={15} />) },
   notify: { name: "Notify", desc: "Sends an in-app notification. Dry runs preview the message.", defLabel: "Notify", defConfig: { text: "", detail: "" }, icon: I(<Bell size={15} />) },
-  deploy_site: { name: "Deploy site", desc: "Publishes the selected documentation site version. Dry runs report what would deploy.", defLabel: "Deploy site", defConfig: { site_id: 0 }, icon: I(<Globe size={15} />) },
   sync_source: { name: "Sync source", desc: "Re-syncs a connected source so the run sees the latest.", defLabel: "Sync source", defConfig: { source_id: 0 }, icon: I(<RefreshCw size={15} />) },
   scan_facts: { name: "Scan for facts", llm: true, desc: "Mines recent documents for checkable claims and captures them as facts.", defLabel: "Scan for facts", defConfig: {}, icon: I(<CheckSquare size={15} />) },
   refresh_digest: { name: "Refresh digest", llm: true, desc: "Rebuilds the recent-activity digest over recent docs.", defLabel: "Refresh digest", defConfig: {}, icon: I(<Send size={15} />) },
@@ -98,11 +97,8 @@ const TASK_KINDS: { value: string; label: string }[] = [
 const PICKER_SECTIONS: { section: Section; tagline: string; kinds: StepKind[] }[] = [
   { section: "do", tagline: "editorial work on the matched docs", kinds: ["fetch_docs", "refine", "fact_check", "summarize", "tag", "derive_links", "scan_facts"] },
   { section: "check", tagline: "gate the result", kinds: ["condition", "approval"] },
-  { section: "then", tagline: "deliver where the team works", kinds: ["create_task", "notify", "deploy_site"] },
+  { section: "then", tagline: "deliver where the team works", kinds: ["create_task", "notify"] },
 ];
-
-/** A published site a deploy step can target. */
-export type SiteRef = { id: number; name: string };
 
 /** Steps rendered in the spine before "Show all". */
 const STEP_PAGE = 25;
@@ -168,8 +164,6 @@ export type FlowsPipelineEditorProps = {
   runs: WorkflowRun[];
   /** Assignees a task/notify step can be pointed at. */
   members: string[];
-  /** Sites a deploy step can publish to. */
-  sites: SiteRef[];
   /** Tags a fetch/tag step can filter or apply. */
   tags: string[];
   /** Leave the editor for the flow list. */
@@ -189,7 +183,7 @@ export type FlowsPipelineEditorProps = {
 };
 
 export function FlowsPipelineEditor({
-  name, description, enabled: initialEnabled = true, steps: initialSteps, runs, members, sites, tags,
+  name, description, enabled: initialEnabled = true, steps: initialSteps, runs, members, tags,
   onBack, onSave, onRun,
   split = FLOWS_SPLIT,
   loading = false,
@@ -413,7 +407,6 @@ export function FlowsPipelineEditor({
             step={selStep}
             idx={selIdx}
             members={members}
-            sites={sites}
             tags={tags}
             onLabel={(v) => patch(selIdx, { label: v })}
             onConfig={(k, v) => setConfig(selIdx, k, v)}
@@ -470,7 +463,6 @@ function stepSummary(s: EditorStep): string {
     case "approval": return `Approver: ${asStr(c.assignee) || "unassigned"}`;
     case "create_task": return `${asStr(c.kind_label) || "Task"}: ${asStr(c.title) || "untitled"}`;
     case "notify": return asStr(c.text) || "Sends an in-app notification";
-    case "deploy_site": return asNum(c.site_id) > 0 ? `Publishes site #${asNum(c.site_id)}` : "Choose a site";
     case "sync_source": return `Re-syncs source #${asNum(c.source_id)}`;
     default: return KIND_META[s.kind].desc;
   }
@@ -539,10 +531,10 @@ function StepPicker({ onPick, onClose }: { onPick: (kind: StepKind) => void; onC
 
 /* ── config panel ──────────────────────────────────────────────────────── */
 function ConfigPanel({
-  step, idx, members, sites, tags, onLabel, onConfig, onBranch, onSave, busy = false,
+  step, idx, members, tags, onLabel, onConfig, onBranch, onSave, busy = false,
 }: {
   step: EditorStep | undefined; idx: number;
-  members: string[]; sites: SiteRef[]; tags: string[];
+  members: string[]; tags: string[];
   onLabel: (v: string) => void; onConfig: (key: string, value: unknown) => void; onBranch: (v: boolean) => void;
   /** Persists the flow. Resolves false when the save was blocked or rejected,
       so "Saved." is only ever drawn over a save that happened. */
@@ -669,15 +661,6 @@ function ConfigPanel({
             <Field label="Message"><Input value={asStr(c.text)} onChange={(e) => onConfig("text", e.target.value)} className="w-full" /></Field>
             <Field label="Detail"><Input value={asStr(c.detail)} onChange={(e) => onConfig("detail", e.target.value)} className="w-full" /></Field>
           </>
-        )}
-
-        {step.kind === "deploy_site" && (
-          <Field label="Site">
-            <Select value={asNum(c.site_id)} onChange={(e) => onConfig("site_id", asNum(e.target.value))} className="w-full">
-              <option value={0}>Choose a site</option>
-              {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
-          </Field>
         )}
 
         {(step.kind === "fact_check" || step.kind === "summarize" || step.kind === "derive_links" || step.kind === "refresh_digest" || step.kind === "scan_facts") && (

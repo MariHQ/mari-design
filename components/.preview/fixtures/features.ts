@@ -47,7 +47,7 @@ import { FIXTURES as SOURCES } from "./sources";
 import { FIXTURES as WELCOME } from "./welcome";
 
 import type { DocHistoryRow, ImpactResult, LEdge, LNode } from "../../features/LineageDataModel";
-import type { EditorStep, SiteRef } from "../../features/FlowsPipelineEditor";
+import type { EditorStep } from "../../features/FlowsPipelineEditor";
 import type { WorkflowRun } from "../../workflow/RunHistory";
 
 /* ── Overview ───────────────────────────────────────────────────────────── */
@@ -141,7 +141,7 @@ export const FLOWS_SOURCES = flows.sources;
 const flowsEditor = FLOWS["pipeline-editor"].data.editor!;
 export const FLOWS_EDITOR: {
   name: string; description: string; steps: EditorStep[]; runs: WorkflowRun[];
-  members: string[]; sites: SiteRef[]; tags: string[];
+  members: string[]; tags: string[];
 } = flowsEditor;
 
 export const FLOWS_PANEL_RUNS: WorkflowRun[] = FLOWS.run.data.runPanel!.runs;

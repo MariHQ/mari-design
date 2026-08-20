@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { Sparkles } from "lucide-react";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { WriteError } from "../feedback/WriteError";
@@ -11,7 +10,6 @@ import { Input } from "../forms/Input";
 import { Field } from "../forms/Field";
 import { SectionLabel } from "../forms/SectionLabel";
 import { Chip } from "../data-display/Chip";
-import { Swatch } from "../data-display/Swatch";
 import { Spinner } from "../data-display/Spinner";
 import { Skeleton, SkeletonLine, SkeletonCard } from "../data-display/Skeleton";
 import { focusRing } from "../tokens/focusRing";
@@ -19,11 +17,9 @@ import { useResync } from "../actions/useResync";
 
 /* Branding editor (bring-your-own-branding) ───────────────────────────────
    The proof that tokens ARE the brand: set accent/green/blue/gold colors,
-   display + body fonts, and a logo — with an "Import your brand" flow that
-   reads a homepage and proposes a palette, plus a live preview rendered under
-   the draft tokens. Source: web/src/pages/settings/BrandingEditor.tsx.
-   Standalone — Import returns a baked harvest result; nothing hits :root, the
-   preview is scoped inline (no network). */
+   display + body fonts, and a logo, plus a live preview rendered under the
+   draft tokens. Source: web/src/pages/settings/BrandingEditor.tsx. The preview
+   is scoped inline and performs no network work. */
 
 export type Branding = {
   accent?: string; accentDeep?: string; accentInk?: string;
@@ -112,9 +108,6 @@ function ColorField({ label, value, onChange, onAuto, explicit }: { label: strin
 export type BrandingEditorActions = {
   /** Persist the brand for the whole workspace. */
   save?: (branding: Branding) => void | Promise<void>;
-  /** Read a site and report what it found. Answers rather than just
-      succeeding, because the editor renders the evidence it returns. */
-  importFrom?: (url: string) => BrandHarvest | Promise<BrandHarvest>;
 };
 
 export type BrandingEditorProps = {
@@ -129,13 +122,10 @@ export type BrandingEditorProps = {
   className?: string;
 };
 
-export function BrandingEditor({ branding, harvest, previewStats, actions, loading = false, className = "" }: BrandingEditorProps) {
+export function BrandingEditor({ branding, previewStats, actions, loading = false, className = "" }: BrandingEditorProps) {
   const [draft, setDraft] = useState<Branding>(branding);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [url, setUrl] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [evidence, setEvidence] = useState<BrandHarvest | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
   /* The draft was taken once, at mount, so a brand saved from another tab —
@@ -149,25 +139,6 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
   const patch = (p: Branding) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const clearKey = (key: keyof Branding) => { setDraft((d) => { const next = { ...d }; delete next[key]; return next; }); setDirty(true); };
 
-  const runImport = async () => {
-    if (!url.trim()) return;
-    setImporting(true);
-    setFailed(null);
-    try {
-      // With a handler the evidence is what the server actually read; without
-      // one it is the supplied `harvest`, after a beat so the spinner reads.
-      const found = actions?.importFrom
-        ? await actions.importFrom(url.trim())
-        : await new Promise<BrandHarvest>((r) => setTimeout(() => r(harvest), 700));
-      setEvidence(found);
-      patch({ accent: found.themeColor, displayFont: found.fonts[0], bodyFont: found.fonts[2] });
-    } catch (e) {
-      setFailed(why(e, `Could not read ${host}.`));
-    } finally {
-      setImporting(false);
-    }
-  };
-
   const doSave = async () => {
     setFailed(null);
     try {
@@ -180,9 +151,7 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
       setFailed(why(e, "That brand could not be saved."));
     }
   };
-  const doReset = () => { setDraft({}); setDirty(false); setEvidence(null); };
-
-  const host = (() => { try { return new URL(url.startsWith("http") ? url : `https://${url}`).host; } catch { return url; } })();
+  const doReset = () => { setDraft({}); setDirty(false); };
 
   const preview = {
     ["--b-accent"]: effectiveColor(draft, "accent"),
@@ -218,33 +187,6 @@ export function BrandingEditor({ branding, harvest, previewStats, actions, loadi
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
       <PageHeader title="Branding" description="Tokens are the brand. Re-skin every primitive from one place." />
-
-      {/* 1 — Import */}
-      <Card icon={<Sparkles size={16} className="text-clay" />} title="Import your brand">
-        {/* min-w-0 on the field and shrink-0 on the button: the URL input has
-            `w-full` and no minimum, so in a rail-width column it took the whole
-            row and crushed the button until "Import" wrapped to "Impor / t"
-            (CONVENTIONS.md §12 — truncate, do not pack). */}
-        <div className="flex items-center gap-2">
-          <Input aria-label="Website URL" type="url" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void runImport(); }} placeholder="https://yourcompany.com" className="w-full min-w-0" />
-          <Button variant="primary" className="shrink-0 whitespace-nowrap" disabled={importing || !url.trim()} onClick={() => void runImport()}>{importing ? <><Spinner size="sm" /> Reading {host}…</> : "Import"}</Button>
-        </div>
-        {evidence && (
-          <div className="mt-4 flex flex-col gap-3">
-            <p className="text-[12.5px] text-ink/70">Harvested from “{evidence.title}”</p>
-            <Field label="Harvested colors">
-              <div className="flex flex-wrap gap-1.5">
-                <Swatch color={evidence.themeColor} selected={draft.accent === evidence.themeColor} onClick={() => patch({ accent: evidence.themeColor })} />
-                {evidence.cssColors.map(([hex, count]) => <Swatch key={hex} color={hex} label={String(count)} selected={draft.accent === hex} onClick={() => patch({ accent: hex })} />)}
-              </div>
-            </Field>
-            <Field label="Harvested fonts">
-              <div className="flex flex-wrap gap-1.5">{evidence.fonts.map((f) => <Chip key={f} label={f} tone={draft.displayFont === f ? "info" : "neutral"} selected={draft.displayFont === f} onClick={() => patch({ displayFont: f })} />)}</div>
-            </Field>
-            {evidence.warnings.map((w) => <Chip key={w} label={w} tone="attention" />)}
-          </div>
-        )}
-      </Card>
 
       {/* 2 — Brand palette */}
       <Card title="Brand palette">
