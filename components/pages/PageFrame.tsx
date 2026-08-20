@@ -142,6 +142,13 @@ function useGlobalSearch(chrome?: ShellChrome) {
     if (r.href) chrome?.onOpen?.(r.href);
   }, [chrome]);
 
+  const submitQuery = useCallback((q: string) => {
+    const value = q.trim();
+    if (!value) return;
+    setQuery("");
+    chrome?.onOpen?.(`/knowledge?q=${encodeURIComponent(value)}`);
+  }, [chrome]);
+
   const node = onSearch ? (
     <GlobalSearch
       open={open}
@@ -153,6 +160,7 @@ function useGlobalSearch(chrome?: ShellChrome) {
       loading={loading}
       recentSearches={chrome?.recentSearches ?? []}
       onSelect={select}
+      onSubmitQuery={submitQuery}
     />
   ) : null;
 

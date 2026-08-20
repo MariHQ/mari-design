@@ -49,6 +49,10 @@ export type GlobalSearchProps = {
   /** Async/custom search — return grouped results for the query + active scope. */
   onQuery?: (query: string, scope: string | null) => SearchResultGroup[];
   onSelect: (result: SearchResult) => void;
+  /** Submit the query itself when Enter arrives before an async result does.
+      Without this, a fast typist presses Enter during the debounce and the
+      search surface silently does nothing. */
+  onSubmitQuery?: (query: string) => void;
   /** Shown (as clickable chips) when the query is empty. */
   recentSearches?: string[];
   onRecentSelect?: (query: string) => void;
@@ -67,7 +71,7 @@ export type GlobalSearchProps = {
 const flatOptionId = (listboxId: string, index: number) => `${listboxId}-option-${index}`;
 
 export function GlobalSearch({
-  open, onOpenChange, scopes, results = [], onQuery, onSelect,
+  open, onOpenChange, scopes, results = [], onQuery, onSelect, onSubmitQuery,
   recentSearches = [], onRecentSelect,
   placeholder = "Search knowledge, people, sources…",
   value, onValueChange, loading = false, footerNote,
@@ -118,7 +122,15 @@ export function GlobalSearch({
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(flat.length - 1, a + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); const r = flat[active]; if (r) select(r); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const r = flat[active];
+      if (r) select(r);
+      else if (query.trim() && onSubmitQuery) {
+        onOpenChange(false);
+        onSubmitQuery(query.trim());
+      }
+    }
   };
 
   const hasQuery = query.trim().length > 0;
