@@ -50,11 +50,12 @@ import { fmtDate } from "../tokens/format";
    the list's own "New site" — the create path this page used to lack. */
 
 /** Which destination surface the top-level tab strip is on. */
-export type PublishSection = "sites" | "mcp" | "bots";
+export type PublishSection = "sites" | "mcp" | "chat" | "bots";
 
 const TAB_OPTIONS: TabOption<PublishSection>[] = [
   { id: "sites", label: "Doc sites" },
   { id: "mcp", label: "MCP servers" },
+  { id: "chat", label: "Knowledge chat" },
   { id: "bots", label: "Bots" },
 ];
 
@@ -66,7 +67,7 @@ export type PublishPhase = "draft" | "publishing" | "published";
     three MCP screens, or bot setup. An app drives it from its own route. */
 export type PublishView =
   | "site-list" | "site-new" | "site-editor" | "publish-flow"
-  | "mcp-list" | "mcp-add" | "mcp-token" | "bots";
+  | "mcp-list" | "mcp-add" | "mcp-token" | "chat" | "bots";
 
 /** Which tab a deep-linked view belongs under. The top strip used to be driven
     off `data.view` alone, so clicking a tab moved the underline and nothing
@@ -75,6 +76,7 @@ export type PublishView =
 const SECTION_OF: Record<PublishView, PublishSection> = {
   "site-list": "sites", "site-new": "sites", "site-editor": "sites", "publish-flow": "sites",
   "mcp-list": "mcp", "mcp-add": "mcp", "mcp-token": "mcp",
+  chat: "chat",
   bots: "bots",
 };
 
@@ -146,6 +148,11 @@ export type McpCreated = {
   name: string; scopeLabel: string; toolCount: number; token: string; snippet: string;
 };
 
+export type KnowledgeChatDestination = {
+  id: number; name: string; slug: string; title: string; welcome: string;
+  status: "draft" | "live"; url: string;
+};
+
 /** What Publish can DO.
 
     The site handlers take no site id: this page edits ONE site, the one the
@@ -183,6 +190,10 @@ export type PublishActions = PublishMcpActions & SourcesBotsActions & {
   setSiteNav?: (nav: NavSection[]) => void | Promise<void>;
   setSiteTheme?: (theme: { preset?: string; accent?: string }) => void | Promise<void>;
   saveDeployConfig?: (cfg: { bucket: string; region: string }) => void | Promise<void>;
+  openKnowledgeChat?: (id: number) => void;
+  createKnowledgeChat?: (args: { name: string; slug: string; title: string; welcome: string }) => void | Promise<void>;
+  updateKnowledgeChat?: (id: number, args: { name: string; title: string; welcome: string }) => void | Promise<void>;
+  deployKnowledgeChat?: (id: number) => void | Promise<void>;
 };
 
 /** Everything Publish renders. */
@@ -202,6 +213,8 @@ export type PublishData = {
   serverCount: number;
   draft: McpDraft;
   created: McpCreated;
+  chats: KnowledgeChatDestination[];
+  selectedChatId: number | null;
   /** Bot delivery endpoints and their observed connection state. */
   slack: SlackStatus;
   github: GithubStatus;
@@ -222,6 +235,7 @@ const STATES = [
   { id: "mcp-add", label: "MCP · Add server" },
   { id: "mcp-token", label: "MCP · Token created" },
   { id: "mcp-empty", label: "MCP · No servers" },
+  { id: "chat", label: "Knowledge chat" },
   { id: "bots", label: "Bots · Slack + GitHub" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
@@ -888,6 +902,69 @@ function PublishFlow({ phase: given, site, mobile, actions }: { phase: PublishPh
   );
 }
 
+function KnowledgeChats({ chats, selectedId, actions }: {
+  chats: KnowledgeChatDestination[]; selectedId: number | null; actions?: PublishActions;
+}) {
+  const selected = chats.find((row) => row.id === selectedId) ?? null;
+  const [creating, setCreating] = useState(chats.length === 0);
+  const [name, setName] = useState(selected?.name ?? "");
+  const [slug, setSlug] = useState("");
+  const [title, setTitle] = useState(selected?.title ?? "");
+  const [welcome, setWelcome] = useState(selected?.welcome ?? "");
+  const write = useWrite();
+  useResync(selected, (row) => {
+    setName(row?.name ?? ""); setTitle(row?.title ?? ""); setWelcome(row?.welcome ?? "");
+  });
+
+  if (!creating && !selected) return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div><h2 className="text-[18px] font-semibold text-ink">Knowledge chat</h2>
+          <p className="mt-1 text-[13px] text-ink/70">Deploy a project-scoped assistant that answers from approved knowledge and cites its sources.</p></div>
+        <Button onClick={() => setCreating(true)}><Plus size={14} /> New knowledge chat</Button>
+      </div>
+      {chats.length === 0 ? <EmptyState title="No knowledge chats yet">Create an interactive search and answer destination for your team.</EmptyState> : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{chats.map((chat) => (
+          <button key={chat.id} type="button" onClick={() => actions?.openKnowledgeChat?.(chat.id)}
+            className={`${card} ${focusRing} p-4 text-left hover:border-moss/50`}>
+            <span className="flex items-center justify-between gap-2"><strong className="text-[14px] text-ink">{chat.name}</strong><Chip label={chat.status === "live" ? "Live" : "Draft"} tone={chat.status === "live" ? "ok" : "neutral"} /></span>
+            <span className="mt-2 block font-term text-[12px] text-ink/60">/{chat.slug}</span>
+          </button>
+        ))}</div>
+      )}
+    </div>
+  );
+
+  const save = async () => {
+    if (creating) {
+      const ok = await write.run(actions?.createKnowledgeChat && (() => actions.createKnowledgeChat!({ name, slug, title, welcome })));
+      if (ok) setCreating(false);
+    } else if (selected) {
+      await write.run(actions?.updateKnowledgeChat && (() => actions.updateKnowledgeChat!(selected.id, { name, title, welcome })));
+    }
+  };
+  return (
+    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4">
+      <div className="flex items-center justify-between gap-3"><div><h2 className="text-[18px] font-semibold text-ink">{creating ? "New knowledge chat" : selected?.name}</h2>
+        <p className="mt-1 text-[13px] text-ink/70">Answers use the existing approved-answer and cited retrieval pipeline for this project.</p></div>
+        <Button compact onClick={() => { setCreating(false); actions?.openSection?.("chat"); }}>All chats</Button></div>
+      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+      <Card className="flex flex-col gap-4 p-5">
+        <Field label="Destination name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Company knowledge" /></Field>
+        {creating ? <Field label="URL slug"><Input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="company-knowledge" /><span className="text-[12px] text-ink/60">Lowercase letters, numbers, and hyphens.</span></Field>
+          : <Field label="Destination URL"><Input readOnly value={selected?.url ?? ""} /></Field>}
+        <Field label="Assistant title"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ask Acme" /></Field>
+        <Field label="Welcome message"><Input value={welcome} onChange={(e) => setWelcome(e.target.value)} placeholder="What would you like to know?" /></Field>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button disabled={write.busy || !name.trim() || !title.trim() || (creating && !slug.trim())} onClick={() => void save()}>{write.busy ? <Spinner size="sm" /> : <Check size={14} />} {creating ? "Create knowledge chat" : "Save configuration"}</Button>
+          {!creating && selected && <Button disabled={write.busy} onClick={() => void write.run(actions?.deployKnowledgeChat && (() => actions.deployKnowledgeChat!(selected.id)))}><Send size={14} /> {selected.status === "live" ? "Redeploy" : "Deploy"}</Button>}
+          {!creating && selected?.status === "live" && <Link href={selected.url} target="_blank"><ExternalLink size={14} /> Open knowledge chat</Link>}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function Body({ data, section, error, mobile, actions }: {
   data: PublishData; section: PublishSection; error: string | null; mobile: boolean; actions?: PublishActions;
 }): ReactNode {
@@ -902,6 +979,9 @@ function Body({ data, section, error, mobile, actions }: {
      nothing here read: the underline moved and the panel never changed. */
   if (section === "bots") {
     return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} actions={actions} />;
+  }
+  if (section === "chat") {
+    return <KnowledgeChats chats={data.chats} selectedId={data.selectedChatId} actions={actions} />;
   }
   if (section === "mcp") {
     /* All three MCP screens are the same component. They used to be two static
@@ -970,7 +1050,7 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
           /* The icon is what puts the loaded title at x=288; without it the
              loading title started at x=250 and slid right on load. */
           icon={<span className="text-moss"><Send size={24} /></span>}
-          tabs={["Doc sites", "MCP servers", "Bots"]}
+          tabs={["Doc sites", "MCP servers", "Knowledge chat", "Bots"]}
           columns={["Site", "Docs", "Status", "Actions"]}
           actions={0}
           mobile={mobile}
@@ -986,9 +1066,9 @@ function PublishPage({ data, loading = false, error = null, actions, chrome, mob
             saying so with the MCP tab underlined — left over from the tab
             repair, which fixed the panel and not the label above it. */}
         <PageHeader
-          eyebrow={tab === "mcp" ? "MCP" : tab === "bots" ? "Bots" : "Doc site"}
+          eyebrow={tab === "mcp" ? "MCP" : tab === "chat" ? "Knowledge chat" : tab === "bots" ? "Bots" : "Doc site"}
           title="Destinations"
-          description="Deliver the knowledge base through documentation websites, MCP servers, and Slack or GitHub bots."
+          description="Deliver the knowledge base through documentation websites, MCP servers, interactive knowledge chat, and bots."
           icon={<span className="text-moss"><Send size={24} /></span>}
         />
         <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
