@@ -65,9 +65,10 @@ export function WelcomeGlossaryStep({ candidates: given, llm = true, defaultMode
   /* The candidate list is the server's, and the harvest replaces it. Without
      this the review step kept showing the batch it mounted with, so a scan
      that really did find new terms looked like it found nothing. */
-  const [seen, setSeen] = useState(given);
-  if (seen !== given) {
-    setSeen(given);
+  const signature = given.map((candidate) => `${candidate.id ?? ""}:${candidate.term}`).join("\u0000");
+  const [seenSignature, setSeenSignature] = useState(signature);
+  if (seenSignature !== signature) {
+    setSeenSignature(signature);
     setScanned(null);
     if (mode === "review") setChecked(new Set(given.map((c) => c.term)));
   }
