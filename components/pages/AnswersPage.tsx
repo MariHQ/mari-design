@@ -721,8 +721,12 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
      and the rail's "See all" reaches it from inside the page. It used to be
      reachable only by routing, which nothing did. */
   const [seeAllCoverage, setSeeAllCoverage] = useState(false);
-  const [seenPane, setSeenPane] = useState(data.pane);
-  if (seenPane !== data.pane) { setSeenPane(data.pane); setSeeAllCoverage(false); setHarvesting(null); }
+  const [seenPaneKind, setSeenPaneKind] = useState(data.pane.kind);
+  if (seenPaneKind !== data.pane.kind) {
+    setSeenPaneKind(data.pane.kind);
+    setSeeAllCoverage(false);
+    setHarvesting(null);
+  }
   const isCoverage = seeAllCoverage || data.pane.kind === "coverage";
 
   /* Harvest is offered only where there is something to scan. The source list
