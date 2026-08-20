@@ -61,7 +61,7 @@ export type WelcomeStep =
   | "connect-gdrive" | "connect-generic" | "connect-upload" | "connect-syncing"
   | "glossary" | "finish" | "done";
 
-/** Which of the five Stepper positions a step sits at. */
+/** Which of the four Stepper positions a step sits at. */
 const STEP_INDEX: Record<WelcomeStep, number> = {
   hero: 0,
   connect: 1, "connect-github": 1, "connect-slack": 1, "connect-notion": 1,
@@ -844,7 +844,7 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
     <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
-        <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Five steps, all of them real." />
+        <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Four steps, all of them real." />
 
         <Card variant="plain">
           <div className="mb-5">
