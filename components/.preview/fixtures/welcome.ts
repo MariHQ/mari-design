@@ -3,7 +3,6 @@
    plain JSON: brand marks are derived from a provider key by the page. */
 
 import type { CField, Repo, Tile, UploadedFile, WelcomeData, WelcomeStep } from "../../pages/WelcomePage";
-import { GUIDE_PACKS, type GuidePack } from "../../features/WelcomeGuideStep";
 import type { Candidate } from "../../features/WelcomeGlossaryStep";
 import type { SyncRow } from "../../features/WelcomeSyncPanel";
 import type { PageFixtures } from "./types";
@@ -17,8 +16,6 @@ const TILES: Tile[] = [
   { key: "slack", name: "Slack", blurb: "Import channel history into the library." },
   { key: "notion", name: "Notion", blurb: "Pages and databases from a shared integration." },
   { key: "gdrive", name: "Google Drive", blurb: "Docs & folders via a service account." },
-  { key: "upload", name: "Upload", blurb: "Drag in .md / .txt files directly." },
-  { key: "website", name: "Website", blurb: "Crawl a docs site by sitemap." },
   { key: "confluence", name: "Confluence", blurb: "Spaces and pages from Cloud or Server.", connected: true },
   { key: "jira", name: "Jira", blurb: "Issues and project docs." },
 ];
@@ -85,10 +82,9 @@ const BASE: WelcomeData = {
   uploadSummary: "3 files ingested · 214 chunks · 189 embedded",
   uploadFiles: UPLOAD_FILES,
   connectSync: CONNECT_SYNC,
-  packs: GUIDE_PACKS,
   glossaryCandidates: CANDIDATES,
   syncRows: SYNC_ROWS,
-  doneSummary: { sourcesSynced: 2, guide: "Plain language", glossaryTerms: 5 },
+  doneSummary: { sourcesSynced: 2, glossaryTerms: 5 },
 };
 
 const at = (step: WelcomeStep, over: Partial<WelcomeData> = {}): { data: WelcomeData } =>
@@ -110,13 +106,9 @@ function strained(extreme: boolean): WelcomeData {
         { id: "gh", provider: "github", name: UNBREAKABLE, state: "syncing", phase: LONG_WORD, done: HUGE_NUMBER, total: 99999999, chunkCount: HUGE_NUMBER, embeddedCount: 5780 },
         { id: "x", provider: "slack", name: MIXED_SCRIPT, state: "error", error: LONG_URL },
       ],
-      doneSummary: { sourcesSynced: HUGE_NUMBER, guide: UNBREAKABLE, glossaryTerms: HUGE_NUMBER },
+      doneSummary: { sourcesSynced: HUGE_NUMBER, glossaryTerms: HUGE_NUMBER },
     };
   }
-  const packs: GuidePack[] = [
-    { id: "plain", name: LONG_TITLE, description: LONG_PARAGRAPH, rules: 42 },
-    { id: "microsoft", name: LONG_NAME, description: LONG_PARAGRAPH, rules: 38 },
-  ];
   return {
     ...BASE,
     step: "connect",
@@ -127,12 +119,11 @@ function strained(extreme: boolean): WelcomeData {
       { key: "slack", name: "Slack workspace with an extraordinarily long organization name", blurb: LONG_PARAGRAPH },
       { key: "gdrive", name: LONG_SOURCE, blurb: LONG_PARAGRAPH },
     ],
-    packs,
     syncRows: [
       { id: "gh", provider: "github", name: LONG_SOURCE, state: "syncing", phase: LONG_TITLE, done: 340, total: 512, chunkCount: 8912, embeddedCount: 5780 },
       { id: "conf", provider: "confluence", name: LONG_NAME, state: "error", error: LONG_PARAGRAPH },
     ],
-    doneSummary: { sourcesSynced: 12847392, guide: LONG_TITLE, glossaryTerms: 12847392 },
+    doneSummary: { sourcesSynced: 12847392, glossaryTerms: 12847392 },
   };
 }
 
@@ -145,7 +136,6 @@ export const FIXTURES: PageFixtures<WelcomeData> = {
   "connect-gdrive": at("connect-gdrive"),
   "connect-upload": at("connect-upload"),
   "connect-syncing": at("connect-syncing"),
-  guide: at("guide"),
   glossary: at("glossary"),
   /* The initial sync renders the auth skeleton while the first status lands. */
   syncing: { ...at("finish"), loading: true },

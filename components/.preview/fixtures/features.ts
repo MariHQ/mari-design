@@ -24,6 +24,7 @@ import type { ChatSession } from "../../features/ChatDockFeature";
 import type { Doc } from "../../features/TagPickerFeature";
 import type { KeyRow } from "../../features/TokenRevealFeature";
 import type { Finding } from "../../features/DocReviewMarkdown";
+import { GUIDE_PACKS } from "../../features/WelcomeGuideStep";
 
 import { FIXTURES as ANSWERS } from "./answers";
 import { FIXTURES as AUDIT } from "./audit";
@@ -216,7 +217,7 @@ export const DESTINATIONS_GITHUB = destinations.github;
 const welcome = WELCOME.default.data;
 
 export const WELCOME_CANDIDATES = welcome.glossaryCandidates;
-export const WELCOME_PACKS = welcome.packs;
+export const WELCOME_PACKS = GUIDE_PACKS;
 export const WELCOME_SYNC_ROWS = welcome.syncRows;
 export const WELCOME_REPOS = welcome.repos;
 
