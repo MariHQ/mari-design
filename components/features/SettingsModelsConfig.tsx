@@ -49,7 +49,7 @@ const PROVIDER_ENDPOINT: Record<string, string> = {
   gateway: "",
 };
 
-const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", local: "Local", gateway: "Enterprise gateway" };
+const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", local: "Local", gateway: "Enterprise gateway", "sentence-transformers": "Sentence Transformers" };
 function optionLabel(opt: string): string {
   const [prov, ...rest] = opt.split(":");
   return `${PROVIDER_LABEL[prov] ?? prov}: ${rest.join(":")}`;
@@ -65,7 +65,7 @@ export type GatewaySettings = {
   baseUrl: string;
   token: string;
   generationModel: string;
-  embeddingModel: string;
+  compatibility: "openai" | "deepseek";
   headersJson: string;
   metadataJson: string;
   modelHeader: string;
@@ -73,7 +73,7 @@ export type GatewaySettings = {
 };
 
 export const EMPTY_GATEWAY: GatewaySettings = {
-  baseUrl: "", token: "", generationModel: "", embeddingModel: "",
+  baseUrl: "", token: "", generationModel: "", compatibility: "openai",
   headersJson: "{}", metadataJson: "{}", modelHeader: "", maxRetries: 2,
 };
 
@@ -82,7 +82,6 @@ function gatewayValidation(value: GatewaySettings): string {
   try { url = new URL(value.baseUrl); } catch { return "Gateway base URL must be a valid http(s) URL."; }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return "Gateway base URL must be a valid http(s) URL without embedded credentials.";
   if (!value.generationModel.trim()) return "Generation model is required.";
-  if (!value.embeddingModel.trim()) return "Embedding model is required.";
   if (!Number.isInteger(value.maxRetries) || value.maxRetries < 0 || value.maxRetries > 5) return "Retry count must be a whole number from 0 to 5.";
   for (const [label, raw] of [["Routing headers", value.headersJson], ["Request metadata", value.metadataJson]] as const) {
     try {
@@ -377,9 +376,9 @@ export function SettingsModelsConfig({
         </Card>
       </div>
 
-      <Card icon={<Sparkles size={16} className="text-moss" />} title="Enterprise LLM gateway" hint="OpenAI-compatible">
+      <Card icon={<Sparkles size={16} className="text-moss" />} title="Generation gateway" hint="OpenAI-compatible">
         <p className="mb-4 text-[12.5px] leading-relaxed text-ink/70">
-          Route generation and embeddings through your organization&apos;s gateway. Ollama remains the open-source default until you save this configuration; no vendor plugin is required.
+          Route answer generation through an OpenAI-compatible provider such as an enterprise gateway or DeepSeek. Embeddings remain independently configured above, so Ollama can continue indexing locally.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Gateway base URL">
@@ -392,10 +391,14 @@ export function SettingsModelsConfig({
             </div>
           </Field>
           <Field label="Generation model">
-            <Input value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder="enterprise-chat" className="w-full font-term" />
+            <Input value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder={gatewayDraft.compatibility === "deepseek" ? "deepseek-v4-flash" : "enterprise-chat"} className="w-full font-term" />
           </Field>
-          <Field label="Embedding model">
-            <Input value={gatewayDraft.embeddingModel} onChange={(e) => setGatewayField("embeddingModel", e.target.value)} placeholder="enterprise-embedding" className="w-full font-term" />
+          <Field label="API compatibility">
+            <Select value={gatewayDraft.compatibility} onChange={(e) => setGatewayField("compatibility", e.target.value as GatewaySettings["compatibility"])} className="w-full">
+              <option value="openai">Standard OpenAI-compatible</option>
+              <option value="deepseek">DeepSeek API</option>
+            </Select>
+            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on Sentence Transformers, Ollama, or another embedding provider.</p>}
           </Field>
           <Field label="Model routing header">
             <Input value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
