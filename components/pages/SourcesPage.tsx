@@ -425,6 +425,7 @@ const STATES = [
     a <select> value is a string. */
 const SCHEDULES: { value: string; label: string; minutes: number | null }[] = [
   { value: "", label: "Manual only", minutes: null },
+  { value: "10", label: "Every 10 minutes", minutes: 10 },
   { value: "15", label: "Every 15 minutes", minutes: 15 },
   { value: "60", label: "Every hour", minutes: 60 },
   { value: "360", label: "Every 6 hours", minutes: 360 },
