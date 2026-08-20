@@ -53,6 +53,10 @@ export type SourcesBotsActions = {
 const fallbackSlackManifest = () => `display_information:
   name: Mari
 features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
   bot_user:
     display_name: Mari
 oauth_config:
@@ -139,7 +143,7 @@ function SlackDrawer({
   const body = () => {
     if (step === 0) return (
       <div className="grid grid-cols-1 gap-3">
-        <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest". It pre-fills scopes and the events URL.</p>
+        <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest", or replace the manifest on an existing app. It enables two-way DMs, scopes, and the events URL.</p>
         <CodeBlock code={manifest} title="app-manifest.yml" />
         {manifestError && <WriteError>{manifestError}</WriteError>}
       </div>
@@ -211,6 +215,7 @@ function SlackDrawer({
           <li>@mention <b>@Mari</b> with a question</li>
           <li>DM <b>Mari</b> directly</li>
         </ul>
+        <p className="text-[12px] text-ink/65">If Slack blocks the DM composer, update the app from this manifest and confirm App Home → Messages Tab allows messages.</p>
         <div className={`${card} p-3 flex items-center gap-2`}>
           {botChip(slackState(status))}
           {status.lastEventAt && <span className="ml-auto font-term text-[11px] text-ink/65">Last event {fmtDateTime(status.lastEventAt)}</span>}
