@@ -108,7 +108,7 @@ export type SettingsModelsActions = {
       is. The server sets it when it takes the model. Only an unchanged model
       reports the dimensions it is already indexed at. */
   saveEmbedding?: (m: { model: string; dims: number | null }) => void | Promise<void>;
-  saveLlm?: (m: { model: string; openai: string; anthropic: string }) => void | Promise<void>;
+  saveLlm?: (m: { model: string; openai: string; anthropic: string; openaiDirty: boolean; anthropicDirty: boolean }) => void | Promise<void>;
   saveGateway?: (gateway: GatewaySettings) => void | Promise<void>;
   testGateway?: () => { ok: boolean; text: string } | Promise<{ ok: boolean; text: string }>;
   /** Ask the server whether the provider actually answers. Optional, and the
@@ -178,6 +178,8 @@ export function SettingsModelsConfig({
   const [llmSel, setLlmSel] = useState(llm);
   const [openaiKey, setOpenaiKey] = useState(keys.openai);
   const [anthropicKey, setAnthropicKey] = useState(keys.anthropic);
+  const [openaiDirty, setOpenaiDirty] = useState(false);
+  const [anthropicDirty, setAnthropicDirty] = useState(false);
   const [showOpenai, setShowOpenai] = useState(false);
   const [showAnthropic, setShowAnthropic] = useState(false);
   const initialGateway = gateway ?? EMPTY_GATEWAY;
@@ -205,6 +207,8 @@ export function SettingsModelsConfig({
     setLlmSel(llm);
     setOpenaiKey(keys.openai);
     setAnthropicKey(keys.anthropic);
+    setOpenaiDirty(false);
+    setAnthropicDirty(false);
     setGatewayDraft(gateway ?? EMPTY_GATEWAY);
     setChunk(initialChunking);
   }
@@ -225,8 +229,8 @@ export function SettingsModelsConfig({
     () => flash(setEmbSaved),
   );
   const saveLlm = () => write.run(
-    actions?.saveLlm && (() => actions.saveLlm!({ model: llmSel, openai: openaiKey, anthropic: anthropicKey })),
-    () => flash(setLlmSaved),
+    actions?.saveLlm && (() => actions.saveLlm!({ model: llmSel, openai: openaiKey, anthropic: anthropicKey, openaiDirty, anthropicDirty })),
+    () => { setOpenaiDirty(false); setAnthropicDirty(false); flash(setLlmSaved); },
   );
 
   const setGatewayField = <K extends keyof GatewaySettings>(key: K, value: GatewaySettings[K]) => {
@@ -421,13 +425,13 @@ export function SettingsModelsConfig({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} className="w-full font-term" />
+              <Input type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => { setOpenaiKey(e.target.value); setOpenaiDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showOpenai} aria-label={showOpenai ? "Hide key" : "Reveal key"} onClick={() => setShowOpenai((v) => !v)}>{showOpenai ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
           <Field label="Anthropic (sk-ant-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} className="w-full font-term" />
+              <Input type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => { setAnthropicKey(e.target.value); setAnthropicDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showAnthropic} aria-label={showAnthropic ? "Hide key" : "Reveal key"} onClick={() => setShowAnthropic((v) => !v)}>{showAnthropic ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
