@@ -136,7 +136,7 @@ function LinkCard({ icon, title, blurb, cta, to, onNavigate }: {
         <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[6px] bg-flysch text-biscay">{icon}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-semibold text-ink">{title}</div>
-          <p className="mt-1 text-[13px] text-ink/60">{blurb}</p>
+          <p className="mt-1 text-[13px] text-ink/70">{blurb}</p>
         </div>
       </div>
       <div className="mt-3">

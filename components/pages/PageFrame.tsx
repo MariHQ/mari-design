@@ -260,7 +260,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
       </header>
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} active={active} chrome={chrome} />
       {search.node}
-      <main id="main-content" tabIndex={-1} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
+      <main id="main-content" tabIndex={0} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
     </div>
   );
 }
@@ -388,7 +388,7 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
           userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />}
         />
         {search.node}
-        <main id="main-content" tabIndex={-1} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
+        <main id="main-content" tabIndex={0} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
       </div>
     </div>
   );

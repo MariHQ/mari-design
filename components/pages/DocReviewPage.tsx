@@ -119,7 +119,7 @@ function DocReviewPage({ data, loading = false, error = null, actions, chrome, m
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
           <PageHeader title={data.title} backLink={{ href: "/knowledge", label: "Knowledge" }} actions={mobile ? undefined : headerActions} />
           <Truncate className="mt-1 max-w-[680px] text-[13px] text-ink/70">{data.subtitle}</Truncate>
-          <p className="mt-2 text-[12.5px] text-ink/60">Read-only source record · make content changes in the connected source.</p>
+          <p className="mt-2 text-[12.5px] text-ink/70">Read-only source record · make content changes in the connected source.</p>
           {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
           <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
           <div className="mt-6"><Body data={data} error={error} actions={actions} mobile={mobile} /></div>
