@@ -63,7 +63,7 @@ export type AnswerStat = {
 
 /** A source the harvest wizard can scan. `key` picks the icon, so the shape
     stays plain JSON: an API can return it, and no React element is carried. */
-export type HarvestSource = { key: "slack" | "docs" | "history"; label: string; desc: string; on: boolean };
+export type HarvestSource = { key: string; label: string; desc: string; on: boolean };
 
 /** One question/answer pair the scan proposed. */
 export type HarvestCandidate = { question: string; draft: string; source: string; confidence: number };
@@ -129,11 +129,10 @@ const HARVEST_STEP: Record<Harvest["phase"], number> = {
   select: 0, scan: 1, review: 2, importing: 3, done: 3,
 };
 
-const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
-  slack: <MessagesSquare size={18} />,
-  docs: <FileText size={18} />,
-  history: <Sparkles size={18} />,
-};
+const sourceIcon = (key: string): React.ReactNode =>
+  key === "slack" ? <MessagesSquare size={18} />
+    : key === "chat" ? <Sparkles size={18} />
+      : <FileText size={18} />;
 
 /** `data` is the whole page's answers — what "nothing curated at all" is judged
     against — while `answers` is only the selected tab's slice. Judging both off
@@ -490,7 +489,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
                 checked={s.on}
                 onChange={() => toggleSource(s.key)}
               />
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{SOURCE_ICON[s.key]}</span>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{sourceIcon(s.key)}</span>
               <span className="min-w-0">
                 <b className="block text-[13.5px] font-semibold text-ink">{s.label}</b>
                 <span className="text-[12.5px] text-ink/65">{s.desc}</span>

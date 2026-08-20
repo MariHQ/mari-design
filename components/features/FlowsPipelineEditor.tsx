@@ -79,10 +79,10 @@ const KIND_META: Record<StepKind, KindMeta> = {
   tag: { name: "Tag docs", desc: "Applies a tag to every fetched document. Dry runs preview the tagging.", defLabel: "Tag docs", defConfig: { tag: "needs-review" }, icon: I(<Tag size={15} />) },
   derive_links: { name: "Derive links", llm: true, desc: "Suggests lineage links between the fetched docs and related knowledge.", defLabel: "Derive links", defConfig: {}, icon: I(<GitBranch size={15} />) },
   condition: { name: "Condition", desc: "Branches on a run stat (for example contradictions > 0). Yes-branch steps run when it passes.", defLabel: "Contradictions?", defConfig: { field: "contradictions", greater_than: 0 }, icon: I(<Filter size={15} />) },
-  approval: { name: "Approval", desc: "Pauses the run as waiting until the assignee approves it from the run panel.", defLabel: "Approval", defConfig: { assignee: "Aki K." }, icon: I(<CheckSquare size={15} />) },
+  approval: { name: "Approval", desc: "Pauses the run as waiting until the selected approver approves it from the run panel.", defLabel: "Approval", defConfig: { assignee: "" }, icon: I(<CheckSquare size={15} />) },
   create_task: { name: "Create review item", desc: "Opens an item in Review. Dry runs preview the item.", defLabel: "Create review item", defConfig: { title: "", kind: "review", kind_label: "Review" }, icon: I(<CheckSquare size={15} />) },
   notify: { name: "Notify", desc: "Sends an in-app notification. Dry runs preview the message.", defLabel: "Notify", defConfig: { text: "", detail: "" }, icon: I(<Bell size={15} />) },
-  deploy_site: { name: "Deploy site", desc: "Publishes a documentation site version. Dry runs report what would deploy.", defLabel: "Deploy site", defConfig: { site_id: 1 }, icon: I(<Globe size={15} />) },
+  deploy_site: { name: "Deploy site", desc: "Publishes the selected documentation site version. Dry runs report what would deploy.", defLabel: "Deploy site", defConfig: { site_id: 0 }, icon: I(<Globe size={15} />) },
   sync_source: { name: "Sync source", desc: "Re-syncs a connected source so the run sees the latest.", defLabel: "Sync source", defConfig: { source_id: 0 }, icon: I(<RefreshCw size={15} />) },
   scan_facts: { name: "Scan for facts", llm: true, desc: "Mines recent documents for checkable claims and captures them as facts.", defLabel: "Scan for facts", defConfig: {}, icon: I(<CheckSquare size={15} />) },
   refresh_digest: { name: "Refresh digest", llm: true, desc: "Rebuilds the recent-activity digest over recent docs.", defLabel: "Refresh digest", defConfig: {}, icon: I(<Send size={15} />) },
@@ -392,7 +392,7 @@ export function FlowsPipelineEditor({
                       <Truncate lines={2} className="mt-1 text-[12px] leading-snug text-ink/70">{stepSummary(s)}</Truncate>
                       {meta.llm && (
                         <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-clay/35 bg-clay/[0.07] px-2 py-[2px] font-term text-[10px] font-medium tracking-[0.06em] text-clay">
-                          <Sparkles size={10} /> LLM: runs the local model, slower
+                          <Sparkles size={10} /> LLM: runs the configured generation model
                         </span>
                       )}
                     </div>
@@ -470,7 +470,7 @@ function stepSummary(s: EditorStep): string {
     case "approval": return `Approver: ${asStr(c.assignee) || "unassigned"}`;
     case "create_task": return `${asStr(c.kind_label) || "Task"}: ${asStr(c.title) || "untitled"}`;
     case "notify": return asStr(c.text) || "Sends an in-app notification";
-    case "deploy_site": return `Publishes site #${asNum(c.site_id, 1)}`;
+    case "deploy_site": return asNum(c.site_id) > 0 ? `Publishes site #${asNum(c.site_id)}` : "Choose a site";
     case "sync_source": return `Re-syncs source #${asNum(c.source_id)}`;
     default: return KIND_META[s.kind].desc;
   }
@@ -673,7 +673,8 @@ function ConfigPanel({
 
         {step.kind === "deploy_site" && (
           <Field label="Site">
-            <Select value={asNum(c.site_id, 1)} onChange={(e) => onConfig("site_id", asNum(e.target.value, 1))} className="w-full">
+            <Select value={asNum(c.site_id)} onChange={(e) => onConfig("site_id", asNum(e.target.value))} className="w-full">
+              <option value={0}>Choose a site</option>
               {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
           </Field>
