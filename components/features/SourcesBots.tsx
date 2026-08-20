@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, GitFork, RefreshCw, Copy, Slack, Github } from "lucide-react";
 import { card } from "../tokens/card";
 import { Button } from "../actions/Button";
@@ -40,6 +40,9 @@ export type SourcesBotsActions = {
   /** Store the bot token and signing secret server-side. Throws with the
       server's own words: "invalid_auth" is the one thing the user can fix. */
   saveSlackCredentials?: (v: { botToken: string; signingSecret: string }) => void | Promise<void>;
+  /** Read the deployment-generated Slack manifest. The callback matters:
+      browser origin is not necessarily the public API origin Slack calls. */
+  loadSlackManifest?: () => Promise<string>;
   /** Slack's `auth.test`. Answers rather than throws: "not ok" is a normal
       outcome of a test. */
   testSlackConnection?: () => Promise<{ ok: boolean; teamName?: string; error?: string }>;
@@ -47,18 +50,18 @@ export type SourcesBotsActions = {
   saveGithubWebhookSecret?: (secret: string) => void | Promise<void>;
 };
 
-const SLACK_MANIFEST = `display_information:
+const fallbackSlackManifest = () => `display_information:
   name: Mari
 features:
   bot_user:
     display_name: Mari
 oauth_config:
   scopes:
-    bot: [app_mentions:read, chat:write, im:history, im:read]
+    bot: [app_mentions:read, channels:history, chat:write, im:history, im:read, im:write]
 settings:
   event_subscriptions:
-    request_url: https://acme.mari.app/webhooks/slack
-    bot_events: [app_mention, message.im]`;
+    request_url: ${origin}/webhooks/slack
+    bot_events: [app_mention, message.channels, message.im]`;
 
 function botChip(status: "not-set-up" | "error" | "waiting" | "configured"): ReactNode {
   switch (status) {
@@ -99,6 +102,8 @@ function SlackDrawer({
   const [token, setToken] = useState("");
   const [secret, setSecret] = useState("");
   const [saved, setSaved] = useState(false);
+  const [manifest, setManifest] = useState(fallbackSlackManifest);
+  const [manifestError, setManifestError] = useState("");
   /* The verify step reports what Slack answered, and nothing else: it used to
      flip to "Connected as @Mari" from a click alone. */
   const [tested, setTested] = useState<{ ok: boolean; teamName?: string; error?: string } | null>(null);
@@ -106,6 +111,16 @@ function SlackDrawer({
   /* Its own hook, not the one Save uses: the two steps are separately
      disableable and a failure on one must not surface on the other. */
   const tester = useWrite();
+
+  useEffect(() => {
+    if (!open || step !== 0 || !actions?.loadSlackManifest) return;
+    let live = true;
+    setManifestError("");
+    void actions.loadSlackManifest()
+      .then((value) => { if (live) setManifest(value); })
+      .catch((error) => { if (live) setManifestError(error instanceof Error ? error.message : String(error)); });
+    return () => { live = false; };
+  }, [open, step, actions?.loadSlackManifest]);
 
   const save = () => write.run(
     actions?.saveSlackCredentials && (() => actions.saveSlackCredentials!({ botToken: token, signingSecret: secret.trim() })),
@@ -125,7 +140,8 @@ function SlackDrawer({
     if (step === 0) return (
       <div className="grid grid-cols-1 gap-3">
         <p className="text-[13px] text-ink/70">Create a Slack app "From a manifest". It pre-fills scopes and the events URL.</p>
-        <CodeBlock code={SLACK_MANIFEST} title="app-manifest.yml" />
+        <CodeBlock code={manifest} title="app-manifest.yml" />
+        {manifestError && <WriteError>{manifestError}</WriteError>}
       </div>
     );
     if (step === 1) return (
@@ -245,7 +261,7 @@ function GithubDrawer({
         <p className="text-[13px] text-ink/70">In the repo's <b>Settings → Webhooks → Add webhook</b>, use:</p>
         <Field label="Payload URL"><Truncate className="font-term text-[12.5px]">{payloadUrl}</Truncate></Field>
         <Field label="Content type"><span className="font-term text-[12.5px]">application/json</span></Field>
-        <Field label="Events"><span className="text-[13px]">Just the <b>push</b> event</span></Field>
+        <Field label="Events"><span className="text-[13px]">Pushes, issues, pull requests, and comments</span></Field>
       </div>
     );
     if (step === 1) return (
@@ -364,7 +380,7 @@ export function SourcesBots({
           <b className="min-w-0 flex-1 basis-[7rem] truncate text-[14px] font-semibold text-ink">GitHub webhook</b>
           {botChip(githubState(github))}
         </div>
-        <p className="text-[12.5px] text-ink/65">Re-syncs a repo the instant you push a commit.</p>
+        <p className="text-[12.5px] text-ink/65">Refreshes repository content when GitHub sends a change.</p>
         <Field label="Payload URL"><Truncate className="font-term text-[12px] text-ink/70" title={`${origin}/webhooks/github`}>{origin}/webhooks/github</Truncate></Field>
         <Field label="Repositories">
           <div className="flex flex-wrap gap-1.5">
