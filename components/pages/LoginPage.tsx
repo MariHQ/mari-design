@@ -472,8 +472,9 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
           <Input className="w-full" autoComplete="name" placeholder="Maya Chen" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
       )}
-      <Field label="Email">
-        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field label={register ? "Email" : "Email or username"}>
+        <Input className="w-full" type={register ? "email" : "text"} autoComplete={register ? "email" : "username"}
+          placeholder={register ? "you@team.com" : "you@team.com or demo"} value={email} onChange={(e) => setEmail(e.target.value)} />
       </Field>
       <Field label="Password">
         <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
