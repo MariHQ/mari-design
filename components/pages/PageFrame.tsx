@@ -348,17 +348,17 @@ function MobileNav({ open, onClose, active, chrome }: { open: boolean; onClose: 
   );
 }
 
-/** The sidebar's "Need help?" card. It opens the assistant, which in this
-    console is the Answers page — the same destination the nav offers, so it
-    can never point somewhere that does not exist. */
+/** Shortcut to the governed answers bots serve verbatim. The floating agent
+    launcher is the conversational surface; this card must not pretend that
+    navigating to answer administration starts a chat. */
 function HelpCard({ onNavigate }: { onNavigate?: (id: string) => void }) {
   return (
     <button
       onClick={() => onNavigate?.("answers")}
       className={`w-full rounded-[6px] bg-white/10 px-3 py-2 text-left text-[12.5px] text-white/80 hover:bg-white/15 ${focusRing}`}
     >
-      <b className="block font-medium text-white">Need help?</b>
-      Ask Mari anything ↗
+      <b className="block font-medium text-white">Approved answers</b>
+      Manage bot responses ↗
     </button>
   );
 }
