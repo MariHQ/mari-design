@@ -72,6 +72,10 @@ export type TrajectoryRow = {
   promotedWorkflowCacheState?: "disabled" | "empty" | "fresh" | "stale";
   promotedWorkflowCacheRefreshedAt?: string;
   promotedWorkflowDependencyCount?: number;
+  promotedWorkflowEmbeddingMap?: {
+    profile: string;
+    points: Array<{ kind: "intent" | "phase" | "tool"; label: string; x: number; y: number }>;
+  };
 };
 
 export type TrajectoriesData = {
@@ -167,6 +171,46 @@ function EvidenceEditor({ trajectoryId, evidence, actions }: {
   </li>;
 }
 
+function EmbeddingMap({ map }: { map?: TrajectoryRow["promotedWorkflowEmbeddingMap"] }) {
+  const points = map?.points ?? [];
+  if (!points.length) return (
+    <div className="rounded-[6px] border border-dashed border-ink/15 bg-paper px-4 py-8 text-center text-[11px] text-ink/55">
+      The embedding map will appear after this workflow has been indexed.
+    </div>
+  );
+  const colors = { intent: "#294f78", phase: "#707746", tool: "#b05d3b" } as const;
+  return (
+    <figure className="overflow-hidden rounded-[7px] border border-ink/10 bg-paper p-3" aria-label="Workflow embedding">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Workflow embedding</h3>
+          <p className="mt-1 text-[11px] text-ink/55">A two-dimensional projection of the stored intent, phases, and tool steps.</p>
+        </div>
+        {map?.profile && <span className="max-w-[280px] truncate font-mono text-[10px] text-ink/45" title={map.profile}>{map.profile}</span>}
+      </div>
+      <svg viewBox="0 0 600 240" role="img" aria-label={`Embedding projection with ${points.length} points`} className="mt-2 h-auto w-full min-w-0">
+        <rect x="0" y="0" width="600" height="240" rx="8" fill="#f8f6f1" />
+        {[100, 200, 300, 400, 500].map((x) => <line key={`x-${x}`} x1={x} y1="18" x2={x} y2="222" stroke="#17202a" strokeOpacity="0.055" />)}
+        {[60, 120, 180].map((y) => <line key={`y-${y}`} x1="18" y1={y} x2="582" y2={y} stroke="#17202a" strokeOpacity="0.055" />)}
+        {points.map((point, index) => {
+          const x = 300 + point.x * 245;
+          const y = 120 - point.y * 82;
+          const labelRight = x < 420;
+          return <g key={`${point.kind}-${point.label}-${index}`}>
+            {point.kind === "intent" && <circle cx={x} cy={y} r="14" fill={colors.intent} fillOpacity="0.12" />}
+            <circle cx={x} cy={y} r={point.kind === "intent" ? 7 : 5} fill={colors[point.kind]} stroke="#fff" strokeWidth="2" />
+            <text x={labelRight ? x + 10 : x - 10} y={y + 4} textAnchor={labelRight ? "start" : "end"} fontSize="11" fill="#17202a">{point.label.slice(0, 34)}</text>
+          </g>;
+        })}
+      </svg>
+      <figcaption className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink/55">
+        {(["intent", "phase", "tool"] as const).map((kind) => <span key={kind} className="flex items-center gap-1"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: colors[kind] }} />{kind === "intent" ? "Canonical intent" : kind === "phase" ? "Phase" : "Tool step"}</span>)}
+        <span className="ml-auto">Distance is relative within this workflow.</span>
+      </figcaption>
+    </figure>
+  );
+}
+
 function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: TrajectoriesActions }) {
   const ready = row.status === "ready" || row.status === "fallback";
   const [workflowName, setWorkflowName] = useState(row.macroIntent || row.prompt.slice(0, 80));
@@ -210,6 +254,7 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
           <summary className="cursor-pointer text-[12px] font-semibold text-biscay">
             {row.workflowObservationCount ?? observations.length} chat observation{(row.workflowObservationCount ?? observations.length) === 1 ? "" : "s"} in this workflow
           </summary>
+          <div className="mt-3"><EmbeddingMap map={row.promotedWorkflowEmbeddingMap} /></div>
           <ol className="mt-2 grid gap-2">
             {observations.map((observation) => <li key={observation.id} className="rounded border border-ink/10 bg-paper p-2 text-[11px]">
               <div className="flex flex-wrap items-center gap-2">
