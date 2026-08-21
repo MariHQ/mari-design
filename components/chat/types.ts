@@ -16,6 +16,8 @@ export type ToolCallData = {
   args?: Record<string, unknown>;
   summary?: string;
   ok?: boolean | null;
+  state?: "proposed" | "running" | "complete" | "auth_required";
+  auth?: { provider: string; kind: string; scopes: string[]; setupUrl: string };
 };
 
 /* One transcript entry. Assistant messages may carry a `tools` trace that

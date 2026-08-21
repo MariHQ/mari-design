@@ -32,13 +32,14 @@ export type McpCreated = { name: string; scopeLabel: string; toolCount: number; 
 export type KnowledgeChatDestination = {
   id: number; name: string; slug: string; title: string; welcome: string;
   status: "draft" | "live"; url: string;
+  tools: string[];
 };
 
 export type PublishActions = PublishMcpActions & SourcesBotsActions & {
   openSection?: (section: PublishSection) => void;
   openKnowledgeChat?: (id: number) => void;
-  createKnowledgeChat?: (args: { name: string; slug: string; title: string; welcome: string }) => void | Promise<void>;
-  updateKnowledgeChat?: (id: number, args: { name: string; title: string; welcome: string }) => void | Promise<void>;
+  createKnowledgeChat?: (args: { name: string; slug: string; title: string; welcome: string; tools: string[] }) => void | Promise<void>;
+  updateKnowledgeChat?: (id: number, args: { name: string; title: string; welcome: string; tools: string[] }) => void | Promise<void>;
   deployKnowledgeChat?: (id: number) => void | Promise<void>;
 };
 
@@ -84,9 +85,11 @@ function KnowledgeChats({ chats, selectedId, actions }: {
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState(selected?.title ?? "");
   const [welcome, setWelcome] = useState(selected?.welcome ?? "");
+  const [tools, setTools] = useState<string[]>(selected?.tools ?? ["search", "facts", "answers"]);
   const write = useWrite();
   useResync(selected, (row) => {
     setName(row?.name ?? ""); setTitle(row?.title ?? ""); setWelcome(row?.welcome ?? "");
+    setTools(row?.tools ?? ["search", "facts", "answers"]);
   });
 
   if (!creating && !selected) return (
@@ -110,10 +113,10 @@ function KnowledgeChats({ chats, selectedId, actions }: {
 
   const save = async () => {
     if (creating) {
-      const ok = await write.run(actions?.createKnowledgeChat && (() => actions.createKnowledgeChat!({ name, slug, title, welcome })));
+      const ok = await write.run(actions?.createKnowledgeChat && (() => actions.createKnowledgeChat!({ name, slug, title, welcome, tools })));
       if (ok) setCreating(false);
     } else if (selected) {
-      await write.run(actions?.updateKnowledgeChat && (() => actions.updateKnowledgeChat!(selected.id, { name, title, welcome })));
+      await write.run(actions?.updateKnowledgeChat && (() => actions.updateKnowledgeChat!(selected.id, { name, title, welcome, tools })));
     }
   };
   return (
@@ -128,8 +131,14 @@ function KnowledgeChats({ chats, selectedId, actions }: {
           : <Field label="Destination URL"><Input readOnly value={selected?.url ?? ""} /></Field>}
         <Field label="Assistant title"><Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ask Acme" /></Field>
         <Field label="Welcome message"><Input value={welcome} onChange={(event) => setWelcome(event.target.value)} placeholder="What would you like to know?" /></Field>
+        <fieldset><legend className="text-[12px] font-semibold text-ink">Knowledge tools</legend>
+          <p className="mt-1 text-[12px] text-ink/65">Choose the direct reads this assistant may make for each answer.</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">{[
+            ["search", "Search documents"], ["facts", "Verified facts"], ["answers", "Approved answers"],
+          ].map(([key, label]) => <label key={key} className="flex items-center gap-2 rounded border border-ink/15 p-2 text-[12px]"><input type="checkbox" checked={tools.includes(key)} onChange={() => setTools((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} />{label}</label>)}</div>
+        </fieldset>
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={write.busy || !name.trim() || !title.trim() || (creating && !slug.trim())} onClick={() => void save()}>{write.busy ? <Spinner size="sm" /> : <Check size={14} />} {creating ? "Create knowledge chat" : "Save configuration"}</Button>
+          <Button disabled={write.busy || !name.trim() || !title.trim() || tools.length === 0 || (creating && !slug.trim())} onClick={() => void save()}>{write.busy ? <Spinner size="sm" /> : <Check size={14} />} {creating ? "Create knowledge chat" : "Save configuration"}</Button>
           {!creating && selected && <Button disabled={write.busy} onClick={() => void write.run(actions?.deployKnowledgeChat && (() => actions.deployKnowledgeChat!(selected.id)))}><Send size={14} /> {selected.status === "live" ? "Redeploy" : "Deploy"}</Button>}
           {!creating && selected?.status === "live" && <Link href={selected.url} target="_blank"><ExternalLink size={14} /> Open knowledge chat</Link>}
         </div>

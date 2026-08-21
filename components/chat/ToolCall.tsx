@@ -25,6 +25,8 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
   const [expanded, setExpanded] = useState(false);
   const running = tool.ok == null;
   const failed = tool.ok === false;
+  const proposed = tool.state === "proposed";
+  const authRequired = tool.state === "auth_required";
   const args = tool.args ?? {};
 
   return (
@@ -72,7 +74,9 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
       </button>
 
       <div className="pb-0.5 pl-[22px] text-[12.5px] text-ink/70 overflow-hidden text-ellipsis whitespace-nowrap">
-        {running ? "Running…" : tool.summary}
+        {authRequired && tool.auth?.setupUrl ? (
+          <a className="font-medium text-biscay underline" href={tool.auth.setupUrl}>Authorize {tool.auth.provider}</a>
+        ) : proposed ? "Proposed speculatively" : running ? "Running…" : tool.summary}
       </div>
 
       {expanded && (
