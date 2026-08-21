@@ -217,7 +217,7 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
               : <p className="mt-1 text-[12px] text-ink/60">No documents were attached to this answer.</p>}
           </section>
           <section className="mt-4 border-t border-ink/10 pt-3">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Codified workflow</h3>
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Workflow cluster</h3>
             {promoted ? <div className="mt-2 grid gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Chip label={enabled ? "Enabled for assistants" : "Paused"} />
