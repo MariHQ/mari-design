@@ -63,6 +63,10 @@ export type TrajectoryRow = {
   steps: TrajectoryStep[];
   evidence: TrajectoryEvidence[];
   promotedWorkflowId: number | null;
+  promotedWorkflowName?: string;
+  workflowRootTrajectoryId?: number | null;
+  workflowObservationCount?: number;
+  clusterObservations?: TrajectoryRow[];
   promotedWorkflowStatus: string;
   promotedWorkflowCachePolicy?: "none" | "reviewed_answer";
   promotedWorkflowCacheState?: "disabled" | "empty" | "fresh" | "stale";
@@ -91,6 +95,8 @@ export type TrajectoriesActions = {
   setWorkflowCache?: (workflowId: number, enabled: boolean) => void | Promise<void>;
   reconcileStale?: () => number | Promise<number>;
   deleteWorkflow?: (workflowId: number) => void | Promise<void>;
+  suggestSplitName?: (trajectoryId: number) => string | Promise<string>;
+  splitWorkflow?: (trajectoryId: number, name: string) => number | Promise<number>;
 };
 
 function PhaseRail({ phases }: { phases: TrajectoryPhase[] }) {
@@ -173,6 +179,10 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
   const statusWrite = useWrite();
   const cacheWrite = useWrite();
   const deleteWrite = useWrite();
+  const splitWrite = useWrite();
+  const [splitTarget, setSplitTarget] = useState<number | null>(null);
+  const [splitName, setSplitName] = useState("");
+  const observations = row.clusterObservations ?? [row];
   return (
     <Card>
       <article aria-labelledby={`trajectory-${row.id}`} className="min-w-0">
@@ -184,7 +194,7 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
               {!ready && <span className="text-[11px] font-medium text-biscay">Analyzing</span>}
             </div>
             <h2 id={`trajectory-${row.id}`} className="mt-2 truncate text-[16px] font-semibold text-ink">
-              {row.macroIntent || row.prompt || `Trajectory ${row.id}`}
+              {row.promotedWorkflowName || row.macroIntent || row.prompt || `Trajectory ${row.id}`}
             </h2>
             <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-ink/65">
               {row.layer2 || "Workflow abstraction is still being generated."}
@@ -196,6 +206,30 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
             <span><b className="block text-[15px] text-ink">{row.reworkCount}</b>rework</span>
           </div>
         </div>
+        {promoted && <details className="mt-3 rounded-[6px] border border-ink/10 bg-ink/[0.015] px-3 py-2">
+          <summary className="cursor-pointer text-[12px] font-semibold text-biscay">
+            {row.workflowObservationCount ?? observations.length} chat observation{(row.workflowObservationCount ?? observations.length) === 1 ? "" : "s"} in this workflow
+          </summary>
+          <ol className="mt-2 grid gap-2">
+            {observations.map((observation) => <li key={observation.id} className="rounded border border-ink/10 bg-paper p-2 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1"><strong>{observation.prompt}</strong> · {observation.stepCount} tool step{observation.stepCount === 1 ? "" : "s"}</span>
+                {observation.id === row.workflowRootTrajectoryId ? <Chip label="Cluster seed" /> :
+                  <Button compact disabled={splitWrite.busy} onClick={() => void splitWrite.runFor(actions?.suggestSplitName && (() => actions.suggestSplitName!(observation.id))).then((name) => {
+                    if (name) { setSplitTarget(observation.id); setSplitName(name); }
+                  })}>Split from cluster</Button>}
+              </div>
+              {splitTarget === observation.id && <div className="mt-2 flex flex-wrap gap-2">
+                <input aria-label="New workflow name" value={splitName} onChange={(event) => setSplitName(event.target.value)} className="min-w-[220px] flex-1 rounded border border-ink/15 bg-paper px-2 py-1" />
+                <Button compact onClick={() => { setSplitTarget(null); setSplitName(""); }}>Cancel</Button>
+                <Button compact disabled={!splitName.trim() || splitWrite.busy} onClick={() => void splitWrite.runFor(actions?.splitWorkflow && (() => actions.splitWorkflow!(observation.id, splitName))).then((id) => {
+                  if (id) { setSplitTarget(null); setSplitName(""); }
+                })}>Create split workflow</Button>
+              </div>}
+            </li>)}
+          </ol>
+          <WriteError onDismiss={() => splitWrite.setFailed(null)}>{splitWrite.failed}</WriteError>
+        </details>}
         <div className="mt-4"><PhaseRail phases={row.phases} /></div>
         <details className="group mt-4 border-t border-ink/10 pt-3">
           <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] font-semibold text-biscay">
