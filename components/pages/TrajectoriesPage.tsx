@@ -278,7 +278,7 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
               </label>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[12px] text-ink/70">Showing {pageStart}-{pageEnd} of {data.total}</span>
-                <Button compact disabled={!staleCaches || reconciliation.busy} onClick={() => void reconciliation.runFor(actions?.reconcileStale && (() => actions.reconcileStale!()))}>
+                <Button compact disabled={reconciliation.busy} onClick={() => void reconciliation.runFor(actions?.reconcileStale && (() => actions.reconcileStale!()))}>
                   <RefreshCw size={13} /> Reconcile stale caches{staleCaches ? ` (${staleCaches})` : ""}
                 </Button>
               </div>
