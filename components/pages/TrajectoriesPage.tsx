@@ -4,7 +4,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ReadError } from "../feedback/ReadError";
 import { Button, Card, Chip } from "../index";
-import { CheckCircle2, ChevronDown, CircleAlert, Database, GitBranch, RefreshCw, Save, Workflow } from "lucide-react";
+import { CheckCircle2, ChevronDown, CircleAlert, Database, GitBranch, RefreshCw, Save, Trash2, Workflow } from "lucide-react";
 import { useState } from "react";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
@@ -90,6 +90,7 @@ export type TrajectoriesActions = {
   setWorkflowEnabled?: (workflowId: number, enabled: boolean) => void | Promise<void>;
   setWorkflowCache?: (workflowId: number, enabled: boolean) => void | Promise<void>;
   reconcileStale?: () => number | Promise<number>;
+  deleteWorkflow?: (workflowId: number) => void | Promise<void>;
 };
 
 function PhaseRail({ phases }: { phases: TrajectoryPhase[] }) {
@@ -167,9 +168,11 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
   const [enabled, setEnabled] = useState(row.promotedWorkflowStatus === "active");
   const [cachePolicy, setCachePolicy] = useState(row.promotedWorkflowCachePolicy ?? "none");
   const [cacheState, setCacheState] = useState(row.promotedWorkflowCacheState ?? "disabled");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const promotion = useWrite();
   const statusWrite = useWrite();
   const cacheWrite = useWrite();
+  const deleteWrite = useWrite();
   return (
     <Card>
       <article aria-labelledby={`trajectory-${row.id}`} className="min-w-0">
@@ -224,6 +227,12 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
                 <Button compact disabled={statusWrite.busy} onClick={() => void statusWrite.run(actions?.setWorkflowEnabled && (() => actions.setWorkflowEnabled!(promoted, !enabled))).then((ok) => { if (ok) setEnabled(!enabled); })}>
                   <Workflow size={13} /> {enabled ? "Pause workflow" : "Enable workflow"}
                 </Button>
+                {!confirmDelete ? <Button compact onClick={() => setConfirmDelete(true)}><Trash2 size={13} /> Delete workflow</Button>
+                  : <><span className="text-[11px] font-medium text-rust">The observed trajectory will be kept.</span>
+                    <Button compact onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                    <Button compact disabled={deleteWrite.busy} onClick={() => void deleteWrite.run(actions?.deleteWorkflow && (() => actions.deleteWorkflow!(promoted))).then((ok) => {
+                      if (ok) { setPromoted(null); setEnabled(false); setCachePolicy("none"); setCacheState("disabled"); setConfirmDelete(false); }
+                    })}><Trash2 size={13} /> Confirm delete</Button></>}
               </div>
               <div className="rounded-[6px] border border-ink/10 bg-ink/[0.02] p-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -244,6 +253,7 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
             </div>}
             <WriteError onDismiss={() => promotion.setFailed(null)}>{promotion.failed}</WriteError>
             <WriteError onDismiss={() => statusWrite.setFailed(null)}>{statusWrite.failed}</WriteError>
+            <WriteError onDismiss={() => deleteWrite.setFailed(null)}>{deleteWrite.failed}</WriteError>
           </section>
         </details>
       </article>
