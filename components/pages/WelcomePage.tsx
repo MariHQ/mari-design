@@ -21,7 +21,6 @@ import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark, GithubMark } from "../icons/marks";
 import { WelcomeGlossaryStep, type Candidate } from "../features/WelcomeGlossaryStep";
 import { WelcomeSyncPanel, type SyncRow } from "../features/WelcomeSyncPanel";
-import { KnowledgeSubstrateForm, type KnowledgeSubstrateActions, type KnowledgeSubstrateSettings } from "../features/KnowledgeSubstrateForm";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { focusRing } from "../tokens/focusRing";
 
@@ -110,7 +109,7 @@ export type WelcomeSummary = { sourcesSynced: number; glossaryTerms: number };
  *
  *  All optional (CONVENTIONS.md §2): stepping through the wizard is local
  *  state and works with no server at all, which is what the canvas renders. */
-export type WelcomeActions = KnowledgeSubstrateActions & {
+export type WelcomeActions = {
   /** Leave onboarding for somewhere else in the console ("/", "/sources",
       "/library"). The page emits the intent; the APP owns routing. This used
       to be `window.location.href = "/"` inside the component, which is a hard
@@ -142,7 +141,6 @@ export type WelcomeActions = KnowledgeSubstrateActions & {
 /** Everything the onboarding wizard renders. */
 export type WelcomeData = {
   step: WelcomeStep;
-  knowledgeSubstrate: KnowledgeSubstrateSettings;
   /** Connect step: the tiles offered, and how many connectors exist in total. */
   tiles: Tile[];
   connectorCount: number;
@@ -223,13 +221,11 @@ function Hero() {
 
 /* ── Step 1: connector grid ───────────────────────────────────────────── */
 
-function ConnectGrid({ tiles, connectorCount, nav, onSelect, substrate, actions }: {
+function ConnectGrid({ tiles, connectorCount, nav, onSelect }: {
   tiles: Tile[];
   connectorCount: number;
   nav: StepNav;
   onSelect: (provider: string) => void;
-  substrate: KnowledgeSubstrateSettings;
-  actions?: WelcomeActions;
 }) {
   const cls = (active?: boolean) =>
     `flex w-full items-center gap-3 rounded-md border p-3 text-left ${focusRing} ${
@@ -243,7 +239,6 @@ function ConnectGrid({ tiles, connectorCount, nav, onSelect, substrate, actions 
           Pick a source to import. Connecting hits the live ingestion pipeline and shows real progress.
         </p>
       </div>
-      <KnowledgeSubstrateForm value={substrate} actions={actions} compact />
       <ResultCount
         from={1}
         to={tiles.length}
@@ -718,8 +713,6 @@ function StepBody({ data, current, actions, nav, selectedTile, connectRow, finis
         tiles={data.tiles}
         connectorCount={data.connectorCount}
         nav={nav}
-        substrate={data.knowledgeSubstrate}
-        actions={actions}
         onSelect={(provider) => nav.selectProvider?.(provider)}
       />;
     case "connect-generic":
@@ -737,8 +730,6 @@ function StepBody({ data, current, actions, nav, selectedTile, connectRow, finis
         tiles={data.tiles}
         connectorCount={data.connectorCount}
         nav={nav}
-        substrate={data.knowledgeSubstrate}
-        actions={actions}
         onSelect={(provider) => nav.selectProvider?.(provider)}
       />;
     case "connect-github": return <GithubConnect data={data} actions={actions} nav={nav} />;

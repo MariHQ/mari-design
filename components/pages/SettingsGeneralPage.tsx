@@ -21,7 +21,6 @@ import type { Branding, BrandHarvest, BrandPreviewStat } from "../features/Brand
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
 import { PropertyList, type PropertyItem } from "../data-display/PropertyList";
-import { KnowledgeSubstrateForm, type KnowledgeSubstrateActions, type KnowledgeSubstrateSettings } from "../features/KnowledgeSubstrateForm";
 
 /* Settings → General (pages/settings-general.md). Workspace identity form
    (name / slug / plan / timezone / language) plus the two sign-post link
@@ -65,7 +64,7 @@ export type LineageTuning = { maxNodes: number; hopDepth: number; minConfidence:
     app that implements them gets working controls; one that does not shows a
     danger zone with only the rows it can honour, and none at all if it has
     neither. `data.danger` gates the whole card on owning the workspace. */
-export type SettingsGeneralActions = KnowledgeSubstrateActions & {
+export type SettingsGeneralActions = {
   saveWorkspace?: (w: WorkspaceIdentity) => void | Promise<void>;
   /** Workspace defaults for the task-first lineage explorer. */
   saveLineageTuning?: (tuning: LineageTuning) => void | Promise<void>;
@@ -98,7 +97,6 @@ export type SettingsGeneralData = {
   /** Owner-only destructive controls. */
   danger: boolean;
   lineage: LineageTuning;
-  knowledgeSubstrate: KnowledgeSubstrateSettings;
   /** Branding, as General used to render it. The editor moved to Settings →
       Design & brand (the only place it has handlers), so these three are no
       longer read here and an app can stop sending them. */
@@ -402,7 +400,6 @@ function Body({ data, error, actions, onNavigate }: {
     <>
       {data.save === "saved" && <Alert tone="ok" title="Workspace saved">Your identity changes are live for all members.</Alert>}
       <WorkspaceForm data={data} actions={actions} />
-      <KnowledgeSubstrateForm value={data.knowledgeSubstrate} actions={actions} />
       <LineageTuningForm data={data} actions={actions} />
       {data.danger && <DangerZone actions={actions} />}
     </>
