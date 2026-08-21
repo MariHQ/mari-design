@@ -42,7 +42,7 @@ const PROVIDER_ENDPOINT: Record<string, string> = {
   gateway: "",
 };
 
-const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", gateway: "Enterprise gateway", "sentence-transformers": "Sentence Transformers" };
+const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", gateway: "Enterprise gateway" };
 function optionLabel(opt: string): string {
   const [prov, ...rest] = opt.split(":");
   return `${PROVIDER_LABEL[prov] ?? prov}: ${rest.join(":")}`;
@@ -393,7 +393,7 @@ export function SettingsModelsConfig({
               <option value="openai">Standard OpenAI-compatible</option>
               <option value="deepseek">DeepSeek API</option>
             </Select>
-            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on Sentence Transformers, Ollama, or another embedding provider.</p>}
+            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on OpenAI, Ollama, or another HTTP embedding provider.</p>}
           </Field>
           <Field label="Model routing header">
             <Input name="gateway-model-header" value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
