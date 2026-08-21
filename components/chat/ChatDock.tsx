@@ -87,8 +87,9 @@ export function ChatDock({
           <div className="my-auto text-center text-ink/70 px-1.5 py-2">
             {emptyState ?? (
               <p>
-                I can operate the console for you: search, edit and tag docs, sync
-                sources, run flows, and steer this screen.
+                I can search and read knowledge, explain product workflows, and
+                take you to the right screen. Governed changes happen in Review
+                and Automations.
               </p>
             )}
             {suggestions && suggestions.length > 0 && (

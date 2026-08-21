@@ -22,19 +22,19 @@ import { WriteError } from "../feedback/WriteError";
 import { useResync } from "../actions/useResync";
 
 /* Publish · MCP servers ───────────────────────────────────────────────────
-   Expose the curated knowledge base to Claude and other agents as
+   Expose the curated knowledge base to AI tools and agents as
    capability-scoped MCP servers. List, create, configure, test, connect, and
    delete each. A newly created server's bearer token is shown once via
    TokenReveal. Source: web/src/pages/publish/McpServersTab.tsx.
    Standalone — create/test/delete are local state, tokens are demo strings. */
 
 const MCP_CAPS = [
-  { key: "search", tools: 3, desc: "hybrid search over documents" },
-  { key: "facts", tools: 4, desc: "verified facts + verify" },
-  { key: "glossary", tools: 2, desc: "term definitions" },
+  { key: "search", tools: 1, desc: "hybrid search over documents" },
+  { key: "facts", tools: 1, desc: "curated facts" },
+  { key: "glossary", tools: 1, desc: "term definitions" },
   { key: "chat", tools: 1, desc: "ask Mari" },
-  { key: "lineage", tools: 2, desc: "graph edges" },
-  { key: "answers", tools: 2, desc: "approved answers, served verbatim" },
+  { key: "lineage", tools: 1, desc: "graph edges" },
+  { key: "answers", tools: 1, desc: "approved answers, served verbatim" },
 ] as const;
 
 const MCP_UNITS: Record<string, string> = { search: "documents", facts: "facts", glossary: "terms", chat: "sessions", lineage: "edges", answers: "answers" };
@@ -80,7 +80,9 @@ export type PublishMcpActions = {
 type McpTest = { ok: boolean; latency_ms: number; checks: Record<string, number>; error?: string } | "error" | null;
 
 function connectSnippet(name: string, url: string, token?: string) {
-  return `claude mcp add ${name} --transport http ${url || "<url>"} \\\n  --header "Authorization: Bearer ${token ?? "YOUR_TOKEN"}"`;
+  return JSON.stringify({ mcpServers: { [name]: {
+    url: url || "<url>", headers: { Authorization: `Bearer ${token ?? "YOUR_TOKEN"}` },
+  } } }, null, 2);
 }
 function randomToken() {
   return "mcp_" + Array.from({ length: 40 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
@@ -208,8 +210,8 @@ export function PublishMcpServers({
 
   return (
     <div className={`flex flex-col gap-5 ${className}`.trim()}>
-      {/* Framed exactly like the Doc sites list next door: both tabs of one
-          page used to draw their heading differently — Doc sites inside a
+      {/* Framed consistently with the other destination panels. This list
+          used to draw its heading differently from adjacent destinations,
           bordered card, MCP as bare page text — so the plumb line jumped
           sideways when you switched tabs. The bare `<CountChip>` beside "New
           server" is gone with it: it restated the strip below on a populated
@@ -220,7 +222,7 @@ export function PublishMcpServers({
           <div className="min-w-0 flex-1">
             <h3 className="text-[15px] font-semibold text-ink">MCP servers</h3>
             <div className="mt-0.5 text-[12px] text-ink/70">
-              Expose your curated knowledge to Claude and other agents, scoped to exactly what they may read.
+              Expose your curated knowledge to AI tools and agents, scoped to exactly what they may read.
             </div>
           </div>
           <Button variant="primary" compact onClick={() => setCreating((v) => !v)}><Plus size={13} /> New server</Button>
@@ -393,8 +395,8 @@ function ServerCard({ server, freshToken, onDelete, onSave, onTest }: {
 
       {open === "connect" && (
         <div className="mt-3">
-          <SectionLabel>Connect from claude-code</SectionLabel>
-          <div className="mt-1.5"><CodeBlock language="bash" code={connectSnippet(server.name, server.url, freshToken)} wrap /></div>
+          <SectionLabel>Connect from an MCP client</SectionLabel>
+          <div className="mt-1.5"><CodeBlock language="json" code={connectSnippet(server.name, server.url, freshToken)} wrap /></div>
           {!freshToken && <p className="mt-1.5 text-[12px] text-ink/70">Replace <span className="font-term">YOUR_TOKEN</span> with the bearer token shown once at creation.</p>}
         </div>
       )}

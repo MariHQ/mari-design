@@ -345,7 +345,7 @@ export function SettingsMembersTable({
                     </td>
                     <td className={tdPad}><Truncate className="text-[13px] text-ink/70">{m.email}</Truncate></td>
                     <td className={`${tdPad} text-center`}>
-                      <Select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8 w-full">
+                      <Select aria-label={`Role for ${m.name}`} value={m.role} onChange={(e) => changeRole(m.id, e.target.value)} className="h-8 w-full">
                         {roleOptions(m.role).map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                       </Select>
                     </td>

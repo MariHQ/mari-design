@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Home, BookOpen, CheckCircle2, Feather, Tag, Network, Shield, Workflow,
-  Send, Sparkles, Settings, Menu as MenuIcon, Search, UserRound, KeyRound,
-  ListChecks, ClipboardCheck,
+  Home, BookOpen, Workflow, Send, Sparkles, Settings, Menu as MenuIcon,
+  Search, UserRound, KeyRound, ListChecks, Database, FolderKanban, GitBranch,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -34,25 +33,18 @@ const SKIP_LINK = `sr-only focus:not-sr-only focus:absolute focus:left-3 focus:t
 
 export const NAV: NavSection[] = [
   { heading: "Workspace", items: [
-    { id: "overview", label: "Overview", icon: <Home size={18} /> },
-    /* Tasks was reachable only by finding the back-link on Overview, which
-       made the console's own work queue the one page you had to already know
-       about. It is a workspace destination like any other, so it is in the
-       rail. */
-    { id: "tasks", label: "Tasks", icon: <ListChecks size={18} /> },
+    /* These are product areas, not a flat inventory of every routed screen.
+       The ids deliberately reuse each area's existing landing page so the app
+       can keep resolving navigation through its page registry. Detail and
+       legacy routes fold back into these areas in navFor below. */
+    { id: "overview", label: "Home", icon: <Home size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
-    { id: "answers", label: "Answers", icon: <CheckCircle2 size={18} /> },
-    { id: "decisions", label: "Decisions", icon: <Feather size={18} /> },
-    { id: "library", label: "Library", icon: <Tag size={18} /> },
-    { id: "lineage", label: "Lineage", icon: <Network size={18} /> },
-    { id: "facts", label: "Facts", icon: <Shield size={18} /> },
-    /* /audit was linked from nothing at all: no nav entry, no page body, no
-       menu. A routed page with no entry point is a page that does not exist.
-       It sits next to Facts because it is the same subject seen per run. */
-    { id: "audit", label: "Repository audit", icon: <ClipboardCheck size={18} /> },
-    { id: "flows", label: "Flows", icon: <Workflow size={18} /> },
-    { id: "publish", label: "Publish", icon: <Send size={18} /> },
-    { id: "insights", label: "Insights", icon: <Sparkles size={18} /> },
+    { id: "lineage", label: "Lineage", icon: <GitBranch size={18} /> },
+    { id: "tasks", label: "Review", icon: <ListChecks size={18} /> },
+    { id: "flows", label: "Automations", icon: <Workflow size={18} /> },
+    { id: "publish", label: "Destinations", icon: <Send size={18} /> },
+    { id: "insights", label: "Analytics", icon: <Sparkles size={18} /> },
+    { id: "sources", label: "Sources", icon: <Database size={18} /> },
   ] },
   { divider: true, items: [
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
@@ -68,6 +60,7 @@ export type ShellUser = { name: string; initials: string; detail: string };
 export type ShellNotification = {
   id: string; title: string; body: string; time: string; unread?: boolean;
 };
+export type ShellProject = { id: string | number; name: string; detail?: string };
 
 /** Chrome the frame shows around every page. Optional so the canvas can render
     a page with no session behind it. */
@@ -93,6 +86,9 @@ export type ShellChrome = {
   searchScopes?: SearchScope[];
   /** Recent queries, shown before anything is typed. */
   recentSearches?: string[];
+  projects?: ShellProject[];
+  activeProjectId?: string | number;
+  onSelectProject?: (project: ShellProject) => void;
 };
 
 /** The search overlay behind the topbar trigger and ⌘K.
@@ -146,6 +142,13 @@ function useGlobalSearch(chrome?: ShellChrome) {
     if (r.href) chrome?.onOpen?.(r.href);
   }, [chrome]);
 
+  const submitQuery = useCallback((q: string) => {
+    const value = q.trim();
+    if (!value) return;
+    setQuery("");
+    chrome?.onOpen?.(`/knowledge?q=${encodeURIComponent(value)}`);
+  }, [chrome]);
+
   const node = onSearch ? (
     <GlobalSearch
       open={open}
@@ -157,6 +160,7 @@ function useGlobalSearch(chrome?: ShellChrome) {
       loading={loading}
       recentSearches={chrome?.recentSearches ?? []}
       onSelect={select}
+      onSubmitQuery={submitQuery}
     />
   ) : null;
 
@@ -174,9 +178,19 @@ function useGlobalSearch(chrome?: ShellChrome) {
     frame's promise not to invent a person to fill the circle. */
 const NO_USER: ShellUser = { name: "Signed out", initials: "?", detail: "" };
 
-function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigate?: (id: string) => void }) {
+function UserMenu({ onSignOut, onNavigate, projects = [], activeProjectId, onSelectProject }: {
+  onSignOut?: () => void; onNavigate?: (id: string) => void;
+  projects?: ShellProject[]; activeProjectId?: string | number;
+  onSelectProject?: (project: ShellProject) => void;
+}) {
   return (
     <>
+      {projects.length > 0 && projects.map((project) => (
+        <MenuItem key={project.id} icon={<FolderKanban size={14} />} onSelect={() => onSelectProject?.(project)}>
+          {project.name}{String(project.id) === String(activeProjectId) ? " · Current" : ""}
+        </MenuItem>
+      ))}
+      {projects.length > 0 && <MenuSeparator />}
       {/* Your account, not the workspace. These were pointing at Settings →
           Workspace, which is an admin's page about a different subject. */}
       <MenuItem icon={<UserRound size={14} />} onSelect={() => onNavigate?.("preferences")}>Preferences</MenuItem>
@@ -192,12 +206,9 @@ function UserMenu({ onSignOut, onNavigate }: { onSignOut?: () => void; onNavigat
     a few off-nav routes map onto the closest nav entry. */
 export function navFor(pageId: string): string {
   if (pageId.startsWith("settings") || pageId === "lookbook") return "settings";
-  // Tasks and Repository Audit have their own rail entries now, so they
-  // highlight themselves rather than borrowing Overview's and Facts'.
-  // Doc Review stays a DETAIL route: you arrive at it from a document, never
-  // from the rail, so it highlights the page you came from.
-  if (pageId === "doc-review") return "knowledge";
-  if (pageId === "sources") return "settings";
+  if (["facts", "decisions", "answers", "library", "doc-review"].includes(pageId)) return "knowledge";
+  if (pageId === "audit") return "tasks";
+  if (pageId === "trajectories") return "insights";
   // Preferences is reached from the account menu, not the sidebar, and it is
   // about YOU rather than the workspace — so it deliberately highlights no nav
   // item instead of borrowing Settings', which is a different subject.
@@ -206,10 +217,9 @@ export function navFor(pageId: string): string {
 }
 
 /** The page a nav item opens. The inverse of `navFor`, which is many-to-one:
-    five Settings pages, Sources and Lookbook all report the "settings" nav id,
-    so "settings" is not itself a page id. Looking the nav id up directly in
-    PAGES therefore found nothing and the Settings menu item did nothing at
-    all. The library owns the nav structure, so it owns this mapping too. */
+    the Settings pages and Lookbook all report the "settings" nav id, so
+    "settings" is not itself a page id. All other product areas deliberately
+    use the id of their existing landing page. */
 export function landingPageFor(navId: string): string {
   if (navId === "settings") return "settings-general";
   return navId;
@@ -253,13 +263,13 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
               <Avatar initials={user.initials} />
             </button>
           )} align="end">
-            <UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />
+            <UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />
           </Menu>
         </div>
       </header>
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} active={active} chrome={chrome} />
       {search.node}
-      <main id="main-content" tabIndex={-1} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
+      <main id="main-content" tabIndex={0} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
     </div>
   );
 }
@@ -346,17 +356,17 @@ function MobileNav({ open, onClose, active, chrome }: { open: boolean; onClose: 
   );
 }
 
-/** The sidebar's "Need help?" card. It opens the assistant, which in this
-    console is the Answers page — the same destination the nav offers, so it
-    can never point somewhere that does not exist. */
+/** Shortcut to the governed answers bots serve verbatim. The floating agent
+    launcher is the conversational surface; this card must not pretend that
+    navigating to answer administration starts a chat. */
 function HelpCard({ onNavigate }: { onNavigate?: (id: string) => void }) {
   return (
     <button
       onClick={() => onNavigate?.("answers")}
       className={`w-full rounded-[6px] bg-white/10 px-3 py-2 text-left text-[12.5px] text-white/80 hover:bg-white/15 ${focusRing}`}
     >
-      <b className="block font-medium text-white">Need help?</b>
-      Ask Mari anything ↗
+      <b className="block font-medium text-white">Approved answers</b>
+      Manage bot responses ↗
     </button>
   );
 }
@@ -384,10 +394,10 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
           onSearch={search.onOpen}
           actions={<NotificationBell items={chrome?.notifications ?? []} />}
           user={user}
-          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />}
         />
         {search.node}
-        <main id="main-content" tabIndex={-1} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
+        <main id="main-content" tabIndex={0} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
       </div>
     </div>
   );
@@ -435,7 +445,7 @@ function DesktopFrame({ active, chrome, children }: { active: string; chrome?: S
           onSearch={search.onOpen}
           actions={<NotificationBell items={chrome?.notifications ?? []} />}
           user={user}
-          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} />}
+          userMenu={<UserMenu onSignOut={chrome?.onSignOut} onNavigate={chrome?.onNavigate} projects={chrome?.projects} activeProjectId={chrome?.activeProjectId} onSelectProject={chrome?.onSelectProject} />}
         />
       )}
     >

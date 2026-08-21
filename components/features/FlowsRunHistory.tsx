@@ -119,7 +119,7 @@ export function FlowRunsTable({
       {loading ? (
         <div className="px-4 pb-4"><SkeletonTable rows={6} cols={6} className="border-0" /></div>
       ) : page.length === 0 ? (
-        <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the flow to see history here.</div>
+        <div className="px-4 pb-4 text-[12.5px] text-ink/70">No runs yet. Start the automation to see history here.</div>
       ) : (
         <>
         {/* The count says what is on screen and the toggle says how to see the
@@ -139,7 +139,7 @@ export function FlowRunsTable({
             <thead>
               <tr>
                 <SortHeader label="Run" sortKey="number" sort={sort} onSort={onSort} />
-                <SortHeader label="Flow" sortKey="workflowName" sort={sort} onSort={onSort} />
+                <SortHeader label="Automation" sortKey="workflowName" sort={sort} onSort={onSort} />
                 <SortHeader label={<>Started<span className="block normal-case tracking-normal text-ink/65">duration</span></>} sortKey="started" sort={sort} onSort={onSort} align="center" />
                 <SortHeader label="Result" sortKey="headline" sort={sort} onSort={onSort} />
                 <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />

@@ -115,7 +115,7 @@ const LONG_FLOW: WfFlow = {
     { kind: "condition", label: "No contradictions", state: "supported" },
     { kind: "approval", label: "Await a human approver", state: "queued" },
     { kind: "notify", label: "Post to Slack", state: "succeeded" },
-    { kind: "deploy_site", label: "Deploy the public help site", state: "failed" },
+    { kind: "notify", label: "Notify the documentation owner", state: "failed" },
   ],
 };
 
@@ -182,7 +182,7 @@ const STRESS_FLOW: WfFlow = {
   name: "Docs guardrail, nightly contradiction sweep across every connected source",
   status: "active",
   nodes: Array.from({ length: 60 }, (_, i) => ({
-    kind: (["trigger", "fetch_docs", "refine", "fact_check", "condition", "approval", "notify", "deploy_site"] as const)[i % 8],
+    kind: (["trigger", "fetch_docs", "refine", "fact_check", "condition", "approval", "notify"] as const)[i % 7],
     label: i % 7 === 0 ? HUGE : `Step ${i + 1}: check every claim in the fetched set`,
     state: (["supported", "queued", "succeeded", "failed"] as const)[i % 4],
   })),

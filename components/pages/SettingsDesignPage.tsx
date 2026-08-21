@@ -74,7 +74,7 @@ function SettingsDesignPage({
           variant="settings"
           eyebrow="Settings"
           title="Design & brand"
-          description="The colours, type and logo this workspace publishes under. Doc sites and exports pick these up."
+          description="The colours, type, and logo used by workspace-owned experiences."
           tabs={SETTINGS_TAB_LABELS}
           activeTab="Design & brand"
           actions={0}
@@ -85,7 +85,7 @@ function SettingsDesignPage({
           <PageHeader
             eyebrow="Settings"
             title="Design & brand"
-            description="The colours, type and logo this workspace publishes under. Doc sites and exports pick these up."
+            description="The colours, type, and logo used by workspace-owned experiences."
             icon={<span className="text-clay"><Palette size={24} /></span>}
           />
           <div className="mt-5"><SettingsTabs active="design" onNavigate={chrome?.onNavigate} /></div>
@@ -111,8 +111,7 @@ function SettingsDesignPage({
                       chose it. The page says which it is (P-SS-1). */}
                   {isEmpty(data) && (
                     <Alert tone="info" title="Still on the Mari defaults">
-                      Nothing has been branded yet. Set an accent and a typeface below, or read them off your own site,
-                      and every doc site and export picks them up.
+                      Nothing has been branded yet. Set an accent and typeface below to establish this workspace's identity.
                     </Alert>
                   )}
                   {!actions?.save && (
@@ -135,7 +134,7 @@ function SettingsDesignPage({
                   loading failure. It says what it means instead. */}
               {data.summary.length === 0 ? (
                 <p className="text-[12.5px] leading-relaxed text-ink/70">
-                  Nothing publishes this brand yet. Doc sites and exports list themselves here once one exists.
+                  No workspace-owned destination currently consumes these settings.
                 </p>
               ) : (
                 <PropertyList items={data.summary} layout="grid" columns={3} boxed={false} />

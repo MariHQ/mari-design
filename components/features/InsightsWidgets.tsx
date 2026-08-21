@@ -296,7 +296,7 @@ export function InsightsWidgets({
             </Scrollable>
             </>
           )}
-          <p className="px-4 py-3 text-[12px] text-ink/70">Deterministic A to C grades from the local model. Re-run scoring after big edits.</p>
+          <p className="px-4 py-3 text-[12px] text-ink/70">Deterministic A to C grades from the configured model. Re-run scoring after big edits.</p>
         </Card>
 
         {/* 3. Glossary health */}

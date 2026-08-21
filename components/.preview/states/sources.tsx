@@ -9,7 +9,7 @@ import {
 import type { SyncRow } from "../../features/WelcomeSyncPanel";
 import type { Source } from "../../features/SourcesConnectorCard";
 import {
-  ANSWER_ONE, SOURCES_ROWS, SOURCES_CATALOG, SOURCES_SLACK, SOURCES_GITHUB,
+  ANSWER_ONE, SOURCES_ROWS, SOURCES_CATALOG, DESTINATIONS_SLACK, DESTINATIONS_GITHUB,
   WELCOME_CANDIDATES, WELCOME_PACKS, WELCOME_SYNC_ROWS,
 } from "../fixtures/features";
 
@@ -128,20 +128,20 @@ export const SOURCES: ComponentSpec[] = [
   {
     id: "SourcesBots", title: "SourcesBots", width: OVERLAY_W,
     states: [
-      { id: "default", label: "Both cards, configured", width: 900, node: <SourcesBots slack={SOURCES_SLACK} github={SOURCES_GITHUB} defaultOpen={null} /> },
+      { id: "default", label: "Both cards, configured", width: 900, node: <SourcesBots slack={DESTINATIONS_SLACK} github={DESTINATIONS_GITHUB} defaultOpen={null} /> },
       { id: "notsetup", label: "Not set up / waiting", width: 900, node: (
         <SourcesBots defaultOpen={null} slack={{ configured: false }} github={{ webhookConfigured: false, repos: [] }} />) },
       { id: "error", label: "Slack error state", width: 900, node: (
-        <SourcesBots defaultOpen={null} github={SOURCES_GITHUB} slack={{ configured: true, teamName: "Acme HQ", lastError: "auth.test returned invalid_auth." }} />) },
-      { id: "slack-drawer", label: "Slack setup drawer", node: <Stage><SourcesBots slack={SOURCES_SLACK} github={SOURCES_GITHUB} defaultOpen="slack" /></Stage> },
-      { id: "github-drawer", label: "GitHub webhook drawer", node: <Stage><SourcesBots slack={SOURCES_SLACK} github={SOURCES_GITHUB} defaultOpen="github" /></Stage> },
-      { id: "loading", label: "Loading", width: 900, node: <SourcesBots slack={SOURCES_SLACK} github={SOURCES_GITHUB} loading /> },
+        <SourcesBots defaultOpen={null} github={DESTINATIONS_GITHUB} slack={{ configured: true, teamName: "Acme HQ", lastError: "auth.test returned invalid_auth." }} />) },
+      { id: "slack-drawer", label: "Slack setup drawer", node: <Stage><SourcesBots slack={DESTINATIONS_SLACK} github={DESTINATIONS_GITHUB} defaultOpen="slack" /></Stage> },
+      { id: "github-drawer", label: "GitHub webhook drawer", node: <Stage><SourcesBots slack={DESTINATIONS_SLACK} github={DESTINATIONS_GITHUB} defaultOpen="github" /></Stage> },
+      { id: "loading", label: "Loading", width: 900, node: <SourcesBots slack={DESTINATIONS_SLACK} github={DESTINATIONS_GITHUB} loading /> },
       { id: "overflow", label: "Overflow: long workspace, many repos", width: 900, node: (
         <SourcesBots defaultOpen={null}
           slack={{ configured: true, teamName: LONG, lastEventAt: "2026-07-21T13:58:00" }}
           github={{ webhookConfigured: true, lastDeliveryAt: "2026-07-21T13:00:00",
             repos: [...Array.from({ length: 10 }, (_, i) => `acme/repository-with-a-rather-long-name-${i}`), HUGE] }} />) },
-      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SourcesBots slack={SOURCES_SLACK} github={SOURCES_GITHUB} defaultOpen={null} /> },
+      { id: "narrow", label: "Narrow frame (320)", width: 320, node: <SourcesBots slack={DESTINATIONS_SLACK} github={DESTINATIONS_GITHUB} defaultOpen={null} /> },
     ],
   },
   {

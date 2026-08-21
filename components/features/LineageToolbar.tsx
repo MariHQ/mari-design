@@ -88,6 +88,10 @@ export type LineageToolbarProps = {
   views?: GraphView[];
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
+  /** Let the filters wrap within a phone viewport instead of making the
+      entire toolbar an 840px horizontal strip. The graph canvas may still
+      pan horizontally; its primary controls should not. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -128,7 +132,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 }
 
 export function LineageToolbar({
-  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, className = "",
+  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, compact = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
@@ -309,7 +313,7 @@ export function LineageToolbar({
       </span>
     );
     return (
-      <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
+      <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
         <Row label="Filter">
           <Skeleton width={168} height={32} rounded="rounded-[4px]" />
           <Pending accent={CONTROL_ACCENT.sources} label="Sources" />
@@ -331,7 +335,7 @@ export function LineageToolbar({
   }
 
   return (
-    <div className={`${card} flex min-w-[840px] flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
+    <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
       {/* ── row 1: filters ─────────────────────────────────────────────── */}
       <Row label="Filter">
         <div className="relative">
@@ -344,6 +348,7 @@ export function LineageToolbar({
               onKeyDown={(e) => { if (e.key === "Escape") setControls({ query: "" }); }}
               placeholder="Search graph"
               aria-label="Search the graph"
+              name="lineage-search"
               className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65"
             />
             {controls.query && (
@@ -446,8 +451,17 @@ export function LineageToolbar({
         </div>
       </Row>
 
+      {/* The resting surface answers the common question with search and
+          filters. Layout, coloring, saved views, and graph-building actions
+          are expert controls, so they disclose together instead of competing
+          with the task selector above the graph. */}
+      <details className="border-t border-ink/10 pt-2.5">
+        <summary className={`w-fit cursor-pointer rounded-[3px] font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/70 hover:text-ink ${focusRing}`}>
+          Graph options and actions
+        </summary>
+        <div className="mt-2.5 flex flex-col gap-2.5">
       {/* ── row 2: view ────────────────────────────────────────────────── */}
-      <Row label="View" divide>
+      <Row label="View">
         <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.lens} label="Color by" value={lensValue} />}>
           <MenuRadioGroup value={controls.lens} onValueChange={(v) => setControls({ lens: v as Lens })}>
             {LENSES.map((l) => <MenuRadioItem key={l.key} value={l.key}>{l.label}</MenuRadioItem>)}
@@ -559,6 +573,7 @@ export function LineageToolbar({
             onKeyDown={(e) => { if (e.key === "Enter" && saveName.trim()) void saveView(saveName.trim()); }}
             placeholder="Name this view"
             aria-label="Name this view"
+            name="lineage-view-name"
             className="w-[220px]"
           />
           {/* Confirm action bottom left of the row, cancel to its right (§2). */}
@@ -597,6 +612,8 @@ export function LineageToolbar({
           )}
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 }

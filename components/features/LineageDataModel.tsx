@@ -28,6 +28,9 @@ import { Scrollable } from "../data-display/Scrollable";
 export type RelKey = "references" | "discussed" | "derived" | "translates" | "contradicts" | "similar";
 export type Lens = "source" | "stale" | "owner" | "health";
 export type LayoutMode = "flow" | "timeline";
+/** The question the graph is answering. Overview is deliberately aggregated;
+    provenance and impact are directional, focal, bounded traversals. */
+export type LineageMode = "overview" | "provenance" | "impact";
 export type DocKind = "page" | "commit" | "pr" | "issue" | "answer" | "decision" | "seed";
 export type Severity = "update-required" | "review" | "minor";
 
@@ -74,6 +77,7 @@ export type LEdge = {
   count?: number;
   meta?: {
     derived?: string;
+    confidence?: number;
     note?: string;
     evidence?: string;
     status?: string;
@@ -121,6 +125,12 @@ export const REL: Record<RelKey, RelStyle> = {
 
 export const REL_ORDER: RelKey[] = ["references", "discussed", "derived", "translates", "contradicts", "similar"];
 
+/** Only these relations carry dependency direction. Similarity,
+    contradiction, and discussion are useful context but cannot truthfully
+    answer either "where did this come from?" or "what depends on this?". */
+export const LINEAGE_RELATIONS: RelKey[] = ["references", "derived", "translates"];
+export const isLineageRelation = (rel: RelKey): boolean => LINEAGE_RELATIONS.includes(rel);
+
 export const edgeKey = (from: string, to: string, rel: RelKey) => `${from}→${to}:${rel}`;
 
 /* ── Source identity ────────────────────────────────────────────────────── */
@@ -154,7 +164,128 @@ export const STUB_PREFIX = "more:";
 export const AGG_EDGE_PREFIX = "ge:";
 export const GROUP_PAGE_SIZE = 25;
 
+/** Stable aggregate bucket for the global overview. GitHub activity keeps its
+    repository/kind bucket; ordinary documents roll up by connector source. */
+export function overviewGroupId(node: LNode): string {
+  return node.group || `source:${node.source}`;
+}
+
+function overviewGroupTitle(groupId: string, members: LNode[]): string {
+  const count = members.length.toLocaleString("en-US");
+  if (groupId.startsWith("gh:")) {
+    const { repo, kind } = groupParts(groupId);
+    return `${repo} · ${count} ${groupKindWord(kind, members.length)}`;
+  }
+  const source = groupId.replace(/^source:/, "");
+  return `${SOURCE_LABELS[source] ?? source} · ${count} document${members.length === 1 ? "" : "s"}`;
+}
+
+export type OverviewGraph = {
+  nodes: LNode[];
+  edges: LEdge[];
+  membersByGroup: Map<string, LNode[]>;
+};
+
+/** Collapse a corpus into a small, stable overview. Similarity is omitted:
+    an embedding-neighbour relationship is not lineage and otherwise becomes
+    the dominant source of cross-bucket noise at enterprise scale. */
+export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence = 0.8): OverviewGraph {
+  const membersByGroup = new Map<string, LNode[]>();
+  for (const node of nodes.filter((n) => !n.macro)) {
+    const key = overviewGroupId(node);
+    const at = membersByGroup.get(key);
+    if (at) at.push(node); else membersByGroup.set(key, [node]);
+  }
+  const groups = [...membersByGroup.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(groups.length))));
+  const rows = Math.max(1, Math.ceil(groups.length / cols));
+  const macroNodes = groups.map<LNode>(([group, members], index) => {
+    const source = members[0]?.source ?? "docs";
+    const owners = new Map<string, number>();
+    for (const member of members) if (member.owner) owners.set(member.owner, (owners.get(member.owner) ?? 0) + 1);
+    const owner = [...owners].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      id: `${MACRO_PREFIX}${group}`,
+      source,
+      title: overviewGroupTitle(group, members),
+      meta: `${members.length} rolled-up document${members.length === 1 ? "" : "s"}`,
+      icon: source,
+      docKind: members[0]?.docKind ?? "page",
+      group,
+      x: cols === 1 ? 0.5 : 0.14 + (0.72 * col) / (cols - 1),
+      y: rows === 1 ? 0.5 : 0.2 + (0.6 * row) / (rows - 1),
+      date: members.map((n) => n.date ?? "").sort().slice(-1)[0],
+      warn: members.some((n) => n.warn || n.orphan),
+      owner,
+      tags: [],
+      staleDays: Math.max(0, ...members.map((n) => n.staleDays ?? 0)),
+      orphan: false,
+      inbound: members.reduce((n, member) => n + (member.inbound ?? 0), 0),
+      outbound: members.reduce((n, member) => n + (member.outbound ?? 0), 0),
+      macro: true,
+      count: members.length,
+      repo: group.startsWith("gh:") ? groupParts(group).repo : SOURCE_LABELS[source] ?? source,
+    };
+  });
+
+  const groupOf = new Map<string, string>();
+  for (const [group, members] of membersByGroup) for (const member of members) groupOf.set(member.id, group);
+  const aggregate = new Map<string, LEdge>();
+  for (const edge of edges) {
+    if (edge.rel === "similar") continue;
+    if (edge.llm && Number(edge.meta?.confidence ?? 0) < minConfidence) continue;
+    const fromGroup = groupOf.get(edge.from);
+    const toGroup = groupOf.get(edge.to);
+    if (!fromGroup || !toGroup || fromGroup === toGroup) continue;
+    const from = `${MACRO_PREFIX}${fromGroup}`;
+    const to = `${MACRO_PREFIX}${toGroup}`;
+    const key = `${from}\u2192${to}:${edge.rel}`;
+    const existing = aggregate.get(key);
+    if (existing) existing.count = (existing.count ?? 1) + 1;
+    else aggregate.set(key, {
+      id: `${AGG_EDGE_PREFIX}${key}`,
+      from, to, rel: edge.rel, date: edge.date, count: 1,
+      dashed: edge.llm || edge.dashed,
+    });
+  }
+  return { nodes: macroNodes, edges: [...aggregate.values()], membersByGroup };
+}
+
+/** A bounded semantic traversal. Edges are stored dependent -> source:
+    provenance follows the arrow, while impact walks it in reverse. */
+export function buildFocusedGraph(
+  nodes: LNode[], edges: LEdge[], focalId: string | null,
+  mode: Exclude<LineageMode, "overview">, depth = 1, minConfidence = 0.8,
+): { nodes: LNode[]; edges: LEdge[] } {
+  if (!focalId || !nodes.some((n) => n.id === focalId)) return { nodes: [], edges: [] };
+  const semantic = edges.filter((edge) =>
+    isLineageRelation(edge.rel) && (!edge.llm || Number(edge.meta?.confidence ?? 0) >= minConfidence));
+  const seen = new Set<string>([focalId]);
+  let frontier = new Set<string>([focalId]);
+  for (let hop = 0; hop < Math.max(1, depth); hop++) {
+    const next = new Set<string>();
+    for (const edge of semantic) {
+      const from = mode === "provenance" ? edge.from : edge.to;
+      const to = mode === "provenance" ? edge.to : edge.from;
+      if (frontier.has(from) && !seen.has(to)) next.add(to);
+    }
+    for (const id of next) seen.add(id);
+    frontier = next;
+    if (!frontier.size) break;
+  }
+  return {
+    nodes: nodes.filter((node) => seen.has(node.id)),
+    edges: semantic.filter((edge) => seen.has(edge.from) && seen.has(edge.to)),
+  };
+}
+
 export function groupParts(id: string): { repo: string; kind: string } {
+  if (id.startsWith("source:")) {
+    const source = id.slice("source:".length);
+    return { repo: SOURCE_LABELS[source] ?? source, kind: "documents" };
+  }
   // "gh:MariHQ/web:commits" → { repo, kind }
   const body = id.replace(/^gh:/, "");
   const lastColon = body.lastIndexOf(":");
@@ -164,6 +295,7 @@ export function groupParts(id: string): { repo: string; kind: string } {
 
 export function groupKindWord(kind: string, n: number): string {
   const map: Record<string, [string, string]> = {
+    documents: ["document", "documents"],
     commits: ["commit", "commits"],
     prs: ["PR", "PRs"],
     issues: ["issue", "issues"],

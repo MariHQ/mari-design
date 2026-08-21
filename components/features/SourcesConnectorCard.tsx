@@ -169,7 +169,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
         await actions.disconnect!(s);
         patch(id, { state: "paused" });
       } catch (err) {
-        setFailed((f) => ({ ...f, [id]: why(err, "Disconnect failed.") }));
+        setFailed((f) => ({ ...f, [id]: why(err, "Pause failed.") }));
       } finally {
         setBusy((b) => ({ ...b, [id]: false }));
       }

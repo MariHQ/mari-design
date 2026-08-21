@@ -59,6 +59,7 @@ export function Composer({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         aria-label="Message the agent"
+        name="agent-message"
         disabled={disabled}
         /* Disabled stays legible: opacity-100 plus the explicit disabled
            palette, never a washed-out ghost (CONVENTIONS.md §6). */

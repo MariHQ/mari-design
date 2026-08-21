@@ -134,16 +134,16 @@ function GoogleMark({ size = 17 }: { size?: number }) {
    each other: one backdrop, one 672px column, one centered logo/title/sub
    header, one card, and a primary-bottom-left action row. Keep these three
    constants identical across the three files. */
-const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_SHELL = "relative h-full w-full overflow-x-hidden overflow-y-auto bg-paper";
 const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
 const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
 
 function AuthBackdrop() {
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
       <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
-    </>
+    </div>
   );
 }
 
@@ -472,8 +472,9 @@ function CredForm({ data, error, actions }: { data: LoginData; error: string | n
           <Input className="w-full" autoComplete="name" placeholder="Maya Chen" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
       )}
-      <Field label="Email">
-        <Input className="w-full" type="email" autoComplete="email" placeholder="you@team.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field label={register ? "Email" : "Email or username"}>
+        <Input className="w-full" type={register ? "email" : "text"} autoComplete={register ? "email" : "username"}
+          placeholder={register ? "you@team.com" : "you@team.com or demo"} value={email} onChange={(e) => setEmail(e.target.value)} />
       </Field>
       <Field label="Password">
         <Input className="w-full" type="password" autoComplete={register ? "new-password" : "current-password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -631,7 +632,7 @@ function Body({ data, error, actions }: { data: LoginData; error: string | null;
 function LoginPage({ data, loading = false, error = null, actions, mobile = false }: PageProps<LoginData, LoginActions>) {
   if (loading) {
     return (
-      <div className={AUTH_SHELL}>
+      <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
         <SkeletonPage
           variant="auth"
           /* The sign-in headline is `data.title`: a workspace can brand it,
@@ -639,17 +640,17 @@ function LoginPage({ data, loading = false, error = null, actions, mobile = fals
           label="sign in"
           mobile={mobile}
         />
-      </div>
+      </main>
     );
   }
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader title={headingFor(data)} sub={data.sub} />
         <Body data={data} error={error} actions={actions} />
       </div>
-    </div>
+    </main>
   );
 }
 

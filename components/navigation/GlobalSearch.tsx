@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import * as RD from "@radix-ui/react-dialog";
 import { Search, Clock, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
 import { Kbd } from "./Kbd";
@@ -49,6 +49,10 @@ export type GlobalSearchProps = {
   /** Async/custom search — return grouped results for the query + active scope. */
   onQuery?: (query: string, scope: string | null) => SearchResultGroup[];
   onSelect: (result: SearchResult) => void;
+  /** Submit the query itself when Enter arrives before an async result does.
+      Without this, a fast typist presses Enter during the debounce and the
+      search surface silently does nothing. */
+  onSubmitQuery?: (query: string) => void;
   /** Shown (as clickable chips) when the query is empty. */
   recentSearches?: string[];
   onRecentSelect?: (query: string) => void;
@@ -64,8 +68,10 @@ export type GlobalSearchProps = {
   footerNote?: ReactNode;
 };
 
+const flatOptionId = (listboxId: string, index: number) => `${listboxId}-option-${index}`;
+
 export function GlobalSearch({
-  open, onOpenChange, scopes, results = [], onQuery, onSelect,
+  open, onOpenChange, scopes, results = [], onQuery, onSelect, onSubmitQuery,
   recentSearches = [], onRecentSelect,
   placeholder = "Search knowledge, people, sources…",
   value, onValueChange, loading = false, footerNote,
@@ -76,6 +82,10 @@ export function GlobalSearch({
 
   const [scope, setScope] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+  const uid = useId().replace(/:/g, "");
+  const listboxId = `global-search-results-${uid}`;
+  const statusId = `global-search-status-${uid}`;
+  const activeOptionId = flatOptionId(listboxId, active);
 
   /* NAV-02: this reset must fire on the OPEN edge only. `value` used to be in
      the deps and PageFrame drives GlobalSearch in its controlled form, so every
@@ -112,7 +122,15 @@ export function GlobalSearch({
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(flat.length - 1, a + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); const r = flat[active]; if (r) select(r); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const r = flat[active];
+      if (r) select(r);
+      else if (query.trim() && onSubmitQuery) {
+        onOpenChange(false);
+        onSubmitQuery(query.trim());
+      }
+    }
   };
 
   const hasQuery = query.trim().length > 0;
@@ -134,6 +152,13 @@ export function GlobalSearch({
             <Search size={16} className="text-ink/65 shrink-0" />
             <input
               autoFocus
+              role="combobox"
+              aria-label="Search"
+              aria-autocomplete="list"
+              aria-expanded={open}
+              aria-controls={listboxId}
+              aria-describedby={statusId}
+              aria-activedescendant={hasQuery && flat[active] ? activeOptionId : undefined}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={placeholder}
@@ -154,7 +179,10 @@ export function GlobalSearch({
 
           {/* Body */}
           <Scrollable axis="y" className="flex-1 min-h-0">
-            <div role="listbox" className="p-1.5">
+            <div id={listboxId} role="listbox" aria-label="Search results" aria-busy={loading || undefined} className="p-1.5">
+            <span id={statusId} role="status" aria-live="polite" className="sr-only">
+              {hasQuery ? loading ? "Searching" : `${flat.length} result${flat.length === 1 ? "" : "s"}` : ""}
+            </span>
             {!hasQuery && recentSearches.length > 0 && (
               <div>
                 <div className="px-2.5 pt-2 pb-1 font-term text-[10px] font-medium uppercase tracking-[0.08em] text-ink/65">Recent</div>
@@ -198,6 +226,7 @@ export function GlobalSearch({
                   return (
                     <div
                       key={r.id}
+                      id={flatOptionId(listboxId, i)}
                       role="option"
                       aria-selected={i === active}
                       onMouseEnter={() => setActive(i)}

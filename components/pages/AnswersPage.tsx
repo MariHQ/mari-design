@@ -5,7 +5,7 @@ import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
 import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
 import { MarkdownEditor } from "../data-display/MarkdownEditor";
-import { ResultCount } from "../data-display/Pagination";
+import { Pagination, ResultCount, usePaged } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ReadError } from "../feedback/ReadError";
@@ -63,7 +63,7 @@ export type AnswerStat = {
 
 /** A source the harvest wizard can scan. `key` picks the icon, so the shape
     stays plain JSON: an API can return it, and no React element is carried. */
-export type HarvestSource = { key: "slack" | "docs" | "history"; label: string; desc: string; on: boolean };
+export type HarvestSource = { key: string; label: string; desc: string; on: boolean };
 
 /** One question/answer pair the scan proposed. */
 export type HarvestCandidate = { question: string; draft: string; source: string; confidence: number };
@@ -129,11 +129,10 @@ const HARVEST_STEP: Record<Harvest["phase"], number> = {
   select: 0, scan: 1, review: 2, importing: 3, done: 3,
 };
 
-const SOURCE_ICON: Record<HarvestSource["key"], React.ReactNode> = {
-  slack: <MessagesSquare size={18} />,
-  docs: <FileText size={18} />,
-  history: <Sparkles size={18} />,
-};
+const sourceIcon = (key: string): React.ReactNode =>
+  key === "slack" ? <MessagesSquare size={18} />
+    : key === "chat" ? <Sparkles size={18} />
+      : <FileText size={18} />;
 
 /** `data` is the whole page's answers — what "nothing curated at all" is judged
     against — while `answers` is only the selected tab's slice. Judging both off
@@ -142,6 +141,7 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
   data: AnswersData; filter: AnswersFilter; answers: Answer[];
   error: string | null; actions?: AnswersActions; onCompose: (question: string) => void;
 }) {
+  const pager = usePaged(answers, 24);
   if (error) {
     /* A failed read is not an empty library: an EmptyState here told the reader
        they had curated nothing when the truth was that the request did not come
@@ -183,8 +183,12 @@ function AnswersList({ data, filter, answers, error, actions, onCompose }: {
      basis-[520px]` means a short last row stretches instead of leaving a dead
      bottom-right corner. Siblings in a row share a height (§15). */
   return (
-    <div className="flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[520px]">
-      {answers.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
+    <div className="flex flex-col gap-3">
+      {pager.paged && <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="answers" />}
+      <div className="flex flex-wrap gap-5 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-[520px]">
+        {pager.pageRows.map((a) => <AnswerCard key={a.id} answer={a} actions={actions} />)}
+      </div>
+      {pager.paged && <Pagination page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
     </div>
   );
 }
@@ -485,7 +489,7 @@ function HarvestWizard({ harvest, actions, onClose }: {
                 checked={s.on}
                 onChange={() => toggleSource(s.key)}
               />
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{SOURCE_ICON[s.key]}</span>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[5px] ${s.on ? "bg-biscay text-white" : "bg-flysch text-ink/70 border border-ink/12"}`}>{sourceIcon(s.key)}</span>
               <span className="min-w-0">
                 <b className="block text-[13.5px] font-semibold text-ink">{s.label}</b>
                 <span className="text-[12.5px] text-ink/65">{s.desc}</span>
@@ -717,8 +721,12 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
      and the rail's "See all" reaches it from inside the page. It used to be
      reachable only by routing, which nothing did. */
   const [seeAllCoverage, setSeeAllCoverage] = useState(false);
-  const [seenPane, setSeenPane] = useState(data.pane);
-  if (seenPane !== data.pane) { setSeenPane(data.pane); setSeeAllCoverage(false); setHarvesting(null); }
+  const [seenPaneKind, setSeenPaneKind] = useState(data.pane.kind);
+  if (seenPaneKind !== data.pane.kind) {
+    setSeenPaneKind(data.pane.kind);
+    setSeeAllCoverage(false);
+    setHarvesting(null);
+  }
   const isCoverage = seeAllCoverage || data.pane.kind === "coverage";
 
   /* Harvest is offered only where there is something to scan. The source list

@@ -53,6 +53,8 @@ export type WorkspaceIdentity = {
   name: string; slug: string; plan: string; timezone: string; language: string;
 };
 
+export type LineageTuning = { maxNodes: number; hopDepth: number; minConfidence: number };
+
 /** What Settings → General can do.
 
     The danger-zone pair is offered per-row, and a row is only RENDERED when
@@ -64,6 +66,8 @@ export type WorkspaceIdentity = {
     neither. `data.danger` gates the whole card on owning the workspace. */
 export type SettingsGeneralActions = {
   saveWorkspace?: (w: WorkspaceIdentity) => void | Promise<void>;
+  /** Workspace defaults for the task-first lineage explorer. */
+  saveLineageTuning?: (tuning: LineageTuning) => void | Promise<void>;
   /** Hand the workspace to another admin. */
   transferWorkspace?: () => void | Promise<void>;
   /** Destructive and final. Goes through <ConfirmButton>, so this only ever
@@ -92,6 +96,7 @@ export type SettingsGeneralData = {
   summary: PropertyItem[];
   /** Owner-only destructive controls. */
   danger: boolean;
+  lineage: LineageTuning;
   /** Branding, as General used to render it. The editor moved to Settings →
       Design & brand (the only place it has handlers), so these three are no
       longer read here and an app can stop sending them. */
@@ -131,7 +136,7 @@ function LinkCard({ icon, title, blurb, cta, to, onNavigate }: {
         <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[6px] bg-flysch text-biscay">{icon}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-semibold text-ink">{title}</div>
-          <p className="mt-1 text-[13px] text-ink/60">{blurb}</p>
+          <p className="mt-1 text-[13px] text-ink/70">{blurb}</p>
         </div>
       </div>
       <div className="mt-3">
@@ -262,6 +267,59 @@ function WorkspaceForm({ data, actions }: { data: SettingsGeneralData; actions?:
   );
 }
 
+function LineageTuningForm({ data, actions }: { data: SettingsGeneralData; actions?: SettingsGeneralActions }) {
+  const [maxNodes, setMaxNodes] = useState(data.lineage.maxNodes);
+  const [hopDepth, setHopDepth] = useState(data.lineage.hopDepth);
+  const [minConfidence, setMinConfidence] = useState(data.lineage.minConfidence);
+  const [seen, setSeen] = useState(data.lineage);
+  if (seen !== data.lineage) {
+    setSeen(data.lineage);
+    setMaxNodes(data.lineage.maxNodes);
+    setHopDepth(data.lineage.hopDepth);
+    setMinConfidence(data.lineage.minConfidence);
+  }
+  const write = useWrite();
+  const dirty = maxNodes !== data.lineage.maxNodes || hopDepth !== data.lineage.hopDepth || minConfidence !== data.lineage.minConfidence;
+  return (
+    <Card title="Lineage defaults" hint="Safe workspace-wide limits for focused provenance and impact views.">
+      <p className="mb-4 max-w-[720px] text-[12.5px] leading-relaxed text-ink/70">
+        Overview always rolls documents up by source or repository. Focused views show only directional dependency links; similarity, discussion, and contradiction remain contextual and do not enter provenance or impact paths.
+      </p>
+      <div className={FORM_GRID}>
+        <Field label="Maximum visible nodes">
+          <Select aria-label="Maximum visible lineage nodes" value={String(maxNodes)} onChange={(event) => setMaxNodes(Number(event.target.value))} className="w-full">
+            {[8, 12, 16, 24, 35].map((value) => <option key={value} value={value}>{value} nodes</option>)}
+          </Select>
+          <p className="mt-1 text-[11.5px] text-ink/65">Protects focused views from high-fanout graphs.</p>
+        </Field>
+        <Field label="Dependency depth">
+          <Select aria-label="Lineage dependency depth" value={String(hopDepth)} onChange={(event) => setHopDepth(Number(event.target.value))} className="w-full">
+            {[1, 2, 3].map((value) => <option key={value} value={value}>{value} hop{value === 1 ? "" : "s"}</option>)}
+          </Select>
+          <p className="mt-1 text-[11.5px] text-ink/65">How many upstream or downstream hops load initially.</p>
+        </Field>
+        <Field label="Machine-link confidence">
+          <Select aria-label="Minimum lineage confidence" value={String(minConfidence)} onChange={(event) => setMinConfidence(Number(event.target.value))} className="w-full">
+            {[0.7, 0.8, 0.9].map((value) => <option key={value} value={value}>{Math.round(value * 100)}% or higher</option>)}
+          </Select>
+          <p className="mt-1 text-[11.5px] text-ink/65">Authored links are always shown; this threshold applies only to machine proposals.</p>
+        </Field>
+      </div>
+      {write.failed && <div className="mt-4"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
+      <div className="mt-5 flex items-center gap-3 border-t border-ink/10 pt-4">
+        <Button
+          variant="primary"
+          disabled={!dirty || write.busy || !actions?.saveLineageTuning}
+          onClick={() => void write.run(actions?.saveLineageTuning && (() => actions.saveLineageTuning!({ maxNodes, hopDepth, minConfidence })))}
+        >
+          {write.busy ? "Saving…" : "Save lineage defaults"}
+        </Button>
+        {!dirty && <span className="text-[12.5px] text-ink/65">Defaults are saved</span>}
+      </div>
+    </Card>
+  );
+}
+
 function DangerZone({ actions }: { actions?: SettingsGeneralActions }) {
   const transfer = actions?.transferWorkspace;
   const remove = actions?.deleteWorkspace;
@@ -342,6 +400,7 @@ function Body({ data, error, actions, onNavigate }: {
     <>
       {data.save === "saved" && <Alert tone="ok" title="Workspace saved">Your identity changes are live for all members.</Alert>}
       <WorkspaceForm data={data} actions={actions} />
+      <LineageTuningForm data={data} actions={actions} />
       {data.danger && <DangerZone actions={actions} />}
     </>
   );

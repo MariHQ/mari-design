@@ -5,6 +5,7 @@ import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Input } from "../forms/Input";
+import { Textarea } from "../forms/Textarea";
 import { Select } from "../forms/Select";
 import { Field } from "../forms/Field";
 import { Chip } from "../data-display/Chip";
@@ -12,7 +13,7 @@ import { SkeletonCard, SkeletonTable } from "../data-display/Skeleton";
 import { Spinner } from "../data-display/Spinner";
 import { SortHeader, useSort, tdPad } from "../data-display/sortable";
 import { EmptyState } from "../data-display/EmptyState";
-import { ErrorMessage } from "../feedback/ErrorMessage";
+import { ErrorMessage, FieldError } from "../feedback/ErrorMessage";
 import { Scrollable } from "../data-display/Scrollable";
 import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
@@ -25,14 +26,8 @@ import { WriteError } from "../feedback/WriteError";
    toggles), a live-ish connection test, and per-source chunking parameters.
    Source: web/src/pages/settings/Models.tsx. Every control writes through
    `actions` when the host supplies them; with none, each keeps the local echo
-   `useWrite` defines, and Test connection falls back to validating what is on
-   screen rather than claiming to have reached a provider. */
-
-/* Fallbacks for a caller that has no catalog of its own. A workspace's real
-   options arrive as props: this list is what the panel offers when nobody has
-   said what the deployment supports. */
-const EMB_OPTIONS = ["openai:text-embedding-3-small", "openai:text-embedding-3-large", "local:bge-base-en"];
-const LLM_OPTIONS = ["anthropic:claude-3-5-sonnet", "openai:gpt-4o", "openai:gpt-4o-mini", "ollama:llama3.1"];
+   `useWrite` defines. Test connection reports that no live provider handler is
+   available rather than simulating a successful provider response. */
 const STRATEGIES = ["heading", "thread", "fixed"];
 /* Dropdown options that name a strategy are Capitalized (CONVENTIONS.md §7). */
 const strategyLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
@@ -44,10 +39,10 @@ const PROVIDER_ENDPOINT: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com/v1",
   ollama: "http://localhost:11434",
-  local: "",
+  gateway: "",
 };
 
-const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", local: "Local" };
+const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", ollama: "Ollama", gateway: "Enterprise gateway", "sentence-transformers": "Sentence Transformers" };
 function optionLabel(opt: string): string {
   const [prov, ...rest] = opt.split(":");
   return `${PROVIDER_LABEL[prov] ?? prov}: ${rest.join(":")}`;
@@ -58,6 +53,37 @@ export type ChunkRow = { source: string; strategy: string; max_tokens: number; o
 
 /** Provider API keys, as the server hands them back. */
 export type ProviderKeys = { openai: string; anthropic: string };
+
+export type GatewaySettings = {
+  baseUrl: string;
+  token: string;
+  generationModel: string;
+  compatibility: "openai" | "deepseek";
+  headersJson: string;
+  metadataJson: string;
+  modelHeader: string;
+  maxRetries: number;
+};
+
+export const EMPTY_GATEWAY: GatewaySettings = {
+  baseUrl: "", token: "", generationModel: "", compatibility: "openai",
+  headersJson: "{}", metadataJson: "{}", modelHeader: "", maxRetries: 2,
+};
+
+function gatewayValidation(value: GatewaySettings): string {
+  let url: URL;
+  try { url = new URL(value.baseUrl); } catch { return "Gateway base URL must be a valid http(s) URL."; }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return "Gateway base URL must be a valid http(s) URL without embedded credentials.";
+  if (!value.generationModel.trim()) return "Generation model is required.";
+  if (!Number.isInteger(value.maxRetries) || value.maxRetries < 0 || value.maxRetries > 5) return "Retry count must be a whole number from 0 to 5.";
+  for (const [label, raw] of [["Routing headers", value.headersJson], ["Request metadata", value.metadataJson]] as const) {
+    try {
+      const parsed = JSON.parse(raw || "{}");
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return `${label} must be a JSON object.`;
+    } catch { return `${label} must be valid JSON.`; }
+  }
+  return "";
+}
 
 function SavedNote({ show }: { show: boolean }) {
   return show ? <span className="font-term text-[11.5px] text-moss">✓ Saved</span> : null;
@@ -74,7 +100,9 @@ export type SettingsModelsActions = {
       is. The server sets it when it takes the model. Only an unchanged model
       reports the dimensions it is already indexed at. */
   saveEmbedding?: (m: { model: string; dims: number | null }) => void | Promise<void>;
-  saveLlm?: (m: { model: string; openai: string; anthropic: string }) => void | Promise<void>;
+  saveLlm?: (m: { model: string; openai: string; anthropic: string; openaiDirty: boolean; anthropicDirty: boolean }) => void | Promise<void>;
+  saveGateway?: (gateway: GatewaySettings) => void | Promise<void>;
+  testGateway?: () => { ok: boolean; text: string } | Promise<{ ok: boolean; text: string }>;
   /** Ask the server whether the provider actually answers. Optional, and the
       only reason "Testing…" is a real state rather than a picture of one: with
       no handler the button falls back to the local validation below, which
@@ -101,6 +129,7 @@ export type SettingsModelsConfigProps = {
   llmOptions?: string[];
   chunking: ChunkRow[];
   keys: ProviderKeys;
+  gateway?: GatewaySettings;
   actions?: SettingsModelsActions;
   /** Corpus line appended to a healthy connection test. */
   indexSummary: string;
@@ -126,6 +155,7 @@ export function SettingsModelsConfig({
   llmOptions,
   chunking: initialChunking,
   keys,
+  gateway,
   actions,
   indexSummary,
   unsaved = null,
@@ -140,8 +170,17 @@ export function SettingsModelsConfig({
   const [llmSel, setLlmSel] = useState(llm);
   const [openaiKey, setOpenaiKey] = useState(keys.openai);
   const [anthropicKey, setAnthropicKey] = useState(keys.anthropic);
+  const [openaiDirty, setOpenaiDirty] = useState(false);
+  const [anthropicDirty, setAnthropicDirty] = useState(false);
   const [showOpenai, setShowOpenai] = useState(false);
   const [showAnthropic, setShowAnthropic] = useState(false);
+  const initialGateway = gateway ?? EMPTY_GATEWAY;
+  const [gatewayDraft, setGatewayDraft] = useState<GatewaySettings>(initialGateway);
+  const [showGatewayToken, setShowGatewayToken] = useState(false);
+  const [gatewaySaved, setGatewaySaved] = useState(false);
+  const [gatewayError, setGatewayError] = useState("");
+  const [gatewayHealth, setGatewayHealth] = useState<{ ok: boolean; text: string } | null>(null);
+  const [gatewayTesting, setGatewayTesting] = useState(false);
   const [llmSaved, setLlmSaved] = useState(false);
   const [health, setHealth] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -153,13 +192,16 @@ export function SettingsModelsConfig({
   /* Every buffer above is seeded from a prop, and `useState` reads its seed
      once — so after a refetch this panel kept editing the FIRST response and
      a save would have written it back over the newer one (C1). */
-  const [seen, setSeen] = useState({ embedding, llm, keys, initialChunking });
-  if (seen.embedding !== embedding || seen.llm !== llm || seen.keys !== keys || seen.initialChunking !== initialChunking) {
-    setSeen({ embedding, llm, keys, initialChunking });
+  const [seen, setSeen] = useState({ embedding, llm, keys, gateway, initialChunking });
+  if (seen.embedding !== embedding || seen.llm !== llm || seen.keys !== keys || seen.gateway !== gateway || seen.initialChunking !== initialChunking) {
+    setSeen({ embedding, llm, keys, gateway, initialChunking });
     setEmb(embedding);
     setLlmSel(llm);
     setOpenaiKey(keys.openai);
     setAnthropicKey(keys.anthropic);
+    setOpenaiDirty(false);
+    setAnthropicDirty(false);
+    setGatewayDraft(gateway ?? EMPTY_GATEWAY);
     setChunk(initialChunking);
   }
 
@@ -179,9 +221,32 @@ export function SettingsModelsConfig({
     () => flash(setEmbSaved),
   );
   const saveLlm = () => write.run(
-    actions?.saveLlm && (() => actions.saveLlm!({ model: llmSel, openai: openaiKey, anthropic: anthropicKey })),
-    () => flash(setLlmSaved),
+    actions?.saveLlm && (() => actions.saveLlm!({ model: llmSel, openai: openaiKey, anthropic: anthropicKey, openaiDirty, anthropicDirty })),
+    () => { setOpenaiDirty(false); setAnthropicDirty(false); flash(setLlmSaved); },
   );
+
+  const setGatewayField = <K extends keyof GatewaySettings>(key: K, value: GatewaySettings[K]) => {
+    setGatewayError("");
+    setGatewayHealth(null);
+    setGatewayDraft((current) => ({ ...current, [key]: value }));
+  };
+  const saveGateway = () => {
+    const error = gatewayValidation(gatewayDraft);
+    if (error) { setGatewayError(error); return; }
+    void write.run(
+      actions?.saveGateway && (() => actions.saveGateway!(gatewayDraft)),
+      () => { setGatewaySaved(true); setTimeout(() => setGatewaySaved(false), 1600); },
+    );
+  };
+  const testGateway = async () => {
+    setGatewayError("");
+    setGatewayHealth(null);
+    if (!actions?.testGateway) { setGatewayHealth({ ok: false, text: "Gateway testing is unavailable in this build." }); return; }
+    setGatewayTesting(true);
+    const result = await write.runFor(() => actions.testGateway!());
+    setGatewayTesting(false);
+    if (result) setGatewayHealth(result);
+  };
 
   const saveChunking = () => write.run(
     actions?.saveChunking && (() => actions.saveChunking!(chunk)),
@@ -191,8 +256,8 @@ export function SettingsModelsConfig({
   const setChunkField = (source: string, field: keyof ChunkRow, value: string) =>
     setChunk((c) => c.map((r) => (r.source === source ? { ...r, [field]: field === "strategy" ? value : Number(value) || 0 } : r)));
 
-  const embCatalog = embeddingOptions?.length ? embeddingOptions : EMB_OPTIONS;
-  const llmCatalog = llmOptions?.length ? llmOptions : LLM_OPTIONS;
+  const embCatalog = embeddingOptions ?? [];
+  const llmCatalog = llmOptions ?? [];
   const embOpts = embCatalog.includes(emb) ? embCatalog : [emb, ...embCatalog];
   const llmOpts = llmCatalog.includes(llmSel) ? llmCatalog : [llmSel, ...llmCatalog];
 
@@ -270,6 +335,7 @@ export function SettingsModelsConfig({
         <Card icon={<Layers size={16} className="text-biscay-2" />} title="Embedding model" hint={embChanged ? "Dimensions follow the model" : dims ? `${dims} dims` : undefined}>
           <Field label="Model">
             <Select
+              name="embedding-model"
               value={emb}
               onChange={(e) => setEmb(e.target.value)}
               className={`w-full ${embDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
@@ -293,6 +359,7 @@ export function SettingsModelsConfig({
         <Card icon={<Sparkles size={16} className="text-clay" />} title="LLM provider" hint={llmDirty ? "Unsaved changes" : undefined}>
           <Field label="Model">
             <Select
+              name="generation-model"
               value={llmSel}
               onChange={(e) => setLlmSel(e.target.value)}
               className={`w-full ${llmDirty ? "border-biscay-2 ring-1 ring-biscay-2/40" : ""}`.trim()}
@@ -304,24 +371,72 @@ export function SettingsModelsConfig({
         </Card>
       </div>
 
+      <Card icon={<Sparkles size={16} className="text-moss" />} title="Generation gateway" hint="OpenAI-compatible">
+        <p className="mb-4 text-[12.5px] leading-relaxed text-ink/70">
+          Route answer generation through an OpenAI-compatible provider such as an enterprise gateway or DeepSeek. Embeddings remain independently configured above, so Ollama can continue indexing locally.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Gateway base URL">
+            <Input name="gateway-base-url" type="url" value={gatewayDraft.baseUrl} onChange={(e) => setGatewayField("baseUrl", e.target.value)} placeholder="https://gateway.example.com/v1" className="w-full font-term" />
+          </Field>
+          <Field label="Gateway token">
+            <div className="flex items-center gap-1.5">
+              <Input name="gateway-token" type={showGatewayToken ? "text" : "password"} value={gatewayDraft.token} onChange={(e) => setGatewayField("token", e.target.value)} className="w-full font-term" />
+              <Button icon compact aria-pressed={showGatewayToken} aria-label={showGatewayToken ? "Hide gateway token" : "Reveal gateway token"} onClick={() => setShowGatewayToken((value) => !value)}>{showGatewayToken ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
+            </div>
+          </Field>
+          <Field label="Generation model">
+            <Input name="gateway-generation-model" value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder={gatewayDraft.compatibility === "deepseek" ? "deepseek-v4-flash" : "enterprise-chat"} className="w-full font-term" />
+          </Field>
+          <Field label="API compatibility">
+            <Select name="gateway-compatibility" value={gatewayDraft.compatibility} onChange={(e) => setGatewayField("compatibility", e.target.value as GatewaySettings["compatibility"])} className="w-full">
+              <option value="openai">Standard OpenAI-compatible</option>
+              <option value="deepseek">DeepSeek API</option>
+            </Select>
+            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on Sentence Transformers, Ollama, or another embedding provider.</p>}
+          </Field>
+          <Field label="Model routing header">
+            <Input name="gateway-model-header" value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
+          </Field>
+          <Field label="Retry count">
+            <Input name="gateway-retries" type="number" min={0} max={5} step={1} value={gatewayDraft.maxRetries} onChange={(e) => setGatewayField("maxRetries", Number(e.target.value))} className="w-full font-term" />
+          </Field>
+          <Field label="Routing headers (JSON)">
+            <Textarea name="gateway-routing-headers" short value={gatewayDraft.headersJson} onChange={(e) => setGatewayField("headersJson", e.target.value)} className="w-full font-term text-[12px]" />
+          </Field>
+          <Field label="Request metadata (JSON)">
+            <Textarea name="gateway-request-metadata" short value={gatewayDraft.metadataJson} onChange={(e) => setGatewayField("metadataJson", e.target.value)} className="w-full font-term text-[12px]" />
+          </Field>
+        </div>
+        {gatewayError && <FieldError>{gatewayError}</FieldError>}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant="primary" compact disabled={write.busy} onClick={saveGateway}>Save gateway</Button>
+          <Button compact disabled={write.busy || gatewayTesting} onClick={() => void testGateway()}>{gatewayTesting ? "Testing gateway…" : "Test gateway"}</Button>
+          {gatewayTesting && <span className="inline-flex items-center gap-2 text-[11.5px] text-ink/70"><Spinner size="sm" /> Checking authentication…</span>}
+          {gatewayHealth?.ok && <span className="inline-flex items-center gap-2"><Chip label="Gateway healthy" tone="ok" dot caps /><span className="font-term text-[11.5px] text-ink/70">{gatewayHealth.text}</span></span>}
+          <SavedNote show={gatewaySaved} />
+        </div>
+        {gatewayHealth && !gatewayHealth.ok && <div className="mt-3"><ErrorMessage id="model.testFailed" onAction={() => void testGateway()} onDismiss={() => setGatewayHealth(null)}>{gatewayHealth.text}</ErrorMessage></div>}
+      </Card>
+
       <Card icon={<KeyRound size={16} className="text-biscay-2" />} title="LLM provider keys" hint="Stored server-side, re-fetchable">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="OpenAI (sk-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} className="w-full font-term" />
+              <Input name="openai-api-key" type={showOpenai ? "text" : "password"} value={openaiKey} onChange={(e) => { setOpenaiKey(e.target.value); setOpenaiDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showOpenai} aria-label={showOpenai ? "Hide key" : "Reveal key"} onClick={() => setShowOpenai((v) => !v)}>{showOpenai ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
           <Field label="Anthropic (sk-ant-…)">
             <div className="flex items-center gap-1.5">
-              <Input type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} className="w-full font-term" />
+              <Input name="anthropic-api-key" type={showAnthropic ? "text" : "password"} value={anthropicKey} onChange={(e) => { setAnthropicKey(e.target.value); setAnthropicDirty(true); }} className="w-full font-term" />
               <Button icon compact aria-pressed={showAnthropic} aria-label={showAnthropic ? "Hide key" : "Reveal key"} onClick={() => setShowAnthropic((v) => !v)}>{showAnthropic ? <EyeOff size={14} /> : <Eye size={14} />}</Button>
             </div>
           </Field>
         </div>
         <div className="mt-3">
           <Field label="Endpoint">
-            <Input type="url" value={endpoint} onChange={(e) => { setEndpoint(e.target.value); setHealth(null); }} placeholder="https://api.anthropic.com/v1" className="w-full font-term" />
+            <Input name="provider-endpoint" type="url" value={endpoint} onChange={(e) => { setEndpoint(e.target.value); setHealth(null); }} placeholder="https://api.anthropic.com/v1" className="w-full font-term" />
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -375,12 +490,12 @@ export function SettingsModelsConfig({
                           a strategy name from a stored config (user data) drove
                           the cell 696px past the table. The control is bounded;
                           the option text ellipsises inside it. */}
-                      <Select value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
+                      <Select name={`chunk-strategy-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} chunk strategy`} value={r.strategy} onChange={(e) => setChunkField(r.source, "strategy", e.target.value)} className="h-8 w-full max-w-[190px]">
                         {opts.map((v) => <option key={v} value={v}>{strategyLabel(v)}</option>)}
                       </Select>
                     </td>
-                    <td className={`${tdPad} text-center`}><Input type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
-                    <td className={`${tdPad} text-center`}><Input type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input name={`chunk-max-tokens-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} maximum tokens`} type="number" value={r.max_tokens} onChange={(e) => setChunkField(r.source, "max_tokens", e.target.value)} className="h-8 w-24 font-term" /></td>
+                    <td className={`${tdPad} text-center`}><Input name={`chunk-overlap-${r.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} aria-label={`${r.source} token overlap`} type="number" value={r.overlap} onChange={(e) => setChunkField(r.source, "overlap", e.target.value)} className="h-8 w-24 font-term" /></td>
                   </tr>
                 );
               })}

@@ -218,8 +218,6 @@ const BASE: SourcesData = {
   uploadFiles: UPLOAD_FILES,
   syncPhase: "queued",
   firstSync: FIRST_SYNC,
-  slack: { configured: true, teamName: "Acme HQ", lastEventAt: "2026-07-21T13:58:00" },
-  github: { webhookConfigured: true, repos: ["acme/handbook", "acme/api"] },
   summary: SUMMARY,
 };
 
@@ -296,7 +294,6 @@ function strained(extreme: boolean): SourcesData {
 
 export const FIXTURES: PageFixtures<SourcesData> = {
   default: view("grid"),
-  bots: view("bots"),
   adding: view("wizard"),
 
   "sync-queued": sync("queued"),

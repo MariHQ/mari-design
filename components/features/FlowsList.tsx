@@ -386,14 +386,14 @@ export function FlowsList({
       <div className={`${card} overflow-hidden`}>
         <div className="flex items-start gap-3 px-4 pt-4 pb-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-[15px] font-semibold text-ink">Flows</h3>
-            <div className="mt-0.5 text-[12px] text-ink/70">{rows.length} defined. Toggle one off to stop it firing.</div>
+            <h3 className="text-[15px] font-semibold text-ink">Automations</h3>
+            <div className="mt-0.5 text-[12px] text-ink/70">{rows.length} defined. Toggle one off to stop it running.</div>
           </div>
-          <Button variant="primary" compact onClick={() => setDraft({ from: null })}>New flow</Button>
+          <Button variant="primary" compact onClick={() => setDraft({ from: null })}>New automation</Button>
         </div>
 
         {rows.length === 0 ? (
-          <EmptyState icon={<Workflow size={26} />} title="No flows yet">
+          <EmptyState icon={<Workflow size={26} />} title="No automations yet">
             Start from a template or create one.
           </EmptyState>
         ) : (
@@ -404,7 +404,7 @@ export function FlowsList({
             from={1}
             to={visible.length}
             total={sorted.length}
-            noun="flows"
+            noun="automations"
             actions={sorted.length > PAGE
               ? <ShowRest expanded={showAll} total={sorted.length} onToggle={() => setShowAll((v) => !v)} />
               : undefined}
@@ -414,7 +414,7 @@ export function FlowsList({
               <thead>
                 <tr>
                   <SortHeader label="On" sortKey="enabled" sort={sort} onSort={onSort} />
-                  <SortHeader label="Flow" sortKey="name" sort={sort} onSort={onSort} />
+                  <SortHeader label="Automation" sortKey="name" sort={sort} onSort={onSort} />
                   <SortHeader label="Trigger" sortKey="trigger" sort={sort} onSort={onSort} />
                   <SortHeader label={<>Last run<span className="block normal-case tracking-normal text-ink/65">recent runs</span></>} sortKey="lastRun" sort={sort} onSort={onSort} align="center" />
                   <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
@@ -539,7 +539,7 @@ function DraftEditor({
     <Drawer
       open
       onClose={onClose}
-      title={from ? "New flow from template" : "New flow"}
+      title={from ? "New automation from template" : "New automation"}
       subtitle={from ? from.name : "Start from scratch"}
       icon={<Workflow size={16} className="text-ink/70" />}
       footer={
@@ -573,7 +573,7 @@ function DraftEditor({
       <div className="pt-2 text-[12.5px] text-ink/70">
         {from
           ? <>Copies {from.nodes.length} steps: {from.nodes.map((n) => n.label).join(", ")}. The editor opens on them next.</>
-          : <>The pipeline editor opens next, where you add the steps this flow runs.</>}
+          : <>The pipeline editor opens next, where you add the steps this automation runs.</>}
       </div>
       <div className="pt-2 text-[11.5px] text-ink/65">The draft starts paused, so nothing fires until you turn it on.</div>
     </Drawer>

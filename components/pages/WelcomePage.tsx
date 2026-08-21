@@ -19,25 +19,24 @@ import { Textarea } from "../forms/Textarea";
 import { Chip } from "../data-display/Chip";
 import { SyncPanel, type SyncSource } from "../feedback/SyncPanel";
 import { SourceMark, GithubMark } from "../icons/marks";
-import { WelcomeGuideStep, type GuidePack } from "../features/WelcomeGuideStep";
 import { WelcomeGlossaryStep, type Candidate } from "../features/WelcomeGlossaryStep";
 import { WelcomeSyncPanel, type SyncRow } from "../features/WelcomeSyncPanel";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { focusRing } from "../tokens/focusRing";
 
 /* Welcome — onboarding wizard (pages/welcome.md). Post-auth, renders OUTSIDE
-   the console shell: a single-column wizard with a five-step Stepper
-   (Welcome → Connect → Style guide → Glossary → Finish). Each state selects the
+   the console shell: a single-column wizard with a four-step Stepper
+   (Welcome → Connect → Glossary → Finish). Each state selects the
    active step; the Connect step expands into per-connector onboarding flows
    rendered INLINE (provider header + credential fields + live sync progress),
    not portalled drawers, so the static canvas captures every connector's setup
-   surface. Style-guide, glossary and finish compose the Welcome* features.
+   surface. Glossary and finish compose the Welcome* features.
 
    Pure presenter: the connector tiles, the repositories, every credential
-   field, the style packs, the glossary candidates and the sync rows arrive in
+   field, the glossary candidates and the sync rows arrive in
    `data`. Brand marks are derived from a provider key, never carried. */
 
-const LABELS = ["Welcome", "Connect", "Style guide", "Glossary", "Finish"] as const;
+const LABELS = ["Welcome", "Connect", "Glossary", "Finish"] as const;
 
 const STATES = [
   { id: "default", label: "Welcome" },
@@ -49,7 +48,6 @@ const STATES = [
   { id: "connect-generic", label: "Connect · connector" },
   { id: "connect-upload", label: "Connect · Upload" },
   { id: "connect-syncing", label: "Connect · Syncing" },
-  { id: "guide", label: "Style guide" },
   { id: "glossary", label: "Glossary" },
   { id: "syncing", label: "Finish · initial sync" },
   { id: "done", label: "Finish · complete" },
@@ -61,14 +59,14 @@ const STATES = [
 export type WelcomeStep =
   | "hero" | "connect" | "connect-github" | "connect-slack" | "connect-notion"
   | "connect-gdrive" | "connect-generic" | "connect-upload" | "connect-syncing"
-  | "guide" | "glossary" | "finish" | "done";
+  | "glossary" | "finish" | "done";
 
-/** Which of the five Stepper positions a step sits at. */
+/** Which of the four Stepper positions a step sits at. */
 const STEP_INDEX: Record<WelcomeStep, number> = {
   hero: 0,
   connect: 1, "connect-github": 1, "connect-slack": 1, "connect-notion": 1,
   "connect-gdrive": 1, "connect-generic": 1, "connect-upload": 1, "connect-syncing": 1,
-  guide: 2, glossary: 3, finish: 4, done: 4,
+  glossary: 2, finish: 3, done: 3,
 };
 
 /** One connector tile on the Connect step. `key` selects the brand mark. */
@@ -102,7 +100,7 @@ export type Repo = { name: string; desc: string; priv: boolean; branch: string }
 export type UploadedFile = { name: string; detail: string };
 
 /** What the onboarding run actually achieved, for the Done step. */
-export type WelcomeSummary = { sourcesSynced: number; guide: string; glossaryTerms: number };
+export type WelcomeSummary = { sourcesSynced: number; glossaryTerms: number };
 
 /** What onboarding can DO. This is the path out of an empty workspace, so
  *  every failure here has to arrive intact: a GitHub token that cannot see a
@@ -131,8 +129,6 @@ export type WelcomeActions = {
   connectSource?: (v: { provider: string; config: Record<string, string> }) => void | Promise<void>;
   /** Ingest files straight from the device: no credentials involved. */
   uploadFiles?: (files: File[]) => void | Promise<void>;
-  /** Adopt a style pack as the workspace default. */
-  chooseGuide?: (id: string) => void | Promise<void>;
   /** Mine the connected documents for glossary candidates, and return the
       fresh list so the review step shows what the scan actually found. */
   harvestGlossary?: () => Promise<Candidate[]>;
@@ -161,8 +157,6 @@ export type WelcomeData = {
   uploadFiles: UploadedFile[];
   /** connect-syncing step: the one source being watched. */
   connectSync: SyncRow;
-  /** Style-guide step. */
-  packs: GuidePack[];
   /** Glossary step. */
   glossaryCandidates: Candidate[];
   /** Finish step: every source's sync state. */
@@ -175,16 +169,16 @@ export type WelcomeData = {
    Kept identical to LoginPage / SetupPage: one backdrop, one 672px column, one
    centered logo/title/sub header, one card, primary-bottom-left actions.
    Deliberately OFF the 1400px console grid (§11): no sidebar here. */
-const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_SHELL = "relative h-full w-full overflow-x-hidden overflow-y-auto bg-paper";
 const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
 const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
 
 function AuthBackdrop() {
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
       <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
-    </>
+    </div>
   );
 }
 
@@ -200,53 +194,27 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
 
 /* ── Step 0: hero ─────────────────────────────────────────────────────── */
 
-function Hero({ data }: { data: WelcomeData }) {
-  const promises = [
-    "Connect your real sources: no fake OAuth, no “coming soon”.",
-    "Curate a style guide that becomes your Library default.",
-    "Seed a glossary from documents you already have.",
+function Hero() {
+  const steps = [
+    "Connect the systems that contain your product knowledge.",
+    "Define the product terms your team uses every day.",
   ];
-  /* What sat on the right was a dashed box captioned "Onboarding journey": a
-     layout placeholder that shipped as product (P-WE-5). It is replaced by the
-     only thing this step honestly knows, which is what the workspace already
-     has waiting. A count with nothing behind it is dropped rather than drawn
-     as a zero, and when none survive the hero is simply one column. */
-  const connected = data.tiles.filter((t) => t.connected).length;
-  const facts: { n: number; label: string }[] = [];
-  if (connected > 0) facts.push({ n: connected, label: connected === 1 ? "source already connected" : "sources already connected" });
-  if (data.connectorCount > 0) facts.push({ n: data.connectorCount, label: "connectors you can import from" });
-  if (data.packs.length > 0) facts.push({ n: data.packs.length, label: data.packs.length === 1 ? "style guide to start from" : "style guides to start from" });
 
   return (
-    <div className={facts.length ? "grid grid-cols-1 gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center" : ""}>
-      <div>
-        <h2 className="font-display text-[20px] font-semibold text-ink">Let’s set up your workspace</h2>
-        <p className="mt-2 text-[14px] leading-relaxed text-ink/70">
-          A few real steps: every one does actual work. You can save and finish
-          later at any point.
-        </p>
-        <ul className="mt-5 space-y-2.5">
-          {promises.map((p) => (
-            <li key={p} className="flex items-start gap-2.5 text-[13.5px] text-ink/80">
-              <span className="mt-0.5 text-moss"><CheckCircle2 size={17} /></span>
-              <span>{p}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      {facts.length > 0 && (
-        <div className="rounded-[8px] border border-ink/15 bg-flysch/60 p-5">
-          <p className="font-term text-[11px] uppercase tracking-[0.1em] text-ink/65">In this workspace</p>
-          <ul className="mt-3 space-y-3.5">
-            {facts.map((f) => (
-              <li key={f.label}>
-                <div className="font-display text-[24px] font-bold leading-none tabular-nums text-biscay">{f.n}</div>
-                <div className="mt-1 text-[12.5px] leading-snug text-ink/70">{f.label}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+    <div>
+      <h2 className="font-display text-[20px] font-semibold text-ink">Build your knowledge workspace</h2>
+      <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink/70">
+        Bring your product knowledge together, establish shared standards, and
+        give your team a reliable place to find answers.
+      </p>
+      <ul className="mt-5 space-y-2.5">
+        {steps.map((step) => (
+          <li key={step} className="flex items-start gap-2.5 text-[13.5px] text-ink/80">
+            <span className="mt-0.5 text-moss"><CheckCircle2 size={17} /></span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -593,7 +561,7 @@ function UploadConnect({ data, actions, nav }: { data: WelcomeData; actions?: We
       </div>
       <div className="mt-2 flex items-center gap-3 border-t border-ink/10 pt-3">
         <span className="flex-1 text-[12px] text-ink/65">.md / .txt · up to 20 files · 1 MB each</span>
-        <Button variant="primary" disabled={write.busy} onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
+        <Button variant="primary" disabled={write.busy} onClick={() => nav.go("glossary")}>Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
   );
@@ -626,33 +594,13 @@ function ConnectSyncing({ row, nav }: { row: SyncRow; nav: StepNav }) {
       )}
       <div className="flex items-center gap-3 border-t border-ink/10 pt-3">
         <span className="flex-1 text-[12px] text-ink/65">Sync continues on the server. Leaving this step won’t interrupt it.</span>
-        <Button variant="primary" onClick={() => nav.go("guide")}>Done <CheckCircle2 size={14} /></Button>
+        <Button variant="primary" onClick={() => nav.go("glossary")}>Done <CheckCircle2 size={14} /></Button>
       </div>
     </div>
   );
 }
 
-/* ── Steps 2–4 ────────────────────────────────────────────────────────── */
-
-function GuideStep({ packs, actions }: { packs: GuidePack[]; actions?: WelcomeActions }) {
-  // XA-04: hand-rolled saving/failed pair around one awaited call.
-  const write = useWrite();
-  const pick = (id: string) => {
-    if (!actions?.chooseGuide) return;
-    void write.run(() => actions.chooseGuide!(id));
-  };
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="font-display text-[20px] font-semibold text-ink">Choose a style guide</h2>
-        <p className="mt-1 text-[13.5px] text-ink/65">Your pick becomes the Library default: you can change it any time.</p>
-      </div>
-      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
-      <WelcomeGuideStep packs={packs} saving={write.busy} onPick={pick} />
-      <Button variant="link" onClick={() => actions?.navigate?.("/library")}>Manage guides in the Library →</Button>
-    </div>
-  );
-}
+/* ── Steps 2–3 ────────────────────────────────────────────────────────── */
 
 function GlossaryStep({ candidates, actions }: { candidates: Candidate[]; actions?: WelcomeActions }) {
   const [failed, setFailed] = useState<string | null>(null);
@@ -724,7 +672,7 @@ function DoneStep({ summary, onNavigate }: { summary: WelcomeSummary; onNavigate
         <div>
           <h2 className="text-[16px] font-semibold text-ink">Your workspace is ready</h2>
           <p className="mt-0.5 text-[13px] text-ink/65">
-            {summary.sourcesSynced} sources synced · style guide set to <b className="text-ink/80">{summary.guide}</b> · {summary.glossaryTerms} glossary terms added.
+            {summary.sourcesSynced} sources synced · {summary.glossaryTerms} glossary terms added.
           </p>
         </div>
       </div>
@@ -808,17 +756,16 @@ function StepBody({ data, current, actions, nav, selectedTile, connectRow, finis
         fields={data.gdriveFields} actions={actions} nav={nav} />;
     case "connect-upload": return <UploadConnect data={data} actions={actions} nav={nav} />;
     case "connect-syncing": return <ConnectSyncing row={connectRow} nav={nav} />;
-    case "guide": return <GuideStep packs={data.packs} actions={actions} />;
     case "glossary": return <GlossaryStep candidates={data.glossaryCandidates} actions={actions} />;
     case "finish": return <FinishStep rows={finishRows} actions={actions} onDone={() => nav.go("done")} />;
     case "done": return <DoneStep summary={data.doneSummary} onNavigate={actions?.navigate} />;
-    default: return <Hero data={data} />;
+    default: return <Hero />;
   }
 }
 
-/** The five wizard positions, in order, for Continue / Back. Connecting a
-    source detours off this spine and rejoins it at `guide`. */
-const SPINE: WelcomeStep[] = ["hero", "connect", "guide", "glossary", "finish"];
+/** The four wizard positions, in order, for Continue / Back. Connecting a
+    source detours off this spine and rejoins it at `glossary`. */
+const SPINE: WelcomeStep[] = ["hero", "connect", "glossary", "finish"];
 
 /** Steps that carry their own primary action, so the wizard footer must not
  *  draw a second one.
@@ -894,10 +841,10 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
   };
 
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
-        <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Five steps, all of them real." />
+        <AuthHeader title="Welcome to Mari" sub="Your product knowledge, curated. Four steps, all of them real." />
 
         <Card variant="plain">
           <div className="mb-5">
@@ -938,7 +885,7 @@ function WelcomePage({ data, loading = false, error = null, actions, mobile = fa
           </div>
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
 

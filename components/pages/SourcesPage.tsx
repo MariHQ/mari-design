@@ -6,8 +6,6 @@ import { card } from "../tokens/card";
 import { PageHeader } from "../layout/PageHeader";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
-import { Tabs, type TabOption } from "../navigation/Tabs";
-import { SettingsTabs, SETTINGS_TAB_LABELS } from "./SettingsTabs";
 import { Stepper } from "../data-display/Stepper";
 import { IconRing } from "../data-display/IconRing";
 import { Chip } from "../data-display/Chip";
@@ -28,14 +26,11 @@ import { SourceMark } from "../icons/marks";
 import { SourcesConnectorCard, type Source } from "../features/SourcesConnectorCard";
 import { SourcesConnectorWizard, type WizardProviderSpec } from "../features/SourcesConnectorWizard";
 import { PhaseTracker } from "../features/SourcesSyncStatus";
-import { SourcesBots, type GithubStatus, type SlackStatus, type SourcesBotsActions } from "../features/SourcesBots";
 import { Truncate } from "../data-display/Truncate";
 import type { PropertyItem } from "../data-display/PropertyList";
 
-/* Sources & connectors (pages/sources.md). Settings → Sources: the hub for
-   bringing every product conversation into one trusted library. Two tabs —
-   Connectors (source cards + live ingestion status + the Add-source wizard)
-   and Bots (Slack + GitHub setup).
+/* Sources & connectors (pages/sources.md). Settings → Sources: the ingestion
+   hub for bringing every product conversation into one trusted library.
 
    Beyond the grid, this page enumerates a full inline connect *workflow* per
    provider — choose → configure credentials → syncing → done — composed
@@ -44,16 +39,9 @@ import type { PropertyItem } from "../data-display/PropertyList";
    whole flow. States: connect-<provider>-configure / -sync / -done.
 
    Pure presenter: the connector catalog, the connected sources, the connect
-   flow's credential fields, the first-sync row and the bot statuses all arrive
+   flow's credential fields and the first-sync row all arrive
    in `data`. Brand marks are derived from the provider key, never carried in
    the data. "No sources connected" is derived from the source list. */
-
-type Tab = "connectors" | "bots";
-
-const TAB_OPTIONS: TabOption<Tab>[] = [
-  { id: "connectors", label: "Connectors" },
-  { id: "bots", label: "Bots" },
-];
 
 /* ── §11 page grid ─────────────────────────────────────────────────────────
    Same container and main/rail split as the five Settings tabs, so the outer
@@ -93,7 +81,7 @@ export type Connector = {
 };
 
 /** Which screen of Sources is on. An app drives it from its own route. */
-export type SourcesView = "grid" | "wizard" | "bots" | "connect" | "sync-status";
+export type SourcesView = "grid" | "wizard" | "connect" | "sync-status";
 /** Step of the inline per-provider connect flow. */
 export type ConnectPhase = "configure" | "sync" | "done";
 /** State of the standalone first-sync row. */
@@ -125,7 +113,7 @@ export type FirstSync = {
  *
  *  All optional. With none of them the page keeps the local behaviour the
  *  library ships, which is what the design canvas renders (CONVENTIONS.md §2). */
-export type SourcesActions = SourcesBotsActions & {
+export type SourcesActions = {
   /** Pre-flight credential check. Answers rather than throws: "not ok" is a
       normal result of a test, not a broken request. */
   testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
@@ -164,9 +152,6 @@ export type SourcesData = {
   /** `sync-status` view. */
   syncPhase: SyncPhase;
   firstSync: FirstSync;
-  /** Bots tab. */
-  slack: SlackStatus;
-  github: GithubStatus;
   /** Read-only facts in the rail. */
   summary: PropertyItem[];
 };
@@ -400,7 +385,6 @@ function syncPhaseSource(f: FirstSync, phase: SyncPhase): SyncSource {
 
 const STATES = [
   { id: "default", label: "Default · Connectors grid" },
-  { id: "bots", label: "Bots · Slack + webhook" },
   { id: "adding", label: "Add-source wizard" },
   // First-sync status phases
   { id: "sync-queued", label: "Sync · Queued" },
@@ -441,6 +425,7 @@ const STATES = [
     a <select> value is a string. */
 const SCHEDULES: { value: string; label: string; minutes: number | null }[] = [
   { value: "", label: "Manual only", minutes: null },
+  { value: "10", label: "Every 10 minutes", minutes: 10 },
   { value: "15", label: "Every 15 minutes", minutes: 15 },
   { value: "60", label: "Every hour", minutes: 60 },
   { value: "360", label: "Every 6 hours", minutes: 360 },
@@ -600,8 +585,8 @@ function isEmpty(d: SourcesData): boolean {
   return d.sources.length === 0 && d.connector === null && d.view === "grid";
 }
 
-function Body({ data, error, tab, actions }: {
-  data: SourcesData; error: string | null; tab: Tab; actions?: SourcesActions;
+function Body({ data, error, actions }: {
+  data: SourcesData; error: string | null; actions?: SourcesActions;
 }): ReactNode {
   // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
   if (error) return <ReadError>{error}</ReadError>;
@@ -632,10 +617,6 @@ function Body({ data, error, tab, actions }: {
       />
     );
   }
-  if (data.view === "bots" || tab === "bots") {
-    return <SourcesBots defaultOpen={null} slack={data.slack} github={data.github} actions={actions} />;
-  }
-
   /* grid / wizard → connectors grid.
      `<SourcesSyncStatus animate={false} />` used to close this list. It takes
      no props: it is the catalog's own self-advancing demo of the sync state
@@ -647,27 +628,19 @@ function Body({ data, error, tab, actions }: {
 }
 
 function SourcesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SourcesData, SourcesActions>) {
-  const [tab, setTab] = useState<Tab>(data.view === "bots" ? "bots" : "connectors");
-  /* The route is the truth about which screen is on: a refetch that lands on
-     the Bots view used to leave the tab row on Connectors (C1). */
-  const [seen, setSeen] = useState(data.view);
-  if (seen !== data.view) { setSeen(data.view); setTab(data.view === "bots" ? "bots" : "connectors"); }
   const pinned = data.view === "connect" || data.view === "sync-status";
   const bare = error !== null || isEmpty(data);
-  /* Add source / Upload belong to the connectors grid, and only there: on the
-     Bots tab, or mid-connect, they act on a screen that is not showing. */
-  const showConnectorTools = !pinned && tab === "connectors" && (data.view === "grid" || data.view === "wizard");
+  /* Add source / Upload belong to the connectors grid, and only there. */
+  const showConnectorTools = !pinned && (data.view === "grid" || data.view === "wizard");
 
   if (loading) {
     return (
       <PageFrame chrome={chrome} active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
         <SkeletonPage
           variant="gallery"
-          eyebrow="Settings"
+          eyebrow="Knowledge ingestion"
           title="Sources & connectors"
           description="Bring every product conversation into one trusted library."
-          tabs={SETTINGS_TAB_LABELS}
-          activeTab="Sources"
           actions={0}
           mobile={mobile}
         />
@@ -679,34 +652,19 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
     <PageFrame chrome={chrome} active={navFor("sources")} title="Sources & connectors" mobile={mobile}>
       <div className={PAGE}>
         <PageHeader
-          eyebrow="Settings"
+          eyebrow="Knowledge ingestion"
           title="Sources & connectors"
           description="Bring every product conversation into one trusted library."
           icon={<span className="text-moss"><Layers size={24} /></span>}
         />
-        {/* Sources IS one of the Settings tabs, so it carries the same row as
-            the five settings/* pages — without it this page is reachable from
-            Settings and has no way back. That row is the page's navigation. */}
-        <div className="mt-5"><SettingsTabs active="sources" onNavigate={chrome?.onNavigate} /></div>
-        {/* One nav row, then ONE toolbar. The Connectors/Bots switch used to
-            sit on a row of its own directly under the Settings tabs, so the
-            page opened with two stacked bars that read as competing
-            navigation. It now shares the toolbar line with the actions that
-            belong to the tab it selects (§13). */}
-        {!bare && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Tabs<Tab> ariaLabel="Sources sections" variant="seg" options={TAB_OPTIONS} value={pinned ? "connectors" : tab} onChange={setTab} />
-            {showConnectorTools && (
-              <div className="ml-auto flex flex-wrap items-start gap-2">
-                {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
-                <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
-              </div>
-            )}
+        {!bare && showConnectorTools && (
+          <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
+            <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
           </div>
         )}
         <div className="mt-6">
           <SplitBody mobile={mobile} rail={<SourcesRail data={data} actions={actions} />}>
-            <Body data={data} error={error} tab={tab} actions={actions} />
+            <Body data={data} error={error} actions={actions} />
           </SplitBody>
         </div>
       </div>

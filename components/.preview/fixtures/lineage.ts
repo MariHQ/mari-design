@@ -158,6 +158,8 @@ const extras = (extreme: boolean): LineageExtras => ({
 const BASE: LineageData = {
   nodes: NODES,
   edges: EDGES,
+  mode: "overview",
+  tuning: { maxNodes: 35, hopDepth: 2, minConfidence: 0.72 },
   dates: DATES,
   activity: ACTIVITY,
   lens: "source",

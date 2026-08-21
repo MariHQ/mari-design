@@ -24,6 +24,7 @@ import type { ChatSession } from "../../features/ChatDockFeature";
 import type { Doc } from "../../features/TagPickerFeature";
 import type { KeyRow } from "../../features/TokenRevealFeature";
 import type { Finding } from "../../features/DocReviewMarkdown";
+import { GUIDE_PACKS } from "../../features/WelcomeGuideStep";
 
 import { FIXTURES as ANSWERS } from "./answers";
 import { FIXTURES as AUDIT } from "./audit";
@@ -46,7 +47,7 @@ import { FIXTURES as SOURCES } from "./sources";
 import { FIXTURES as WELCOME } from "./welcome";
 
 import type { DocHistoryRow, ImpactResult, LEdge, LNode } from "../../features/LineageDataModel";
-import type { EditorStep, SiteRef } from "../../features/FlowsPipelineEditor";
+import type { EditorStep } from "../../features/FlowsPipelineEditor";
 import type { WorkflowRun } from "../../workflow/RunHistory";
 
 /* ── Overview ───────────────────────────────────────────────────────────── */
@@ -140,7 +141,7 @@ export const FLOWS_SOURCES = flows.sources;
 const flowsEditor = FLOWS["pipeline-editor"].data.editor!;
 export const FLOWS_EDITOR: {
   name: string; description: string; steps: EditorStep[]; runs: WorkflowRun[];
-  members: string[]; sites: SiteRef[]; tags: string[];
+  members: string[]; tags: string[];
 } = flowsEditor;
 
 export const FLOWS_PANEL_RUNS: WorkflowRun[] = FLOWS.run.data.runPanel!.runs;
@@ -204,18 +205,19 @@ export const ANSWER_ONE = ANSWERS_ROWS[0];
 /* ── Sources ────────────────────────────────────────────────────────────── */
 
 const sources = SOURCES.default.data;
+const destinations = PUBLISH.default.data;
 
 export const SOURCES_ROWS = sources.sources;
 export const SOURCES_CATALOG = sources.catalog;
-export const SOURCES_SLACK = sources.slack;
-export const SOURCES_GITHUB = sources.github;
+export const DESTINATIONS_SLACK = destinations.slack;
+export const DESTINATIONS_GITHUB = destinations.github;
 
 /* ── Onboarding ─────────────────────────────────────────────────────────── */
 
 const welcome = WELCOME.default.data;
 
 export const WELCOME_CANDIDATES = welcome.glossaryCandidates;
-export const WELCOME_PACKS = welcome.packs;
+export const WELCOME_PACKS = GUIDE_PACKS;
 export const WELCOME_SYNC_ROWS = welcome.syncRows;
 export const WELCOME_REPOS = welcome.repos;
 
@@ -401,7 +403,7 @@ export const FEATURE_PROPS: Record<string, Record<string, unknown>> = {
 
   SourcesConnectorCard: { sources: SOURCES_ROWS },
   SourcesConnectorWizard: { providers: SOURCES_CATALOG, defaultOpen: false },
-  SourcesBots: { slack: SOURCES_SLACK, github: SOURCES_GITHUB, defaultOpen: null },
+  SourcesBots: { slack: DESTINATIONS_SLACK, github: DESTINATIONS_GITHUB, defaultOpen: null },
 
   WelcomeGithubConnect: { repos: WELCOME_REPOS, defaultOpen: false },
   WelcomeGenericConnect: { defaultOpen: false },

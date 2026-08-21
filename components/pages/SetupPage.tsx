@@ -2,12 +2,10 @@ import { useState } from "react";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { Logo, Brandmark } from "../shell/Logo";
-import { Stepper } from "../data-display/Stepper";
 import { Card } from "../layout/Card";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
 import { Button } from "../actions/Button";
-import { CodeBlock } from "../data-display/CodeBlock";
 import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite } from "../actions/useWrite";
@@ -19,17 +17,13 @@ import { SkeletonPage } from "../data-display/Skeletons";
    confirmation, these two demanded nothing (P-ST-1, P-LG-6). */
 import { PASSWORD_MIN, PASSWORD_HINT } from "./LoginPage";
 
-/* Setup — first-run admin claim (pages/setup.md). Shown when a fresh workspace
-   has no admin yet; renders OUTSIDE the console shell on the same full-bleed
-   auth backdrop as Login, in a WIDER centered card. Two-step tracker:
-   1 Token → 2 Admin account.
-
-   Pure presenter: the step, the server-log excerpt carrying the one-time
-   token, and the admin details all arrive in `data`. The canvas supplies them
-   from `.preview/fixtures/setup.ts`. */
+/* Setup — first-owner claim. Shown when a fresh workspace has no owner yet;
+   renders outside the console shell on the same full-bleed auth backdrop as
+   Login. The browser form is the complete workflow; no operator token or
+   server-log handoff is involved. */
 
 const STATES = [
-  { id: "default", label: "Token step" },
+  { id: "default", label: "Create workspace" },
   { id: "admin", label: "Admin account" },
   { id: "saving", label: "Setting up…" },
   { id: "error", label: "Error / service unavailable" },
@@ -38,11 +32,11 @@ const STATES = [
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
-/** Which of the two claim steps is on screen, or the hand-off after both. */
-export type SetupStep = "token" | "admin" | "done";
+/** The owner form, or its successful hand-off. */
+export type SetupStep = "admin" | "done";
 
-/** The admin account this screen creates, and the token that authorizes it. */
-export type Claim = { token: string; name: string; email: string; password: string; workspace: string };
+/** The first owner account and workspace created by this screen. */
+export type Claim = { name: string; email: string; password: string; workspace: string };
 
 /** What first-run setup can DO. One call, because the server validates the
  *  token and creates the admin in one step: a token that was mistyped or
@@ -51,11 +45,6 @@ export type Claim = { token: string; name: string; email: string; password: stri
  *  still walk, which is what the design canvas renders. */
 export type SetupActions = {
   claimWorkspace?: (c: Claim) => void | Promise<void>;
-  /** Check the token before step 2 asks for four more fields. Optional: with
-      no handler the token is only checked by `claimWorkspace`, which is where
-      a mistyped one used to surface — after the whole admin account had been
-      filled in (P-ST-3). */
-  checkToken?: (token: string) => void | Promise<void>;
   /** Leave first-run setup. The workspace is claimed and the admin is signed
       in by this point, so both exits are ordinary navigation — the screen just
       names which one was chosen. */
@@ -65,10 +54,6 @@ export type SetupActions = {
 /** Everything the Setup screen renders. */
 export type SetupData = {
   step: SetupStep;
-  /** The server-log excerpt that carries the one-time token. */
-  logSample: string;
-  /** Prefilled admin-token input. Empty string leaves it blank. */
-  token: string;
   /** The admin account being created, and the workspace it will own. */
   name: string;
   email: string;
@@ -80,7 +65,7 @@ export type SetupData = {
    Kept identical to LoginPage / WelcomePage: one backdrop, one 672px column,
    one centered logo/title/sub header, one card, primary-bottom-left actions.
    Deliberately OFF the 1400px console grid (§11): no sidebar here. */
-const AUTH_SHELL = "relative h-full w-full overflow-y-auto bg-paper";
+const AUTH_SHELL = "relative h-full w-full overflow-x-hidden overflow-y-auto bg-paper";
 const AUTH_COL = "relative mx-auto flex min-h-full max-w-2xl flex-col justify-center";
 const AUTH_ACTIONS = "flex flex-wrap items-center gap-2";
 /* Two-up field grid: the auth card is 672px wide, so a single stretched input
@@ -89,10 +74,10 @@ const FORM_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2";
 
 function AuthBackdrop() {
   return (
-    <>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <span className="pointer-events-none absolute -left-6 -top-8 rotate-[-12deg] text-biscay/[0.08]"><Brandmark size={140} /></span>
       <span className="pointer-events-none absolute -bottom-10 -right-6 rotate-[8deg] text-moss/[0.08]"><Brandmark size={160} /></span>
-    </>
+    </div>
   );
 }
 
@@ -106,73 +91,13 @@ function AuthHeader({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-function TokenStep({ data, error, claim, set, onNext, actions }: {
-  data: SetupData; error: string | null; claim: Claim;
-  set: (patch: Partial<Claim>) => void; onNext: () => void; actions?: SetupActions;
-}) {
-  const [help, setHelp] = useState(false);
-  /* Check the token HERE when the server offers a way to. It used to be
-     carried forward unchecked, so a token off by one character was reported
-     only after a name, an email, a password and a workspace name had been
-     typed, and the form gave no clue which of the five fields was wrong.
-
-     XA-04: the hand-rolled checking/rejected/try-catch pair around one
-     optional handler is exactly what useWrite is. */
-  const write = useWrite();
-  const next = () => write.run(
-    actions?.checkToken && (() => actions.checkToken!(claim.token.trim())),
-    onNext,
-  );
-
-  return (
-    <div className="space-y-4">
-      <p className="text-[13.5px] leading-relaxed text-ink/70">
-        This workspace has no admin yet. Paste the one-time token printed in the
-        server logs to claim it.
-      </p>
-      {/* Copyable. This is the one place the token exists, it is long, and it
-          is unguessable, so the block that carries it was the worst possible
-          place to turn copying off (P-ST-2). */}
-      <CodeBlock code={data.logSample} language="log" title="server logs" />
-      <Field label="Admin token">
-        <Input className="w-full" placeholder="3f9c-7b21-e04d-a41b" autoComplete="off" spellCheck={false}
-          value={claim.token} onChange={(e) => set({ token: e.target.value })} />
-      </Field>
-      {/* The token step is exactly where a rejected token has to be reported;
-          this branch used to drop `error`, so "Invalid token" — a state this
-          page declares — rendered as a silently unchanged form.
-
-          XA-01/XA-02: two different failures were merged into one bespoke
-          Alert. A refused check is a failed WRITE; what the host handed the
-          page is the read surface every other page uses. */}
-      <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
-      {!write.failed && error && <ReadError>{error}</ReadError>}
-      {/* Next-step action bottom LEFT (§2). */}
-      <div className={AUTH_ACTIONS}>
-        <Button variant="primary" disabled={!claim.token.trim() || write.busy} onClick={() => void next()}>
-          {write.busy ? <><Spinner size="sm" /> Checking token…</> : <>Continue <ArrowRight size={14} /></>}
-        </Button>
-        <Button variant="link" onClick={() => setHelp((h) => !h)}>Where do I find this?</Button>
-      </div>
-      {help && (
-        <p className="text-[12.5px] leading-relaxed text-ink/70">
-          The API prints it once at first boot, on a line beginning{" "}
-          <code className="font-term">admin token:</code>. The excerpt above is
-          from those logs: copy the value after the colon. If you no longer have
-          it, read the logs of the container that is serving this page.
-        </p>
-      )}
-    </div>
-  );
-}
-
 function AdminStep({ error, failed, onDismissFailed, claim, set, busy, onBack, onSubmit }: {
   error: string | null;
   /** What `claimWorkspace` threw. A refused write, not a failed read. */
   failed: string | null;
   onDismissFailed: () => void;
   claim: Claim; set: (patch: Partial<Claim>) => void;
-  busy: boolean; onBack: () => void; onSubmit: () => void;
+  busy: boolean; onBack?: () => void; onSubmit: () => void;
 }) {
   /* Confirmation lives here rather than on `Claim`, because it never leaves
      the form: the server is sent one password, and the second box exists only
@@ -195,12 +120,7 @@ function AdminStep({ error, failed, onDismissFailed, claim, set, busy, onBack, o
           most. The catalog owns the heading; the server's message and our
           recovery step are the detail underneath it. */}
       <WriteError onDismiss={onDismissFailed}>{failed}</WriteError>
-      {!failed && error && (
-        <ReadError>
-          {error} The server rejected that token. It may be mistyped or already used:
-          copy it fresh from the <code className="font-term">admin token:</code> log line.
-        </ReadError>
-      )}
+      {!failed && error && <ReadError>{error}</ReadError>}
       <div className={FORM_GRID}>
         <Field label="Your name">
           <Input className="w-full" placeholder="Maya Chen" autoComplete="name" value={claim.name} onChange={(e) => set({ name: e.target.value })} />
@@ -227,7 +147,6 @@ function AdminStep({ error, failed, onDismissFailed, claim, set, busy, onBack, o
         <Button variant="primary" disabled={busy || !ready} onClick={onSubmit}>
           {busy ? <><Spinner size="sm" /> Setting up…</> : "Finish setup"}
         </Button>
-        <Button variant="link" onClick={onBack}>← Back to token</Button>
       </div>
     </div>
   );
@@ -260,15 +179,13 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
      seeded from the data. Both steps used to be uncontrolled `defaultValue`
      inputs under buttons with no handler: the whole screen was a picture. */
   const [claim, setClaim] = useState<Claim>({
-    token: data.token, name: data.name, email: data.email,
-    password: data.password, workspace: data.workspace,
+    name: data.name, email: data.email, password: data.password, workspace: data.workspace,
   });
   const [step, setStep] = useState<SetupStep>(data.step);
   const [seen, setSeen] = useState(data.step);
   if (seen !== data.step) { setSeen(data.step); setStep(data.step); }
-  /* XA-04: a busy flag, a failed string and a try/catch around one optional
-     handler. "Invalid setup token, check the server logs." is the message that
-     makes this recoverable, and useWrite passes it through unchanged. */
+  /* The shared write lifecycle prevents duplicate submits and keeps a failed
+     first-owner claim recoverable without losing the form. */
   const write = useWrite();
 
   const set = (patch: Partial<Claim>) => setClaim((c) => ({ ...c, ...patch }));
@@ -280,20 +197,20 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
 
   if (loading) {
     return (
-      <div className={AUTH_SHELL}>
+      <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
         <SkeletonPage
           variant="auth"
           title="Welcome to Mari"
           description="Claim this workspace and create the admin account."
           mobile={mobile}
         />
-      </div>
+      </main>
     );
   }
 
   const done = step === "done";
   return (
-    <div className={AUTH_SHELL}>
+    <main id="main-content" aria-label="Main content" className={AUTH_SHELL}>
       <AuthBackdrop />
       <div className={`${AUTH_COL} ${mobile ? "px-4 py-10" : "px-6 py-16"}`}>
         <AuthHeader
@@ -301,15 +218,11 @@ function SetupPage({ data, loading = false, error = null, actions, mobile = fals
           sub={done ? "Your workspace is claimed and ready." : "Claim this workspace and create the admin account."}
         />
         <Card variant="plain">
-          <div className="mb-5">
-            <Stepper labels={["Token", "Admin account"]} current={step === "token" ? 0 : 1} ariaLabel="Setup steps" />
-          </div>
           {done ? <SuccessStep workspace={claim.workspace || data.workspace} actions={actions} />
-            : step === "token" ? <TokenStep data={data} error={error} claim={claim} set={set} actions={actions} onNext={() => setStep("admin")} />
-            : <AdminStep error={error} failed={write.failed} onDismissFailed={() => write.setFailed(null)} claim={claim} set={set} busy={write.busy} onBack={() => setStep("token")} onSubmit={() => void submit()} />}
+            : <AdminStep error={error} failed={write.failed} onDismissFailed={() => write.setFailed(null)} claim={claim} set={set} busy={write.busy} onSubmit={() => void submit()} />}
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
 

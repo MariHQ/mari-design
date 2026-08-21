@@ -47,8 +47,6 @@ const SORTS = [
   { id: "title", label: "Title" },
 ];
 
-const KNOWN_OWNERS = ["Priya Nair", "Marcus Vale", "Dana Osei"];
-
 /** KnowledgeResult cards rendered per page. */
 const PAGE = 25;
 
@@ -115,12 +113,21 @@ function FooterStat({ value, label }: { value: ReactNode; label: string }) {
   );
 }
 
-const SOURCE_LABELS: { key: string; label: string }[] = [
-  { key: "slack", label: "Slack" },
-  { key: "github", label: "GitHub" },
-  { key: "notion", label: "Notion" },
-  { key: "docs", label: "Google Docs" },
-];
+const SOURCE_LABELS: Record<string, string> = {
+  airtable: "Airtable", asana: "Asana", confluence: "Confluence",
+  docs: "Google Docs", gdrive: "Google Drive", github: "GitHub",
+  jira: "Jira", linear: "Linear", notion: "Notion", slack: "Slack",
+  trello: "Trello", upload: "Uploads", website: "Website", zendesk: "Zendesk",
+};
+
+/** Sources can be qualified (`github:owner/repo`); the connector key still
+    owns the mark and the facet. Unknown providers remain visible instead of
+    disappearing from the only source filter on the page. */
+const sourceKey = (source: string) => source.split(":", 1)[0].toLowerCase();
+const sourceLabel = (source: string) => {
+  const key = sourceKey(source);
+  return SOURCE_LABELS[key] ?? key.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
 const TYPE_ROWS: { label: string; match: (r: KnowledgeResult) => boolean }[] = [
   { label: "Documents", match: (r) => r.kind === "page" },
   { label: "Conversations", match: (r) => r.kind === "thread" },
@@ -296,15 +303,12 @@ export function KnowledgeBrowser({
     // Only when the box is local: a controlled query has already been answered
     // by whoever owns it (see `query`), and re-filtering would drop its hits.
     if (!served && q && !`${r.title} ${r.snippet} ${r.author}`.toLowerCase().includes(q.toLowerCase())) return false;
-    if (srcSel.size && !srcSel.has(r.source)) return false;
+    if (srcSel.size && !srcSel.has(sourceKey(r.source))) return false;
     if (typeSel.size) {
       const t = r.kind === "page" ? "Documents" : r.kind === "thread" ? "Conversations" : "Pull requests";
       if (!typeSel.has(t)) return false;
     }
-    if (ownerSel.size) {
-      const owner = KNOWN_OWNERS.includes(r.author) ? r.author : "Other people";
-      if (!ownerSel.has(owner)) return false;
-    }
+    if (ownerSel.size && !ownerSel.has(r.author || "Unknown owner")) return false;
     if (statusSel.size && !(r.status && statusSel.has(r.status))) return false;
     if (!fresherThan(r.date, freshDays)) return false;
     return true;
@@ -313,7 +317,6 @@ export function KnowledgeBrowser({
   const tabMatch = (r: KnowledgeResult) => tab === "all"
     || (tab === "docs" && r.kind === "page")
     || (tab === "conv" && r.kind === "thread")
-    || (tab === "pages" && (r.source === "docs" || r.source === "notion"))
     || (tab === "prs" && r.kind === "pr");
 
   const sorted = useMemo(() => {
@@ -323,7 +326,10 @@ export function KnowledgeBrowser({
     return rows;
   }, [baseFiltered, tab, sort]);
 
-  const owners = [...KNOWN_OWNERS, "Other people"];
+  const owners = [...new Set(results.map((result) => result.author || "Unknown owner"))]
+    .sort((a, b) => a.localeCompare(b));
+  const sources = [...new Set(results.map((result) => sourceKey(result.source)).filter(Boolean))]
+    .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Best match";
   /* Who is paging. With a `total` the owner fetched this page and holds the
      rest, so everything handed in is shown and "show more" asks for the next
@@ -350,9 +356,9 @@ export function KnowledgeBrowser({
             Counts cover the {loaded.toLocaleString()} results loaded so far, not all {total!.toLocaleString()}.
           </p>
         )}
-        <FacetGroup name="Source" rows={SOURCE_LABELS.map((s) => ({ label: s.label, icon: <SourceMark provider={s.key} size={15} />, count: count((r) => r.source === s.key), active: srcSel.has(s.key), onToggle: () => toggle(srcSel, setSrcSel, s.key) }))} />
+        <FacetGroup name="Source" rows={sources.map((key) => ({ label: sourceLabel(key), icon: <SourceMark provider={key} size={15} />, count: count((r) => sourceKey(r.source) === key), active: srcSel.has(key), onToggle: () => toggle(srcSel, setSrcSel, key) }))} />
         <FacetGroup name="Content type" rows={TYPE_ROWS.map((t) => ({ label: t.label, count: count(t.match), active: typeSel.has(t.label), onToggle: () => toggle(typeSel, setTypeSel, t.label) }))} />
-        <FacetGroup name="Owner" rows={owners.map((o) => ({ label: o, count: count((r) => (o === "Other people" ? !KNOWN_OWNERS.includes(r.author) : r.author === o)), active: ownerSel.has(o), onToggle: () => toggle(ownerSel, setOwnerSel, o) }))} />
+        <FacetGroup name="Owner" rows={owners.map((owner) => ({ label: owner, count: count((r) => (r.author || "Unknown owner") === owner), active: ownerSel.has(owner), onToggle: () => toggle(ownerSel, setOwnerSel, owner) }))} />
         <FacetGroup name="Freshness" rows={FRESH_ROWS.map((f) => ({ label: f.label, single: true, count: count((r) => fresherThan(r.date, f.days)), active: fresh === f.label, onToggle: () => setFresh(f.label) }))} />
         <FacetGroup name="Status" rows={STATUS_ROWS.map((s) => ({ label: s.label, count: count((r) => r.status === s.key), active: statusSel.has(s.key), onToggle: () => toggle(statusSel, setStatusSel, s.key) }))} />
       </Card>
@@ -384,7 +390,6 @@ export function KnowledgeBrowser({
               { id: "all", label: "All" },
               { id: "docs", label: "Documents", count: count((r) => r.kind === "page") },
               { id: "conv", label: "Conversations", count: count((r) => r.kind === "thread") },
-              { id: "pages", label: "Pages", count: count((r) => r.source === "docs" || r.source === "notion") },
               { id: "prs", label: "PRs", count: count((r) => r.kind === "pr") },
             ]}
           />
@@ -517,7 +522,7 @@ export function KnowledgeBrowser({
                       source={
                         <Chip
                           className="min-w-0"
-                          label={SOURCE_LABELS.find((s) => s.key === r.source)?.label ?? r.source}
+                          label={sourceLabel(r.source)}
                           tone="neutral"
                           icon={<SourceMark provider={r.source} size={13} />}
                         />

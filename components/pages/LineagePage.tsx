@@ -11,9 +11,9 @@ import { LineageEdgeDrawer } from "../features/LineageEdgeDrawer";
 import { LineageGroupDrawer } from "../features/LineageGroupDrawer";
 import { LineageAssertDrawer } from "../features/LineageAssertDrawer";
 import {
-  setLineageControls,
+  setLineageControls, overviewGroupId,
   type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
-  type LayoutMode, type Lens,
+  type LayoutMode, type Lens, type LineageMode,
 } from "../features/LineageDataModel";
 import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
@@ -69,6 +69,8 @@ export type LineageActions = {
   openDocument?: (docId: number) => void;
   /** Persist the focal node in the route while the page filters locally. */
   setFocalNode?: (nodeId: string) => void;
+  /** Persist which lineage question the reader is asking. */
+  setMode?: (mode: LineageMode, focalId?: string) => void;
   /** Open a review task on a document. */
   createReviewTask?: (args: { title: string; assignee: string }) => void | Promise<void>;
   /** Ask Mari to propose new edges across the corpus. Long-running. Return the
@@ -126,6 +128,11 @@ export type LineageData = {
   activity: { date: string; count: number }[];
   lens: Lens;
   layout: LayoutMode;
+  /** Overview is aggregated. Provenance and impact require `focalId`. */
+  mode: LineageMode;
+  /** Workspace defaults. The page exposes these in Settings; the canvas
+      consumes them without making every visit start with tuning controls. */
+  tuning: { maxNodes: number; hopDepth: number; minConfidence: number };
   focalId: string | null;
   trace: { originId: string; direction: "down" | "up" } | null;
   /** Scrubber position (index into `dates`); null = live / all time. The
@@ -165,12 +172,13 @@ function railFor(data: LineageData, drawer: LineageDrawer | null): number | null
   return drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal }: {
+function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal, onSelectGroupMember }: {
   data: LineageData; drawer: LineageDrawer | null;
   actions?: LineageActions;
   onClose?: () => void;
   focalId: string | null;
   onSetFocal: (nodeId: string) => void;
+  onSelectGroupMember: (nodeId: string) => void;
 }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
@@ -217,6 +225,7 @@ function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal }: {
         members={d.members}
         nodes={data.nodes}
         edges={data.edges}
+        onSelectMember={onSelectGroupMember}
         onClose={onClose}
       />
     );
@@ -253,8 +262,8 @@ function Extras({ extras }: { extras: LineageExtras }) {
    instrument can never push the drawer off-screen. LineageGraph has a hard
    720px minimum, so on a narrow console the *canvas alone* scrolls sideways
    inside its own column, leaving both outer edges of the page plumb. */
-function Rig({ rail, canvas, drawer }: {
-  rail: number | null; canvas: React.ReactNode; drawer?: React.ReactNode;
+function Rig({ rail, canvas, drawer, compact = false }: {
+  rail: number | null; canvas: React.ReactNode; drawer?: React.ReactNode; compact?: boolean;
 }) {
   // Every branch scrolls, including the full-width one. It used to skip the
   // scroller on the assumption that a rail-less canvas always clears its
@@ -265,7 +274,7 @@ function Rig({ rail, canvas, drawer }: {
   const column = (
     <div className="min-w-0">
       <Scrollable className="pb-1">
-        <div className="relative flex min-w-[720px] flex-col gap-5">{canvas}</div>
+        <div className={`relative flex flex-col gap-5 ${compact ? "min-w-0" : "min-w-[720px]"}`}>{canvas}</div>
       </Scrollable>
     </div>
   );
@@ -315,6 +324,18 @@ function Body({ data, error, actions, mobile }: {
     setLineageControls({ scope: "focus" });
     actions?.setFocalNode?.(nodeId);
   };
+  const selectGroupMember = (nodeId: string) => {
+    setFocalId(nodeId);
+    setPicked(null);
+    setLineageControls({ scope: "focus" });
+    actions?.setMode?.("provenance", nodeId);
+  };
+
+  const openGroup = (groupId: string) => {
+    const members = data.nodes.filter((node) => overviewGroupId(node) === groupId && !node.macro);
+    setPicked({ kind: "group", groupId, totalMembers: members.length, members });
+  };
+  const overviewGroups = new Set(data.nodes.filter((node) => !node.macro).map(overviewGroupId)).size;
 
   /* One search on this page, and it lives in the toolbar. `data.search` seeds
      the shared control store the toolbar reads, so a deep-linked query still
@@ -381,19 +402,54 @@ function Body({ data, error, actions, mobile }: {
         onClose={() => setPicked(null)}
         focalId={focalId}
         onSetFocal={setFocal}
+        onSelectGroupMember={selectGroupMember}
       />;
 
   return (
     <div className="mt-6 flex flex-col gap-5">
       {data.crumbs && <Breadcrumb items={data.crumbs.map((label) => ({ label }))} />}
+      <div className="rounded-[6px] border border-ink/15 bg-paper p-3" aria-label="Lineage question">
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            ["overview", "Overview"],
+            ["provenance", "Provenance"],
+            ["impact", "Impact"],
+          ] as const).map(([mode, label]) => (
+            <Button
+              key={mode}
+              compact
+              variant={data.mode === mode ? "primary" : "default"}
+              disabled={mode !== "overview" && !focalId}
+              aria-pressed={data.mode === mode}
+              onClick={() => actions?.setMode?.(mode)}
+            >
+              {label}
+            </Button>
+          ))}
+          <span className="ml-1 text-[12.5px] text-ink/70">
+            {data.mode === "overview"
+              ? `${overviewGroups.toLocaleString("en-US")} group${overviewGroups === 1 ? "" : "s"} · ${data.nodes.length.toLocaleString("en-US")} document${data.nodes.length === 1 ? "" : "s"}, rolled up before individual documents.`
+              : data.mode === "provenance"
+                ? "Where the selected document came from."
+                : "What depends on the selected document."}
+          </span>
+        </div>
+        {data.mode !== "overview" && focalId && (
+          <div className="mt-2 font-term text-[11px] text-ink/65">
+            Showing {data.tuning.hopDepth} dependency hop{data.tuning.hopDepth === 1 ? "" : "s"}; machine proposals below {Math.round(data.tuning.minConfidence * 100)}% confidence and contextual links are excluded.
+          </div>
+        )}
+      </div>
       <Rig
         rail={rail}
+        compact={mobile}
         canvas={(
           <>
             <LineageToolbar
               nodes={data.nodes}
               edges={data.edges}
               views={data.views}
+              compact={mobile}
               onDeriveLinks={actions?.deriveLinks}
               onSaveView={actions?.saveView}
             />
@@ -407,10 +463,14 @@ function Body({ data, error, actions, mobile }: {
               edges={data.edges}
               lens={data.lens}
               layout={data.layout}
-              trace={data.trace}
+              mode={data.mode}
+              hopDepth={data.tuning.hopDepth}
+              minConfidence={data.tuning.minConfidence}
+              maxNodes={data.tuning.maxNodes}
               focalId={focalId}
               onPinNode={actions?.pinNode}
               onSelectNode={openNode}
+              onSelectGroup={openGroup}
               onSelectEdge={(id) => setPicked({ kind: "edge", edgeId: id })}
             />
             <LineageTimeScrubber dates={data.dates} activity={data.activity} value={data.asOf} />

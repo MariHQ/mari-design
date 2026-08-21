@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock, FileText } from "lucide-react";
+import { Plus, Check, Clipboard, CheckCircle2, Trash2, CalendarClock, FileText, Link2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, DASH2 } from "./PageFrame";
 import { PageHeader, Card, Button, Input, Select, Avatar, AvatarGroup, Pill, IconRing, Badge, Chip, Stat } from "../index";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate, TruncateInline } from "../data-display/Truncate";
 import { Tabs } from "../navigation/Tabs";
+import { Link } from "../navigation/Link";
 import { Combobox } from "../forms/Combobox";
 import { FormField } from "../forms/FormField";
 import { ConfirmButton } from "../actions/ConfirmButton";
@@ -13,6 +14,7 @@ import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite } from "../actions/useWrite";
 import { fmtDate, type DateInput } from "../tokens/format";
+import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 
 /* Tasks inbox (pages/tasks.md). The standalone / expanded form of the Overview
    "Today's review" card: a composer at the top, then Open and Done columns of
@@ -27,22 +29,35 @@ const STATES = [
   { id: "default", label: "Default · mixed" },
   { id: "open-only", label: "All open" },
   { id: "all-done", label: "All caught up" },
-  { id: "single", label: "Single task" },
-  { id: "many", label: "Many tasks" },
+  { id: "single", label: "Single review item" },
+  { id: "many", label: "Many review items" },
   { id: "overdue", label: "Overdue" },
   { id: "assigned-to-me", label: "Assigned to me" },
   { id: "composer-open", label: "Composer · drafting" },
-  { id: "saving", label: "Adding task…" },
+  { id: "saving", label: "Adding review item…" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
-  { id: "empty", label: "No tasks" },
+  { id: "empty", label: "No review items" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
 
+/** The product object a review item is about. `type` is deliberately an open
+    string: workspaces can attach reviews to documents, facts, decisions,
+    automation runs, or product-specific objects without widening this type. */
+export type TaskSubject = {
+  type: string;
+  id: string | number;
+  title: string;
+  /** A durable destination when the presenter can navigate without an action. */
+  href?: string;
+};
+
 /** One row of the inbox. */
 export type Task = {
-  id: number;
+  id: string | number;
+  /** Stable cross-kind id (`fact:42`, `workflow:7`) from the Review projection. */
+  reviewId?: string;
   title: string;
   who: string;
   kind: string;
@@ -56,13 +71,18 @@ export type Task = {
       compares `due` against the reader's own midnight — a stated timezone
       rather than the unstated one the flag used to carry. */
   overdue?: boolean;
-  /** What the task is about. Rendered as a link only when the page can open it
-      (`actions.openDoc`); a task with no way back to its document is where the
-      inbox used to dead-end (P-TA-5). */
+  /** What the review is about. It is a real contextual link when either its
+      own `href` or `actions.openSubject` supplies a destination. */
+  subject?: TaskSubject;
+  /** @deprecated Use `subject` with `type: "document"`. Kept as a migration
+      bridge for consumers that have not adopted typed subjects yet. */
   doc?: { id: string; title: string };
   /** How urgent, in the workspace's own words ("High"). Display text, like
       `kindLabel`, so a workspace with no priority vocabulary shows none. */
   priority?: string;
+  status?: string;
+  source?: string;
+  assignee?: string;
 };
 
 /** Someone a task can be filed to. */
@@ -107,6 +127,10 @@ export type TaskStrip = {
 export type TasksActions = {
   /** Check / uncheck one row. */
   setDone?: (args: { id: number; done: boolean }) => void | Promise<void>;
+  /** Run the centralized deterministic policy for a projected Review item. */
+  evaluate?: (args: { id: string; dryRun?: boolean }) =>
+    { outcome: string; explanation: string } | void |
+    Promise<{ outcome: string; explanation: string } | void>;
   /** Add the composer's draft to the inbox.
 
       `assignee`, `priority` and `due` are only sent when the composer collected
@@ -120,8 +144,9 @@ export type TasksActions = {
   }) => Task | void | Promise<Task | void>;
   /** Empty the Done column. Destructive: goes through ConfirmButton. */
   clearDone?: () => void | Promise<void>;
-  /** Open the document a task is about. Without it a task's document is text,
-      not a link that goes nowhere (§2). */
+  /** Open the typed product object a review item is about. */
+  openSubject?: (subject: TaskSubject) => void;
+  /** @deprecated Use `openSubject`. */
   openDoc?: (docId: string) => void;
 };
 
@@ -161,24 +186,35 @@ export type TasksData = {
    it used to `[overflow-wrap:anywhere]`, which is exactly the "pack it in"
    the rule names (§12, C4). The full title rides the title attribute. The done
    marker is a SQUARE checkbox: a circle reads as "pick one" (§6). */
-function TaskRow({ task, overdue, onToggle, onOpenDoc }: {
+function TaskRow({ task, overdue, onToggle, onOpenSubject, onEvaluate }: {
   task: Task;
   overdue: boolean;
-  onToggle: (id: number) => void;
-  onOpenDoc?: (docId: string) => void;
+  onToggle: (id: string | number) => void;
+  onOpenSubject?: (subject: TaskSubject) => void;
+  onEvaluate?: (id: string) => void;
 }) {
+  const subject: TaskSubject | undefined = task.subject ?? (task.doc
+    ? { type: "document", id: task.doc.id, title: task.doc.title }
+    : undefined);
+  const subjectIcon = subject?.type === "document" ? <FileText size={12} /> : <Link2 size={12} />;
+  const actionLabel = ({ fact: "Verify", decision: "Ratify", answer: "Approve",
+    change: "Approve", finding: "Review", workflow: "Review" } as Record<string, string>)[task.kind] ?? "Evaluate";
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5">
-      <button
-        type="button"
-        aria-label={task.done ? "Mark not done" : "Mark done"}
-        onClick={() => onToggle(task.id)}
-        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[4px] border transition-colors ${
-          task.done ? "border-moss bg-moss text-white" : "border-ink/30 text-transparent hover:border-ink/50"
-        }`}
-      >
-        <Check size={12} />
-      </button>
+      {task.reviewId ? (
+        !task.done && onEvaluate ? <Button compact variant="default" onClick={() => onEvaluate(task.reviewId!)}>{actionLabel}</Button> : null
+      ) : (
+        <button
+          type="button"
+          aria-label={task.done ? "Mark not done" : "Mark done"}
+          onClick={() => onToggle(task.id)}
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[4px] border transition-colors ${
+            task.done ? "border-moss bg-moss text-white" : "border-ink/30 text-transparent hover:border-ink/50"
+          }`}
+        >
+          <Check size={12} />
+        </button>
+      )}
       <span className="min-w-[9rem] flex-1">
         <Truncate
           lines={2}
@@ -186,17 +222,32 @@ function TaskRow({ task, overdue, onToggle, onOpenDoc }: {
         >
           {task.title}
         </Truncate>
-        {task.doc && (
-          onOpenDoc ? (
-            <Button variant="link" compact className="mt-0.5" onClick={() => onOpenDoc(task.doc!.id)}>
-              <FileText size={12} /> <TruncateInline className="max-w-[220px]">{task.doc.title}</TruncateInline>
+        {subject && (
+          onOpenSubject && (subject.href || subject.type === "document") ? (
+            <Button
+              variant="link"
+              compact
+              className="mt-0.5"
+              aria-label={`Open ${subject.type}: ${subject.title}`}
+              onClick={() => onOpenSubject(subject)}
+            >
+              {subjectIcon} <TruncateInline className="max-w-[220px]">{subject.title}</TruncateInline>
             </Button>
+          ) : subject.href ? (
+            <Link
+              href={subject.href}
+              aria-label={`Open ${subject.type}: ${subject.title}`}
+              className="mt-0.5 inline-flex max-w-full items-center gap-1 font-term text-[12px] font-medium text-biscay-2 hover:underline"
+            >
+              {subjectIcon} <TruncateInline className="max-w-[220px]">{subject.title}</TruncateInline>
+            </Link>
           ) : (
-            <Truncate className="mt-0.5 text-[12px] text-ink/70">{task.doc.title}</Truncate>
+            <Truncate className="mt-0.5 text-[12px] text-ink/70">{subject.title}</Truncate>
           )
         )}
       </span>
       <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+        {task.source && <Chip label={task.source} tone="neutral" />}
         {task.priority && <Chip label={task.priority} tone={overdue ? "attention" : "neutral"} />}
         {task.due && !task.done && (
           <Chip
@@ -264,6 +315,10 @@ function Body({ data, error, actions, who, mobile }: {
   const [due, setDue] = useState("");
   const [view, setView] = useState<"all" | "mine" | "overdue">("all");
   const [sort, setSort] = useState<"due" | "title" | "priority">("due");
+  const [kindFilter, setKindFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [policyNote, setPolicyNote] = useState("");
 
   /* The board is the page's most-mutated state, and it was seeded from `data`
      ONCE: every refetch landed behind it, so a task someone else closed stayed
@@ -293,12 +348,12 @@ function Body({ data, error, actions, who, mobile }: {
      actions that local move is the whole behaviour (the canvas renders this
      page with no server); with actions it is an optimistic echo the refetch
      confirms, and a rejected write puts the row back where it was. */
-  const toggle = async (id: number) => {
+  const toggle = async (id: string | number) => {
     const row = tasks.find((t) => t.id === id);
     if (!row) return;
     const done = !row.done;
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done } : t)));
-    if (!actions?.setDone) return;
+    if (!actions?.setDone || typeof id !== "number") return;
     // `run` answers whether the write landed, so the optimistic row can go back
     // where it was when it did not.
     const ok = await board.run(() => actions.setDone!({ id, done }));
@@ -368,6 +423,9 @@ function Body({ data, error, actions, who, mobile }: {
   const floor = startOfToday();
   const shown = useMemo(() => {
     const kept = tasks.filter((t) => {
+      if (kindFilter && t.kind !== kindFilter) return false;
+      if (sourceFilter && t.source !== sourceFilter) return false;
+      if (assigneeFilter && t.assignee !== assigneeFilter) return false;
       if (view === "mine") return t.who === who;
       if (view === "overdue") return isOverdue(t, floor);
       return true;
@@ -384,16 +442,31 @@ function Body({ data, error, actions, who, mobile }: {
       const bv = b.due ? new Date(String(b.due)).getTime() : Infinity;
       return av - bv;
     });
-  }, [tasks, view, sort, who, floor, priorities]);
+  }, [tasks, view, sort, who, floor, priorities, kindFilter, sourceFilter, assigneeFilter]);
 
   const open = shown.filter((t) => !t.done);
   const done = shown.filter((t) => t.done);
+  const openPager = usePaged(open, 25);
+  const donePager = usePaged(done, 25);
 
   const views = [
     { id: "all" as const, label: "All", count: tasks.length },
     { id: "mine" as const, label: "Assigned to me", count: tasks.filter((t) => t.who === who).length },
     { id: "overdue" as const, label: "Overdue", count: tasks.filter((t) => isOverdue(t, floor)).length },
   ];
+
+  const openSubject = actions?.openSubject ?? (actions?.openDoc
+    ? (subject: TaskSubject) => actions.openDoc!(String(subject.id))
+    : undefined);
+  const evaluate = actions?.evaluate
+    ? (id: string) => { void board.run(async () => {
+        const result = await actions.evaluate!({ id, dryRun: false });
+        if (result) setPolicyNote(`${result.outcome}: ${result.explanation}`);
+      }); }
+    : undefined;
+  const kinds = [...new Set(tasks.map((t) => t.kind))].sort();
+  const sources = [...new Set(tasks.map((t) => t.source).filter(Boolean) as string[])].sort();
+  const owners = [...new Set(tasks.map((t) => t.assignee).filter(Boolean) as string[])].sort();
 
   const listBody = (rows: Task[], emptyText: string) => {
     /* One banner for the page, not one per column: the same failure twice reads
@@ -403,7 +476,8 @@ function Body({ data, error, actions, who, mobile }: {
     if (error) return null;
     if (rows.length === 0) return <div className="py-6 text-center text-[13px] text-ink/70">{emptyText}</div>;
     return rows.map((t) => (
-      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle} onOpenDoc={actions?.openDoc} />
+      <TaskRow key={t.id} task={t} overdue={isOverdue(t, floor)} onToggle={toggle}
+        onOpenSubject={openSubject} onEvaluate={evaluate} />
     ));
   };
 
@@ -417,9 +491,9 @@ function Body({ data, error, actions, who, mobile }: {
           carries the vocabulary to store it. */}
       <Card className={composing ? "ring-1 ring-biscay-2/40" : ""}>
         <div className="flex flex-col gap-4">
-          <div className="flex items-end gap-3">
+          <div className={mobile ? "flex flex-col items-stretch gap-3" : "flex items-end gap-3"}>
             <span className="min-w-0 flex-1">
-              <FormField label="Task">
+              <FormField label="Review item">
                 <Input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -429,7 +503,7 @@ function Body({ data, error, actions, who, mobile }: {
                 />
               </FormField>
             </span>
-            <span className="w-40 shrink-0">
+            <span className={mobile ? "w-full" : "w-40 shrink-0"}>
               <FormField label="Kind">
                 <Select value={kind} onChange={(e) => setKind(e.target.value)} className="w-full">
                   {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
@@ -439,9 +513,9 @@ function Body({ data, error, actions, who, mobile }: {
           </div>
 
           {(assignees.length > 0 || priorities.length > 0) && (
-            <div className="flex items-end gap-3">
+            <div className={mobile ? "flex flex-col items-stretch gap-3" : "flex items-end gap-3"}>
               {assignees.length > 0 && (
-                <span className="w-[220px] shrink-0">
+                <span className={mobile ? "w-full" : "w-[220px] shrink-0"}>
                   <FormField label="Owner">
                     {/* An assignee picker is always a searchable combobox,
                         never a plain select (§7, P-TA-2). */}
@@ -457,7 +531,7 @@ function Body({ data, error, actions, who, mobile }: {
                 </span>
               )}
               {priorities.length > 0 && (
-                <span className="w-40 shrink-0">
+                <span className={mobile ? "w-full" : "w-40 shrink-0"}>
                   <FormField label="Priority">
                     <Select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full">
                       <option value="">No priority</option>
@@ -466,7 +540,7 @@ function Body({ data, error, actions, who, mobile }: {
                   </FormField>
                 </span>
               )}
-              <span className="w-44 shrink-0">
+              <span className={mobile ? "w-full" : "w-44 shrink-0"}>
                 <FormField label="Due date">
                   <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-full" />
                 </FormField>
@@ -479,7 +553,7 @@ function Body({ data, error, actions, who, mobile }: {
           <WriteError onDismiss={() => composer.setFailed(null)}>{composer.failed}</WriteError>
           <div>
             <Button variant="primary" onClick={add} disabled={saving || !draft.trim()}>
-              <Plus size={15} /> {saving ? "Adding…" : "Add task"}
+              <Plus size={15} /> {saving ? "Adding…" : "Add review item"}
             </Button>
           </div>
         </div>
@@ -490,10 +564,27 @@ function Body({ data, error, actions, who, mobile }: {
       {/* A rejected toggle or a refused Clear done accuses no input: it is a
           banner beside the board, at the weight a failed read gets (XA-02). */}
       <WriteError onDismiss={() => board.setFailed(null)}>{board.failed}</WriteError>
+      {policyNote && (
+        <div role="status" className="rounded-[4px] border border-ink/15 bg-flysch/50 px-3 py-2 text-[13px] text-ink">
+          {policyNote}
+        </div>
+      )}
 
       {/* Filter left, sort on the SAME line (§13). */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Tabs ariaLabel="Filter tasks" options={views} value={view} onChange={setView} />
+      <div className="flex flex-wrap items-center gap-3" aria-label="Review filters">
+        <Tabs ariaLabel="Filter review items" options={views} value={view} onChange={setView} />
+        <Select aria-label="Kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} className="w-36">
+          <option value="">All kinds</option>
+          {kinds.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
+        <Select aria-label="Source" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-36">
+          <option value="">All sources</option>
+          {sources.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
+        <Select aria-label="Assignee" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="w-40">
+          <option value="">All assignees</option>
+          {owners.map((value) => <option key={value} value={value}>{value}</option>)}
+        </Select>
         <span className="ml-auto flex items-center gap-2">
           <label className="font-term text-[11px] uppercase tracking-[0.08em] text-ink/65" htmlFor="tasks-sort">Sort</label>
           <Select id="tasks-sort" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="w-44">
@@ -511,9 +602,11 @@ function Body({ data, error, actions, who, mobile }: {
           level, not via a component breakpoint (§10). */}
       <div className={mobile ? "grid grid-cols-1 gap-5" : DASH2}>
         <Column title="Open" icon={<Clipboard size={16} />} tone="ink" count={open.length}>
+          <ResultCount from={openPager.from} to={openPager.to} total={openPager.total} noun="open review items" whenTruncated />
           {/* The empty line names the filter, so a hidden backlog never reads
               as an empty inbox. */}
-          {listBody(open, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
+          {listBody(openPager.pageRows, view === "all" ? "Nothing open: all caught up." : "Nothing open in this filter.")}
+          {openPager.paged && <PagerBar page={openPager.page} pageCount={openPager.pageCount} onChange={openPager.setPage} />}
         </Column>
         <Column
           title="Done"
@@ -528,7 +621,9 @@ function Body({ data, error, actions, who, mobile }: {
             ) : null
           }
         >
-          {listBody(done, view === "all" ? "No completed tasks yet." : "No completed tasks in this filter.")}
+          <ResultCount from={donePager.from} to={donePager.to} total={donePager.total} noun="completed review items" whenTruncated />
+          {listBody(donePager.pageRows, view === "all" ? "No completed review items yet." : "No completed review items in this filter.")}
+          {donePager.paged && <PagerBar page={donePager.page} pageCount={donePager.pageCount} onChange={donePager.setPage} />}
         </Column>
       </div>
     </div>
@@ -537,13 +632,13 @@ function Body({ data, error, actions, who, mobile }: {
 
 function TasksPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<TasksData, TasksActions>) {
   return (
-    <PageFrame chrome={chrome} active={navFor("tasks")} title="Tasks" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("tasks")} title="Review" mobile={mobile}>
       {loading ? (
         <SkeletonPage
           variant="board"
-          eyebrow="Tasks"
-          title="Tasks"
-          description="Everything Mari opened for a human: fact checks, approvals, stale docs, and canonical tagging."
+          eyebrow="Review queue"
+          title="Review"
+          description="Everything Mari needs a person to check: facts, approvals, stale documents, and canonical tags."
           /* The board's two columns are the workflow itself, never a query
              result, so they name themselves while the cards are still bars. */
           sections={["Open", "Done"]}
@@ -553,9 +648,9 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
       ) : (
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
         <PageHeader
-          eyebrow="Tasks"
-          title="Tasks"
-          description="Everything Mari opened for a human: fact checks, approvals, stale docs, and canonical tagging."
+          eyebrow="Review queue"
+          title="Review"
+          description="Everything Mari needs a person to check: facts, approvals, stale documents, and canonical tags."
           backLink={{ href: "/", label: "Overview" }}
         />
         <div className="mt-6">
@@ -572,7 +667,7 @@ function TasksPage({ data, loading = false, error = null, actions, chrome, mobil
 
 export const page: PageModule<TasksData, TasksActions> = {
   id: "tasks",
-  title: "Tasks",
+  title: "Review",
   route: "/tasks",
   component: TasksPage,
   states: STATES.map((s) => ({ ...s })),

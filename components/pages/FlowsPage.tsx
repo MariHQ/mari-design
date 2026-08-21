@@ -1,7 +1,7 @@
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { FlowsList, type Flow, type FlowsListActions, type SourceRef } from "../features/FlowsList";
-import { FlowsPipelineEditor, type EditorStep, type SiteRef } from "../features/FlowsPipelineEditor";
+import { FlowsPipelineEditor, type EditorStep } from "../features/FlowsPipelineEditor";
 import { FlowsRunHistory } from "../features/FlowsRunHistory";
 import { FlowsRunPanel, type FlowsRunActions } from "../features/FlowsRunPanel";
 import type { WorkflowRun } from "../workflow/RunHistory";
@@ -24,8 +24,8 @@ import { ReadError } from "../feedback/ReadError";
 
 const STATES = [
   { id: "default", label: "Default (list)" },
-  { id: "new-flow", label: "New flow · name and trigger" },
-  { id: "new-flow-first", label: "New flow · first one in the workspace" },
+  { id: "new-flow", label: "New automation · name and trigger" },
+  { id: "new-flow-first", label: "New automation · first one in the workspace" },
   { id: "pipeline-editor", label: "Pipeline editor" },
   { id: "pipeline-branch", label: "Pipeline editor · branching" },
   { id: "run", label: "Run panel · waiting (approval)" },
@@ -37,7 +37,7 @@ const STATES = [
   { id: "trigger-document", label: "Trigger editor · document" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
-  { id: "empty", label: "No flows yet" },
+  { id: "empty", label: "No automations yet" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
 ] as const;
@@ -77,7 +77,6 @@ export type FlowsEditor = {
   steps: EditorStep[];
   runs: WorkflowRun[];
   members: string[];
-  sites: SiteRef[];
   tags: string[];
 };
 
@@ -214,18 +213,18 @@ function Body({ data, error, actions, mobile }: {
 
 function FlowsPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<FlowsData, FlowsActions>) {
   return (
-    <PageFrame chrome={chrome} active={navFor("flows")} title="Flows" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("flows")} title="Automations" mobile={mobile}>
       {loading ? (
         <SkeletonPage
           variant="list"
-          eyebrow="Flows"
-          title="Flows"
+          eyebrow="Automations"
+          title="Automations"
           description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
           /* The list surface's three real headings. NOT the four template
              cards: a template card is titled with a FLOW NAME, which is the
              response's to give, so naming them here would invent four values
              the workspace may not have. The gallery's own heading stands. */
-          sections={["Start from a template", "Flows", "Run history"]}
+          sections={["Start from a template", "Automations", "Run history"]}
           actions={0}
           mobile={mobile}
         />
@@ -238,8 +237,8 @@ function FlowsPage({ data, loading = false, error = null, actions, chrome, mobil
               duplicate header is gone; the editor's toolbar is a breadcrumb
               under this header, not a second one. */}
           <PageHeader
-            eyebrow="Flows"
-            title="Flows"
+            eyebrow="Automations"
+            title="Automations"
             description="When something happens to your knowledge, Mari does the editorial work, checks it, then delivers it."
           />
           <div className="mt-6 flex flex-col gap-5 [&>*]:min-w-0">
@@ -253,7 +252,7 @@ function FlowsPage({ data, loading = false, error = null, actions, chrome, mobil
 
 export const page: PageModule<FlowsData, FlowsActions> = {
   id: "flows",
-  title: "Flows",
+  title: "Automations",
   route: "/flows",
   component: FlowsPage,
   states: STATES.map((s) => ({ ...s })),

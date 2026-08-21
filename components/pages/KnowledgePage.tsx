@@ -19,7 +19,6 @@ const STATES = [
   { id: "default", label: "Default" },
   { id: "documents", label: "Documents tab" },
   { id: "conversations", label: "Conversations tab · Slack chunks" },
-  { id: "pages", label: "Pages tab" },
   { id: "pull-requests", label: "Pull requests tab" },
   { id: "single-result", label: "Single result" },
   { id: "many-results", label: "Many results" },

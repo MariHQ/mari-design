@@ -195,7 +195,7 @@ export function InsightsFreshnessChart({ freshness, onOpenBand, loading = false,
                   {total > 0 ? (
                     <FreshnessBar row={row} onOpen={onOpenBand} />
                   ) : (
-                    <span aria-label="No documents" className="block h-[14px] w-full rounded-[3px] border border-dashed border-ink/25" />
+                    <span role="img" aria-label="No documents" className="block h-[14px] w-full rounded-[3px] border border-dashed border-ink/25" />
                   )}
                   <span className="whitespace-nowrap font-term text-[11px] tabular-nums text-ink/70">{total.toLocaleString("en-US")} docs</span>
                 </div>
