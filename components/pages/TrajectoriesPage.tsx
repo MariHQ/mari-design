@@ -13,7 +13,7 @@ const STATES = [
   { id: "default", label: "Default" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
-  { id: "empty", label: "Empty / no trajectories" },
+  { id: "empty", label: "Empty / no observed workflows" },
   { id: "stress", label: "Stress / large archive" },
 ] as const;
 
@@ -63,6 +63,7 @@ export type TrajectoryRow = {
   steps: TrajectoryStep[];
   evidence: TrajectoryEvidence[];
   promotedWorkflowId: number | null;
+  promotedWorkflowStatus: string;
 };
 
 export type TrajectoriesData = {
@@ -82,7 +83,7 @@ export type TrajectoriesActions = {
   tuneEvidence?: (trajectoryId: number, documentId: number, relevance: string,
                   note: string) => void | Promise<void>;
   promote?: (trajectoryId: number, name: string) => number | Promise<number>;
-  openWorkflow?: (workflowId: number) => void;
+  setWorkflowEnabled?: (workflowId: number, enabled: boolean) => void | Promise<void>;
 };
 
 function PhaseRail({ phases }: { phases: TrajectoryPhase[] }) {
@@ -157,7 +158,9 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
   const ready = row.status === "ready" || row.status === "fallback";
   const [workflowName, setWorkflowName] = useState(row.macroIntent || row.prompt.slice(0, 80));
   const [promoted, setPromoted] = useState(row.promotedWorkflowId);
+  const [enabled, setEnabled] = useState(row.promotedWorkflowStatus === "active");
   const promotion = useWrite();
+  const statusWrite = useWrite();
   return (
     <Card>
       <article aria-labelledby={`trajectory-${row.id}`} className="min-w-0">
@@ -205,12 +208,18 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
               : <p className="mt-1 text-[12px] text-ink/60">No documents were attached to this answer.</p>}
           </section>
           <section className="mt-4 border-t border-ink/10 pt-3">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Codify as workflow</h3>
-            {promoted ? <Button compact onClick={() => actions?.openWorkflow?.(promoted)}><Workflow size={13} /> Open draft workflow</Button> : <div className="mt-2 flex flex-wrap gap-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Codified workflow</h3>
+            {promoted ? <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Chip label={enabled ? "Enabled for assistants" : "Paused"} />
+              <Button compact disabled={statusWrite.busy} onClick={() => void statusWrite.run(actions?.setWorkflowEnabled && (() => actions.setWorkflowEnabled!(promoted, !enabled))).then((ok) => { if (ok) setEnabled(!enabled); })}>
+                <Workflow size={13} /> {enabled ? "Pause workflow" : "Enable workflow"}
+              </Button>
+            </div> : <div className="mt-2 flex flex-wrap gap-2">
               <input aria-label="Workflow name" value={workflowName} onChange={(event) => setWorkflowName(event.target.value)} className="min-w-[240px] flex-1 rounded border border-ink/15 bg-paper px-2 py-1.5 text-[12px]" />
-              <Button disabled={promotion.busy || !workflowName.trim()} onClick={() => void promotion.runFor(actions?.promote && (() => actions.promote!(row.id, workflowName))).then((id) => { if (id) setPromoted(id); })}><Workflow size={13} /> Create paused workflow</Button>
+              <Button disabled={promotion.busy || !workflowName.trim()} onClick={() => void promotion.runFor(actions?.promote && (() => actions.promote!(row.id, workflowName))).then((id) => { if (id) { setPromoted(id); setEnabled(true); } })}><Workflow size={13} /> Codify workflow</Button>
             </div>}
             <WriteError onDismiss={() => promotion.setFailed(null)}>{promotion.failed}</WriteError>
+            <WriteError onDismiss={() => statusWrite.setFailed(null)}>{statusWrite.failed}</WriteError>
           </section>
         </details>
       </article>
@@ -223,14 +232,14 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
   const pageStart = data.total ? data.offset + 1 : 0;
   const pageEnd = Math.min(data.offset + data.rows.length, data.total);
   if (loading) return (
-    <PageFrame chrome={chrome} active={navFor("trajectories")} title="Agent trajectories" mobile={mobile}>
-      <SkeletonPage variant="list" eyebrow="AI monitoring" title="Agent trajectories" description="Grounded workflow abstractions and coarse-to-fine intent paths." mobile={mobile} />
+    <PageFrame chrome={chrome} active={navFor("trajectories")} title="Workflows" mobile={mobile}>
+      <SkeletonPage variant="list" eyebrow="Agent learning" title="Workflows" description="Observe, tune, and codify how assistants use tools and evidence." mobile={mobile} />
     </PageFrame>
   );
   return (
-    <PageFrame chrome={chrome} active={navFor("trajectories")} title="Agent trajectories" mobile={mobile}>
+    <PageFrame chrome={chrome} active={navFor("trajectories")} title="Workflows" mobile={mobile}>
       <div className="mx-auto max-w-[1200px] px-5 py-6 sm:px-8">
-        <PageHeader eyebrow="AI monitoring" title="Agent trajectories" description="Grounded workflow abstractions and coarse-to-fine intent paths." />
+        <PageHeader eyebrow="Agent learning" title="Workflows" description="Observe successful assistant behavior, tune its tools and evidence, then codify it for chat and bot experiences." />
         {error ? <ReadError>{error}</ReadError> : (
           <>
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[7px] border border-ink/12 bg-paper px-4 py-3">
@@ -246,12 +255,12 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
             {!data.rows.length ? (
               <div className="rounded-[8px] border border-dashed border-ink/20 px-6 py-16 text-center">
                 <GitBranch className="mx-auto text-ink/35" size={26} />
-                <h2 className="mt-3 text-[15px] font-semibold">No agent trajectories yet</h2>
-                <p className="mt-1 text-[13px] text-ink/70">Agent tool runs will appear here after their grounded abstraction is harvested.</p>
+                <h2 className="mt-3 text-[15px] font-semibold">No observed workflows yet</h2>
+                <p className="mt-1 text-[13px] text-ink/70">Assistant tool runs appear here so they can be reviewed and codified.</p>
               </div>
             ) : <div className="space-y-4">{data.rows.map((row) => <TrajectoryCard key={row.id} row={row} actions={actions} />)}</div>}
             {data.total > data.limit && (
-              <nav aria-label="Trajectory pages" className="mt-6 flex items-center justify-between">
+              <nav aria-label="Workflow pages" className="mt-6 flex items-center justify-between">
                 <Button disabled={data.offset === 0} onClick={() => actions?.setOffset?.(Math.max(0, data.offset - data.limit))}>Previous</Button>
                 <span className="text-[12px] text-ink/50">Page {Math.floor(data.offset / data.limit) + 1}</span>
                 <Button disabled={data.offset + data.limit >= data.total} onClick={() => actions?.setOffset?.(data.offset + data.limit)}>Next</Button>
@@ -266,8 +275,8 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
 
 export const page: PageModule<TrajectoriesData, TrajectoriesActions> = {
   id: "trajectories",
-  title: "Agent trajectories",
-  route: "/trajectories",
+  title: "Workflows",
+  route: "/workflows",
   component: TrajectoriesPage,
   states: STATES.map((state) => ({ ...state })),
 };
