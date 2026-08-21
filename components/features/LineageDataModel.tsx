@@ -30,7 +30,7 @@ export type Lens = "source" | "stale" | "owner" | "health";
 export type LayoutMode = "flow" | "timeline";
 /** The question the graph is answering. Overview is deliberately aggregated;
     provenance and impact are directional, focal, bounded traversals. */
-export type LineageMode = "overview" | "provenance" | "impact";
+export type LineageMode = "documents" | "overview" | "provenance" | "impact";
 export type DocKind = "page" | "commit" | "pr" | "issue" | "answer" | "decision" | "seed";
 export type Severity = "update-required" | "review" | "minor";
 
@@ -257,7 +257,7 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence
     provenance follows the arrow, while impact walks it in reverse. */
 export function buildFocusedGraph(
   nodes: LNode[], edges: LEdge[], focalId: string | null,
-  mode: Exclude<LineageMode, "overview">, depth = 1, minConfidence = 0.8,
+  mode: Extract<LineageMode, "provenance" | "impact">, depth = 1, minConfidence = 0.8,
 ): { nodes: LNode[]; edges: LEdge[] } {
   if (!focalId || !nodes.some((n) => n.id === focalId)) return { nodes: [], edges: [] };
   const semantic = edges.filter((edge) =>

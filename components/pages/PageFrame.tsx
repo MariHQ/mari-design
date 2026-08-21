@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   Home, BookOpen, Send, Sparkles, Settings, Menu as MenuIcon,
   Search, UserRound, KeyRound, ListChecks, Database, FolderKanban, GitBranch,
+  BadgeCheck, MessageCircleQuestion, Scale,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -39,6 +40,9 @@ export const NAV: NavSection[] = [
        legacy routes fold back into these areas in navFor below. */
     { id: "overview", label: "Home", icon: <Home size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
+    { id: "facts", label: "Facts", icon: <BadgeCheck size={18} /> },
+    { id: "answers", label: "Answers", icon: <MessageCircleQuestion size={18} /> },
+    { id: "decisions", label: "Decisions", icon: <Scale size={18} /> },
     { id: "lineage", label: "Lineage", icon: <GitBranch size={18} /> },
     { id: "tasks", label: "Review", icon: <ListChecks size={18} /> },
     { id: "publish", label: "Destinations", icon: <Send size={18} /> },
@@ -205,7 +209,7 @@ function UserMenu({ onSignOut, onNavigate, projects = [], activeProjectId, onSel
     a few off-nav routes map onto the closest nav entry. */
 export function navFor(pageId: string): string {
   if (pageId.startsWith("settings") || pageId === "lookbook") return "settings";
-  if (["facts", "decisions", "answers", "library", "doc-review"].includes(pageId)) return "knowledge";
+  if (["library", "doc-review"].includes(pageId)) return "knowledge";
   if (pageId === "audit") return "tasks";
   if (pageId === "trajectories") return "insights";
   // Preferences is reached from the account menu, not the sidebar, and it is

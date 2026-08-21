@@ -128,7 +128,8 @@ export type LineageData = {
   activity: { date: string; count: number }[];
   lens: Lens;
   layout: LayoutMode;
-  /** Overview is aggregated. Provenance and impact require `focalId`. */
+  /** Documents is the complete graph. Overview is aggregated. Provenance and
+      impact require `focalId`. */
   mode: LineageMode;
   /** Workspace defaults. The page exposes these in Settings; the canvas
       consumes them without making every visit start with tuning controls. */
@@ -411,6 +412,7 @@ function Body({ data, error, actions, mobile }: {
       <div className="rounded-[6px] border border-ink/15 bg-paper p-3" aria-label="Lineage question">
         <div className="flex flex-wrap items-center gap-2">
           {([
+            ["documents", "Documents"],
             ["overview", "Overview"],
             ["provenance", "Provenance"],
             ["impact", "Impact"],
@@ -419,7 +421,7 @@ function Body({ data, error, actions, mobile }: {
               key={mode}
               compact
               variant={data.mode === mode ? "primary" : "default"}
-              disabled={mode !== "overview" && !focalId}
+              disabled={(mode === "provenance" || mode === "impact") && !focalId}
               aria-pressed={data.mode === mode}
               onClick={() => actions?.setMode?.(mode)}
             >
@@ -427,14 +429,16 @@ function Body({ data, error, actions, mobile }: {
             </Button>
           ))}
           <span className="ml-1 text-[12.5px] text-ink/70">
-            {data.mode === "overview"
+            {data.mode === "documents"
+              ? `${data.nodes.length.toLocaleString("en-US")} documents · ${data.edges.length.toLocaleString("en-US")} recorded relationships.`
+              : data.mode === "overview"
               ? `${overviewGroups.toLocaleString("en-US")} group${overviewGroups === 1 ? "" : "s"} · ${data.nodes.length.toLocaleString("en-US")} document${data.nodes.length === 1 ? "" : "s"}, rolled up before individual documents.`
               : data.mode === "provenance"
                 ? "Where the selected document came from."
                 : "What depends on the selected document."}
           </span>
         </div>
-        {data.mode !== "overview" && focalId && (
+        {(data.mode === "provenance" || data.mode === "impact") && focalId && (
           <div className="mt-2 font-term text-[11px] text-ink/65">
             Showing {data.tuning.hopDepth} dependency hop{data.tuning.hopDepth === 1 ? "" : "s"}; machine proposals below {Math.round(data.tuning.minConfidence * 100)}% confidence and contextual links are excluded.
           </div>

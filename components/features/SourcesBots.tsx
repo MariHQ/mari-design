@@ -263,10 +263,10 @@ function GithubDrawer({
   const body = () => {
     if (step === 0) return (
       <div className="grid grid-cols-1 gap-3">
-        <p className="text-[13px] text-ink/70">In the repo's <b>Settings → Webhooks → Add webhook</b>, use:</p>
+        <p className="text-[13px] text-ink/70">In the repository's <b>Settings → Webhooks → Add webhook</b>, use:</p>
         <Field label="Payload URL"><Truncate className="font-term text-[12.5px]">{payloadUrl}</Truncate></Field>
         <Field label="Content type"><span className="font-term text-[12.5px]">application/json</span></Field>
-        <Field label="Events"><span className="text-[13px]">Pushes, issues, pull requests, and comments</span></Field>
+        <Field label="Events"><span className="text-[13px]">Pushes, issues, pull requests, issue comments, and pull request review comments</span></Field>
       </div>
     );
     if (step === 1) return (
@@ -284,7 +284,7 @@ function GithubDrawer({
           {saved && <span className="ml-2 inline-flex items-center gap-1 text-[12.5px] text-moss"><CheckCircle2 size={14} /> Saved</span>}
         </div>
         <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>
-        <p className="mt-2 text-[11.5px] text-ink/70">Paste the same value into GitHub's "Secret" field. A separate receiver reads <code>MARI_GITHUB_WEBHOOK_SECRET</code>.</p>
+        <p className="mt-2 text-[11.5px] text-ink/70">Paste the same value into GitHub's "Secret" field. In a pull request, write <code>@Mari validate facts</code> to request a fact check.</p>
       </div>
     );
     return (
@@ -319,7 +319,7 @@ function GithubDrawer({
   );
 
   return (
-    <Drawer open={open} onClose={onClose} title="Set up GitHub webhook" subtitle="Guided setup"
+    <Drawer open={open} onClose={onClose} title="Set up GitHub bot" subtitle="Repository webhook"
       icon={<IconRing size={31}><GithubMark size={18} /></IconRing>} footer={footer}>
       <div className="mb-5"><Stepper labels={GH_STEPS} current={step} onSelect={(i) => i < step && setStep(i)} ariaLabel="GitHub webhook setup progress" /></div>
       {body()}
@@ -382,10 +382,10 @@ export function SourcesBots({
       <div className={`${card} p-4 flex flex-col gap-3`}>
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <IconRing size={31}><GithubMark size={18} /></IconRing>
-          <b className="min-w-0 flex-1 basis-[7rem] truncate text-[14px] font-semibold text-ink">GitHub webhook</b>
+          <b className="min-w-0 flex-1 basis-[7rem] truncate text-[14px] font-semibold text-ink">GitHub bot</b>
           {botChip(githubState(github))}
         </div>
-        <p className="text-[12.5px] text-ink/65">Refreshes repository content when GitHub sends a change.</p>
+        <p className="text-[12.5px] text-ink/65">Refreshes repository content and validates facts when @Mari is tagged in a pull request.</p>
         <Field label="Payload URL"><Truncate className="font-term text-[12px] text-ink/70" title={`${origin}/webhooks/github`}>{origin}/webhooks/github</Truncate></Field>
         <Field label="Repositories">
           <div className="flex flex-wrap gap-1.5">
@@ -395,7 +395,7 @@ export function SourcesBots({
           </div>
         </Field>
         <Button variant="primary" compact className="self-start" onClick={() => setDrawer("github")}>
-          <Github size={14} /> {github.webhookConfigured ? "Manage setup" : "Set up webhook"}
+          <Github size={14} /> {github.webhookConfigured ? "Manage setup" : "Set up GitHub bot"}
         </Button>
       </div>
 
