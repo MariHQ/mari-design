@@ -4,7 +4,7 @@ import { PageHeader } from "../layout/PageHeader";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { ReadError } from "../feedback/ReadError";
 import { Button, Card, Chip } from "../index";
-import { CheckCircle2, ChevronDown, CircleAlert, GitBranch, Save, Workflow } from "lucide-react";
+import { CheckCircle2, ChevronDown, CircleAlert, Database, GitBranch, RefreshCw, Save, Workflow } from "lucide-react";
 import { useState } from "react";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
@@ -64,6 +64,10 @@ export type TrajectoryRow = {
   evidence: TrajectoryEvidence[];
   promotedWorkflowId: number | null;
   promotedWorkflowStatus: string;
+  promotedWorkflowCachePolicy?: "none" | "reviewed_answer";
+  promotedWorkflowCacheState?: "disabled" | "empty" | "fresh" | "stale";
+  promotedWorkflowCacheRefreshedAt?: string;
+  promotedWorkflowDependencyCount?: number;
 };
 
 export type TrajectoriesData = {
@@ -84,6 +88,8 @@ export type TrajectoriesActions = {
                   note: string) => void | Promise<void>;
   promote?: (trajectoryId: number, name: string) => number | Promise<number>;
   setWorkflowEnabled?: (workflowId: number, enabled: boolean) => void | Promise<void>;
+  setWorkflowCache?: (workflowId: number, enabled: boolean) => void | Promise<void>;
+  reconcileStale?: () => number | Promise<number>;
 };
 
 function PhaseRail({ phases }: { phases: TrajectoryPhase[] }) {
@@ -159,8 +165,11 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
   const [workflowName, setWorkflowName] = useState(row.macroIntent || row.prompt.slice(0, 80));
   const [promoted, setPromoted] = useState(row.promotedWorkflowId);
   const [enabled, setEnabled] = useState(row.promotedWorkflowStatus === "active");
+  const [cachePolicy, setCachePolicy] = useState(row.promotedWorkflowCachePolicy ?? "none");
+  const [cacheState, setCacheState] = useState(row.promotedWorkflowCacheState ?? "disabled");
   const promotion = useWrite();
   const statusWrite = useWrite();
+  const cacheWrite = useWrite();
   return (
     <Card>
       <article aria-labelledby={`trajectory-${row.id}`} className="min-w-0">
@@ -209,11 +218,26 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
           </section>
           <section className="mt-4 border-t border-ink/10 pt-3">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Codified workflow</h3>
-            {promoted ? <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Chip label={enabled ? "Enabled for assistants" : "Paused"} />
-              <Button compact disabled={statusWrite.busy} onClick={() => void statusWrite.run(actions?.setWorkflowEnabled && (() => actions.setWorkflowEnabled!(promoted, !enabled))).then((ok) => { if (ok) setEnabled(!enabled); })}>
-                <Workflow size={13} /> {enabled ? "Pause workflow" : "Enable workflow"}
-              </Button>
+            {promoted ? <div className="mt-2 grid gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip label={enabled ? "Enabled for assistants" : "Paused"} />
+                <Button compact disabled={statusWrite.busy} onClick={() => void statusWrite.run(actions?.setWorkflowEnabled && (() => actions.setWorkflowEnabled!(promoted, !enabled))).then((ok) => { if (ok) setEnabled(!enabled); })}>
+                  <Workflow size={13} /> {enabled ? "Pause workflow" : "Enable workflow"}
+                </Button>
+              </div>
+              <div className="rounded-[6px] border border-ink/10 bg-ink/[0.02] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Database size={14} />
+                  <strong className="text-[12px]">Reviewed-answer cache</strong>
+                  <Chip label={cachePolicy === "none" ? "Not cached" : cacheState === "fresh" ? "Current" : cacheState === "stale" ? "Stale" : "Needs reconciliation"} />
+                  <Button compact disabled={cacheWrite.busy} onClick={() => void cacheWrite.run(actions?.setWorkflowCache && (() => actions.setWorkflowCache!(promoted, cachePolicy === "none"))).then((ok) => {
+                    if (ok) { const enabling = cachePolicy === "none"; setCachePolicy(enabling ? "reviewed_answer" : "none"); setCacheState(enabling ? "fresh" : "disabled"); }
+                  })}>{cachePolicy === "none" ? "Cache reviewed answer" : "Disable cache"}</Button>
+                </div>
+                <p className="mt-1 text-[11px] text-ink/65">Optional. A current cache returns the reviewed answer without generation. It becomes stale when any tracked document revision changes.</p>
+                {cachePolicy !== "none" && <p className="mt-1 text-[11px] text-ink/55">Tracking {row.promotedWorkflowDependencyCount ?? 0} document{row.promotedWorkflowDependencyCount === 1 ? "" : "s"}{row.promotedWorkflowCacheRefreshedAt ? ` · refreshed ${new Date(row.promotedWorkflowCacheRefreshedAt).toLocaleString()}` : ""}</p>}
+                <WriteError onDismiss={() => cacheWrite.setFailed(null)}>{cacheWrite.failed}</WriteError>
+              </div>
             </div> : <div className="mt-2 flex flex-wrap gap-2">
               <input aria-label="Workflow name" value={workflowName} onChange={(event) => setWorkflowName(event.target.value)} className="min-w-[240px] flex-1 rounded border border-ink/15 bg-paper px-2 py-1.5 text-[12px]" />
               <Button disabled={promotion.busy || !workflowName.trim()} onClick={() => void promotion.runFor(actions?.promote && (() => actions.promote!(row.id, workflowName))).then((id) => { if (id) { setPromoted(id); setEnabled(true); } })}><Workflow size={13} /> Codify workflow</Button>
@@ -231,6 +255,8 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
   PageProps<TrajectoriesData, TrajectoriesActions>) {
   const pageStart = data.total ? data.offset + 1 : 0;
   const pageEnd = Math.min(data.offset + data.rows.length, data.total);
+  const staleCaches = data.rows.filter((row) => (row.promotedWorkflowCachePolicy ?? "none") !== "none" && row.promotedWorkflowCacheState !== "fresh").length;
+  const reconciliation = useWrite();
   if (loading) return (
     <PageFrame chrome={chrome} active={navFor("trajectories")} title="Workflows" mobile={mobile}>
       <SkeletonPage variant="list" eyebrow="Agent learning" title="Workflows" description="Observe, tune, and codify how assistants use tools and evidence." mobile={mobile} />
@@ -250,8 +276,14 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
                   {data.categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </label>
-              <span className="text-[12px] text-ink/70">Showing {pageStart}-{pageEnd} of {data.total}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] text-ink/70">Showing {pageStart}-{pageEnd} of {data.total}</span>
+                <Button compact disabled={!staleCaches || reconciliation.busy} onClick={() => void reconciliation.runFor(actions?.reconcileStale && (() => actions.reconcileStale!()))}>
+                  <RefreshCw size={13} /> Reconcile stale caches{staleCaches ? ` (${staleCaches})` : ""}
+                </Button>
+              </div>
             </div>
+            <WriteError onDismiss={() => reconciliation.setFailed(null)}>{reconciliation.failed}</WriteError>
             {!data.rows.length ? (
               <div className="rounded-[8px] border border-dashed border-ink/20 px-6 py-16 text-center">
                 <GitBranch className="mx-auto text-ink/35" size={26} />
