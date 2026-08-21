@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Home, BookOpen, Workflow, Send, Sparkles, Settings, Menu as MenuIcon,
+  Home, BookOpen, Send, Sparkles, Settings, Menu as MenuIcon,
   Search, UserRound, KeyRound, ListChecks, Database, FolderKanban, GitBranch,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
@@ -41,7 +41,6 @@ export const NAV: NavSection[] = [
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
     { id: "lineage", label: "Lineage", icon: <GitBranch size={18} /> },
     { id: "tasks", label: "Review", icon: <ListChecks size={18} /> },
-    { id: "flows", label: "Automations", icon: <Workflow size={18} /> },
     { id: "publish", label: "Destinations", icon: <Send size={18} /> },
     { id: "insights", label: "Analytics", icon: <Sparkles size={18} /> },
     { id: "sources", label: "Sources", icon: <Database size={18} /> },
