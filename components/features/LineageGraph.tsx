@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Minus, Plus, Maximize2, Move } from "lucide-react";
 import { card } from "../tokens/card";
@@ -142,37 +142,58 @@ function traceClosure(originId: string, dir: "down" | "up", edges: LEdge[]): Set
 
    1. CAP     — draw at most `maxNodes` cards, keeping the best-connected ones
                 (plus the focal / trace origin) and reporting the remainder.
-   2. GRID    — past DECLUTTER_AT cards, snap positions onto a lane grid so no
-                two cards can overlap. Small graphs keep their authored layout.
+   2. PACK    — the authored layout arrives as 0..1 fractions, which say
+                nothing about how wide a card is. Whenever those fractions put
+                two card BOXES on top of each other at the canvas's real pixel
+                size, the packer takes over: source lanes, laid out in pixels
+                around the card box plus a minimum gap, so cards cannot touch.
+                A layout that already reads clear is left exactly as authored.
    3. QUIET   — past LABEL_LIMIT edges, drop the per-edge relation codes; the
                 legend still carries them and the dash patterns still read. */
 
 const DEFAULT_MAX_NODES = 35;
-/** Above this many drawn cards the authored positions are replaced by lanes. */
-const DECLUTTER_AT = 18;
 /** Above this many drawn edges the per-edge codes stop being painted. */
 const LABEL_LIMIT = 40;
-/** Lane grid: 5 columns × 7 rows fits DEFAULT_MAX_NODES cards with air
-    between them on a 900px canvas. More columns and the cards touch. The rows
-    start below the zoom controls and stop above the drag hint so the canvas
-    overlays never sit on a card. */
-const GRID_COLS = 5;
-const GRID_ROWS = 7;
 /** Node card width in px, and its half — the card is centred on its position,
     so half a card is how far inside the canvas the centre has to stay. The
     card's own class is the literal `w-[168px]`; keep the two in step. */
 const CARD_W = 168;
 const CARD_HALF = CARD_W / 2;
-/** Half a two-line card's height. The canvas clips at its own edges, so a card
-    whose position sits within half a card of the bottom loses its second line
-    — which is where the source, the owner and the freshness live. */
-const CARD_HALF_H = 26;
-/** Roughly what one card occupies as a fraction of the canvas, used to leave
-    the outermost cards whole when the viewport is fitted to them. */
+/** A two-line card's height. The real one is measured off a rendered card, so
+    a taller card (a second line that wraps, a macro card's heavier border)
+    still gets its own row; this is the value used until that measurement
+    lands, and the bounds it is trusted between. */
+const CARD_H = 50;
+const CARD_H_MIN = 36;
+const CARD_H_MAX = 120;
+/** The air the packer leaves between two card boxes. Small enough that a lane
+    still reads as one column, big enough that two cards never look joined. */
+const GAP_X = 16;
+const GAP_Y = 12;
+/** The canvas overlays — zoom cluster, filter readout, drag hint, trace panel
+    — sit in the corners at a fixed size whatever the zoom, so the packed rows
+    start below them and stop above them rather than under them. */
+const PAD_X = 14;
+const PAD_TOP = 64;
+const PAD_BOTTOM = 48;
+/** How close two authored cards may come before the packer takes the layout
+    over. A hand-authored graph is allowed to be tight; it is not allowed to
+    overlap. */
+const TOUCH_X = 8;
+const TOUCH_Y = 6;
+/** Fallbacks for the card's share of the canvas, used by "fit to view" before
+    the canvas has been measured. */
 const CARD_FRAC_W = 0.21;
 const CARD_FRAC_H = 0.15;
-const GRID_TOP = 0.14;
-const GRID_BOTTOM = 0.85;
+
+type Pt = { x: number; y: number };
+type CardBox = { w: number; h: number };
+
+/** Measuring has to land before the browser paints, or the first frame shows
+    the unpacked layout and then jumps. On a server there is nothing to measure
+    and nothing to paint, so this falls back to the effect React can run there
+    rather than warning about a layout effect it cannot honour. */
+const useMeasure = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /** Total edge count per node id, used to rank which nodes survive the cap. */
 function degreeMap(edges: LEdge[]): Map<string, number> {
@@ -184,23 +205,178 @@ function degreeMap(edges: LEdge[]): Map<string, number> {
   return d;
 }
 
-/** Lane layout: left-to-right by authored x, so the flow reading survives the
-    declutter, but on a fixed grid so cards never sit on top of each other. */
-function gridPositions(nodes: LNode[], pos: (n: LNode) => { x: number; y: number }) {
-  const out: Record<string, { x: number; y: number }> = {};
-  const order = [...nodes].sort((a, b) => pos(a).x - pos(b).x || pos(a).y - pos(b).y);
-  const cols = Math.min(GRID_COLS, Math.max(1, Math.ceil(order.length / GRID_ROWS)));
-  const perCol = Math.ceil(order.length / cols);
-  const colX = (i: number) => (cols === 1 ? 0.5 : 0.09 + (0.81 * i) / (cols - 1));
-  const span = GRID_BOTTOM - GRID_TOP;
-  for (let c = 0; c < cols; c++) {
-    const lane = order.slice(c * perCol, (c + 1) * perCol).sort((a, b) => pos(a).y - pos(b).y);
-    for (let r = 0; r < lane.length; r++) {
-      const y = lane.length === 1 ? 0.5 : GRID_TOP + (span * r) / (lane.length - 1);
-      out[lane[r].id] = { x: colX(c), y };
+/* ── The packer ───────────────────────────────────────────────────────────
+   Positions arrive as 0..1 fractions — the server's auto-layout, or a reader's
+   pin. A fraction cannot know that a card is 168px wide, so on a narrower
+   console two positions a comfortable 0.16 apart put two cards 130px apart and
+   the cards overlap. Everything below works in the canvas's real pixels, in
+   whole card boxes plus a minimum gap, and only converts back to fractions at
+   the very end (which is what the rest of the canvas — drag, fit, edges —
+   already speaks). */
+
+/** Would any two cards, placed at these fractions on this canvas, touch? */
+function anyCollision(nodes: LNode[], at: (n: LNode) => Pt, w: number, h: number, box: CardBox) {
+  const needX = box.w + TOUCH_X;
+  const needY = box.h + TOUCH_Y;
+  const pts = nodes.map((n) => { const q = at(n); return { x: q.x * w, y: q.y * h }; });
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      if (Math.abs(pts[i].x - pts[j].x) < needX && Math.abs(pts[i].y - pts[j].y) < needY) return true;
     }
   }
-  return out;
+  return false;
+}
+
+type Lane = { key: string; members: LNode[]; at: number };
+
+/** One lane per source — lanes left to right by where the layout already put
+    them, so the flow reading survives — and inside a lane oldest first, with
+    the best-connected document winning a tie. */
+function sourceLanes(nodes: LNode[], at: (n: LNode) => Pt, degree: Map<string, number>): Lane[] {
+  const byKey = new Map<string, LNode[]>();
+  for (const n of nodes) {
+    const key = n.source || "other";
+    const bucket = byKey.get(key);
+    if (bucket) bucket.push(n); else byKey.set(key, [n]);
+  }
+  const lanes = [...byKey].map(([key, members]) => ({
+    key,
+    at: Math.min(...members.map((n) => at(n).x)),
+    members: members.sort((a, b) =>
+      (a.date ?? "9999-99-99").localeCompare(b.date ?? "9999-99-99") ||
+      (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) ||
+      at(a).x - at(b).x || a.id.localeCompare(b.id)),
+  }));
+  return lanes.sort((a, b) => a.at - b.at || a.key.localeCompare(b.key));
+}
+
+/** Fill columns top to bottom, `rows` cards to a column, without cutting a
+    lane in half where it did not have to be: a lane that will not fit in what
+    is left of the current column opens a fresh one, a lane longer than a
+    column fills whole columns first, and a short lane is allowed to finish out
+    a column its neighbour started. */
+function laneColumns(lanes: Lane[], rows: number): LNode[][] {
+  const cols: LNode[][] = [];
+  let col: LNode[] = [];
+  const flush = () => { if (col.length) { cols.push(col); col = []; } };
+  for (const lane of lanes) {
+    if (col.length && col.length + lane.members.length > rows) flush();
+    for (const n of lane.members) {
+      col.push(n);
+      if (col.length >= rows) flush();
+    }
+  }
+  flush();
+  return cols;
+}
+
+/** Timeline columns: x stays the event date, but a date band is a column of
+    its own, so two documents from the same week stagger into rows instead of
+    stacking on one point. Bands keep their time order, which is the whole
+    reading of this layout. */
+function timeColumns(
+  nodes: LNode[], laneRank: Map<string, number>,
+  dateRank: Map<string, number>, bands: number,
+): LNode[][] {
+  const cols: LNode[][] = Array.from({ length: bands }, () => []);
+  for (const n of nodes) {
+    const i = n.date ? dateRank.get(n.date) ?? -1 : -1;
+    // No date is no place on a time axis: those cards sit in the middle, which
+    // is where the old timeline layout parked them too.
+    const band = i < 0 || dateRank.size === 0
+      ? Math.min(bands - 1, Math.floor(bands / 2))
+      : Math.min(bands - 1, Math.floor((i * bands) / dateRank.size));
+    cols[band].push(n);
+  }
+  for (const col of cols) {
+    col.sort((a, b) =>
+      (laneRank.get(a.source || "other") ?? 0) - (laneRank.get(b.source || "other") ?? 0) ||
+      (a.date ?? "").localeCompare(b.date ?? "") || a.id.localeCompare(b.id));
+  }
+  return cols.filter((c) => c.length > 0);
+}
+
+type Packed = {
+  /** id → canvas-fraction centre. Outside 0..1 when the packed grid is bigger
+      than the canvas; `fit` is then below 1 and the canvas zooms out to it. */
+  pos: Record<string, Pt>;
+  /** The scale that brings the whole grid into view. 1 = it already fits. */
+  fit: number;
+};
+
+/** Pack every visible card into lanes of whole card boxes, centred on the
+    canvas and spread over it when there is room to spare. */
+function packLayout(args: {
+  nodes: LNode[]; at: (n: LNode) => Pt; degree: Map<string, number>;
+  width: number; height: number; box: CardBox; timeline: boolean;
+}): Packed | null {
+  const { nodes, at, degree, width, height, box, timeline } = args;
+  if (!width || !height || nodes.length === 0) return null;
+  const cellW = box.w + GAP_X;
+  const cellH = box.h + GAP_Y;
+  const availW = Math.max(cellW, width - PAD_X * 2);
+  const availH = Math.max(cellH, height - PAD_TOP - PAD_BOTTOM);
+
+  const lanes = sourceLanes(nodes, at, degree);
+  const laneRank = new Map(lanes.map((lane, i) => [lane.key, i]));
+  const dateRank = new Map(
+    [...new Set(nodes.filter((n) => n.date).map((n) => n.date as string))].sort()
+      .map((d, i) => [d, i] as const),
+  );
+  const limit = Math.max(1, timeline ? dateRank.size : nodes.length);
+
+  /* One free parameter — rows per column, or bands on the time axis — and a
+     closed-form score for each: how much of the canvas the resulting grid
+     needs. Six columns of six beats twelve columns of three on a wide canvas
+     and loses on a tall one, and this is the cheapest honest way to know
+     which. Ties go to the later value: more time on the axis, fuller columns
+     off it. */
+  let best: { cols: LNode[][]; rows: number; fit: number } | null = null;
+  for (let k = 1; k <= limit; k++) {
+    const cols = timeline ? timeColumns(nodes, laneRank, dateRank, k) : laneColumns(lanes, k);
+    if (cols.length === 0) continue;
+    const rows = Math.max(...cols.map((c) => c.length));
+    const fit = Math.min(
+      availW / (cols.length * cellW - GAP_X),
+      availH / (rows * cellH - GAP_Y),
+    );
+    if (!best || fit >= best.fit) best = { cols, rows, fit };
+  }
+  if (!best) return null;
+
+  const { cols, rows } = best;
+  const fit = Math.min(best.fit, 1);
+  /* Room to spare is spread, not hoarded: the grid opens out over the canvas
+     instead of sitting as one dense block in the middle. Capped, because a
+     three-card graph pushed into the four corners stops reading as a graph. */
+  const pitchX = fit >= 1 ? Math.min(availW / cols.length, cellW * 1.55) : cellW;
+  const pitchY = fit >= 1 ? Math.min(availH / rows, cellH * 1.7) : cellH;
+  const spreadW = cols.length * pitchX;
+  const spreadH = rows * pitchY;
+  /* Where the grid has to start so that it LANDS centred between the overlays.
+     A grid that fits is simply placed there. A grid that does not is about to
+     be scaled by `fit` about the canvas centre, so it is placed where that
+     scaling will drop it — otherwise the top row slides under the zoom cluster
+     on the way in. */
+  const land = (extent: number, pad: number, avail: number, spread: number) => {
+    const target = pad + avail / 2;
+    const middle = extent / 2;
+    return middle + (target - middle) / fit - spread / 2;
+  };
+  const originX = land(width, PAD_X, availW, spreadW);
+  const originY = land(height, PAD_TOP, availH, spreadH);
+
+  const pos: Record<string, Pt> = {};
+  cols.forEach((col, c) => {
+    const short = ((rows - col.length) * pitchY) / 2;
+    col.forEach((n, r) => {
+      pos[n.id] = {
+        x: (originX + (c + 0.5) * pitchX) / width,
+        y: (originY + short + (r + 0.5) * pitchY) / height,
+      };
+    });
+  });
+  return { pos, fit };
 }
 
 /** Timeline layout: x by event date rank, y kept from the flow layout. */
@@ -269,8 +445,25 @@ export function LineageGraph({
   const effLens = controls.lens;
   const effLayout = controls.layout;
   const zoom = controls.zoom;
+  /* The current scale, readable from an effect that must not re-run when it
+     changes — the auto-fit below fires on the LAYOUT, not on the number. */
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  /* The canvas's real pixel box. The packer needs it — a card is 168px wide
+     whatever fraction of the canvas that turns out to be — and it changes with
+     the window, the sidebar and the drawer, so it is watched, not read once. */
+  const [canvas, setCanvas] = useState({ w: 0, h: 0 });
+  /* The card's real height, measured off a rendered card rather than guessed:
+     the row pitch has to clear the tallest thing in the row. */
+  const [cardH, setCardH] = useState(CARD_H);
+  /** Every node card, so the arrow keys can move focus between them and the
+      layout can measure one. */
+  const nodeRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  /** Has the reader taken the zoom into their own hands? Until they do, the
+      canvas fits the drawn graph; after, it leaves the scale alone. */
+  const userZoomed = useRef(false);
   const drag = useRef<{
     mode: "pan" | "node"; id?: string; startX: number; startY: number;
     origin: { x: number; y: number }; moved: boolean;
@@ -342,23 +535,32 @@ export function LineageGraph({
 
   const basePos = (n: LNode) => (effLayout === "timeline" ? timeline[n.id] ?? { x: n.x, y: n.y } : { x: n.x, y: n.y });
 
-  /* Declutter: a dense canvas gets lanes instead of authored coordinates, so
-     no two cards can overlap. Small graphs keep the layout they were given.
+  const degrees = useMemo(() => degreeMap(edges), [edges]);
+  const cardBox = useMemo(() => ({ w: CARD_W, h: cardH }), [cardH]);
 
-     An unfolded roll-up always gets lanes, however few cards it produced: the
-     members arrive clustered on the slot their macro card held, and a cluster
-     tight enough to read as one bucket is tight enough for two cards to land
-     on the same clamped position at the canvas edge. Lanes are what the
-     unfolding is FOR — seeing the members apart from each other. */
-  const unfoldedOverview = mode === "overview" && controls.expanded.length > 0;
-  const lanes = useMemo(
-    () => (visibleNodes.length > DECLUTTER_AT || unfoldedOverview ? gridPositions(visibleNodes, basePos) : null),
+  /* Pack, but only when the authored layout actually fails. The positions the
+     data ships are the ones the server reasoned about and the ones a reader
+     pinned, so a graph whose cards already stand clear of each other at this
+     canvas size keeps them exactly. The moment two card boxes touch — a denser
+     graph, a narrower console, a roll-up unfolded onto the slot its macro card
+     held — the packer takes the whole visible set over, whichever mode drew
+     it. */
+  const packed = useMemo(() => {
+    if (!canvas.w || !canvas.h || visibleNodes.length === 0) return null;
+    if (!anyCollision(visibleNodes, basePos, canvas.w, canvas.h, cardBox)) return null;
+    return packLayout({
+      nodes: visibleNodes, at: basePos, degree: degrees,
+      width: canvas.w, height: canvas.h, box: cardBox,
+      timeline: effLayout === "timeline",
+    });
     // basePos is derived from effLayout + timeline, both listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleNodes, effLayout, timeline, unfoldedOverview],
-  );
+  }, [visibleNodes, effLayout, timeline, canvas.w, canvas.h, cardBox, degrees]);
 
-  const posOf = (n: LNode) => moved[n.id] ?? lanes?.[n.id] ?? basePos(n);
+  /** The scale that brings the packed grid into view, 1 when it needs none. */
+  const fitScale = packed ? packed.fit : 1;
+
+  const posOf = (n: LNode) => moved[n.id] ?? packed?.pos[n.id] ?? basePos(n);
   const px = (n: LNode) => { const p = posOf(n); return { x: p.x * VB_W, y: p.y * VB_H }; };
   const dimmed = (id: string) => {
     // A resolved path is the strongest statement on the canvas: everything off
@@ -402,6 +604,9 @@ export function LineageGraph({
       `translate(pan) scale(zoom)` about the centre, so the pan that lands a
       bounding box's centre on the canvas centre is a closed form. */
   const fitTo = (ids: Set<string> | null) => {
+    // A fit is a zoom the reader asked for, so the canvas stops fitting the
+    // packed grid under them afterwards.
+    userZoomed.current = true;
     const rect = canvasRef.current?.getBoundingClientRect();
     // Nothing selected, or a selection nothing is drawing: fit the graph. A
     // control that promises to bring something into view must not answer by
@@ -420,9 +625,10 @@ export function LineageGraph({
       y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
     }
     // Grow the box by a card, so the outermost cards land whole rather than
-    // with their right edge cropped at the canvas boundary.
-    const w = (x1 - x0) + CARD_FRAC_W;
-    const h = (y1 - y0) + CARD_FRAC_H;
+    // with their right edge cropped at the canvas boundary. A card's share of
+    // the canvas is a measurement, not a guess, once the canvas has been read.
+    const w = (x1 - x0) + (rect.width ? CARD_W / rect.width : CARD_FRAC_W);
+    const h = (y1 - y0) + (rect.height ? cardH / rect.height : CARD_FRAC_H);
     const z = clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, 2.5);
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     setPan({ x: -(cx - 0.5) * rect.width * z, y: -(cy - 0.5) * rect.height * z });
@@ -430,12 +636,59 @@ export function LineageGraph({
   };
 
   /** Back to the layout the data shipped: dragged positions dropped, pan
-      cleared, scale at 100%. */
+      cleared, and the scale the drawn graph actually needs — 100% when it fits
+      the canvas, zoomed out to it when it does not. */
   const resetLayout = () => {
+    userZoomed.current = false;
     setMoved({});
     setPan({ x: 0, y: 0 });
-    setControls({ zoom: 1 });
+    setControls({ zoom: fitScale >= 1 ? 1 : clamp(Number(fitScale.toFixed(2)), 0.3, 2.5) });
   };
+
+  /* ── measuring the canvas and the card ────────────────────────────────
+     Both are pixels, and both change under the layout: the canvas with the
+     window, the sidebar and any open drawer, the card with its content. The
+     packer is only as honest as these two numbers. */
+  useMeasure(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      setCanvas((c) => (Math.abs(c.w - r.width) < 0.5 && Math.abs(c.h - r.height) < 0.5
+        ? c : { w: r.width, h: r.height }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading]);
+
+  useMeasure(() => {
+    const first = visibleNodes.find((n) => nodeRefs.current[n.id]);
+    const h = first ? nodeRefs.current[first.id]?.offsetHeight : 0;
+    if (h && Math.abs(h - cardH) > 0.5) setCardH(clamp(h, CARD_H_MIN, CARD_H_MAX));
+    // Card height follows the card's content, which is what these two change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleNodes, effLens]);
+
+  /* A packed grid can be bigger than the canvas — 35 cards is more card than
+     an 820px console has room for — and the honest answer to that is to zoom
+     out to it, never to let the cards overlap. Once the reader touches the
+     zoom themselves the canvas stops re-fitting under them; Reset layout hands
+     the fitting back. */
+  const fittedKey = useRef<string | null>(null);
+  const layoutKey = `${visibleNodes.length}:${effLayout}:${mode ?? "flow"}:${Math.round(canvas.w)}:${Math.round(canvas.h)}:${packed ? "packed" : "authored"}`;
+  useEffect(() => {
+    if (userZoomed.current || !canvas.w || fittedKey.current === layoutKey) return;
+    fittedKey.current = layoutKey;
+    const z = fitScale >= 1 ? 1 : clamp(Number(fitScale.toFixed(2)), 0.3, 2.5);
+    if (z === zoomRef.current) return;
+    setPan({ x: 0, y: 0 });
+    setControls({ zoom: z });
+    // Reading the current zoom through a ref: this fires when the LAYOUT
+    // changes, not every time the number it writes comes back round.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey, fitScale]);
 
   /* A viewport request is one-shot: obey it, then clear it, so the same button
      works twice in a row. */
@@ -502,11 +755,18 @@ export function LineageGraph({
     }
     const r = canvasRef.current?.getBoundingClientRect();
     if (!r) return;
+    /* A card may be dropped anywhere the reader can see, and no further: half
+       a real card inside the viewport, which at a zoomed-out scale reaches
+       past the canvas box itself. Guessed margins used to cut the reach short
+       on a wide canvas and let a card hang out on a narrow one. */
+    const reach = 0.5 / Math.max(zoom, 0.05);
+    const edgeX = r.width ? CARD_HALF / r.width : 0.04;
+    const edgeY = r.height ? cardH / 2 / r.height : 0.05;
     setMoved((m) => ({
       ...m,
       [d.id!]: {
-        x: clamp(d.origin.x + dx / (r.width * zoom), 0.04, 0.96),
-        y: clamp(d.origin.y + dy / (r.height * zoom), 0.05, 0.95),
+        x: clamp(d.origin.x + dx / (r.width * zoom), 0.5 - reach + edgeX, 0.5 + reach - edgeX),
+        y: clamp(d.origin.y + dy / (r.height * zoom), 0.5 - reach + edgeY, 0.5 + reach - edgeY),
       },
     }));
   };
@@ -546,7 +806,10 @@ export function LineageGraph({
     onSelectNode?.(id);
   };
 
-  const setZoom = (z: number) => setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
+  const setZoom = (z: number) => {
+    userZoomed.current = true;
+    setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
+  };
 
   /* ── keyboard traversal ─────────────────────────────────────────────────
      The canvas was mouse-only: pointer handlers everywhere and no way to walk
@@ -554,8 +817,6 @@ export function LineageGraph({
      them in reading order and Enter opens one), and the arrow keys move focus
      to the nearest card in that direction, which is how a reader follows a
      lineage without dragging. */
-  const nodeRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
   const ARROWS: Record<string, "left" | "right" | "up" | "down"> = {
     ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down",
   };
@@ -623,6 +884,22 @@ export function LineageGraph({
   const hiddenCount = nodes.length - passing.length;
   const cappedCount = passing.length - visibleNodes.length;
   const quietEdges = visibleEdges.length > LABEL_LIMIT;
+  /** Does the drawn graph fit the canvas box? A grid too big for it is drawn
+      at its own size and zoomed to fit, so nothing about it is clamped. */
+  const inFrame = fitScale >= 1;
+
+  /* Card boxes in viewBox units, so an edge label can be slid along its own
+     edge to a spot that is not on top of a card. The edge layer is a 1000×560
+     box stretched over the canvas, so the two axes scale by different amounts
+     and a card is not the same shape in it that it is on screen. */
+  const cardVB = {
+    w: canvas.w ? (CARD_W / canvas.w) * VB_W : CARD_W,
+    h: canvas.h ? (cardH / canvas.h) * VB_H : cardH,
+  };
+  const cardSpots = visibleNodes.map((n) => px(n));
+  const clearOfCards = (x: number, y: number, halfW: number, halfH: number) =>
+    !cardSpots.some((c) =>
+      Math.abs(c.x - x) < cardVB.w / 2 + halfW && Math.abs(c.y - y) < cardVB.h / 2 + halfH);
   const legendRelations = mode === "overview"
     ? REL_ORDER.filter((rel) => visibleEdges.some((edge) => edge.rel === rel))
     : mode ? LINEAGE_RELATIONS : REL_ORDER;
@@ -769,15 +1046,29 @@ export function LineageGraph({
                     // is set in the mono face: 6.2 units per character is that
                     // face's advance at this size, plus the chip's padding.
                     const w = label.length * 6.2 + 11;
+                    /* Slide the chip along its own edge to the first spot
+                       clear of every card, instead of printing the relation
+                       over the document it describes. Nothing clear anywhere:
+                       it sits at the middle, which is where it always sat. */
+                    const on = (t: number) => {
+                      const u = 1 - t;
+                      return {
+                        x: u * u * u * p1.x + 3 * u * u * t * midX + 3 * u * t * t * midX + t * t * t * p2.x,
+                        y: u * u * u * p1.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p2.y,
+                      };
+                    };
+                    const spot = [0.5, 0.38, 0.62, 0.28, 0.72, 0.18, 0.82]
+                      .map(on).find((q) => clearOfCards(q.x, q.y - 9, w / 2, 8))
+                      ?? { x: midX, y: midY };
                     return (
                       <g pointerEvents="none">
                         <rect
-                          x={midX - w / 2} y={midY - 17} width={w} height={16} rx={3}
+                          x={spot.x - w / 2} y={spot.y - 17} width={w} height={16} rx={3}
                           fill="#ffffff" fillOpacity={0.94}
                           stroke={s.color} strokeOpacity={0.4} vectorEffect="non-scaling-stroke"
                         />
                         <text
-                          x={midX} y={midY - 5.5} textAnchor="middle" fontSize="11"
+                          x={spot.x} y={spot.y - 5.5} textAnchor="middle" fontSize="11"
                           fill={s.color} className="font-term"
                         >
                           {label}
@@ -831,12 +1122,20 @@ export function LineageGraph({
                   onMouseEnter={() => setHover(n.id)}
                   onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
                   style={{
-                    // The card is CARD_W wide and centred on its position, so
-                    // its centre is held at least half a card inside the
-                    // canvas. Without this the rightmost timeline column hung
-                    // 26px past the canvas on a narrow console.
-                    left: `clamp(${CARD_HALF}px, ${p.x * 100}%, calc(100% - ${CARD_HALF}px))`,
-                    top: `clamp(${CARD_HALF_H}px, ${p.y * 100}%, calc(100% - ${CARD_HALF_H}px))`,
+                    /* The card is CARD_W wide and centred on its position, so
+                       while the graph fits the canvas its centre is held at
+                       least half a card inside — without this the rightmost
+                       timeline column hung 26px past the canvas on a narrow
+                       console. A grid too big for the canvas is a different
+                       case: it is drawn at its own size and zoomed to fit, and
+                       clamping it back inside would stack the outer cards on
+                       the edges, which is the overlap this is here to stop. */
+                    left: inFrame
+                      ? `clamp(${CARD_HALF}px, ${p.x * 100}%, calc(100% - ${CARD_HALF}px))`
+                      : `${p.x * 100}%`,
+                    top: inFrame
+                      ? `clamp(${cardH / 2}px, ${p.y * 100}%, calc(100% - ${cardH / 2}px))`
+                      : `${p.y * 100}%`,
                     transform: "translate(-50%, -50%)",
                     opacity: dim ? 0.22 : 1,
                     backgroundColor: NODE_CREAM,
@@ -959,14 +1258,30 @@ export function LineageGraph({
           </div>
         )}
 
-        {/* hover tooltip — outside the transform so it stays legible at any zoom */}
+        {/* hover tooltip — outside the transform so it stays legible at any
+            zoom, which means it has to do the transform's arithmetic itself:
+            the card it labels has been scaled about the canvas centre and
+            panned, and a tooltip printed at the raw fraction would sit away
+            from its card at every scale but 100%. */}
         {hover && byId[hover] && visibleIds.has(hover) && (() => {
           const n = byId[hover];
           const p = posOf(n);
+          const atX = (0.5 + (p.x - 0.5) * zoom) * 100;
+          const atY = (0.5 + (p.y - 0.5) * zoom) * 100;
+          const half = (cardH / 2) * zoom;
+          // Above the card, unless the card is up against the top of the
+          // canvas and there is nothing above it to be in.
+          const under = (atY / 100) * canvas.h + pan.y - half < 56;
+          const off = pan.y + (under ? half + 8 : -half - 8);
           return (
             <div
-              className="pointer-events-none absolute z-20 max-w-[240px] -translate-x-1/2 rounded-[4px] border border-ink/20 bg-paper px-2.5 py-1.5"
-              style={{ left: `clamp(${CARD_HALF}px, ${p.x * 100}%, calc(100% - ${CARD_HALF}px))`, top: `calc(${p.y * 100}% - 56px)` }}
+              className={`pointer-events-none absolute z-20 max-w-[240px] -translate-x-1/2 rounded-[4px] border border-ink/20 bg-paper px-2.5 py-1.5 ${
+                under ? "" : "-translate-y-full"
+              }`}
+              style={{
+                left: `clamp(120px, calc(${atX}% + ${pan.x}px), calc(100% - 120px))`,
+                top: `calc(${atY}% + ${off}px)`,
+              }}
             >
               <Truncate lines={2} className="text-[12px] font-semibold text-ink">{n.title}</Truncate>
               <div className="truncate font-term text-[10.5px] text-ink/70">
