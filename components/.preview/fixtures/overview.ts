@@ -14,7 +14,7 @@ import {
   LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, repeat,
 } from "./stress";
 
-const STATS: OverviewStats = { changes: 47, factsReview: 6, flowsRunning: 3 };
+const STATS: OverviewStats = { changes: 47, factsReview: 6, workflowsActive: 3 };
 
 const DIGEST: DigestTopic[] = [
   {
@@ -102,7 +102,7 @@ const DEFAULT: OverviewData = {
     `isEmpty` check fires — the canvas is not faking the empty state. */
 const EMPTY: OverviewData = {
   personName: "Dana",
-  stats: { changes: 0, factsReview: 0, flowsRunning: 0 },
+  stats: { changes: 0, factsReview: 0, workflowsActive: 0 },
   digest: [], activity: [], docs: [], sources: [],
   activityPollMs: 0,
 };
@@ -142,7 +142,7 @@ function strained(extreme: boolean): OverviewData {
 
   return {
     personName: extreme ? LONG_WORD : LONG_NAME,
-    stats: { changes: HUGE_NUMBER, factsReview: HUGE_NUMBER, flowsRunning: HUGE_NUMBER },
+    stats: { changes: HUGE_NUMBER, factsReview: HUGE_NUMBER, workflowsActive: HUGE_NUMBER },
     digest, activity, docs, sources,
     activityPollMs: 0,
   };

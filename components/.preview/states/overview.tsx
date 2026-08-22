@@ -147,15 +147,15 @@ export const OVERVIEW: ComponentSpec[] = [
     states: [
       { id: "default", label: "Default", node: <OverviewStatTiles stats={OVERVIEW_STATS} /> },
       { id: "zeroes", label: "All zero (idle workspace)", node: (
-        <OverviewStatTiles stats={{ changes: 0, factsReview: 0, flowsRunning: 0 }} />) },
+        <OverviewStatTiles stats={{ changes: 0, factsReview: 0, workflowsActive: 0 }} />) },
       { id: "loading", label: "Loading", node: <OverviewStatTiles stats={OVERVIEW_STATS} loading /> },
       { id: "offline", label: "Offline (no API)", node: <OverviewStatTiles stats={null} offline /> },
       { id: "noswatch", label: "Accent line off", node: <OverviewStatTiles stats={OVERVIEW_STATS} swatch={false} /> },
       { id: "bignumbers", label: "Overflow: huge numbers", node: (
-        <OverviewStatTiles stats={{ changes: 1284905, factsReview: 998877, flowsRunning: 1234567 }} />) },
+        <OverviewStatTiles stats={{ changes: 1284905, factsReview: 998877, workflowsActive: 1234567 }} />) },
       { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: <OverviewStatTiles stats={OVERVIEW_STATS} /> },
       { id: "stress", label: "Volume: nine-figure counts", node: (
-        <OverviewStatTiles stats={{ changes: 128490512, factsReview: 99887766, flowsRunning: 412345678 }} />) },
+        <OverviewStatTiles stats={{ changes: 128490512, factsReview: 99887766, workflowsActive: 412345678 }} />) },
     ],
   },
   {

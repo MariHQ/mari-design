@@ -165,7 +165,7 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
              drawing a fourth relaid the whole dashboard when the row rewrapped
              on load. Captions are this page's own literals (OverviewStatTiles),
              so they render. */
-          stats={["Changes", "Facts to review", "Flows running"]}
+          stats={["Changes", "Facts to review", "Workflows active"]}
           sections={["Recent docs", "Source pulse", "This week's digest", "Live activity"]}
           /* The one header control is a date-range picker whose label IS the
              range — a value, so it stays a bar. */

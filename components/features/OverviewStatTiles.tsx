@@ -6,7 +6,7 @@ import { IconRing, type IconRingTone } from "../data-display/IconRing";
 
 /* Overview — Headline stat tiles ─────────────────────────────────────────
    Three big-number tiles summarizing the week: changes, facts to review,
-   flows running. Each is click-navigable to its owning area. Composes the
+   workflows active. Each is click-navigable to its owning area. Composes the
    catalog <Stat> (with an IconRing icon) plus a SOLID brand-colored accent
    line on the tile's left edge (moss / espelette / biscay-2). The old
    pencil-hatch swatch read as a texture, not as a category marker.
@@ -25,12 +25,12 @@ const STAT_ICONS: Record<StatIconKey, ReactNode> = {
   check: <CheckCircle2 size={17} />,
   play: <Play size={17} />,
 };
-const STAT_AREA: Record<StatIconKey, string> = { clipboard: "knowledge", check: "facts", play: "flows" };
+const STAT_AREA: Record<StatIconKey, string> = { clipboard: "knowledge", check: "facts", play: "workflows" };
 
 export type OverviewStats = {
   changes: number;
   factsReview: number;
-  flowsRunning: number;
+  workflowsActive: number;
 };
 
 export type OverviewStatTilesProps = {
@@ -58,7 +58,7 @@ export function OverviewStatTiles({
   const tiles: Tile[] = [
     { key: "clipboard", label: "Changes", tone: "green", num: live ? stats!.changes : null, sub: live ? "This week" : null },
     { key: "check", label: "Facts to review", tone: "red", num: live ? stats!.factsReview : null, sub: live ? (stats!.factsReview > 0 ? "Awaiting verification" : "All verified") : null },
-    { key: "play", label: "Flows running", tone: "blue", num: live ? stats!.flowsRunning : null, sub: live ? (stats!.flowsRunning > 0 ? "All healthy" : "Idle") : null },
+    { key: "play", label: "Workflows active", tone: "blue", num: live ? stats!.workflowsActive : null, sub: live ? (stats!.workflowsActive > 0 ? "Codified from runs" : "None yet") : null },
   ];
 
   return (
