@@ -8,6 +8,8 @@ import { CheckCircle2, ChevronDown, CircleAlert, Database, GitBranch, RefreshCw,
 import { useState } from "react";
 import { useWrite } from "../actions/useWrite";
 import { WriteError } from "../feedback/WriteError";
+import { Drawer } from "../layout/Drawer";
+import { Spinner } from "../data-display/Spinner";
 
 const STATES = [
   { id: "default", label: "Default" },
@@ -101,7 +103,84 @@ export type TrajectoriesActions = {
   deleteWorkflow?: (workflowId: number) => void | Promise<void>;
   suggestSplitName?: (trajectoryId: number) => string | Promise<string>;
   splitWorkflow?: (trajectoryId: number, name: string) => number | Promise<number>;
+  harvestCandidates?: () => WorkflowHarvestCandidate[] | Promise<WorkflowHarvestCandidate[]>;
+  codifyCandidate?: (candidate: WorkflowHarvestCandidate) => number | Promise<number>;
 };
+
+export type WorkflowHarvestCandidate = {
+  seedTrajectoryId: number;
+  name: string;
+  reason: string;
+  observationIds: number[];
+  prompts: string[];
+  existingWorkflowId: number | null;
+  accepted?: boolean;
+};
+
+function WorkflowHarvestWizard({ actions }: { actions?: TrajectoriesActions }) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"intro" | "scanning" | "review" | "done">("intro");
+  const [candidates, setCandidates] = useState<WorkflowHarvestCandidate[]>([]);
+  const scan = useWrite();
+  const create = useWrite();
+  const start = async () => {
+    setStep("scanning");
+    const rows = await scan.runFor(actions?.harvestCandidates && (() => actions.harvestCandidates!()));
+    if (rows) {
+      setCandidates(rows.map((row) => ({ ...row, accepted: true })));
+      setStep("review");
+    } else setStep("intro");
+  };
+  const finish = async () => {
+    const selected = candidates.filter((candidate) => candidate.accepted && candidate.name.trim());
+    const result = await create.runFor(async () => {
+      let count = 0;
+      for (const candidate of selected) {
+        await actions?.codifyCandidate?.({ ...candidate, name: candidate.name.trim() });
+        count += 1;
+      }
+      return count;
+    });
+    if (result !== undefined) setStep("done");
+  };
+  const close = () => { if (!scan.busy && !create.busy) { setOpen(false); setStep("intro"); setCandidates([]); } };
+  return <>
+    <Button compact onClick={() => setOpen(true)}><GitBranch size={13} /> Harvest new workflows</Button>
+    <Drawer open={open} onClose={close} title="Harvest new workflows" subtitle="Guided workflow discovery" closable={!scan.busy && !create.busy}
+      footer={step === "review" ? <>
+        <Button onClick={close}>Cancel</Button>
+        <Button variant="primary" disabled={create.busy || !candidates.some((candidate) => candidate.accepted && candidate.name.trim())} onClick={() => void finish()}>
+          Codify selected
+        </Button>
+      </> : step === "done" ? <Button variant="primary" onClick={close}>Done</Button> : undefined}>
+      {step === "intro" && <div className="space-y-4">
+        <p className="text-[13px] leading-5 text-ink/70">Mari will inspect recent assistant turns and propose distinct reusable workflows. You review every candidate before anything is created.</p>
+        <div className="rounded-[7px] border border-ink/10 bg-ink/[0.02] p-3 text-[12px] text-ink/65">The scan considers unclustered turns and narrower intents inside existing clusters. Greetings and one-off chatter are excluded.</div>
+        <Button variant="primary" disabled={scan.busy} onClick={() => void start()}>Analyze recent turns</Button>
+        <WriteError onDismiss={() => scan.setFailed(null)}>{scan.failed}</WriteError>
+      </div>}
+      {step === "scanning" && <div className="flex flex-col items-center gap-3 py-14 text-center"><Spinner label="Finding workflow candidates" /><strong className="text-[13px]">Clustering observed intent</strong><span className="text-[12px] text-ink/60">Comparing recent turns with current workflow clusters…</span></div>}
+      {step === "review" && <div className="space-y-3">
+        <p className="text-[12px] text-ink/65">{candidates.length ? `${candidates.length} candidate${candidates.length === 1 ? "" : "s"} found. Rename, inspect, or skip each one.` : "No distinct workflow candidates were found in recent turns."}</p>
+        {candidates.map((candidate, index) => <Card key={`${candidate.seedTrajectoryId}-${index}`} className={candidate.accepted ? "" : "opacity-60"}>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" checked={Boolean(candidate.accepted)} onChange={(event) => setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, accepted: event.target.checked } : row))} className="mt-1" />
+            <span className="min-w-0 flex-1">
+              <input aria-label={`Candidate ${index + 1} name`} value={candidate.name} onChange={(event) => setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} className="w-full rounded border border-ink/15 bg-paper px-2 py-1.5 text-[13px] font-semibold" />
+              <span className="mt-2 block text-[12px] leading-5 text-ink/65">{candidate.reason}</span>
+            </span>
+          </label>
+          <details className="mt-3"><summary className="cursor-pointer text-[11px] font-semibold text-biscay">{candidate.observationIds.length} supporting turn{candidate.observationIds.length === 1 ? "" : "s"}</summary>
+            <ul className="mt-2 space-y-1 text-[11px] text-ink/65">{candidate.prompts.map((prompt, promptIndex) => <li key={promptIndex} className="rounded bg-ink/[0.025] px-2 py-1.5">{prompt}</li>)}</ul>
+          </details>
+          {candidate.existingWorkflowId && <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-rust">Will split from workflow {candidate.existingWorkflowId}</p>}
+        </Card>)}
+        <WriteError onDismiss={() => create.setFailed(null)}>{create.failed}</WriteError>
+      </div>}
+      {step === "done" && <div className="py-12 text-center"><CheckCircle2 className="mx-auto text-olive" size={28} /><h3 className="mt-3 text-[15px] font-semibold">Workflows codified</h3><p className="mt-1 text-[12px] text-ink/65">The selected candidates are now available to chat, Slack, and other agent destinations.</p></div>}
+    </Drawer>
+  </>;
+}
 
 function PhaseRail({ phases }: { phases: TrajectoryPhase[] }) {
   if (!phases.length) return <p className="text-[12px] text-ink/70">No tool phases were observed.</p>;
@@ -367,6 +446,7 @@ function TrajectoriesPage({ data, loading = false, error = null, actions, chrome
               </label>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[12px] text-ink/70">Showing {pageStart}-{pageEnd} of {data.total}</span>
+                <WorkflowHarvestWizard actions={actions} />
                 <Button compact disabled={reconciliation.busy} onClick={() => void reconciliation.runFor(actions?.reconcileStale && (() => actions.reconcileStale!()))}>
                   <RefreshCw size={13} /> Reconcile stale caches{staleCaches ? ` (${staleCaches})` : ""}
                 </Button>
