@@ -1,46 +1,30 @@
 import { useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
-import type { PageModule, PageProps } from "./types";
-import { PageFrame, navFor, SPLIT } from "./PageFrame";
-import { AnswerCard, type Answer, type AnswerActions } from "../features/AnswerCard";
-import { PageHeader, Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
+import { AnswerCard, type Answer, type AnswerActions } from "./AnswerCard";
+import { Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
+import { SPLIT } from "../tokens/pagegrid";
 import { MarkdownEditor } from "../data-display/MarkdownEditor";
 import { Pagination, ResultCount, usePaged } from "../data-display/Pagination";
 import { ShowRest } from "../data-display/ShowRest";
-import { SkeletonPage } from "../data-display/Skeletons";
 import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite, why } from "../actions/useWrite";
 
-/* Approved answers (pages/answers.md). Curate the answers bots serve verbatim.
-   A stat strip, a status-filter tab strip, a list of AnswerCards, and a right
-   rail (coverage + how-serving-works).
+/* Approved answers: the answers bots serve verbatim.
+   A stat strip, a status-filter tab strip, a list of AnswerCards, and a
+   supporting band (coverage + how-serving-works) across the top.
 
-   This page is a pure presenter: it holds no demo content. Answers, coverage
-   gaps, and the harvest wizard's state all arrive in `data`, so a workspace
-   with nothing approved renders the empty state rather than someone's invented
-   library. The design canvas supplies the same shape from
-   `.preview/fixtures/answers.ts`. */
+   This used to be its own page at /answers. It is a TAB of Workflows now, for
+   the reason the two belong together: an approved answer is what an observed
+   workflow is promoted into, and reviewing the run and curating the answer it
+   produced were two pages apart. Lifted here as a feature so the page that
+   hosts it stays a page — WorkflowsPage owns the frame, the header and the tab
+   strip, and this owns everything below.
 
-const STATES = [
-  { id: "default", label: "Default · all" },
-  { id: "approved", label: "Approved tab" },
-  { id: "drafts", label: "Drafts tab" },
-  { id: "retired", label: "Retired tab" },
-  { id: "single-answer", label: "Single answer" },
-  { id: "coverage", label: "Coverage rail" },
-  { id: "harvest-select", label: "Harvest · select sources" },
-  { id: "harvest-scan", label: "Harvest · scanning" },
-  { id: "harvest-review", label: "Harvest · review candidates" },
-  { id: "harvest-importing", label: "Harvest · importing" },
-  { id: "harvest-done", label: "Harvest · done" },
-  { id: "filtered", label: "Filtered · empty" },
-  { id: "empty", label: "No answers" },
-  { id: "loading", label: "Loading" },
-  { id: "error", label: "Error / service unavailable" },
-  { id: "overflow", label: "Overflow · long text" },
-  { id: "stress", label: "Stress · extremes" },
-] as const;
+   It holds no demo content. Answers, coverage gaps, and the harvest wizard's
+   state all arrive in `data`, so a workspace with nothing approved renders the
+   empty state rather than someone's invented library. The design canvas
+   supplies the same shape from `.preview/fixtures/workflows.ts`. */
 
 export type AnswersFilter = "all" | "approved" | "drafts" | "retired";
 
@@ -705,21 +689,30 @@ function Body({ data, error, actions, mobile, composing, onCompose, onCloseCompo
   );
 }
 
-function AnswersPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<AnswersData, AnswersActions>) {
-  /* The composer is a mode of this page, not a property of the library: it
+/** The Approved answers tab.
+
+    Everything AnswersPage rendered below its PageHeader, plus the tab's own
+    action row: the page header above now names Workflows, so "Harvest
+    questions" and "New answer" belong to the tab that owns them (§2, §13). */
+export function ApprovedAnswers({ data, error = null, actions, mobile = false }: {
+  data: AnswersData;
+  error?: string | null;
+  actions?: AnswersActions;
+  mobile?: boolean;
+}) {
+  /* The composer is a mode of this tab, not a property of the library: it
      opens on "" for a blank answer, or on the text of a coverage gap. */
   const [composing, setComposing] = useState<string | null>(null);
 
-  /* The wizard is a mode of this page. `data.pane` can pin it open on a given
-     step (that is how the canvas reviews each one); otherwise the header
-     button opens it at the beginning. */
+  /* The wizard is a mode of this tab. `data.pane` can pin it open on a given
+     step (that is how the canvas reviews each one); otherwise the button above
+     opens it at the beginning. */
   const pinned = data.pane.kind === "harvest" ? data.pane.harvest : null;
   const [harvesting, setHarvesting] = useState<Harvest | null>(null);
   const harvest = harvesting ?? pinned;
 
   /* Same shape for the coverage pane: `data.pane` can route straight to it,
-     and the rail's "See all" reaches it from inside the page. It used to be
-     reachable only by routing, which nothing did. */
+     and the band's "See all" reaches it from inside the tab. */
   const [seeAllCoverage, setSeeAllCoverage] = useState(false);
   const [seenPaneKind, setSeenPaneKind] = useState(data.pane.kind);
   if (seenPaneKind !== data.pane.kind) {
@@ -734,79 +727,48 @@ function AnswersPage({ data, loading = false, error = null, actions, chrome, mob
      always offered the same three places (§2). */
   const harvestSources = data.harvestSources ?? [];
 
-  const headerActions = (
-    <>
-      {harvestSources.length > 0 && (
-        <Button
-          variant="default"
-          compact
-          onClick={() => setHarvesting({
-            phase: "select",
-            sources: harvestSources,
-            scanning: "Reading recent threads…",
-            candidates: [],
-          })}
-        >
-          <Sparkles size={15} /> Harvest questions
-        </Button>
-      )}
-      <Button variant="primary" compact onClick={() => setComposing("")}><Plus size={15} /> New answer</Button>
-    </>
-  );
   return (
-    <PageFrame chrome={chrome} active={navFor("answers")} title="Answers" mobile={mobile}>
-      {loading ? (
-        <SkeletonPage
-          variant="list"
-          eyebrow="Knowledge"
-          title="Approved answers"
-          description="Curate the answers bots and teams serve verbatim: no generation, no drift."
-          actions={["Harvest questions", { label: "New answer", variant: "primary" }]}
-          stats={["Approved", "Drafts", "Served this week"]}
-          tabs={["All", "Approved", "Drafts", "Retired"]}
-          /* A BAND, not a rail: this page's supporting cards run across the top
-             on the 1fr/320px plumb line and the answer list below gets the
-             whole container width (§11). Drawn as a rail, the skeleton claimed
-             a right column the load then threw away. */
-          rail={["Coverage", "How serving works"]}
-          railPlacement="above"
-          mobile={mobile}
-        />
-      ) : (
-      <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8">
-        <PageHeader
-          eyebrow="Knowledge"
-          title="Approved answers"
-          description="Curate the answers bots and teams serve verbatim: no generation, no drift."
-          actions={mobile ? undefined : headerActions}
-        />
-        {mobile && <div className="mt-4 flex flex-wrap items-center gap-2">{headerActions}</div>}
-        <div className="mt-6">
-          <Body
-            data={data}
-            error={error}
-            actions={actions}
-            mobile={mobile}
-            composing={composing}
-            onCompose={setComposing}
-            onCloseComposer={() => setComposing(null)}
-            harvest={harvest}
-            onCloseHarvest={() => setHarvesting(null)}
-            isCoverage={isCoverage}
-            onSeeAllCoverage={() => setSeeAllCoverage(true)}
-            onCloseCoverage={seeAllCoverage ? () => setSeeAllCoverage(false) : undefined}
-          />
+    <div className="flex flex-col gap-5">
+      {/* The tab's toolbar. Its actions sit top right of the content they act
+          on, matching the Observed tab's own toolbar row (§2, §13). */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 max-w-[70ch] text-[13px] text-ink/70">
+          Curate the answers bots and teams serve verbatim: no generation, no drift.
+        </p>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {harvestSources.length > 0 && (
+            <Button
+              variant="default"
+              compact
+              onClick={() => setHarvesting({
+                phase: "select",
+                sources: harvestSources,
+                scanning: "Reading recent threads\u2026",
+                candidates: [],
+              })}
+            >
+              <Sparkles size={15} /> Harvest questions
+            </Button>
+          )}
+          <Button variant="primary" compact onClick={() => setComposing("")}><Plus size={15} /> New answer</Button>
         </div>
       </div>
-      )}
-    </PageFrame>
+      <Body
+        data={data}
+        error={error}
+        actions={actions}
+        mobile={mobile}
+        composing={composing}
+        onCompose={setComposing}
+        onCloseComposer={() => setComposing(null)}
+        harvest={harvest}
+        onCloseHarvest={() => setHarvesting(null)}
+        isCoverage={isCoverage}
+        onSeeAllCoverage={() => setSeeAllCoverage(true)}
+        onCloseCoverage={seeAllCoverage ? () => setSeeAllCoverage(false) : undefined}
+      />
+    </div>
   );
 }
 
-export const page: PageModule<AnswersData, AnswersActions> = {
-  id: "answers",
-  title: "Answers",
-  route: "/answers",
-  component: AnswersPage,
-  states: STATES.map((s) => ({ ...s })),
-};
+export default ApprovedAnswers;

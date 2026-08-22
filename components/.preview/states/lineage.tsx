@@ -212,6 +212,8 @@ export const LINEAGE: ComponentSpec[] = [
       { id: "single", label: "One orphan node, no edges", node: <LineageGraph nodes={LONE_NODES} edges={[]} focalId="solo" /> },
       { id: "overflow", label: "Overflow: absurd titles, unbreakable string, long owners",
         node: <LineageGraph nodes={OVER_NODES} edges={OVER_EDGES} focalId="n1" /> },
+      { id: "capped", label: "Capped: a cap the graph exceeds, counted in the header",
+        node: <LineageGraph nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} focalId="n1" maxNodes={4} /> },
       { id: "stress", label: "Volume: 150 nodes, 400 edges (capped, decluttered, counted)",
         node: <LineageGraph nodes={VOL_NODES} edges={VOL_EDGES} focalId="v0" /> },
       { id: "stress-trace", label: "Volume: 150 nodes, downstream trace from the hub node",
@@ -225,6 +227,17 @@ export const LINEAGE: ComponentSpec[] = [
     id: "LineageToolbar", title: "LineageToolbar", width: 900,
     states: [
       { id: "default", label: "Default (three rows: filters / view / actions)", node: <LineageToolbar nodes={LINEAGE_NODES} /> },
+      { id: "volume", label: "Volume readout: capped, with the way to draw more",
+        node: <LineageToolbar nodes={LINEAGE_NODES} volume={{ shown: 4, matching: 9, total: 128, cap: 4 }} volumeStep={35} /> },
+      { id: "views", label: "Saved views, removable (confirm in place)",
+        node: <LineageToolbar
+          nodes={LINEAGE_NODES}
+          views={[
+            { id: 1, name: "Customer-facing only", state: '{"status":"all"}' },
+            { id: 2, name: "Warnings, timeline", state: '{"status":"warnings"}' },
+          ]}
+          onSaveView={() => {}}
+          onDeleteView={() => {}} /> },
       { id: "loading", label: "Loading skeleton", node: <LineageToolbar nodes={[]} loading /> },
       { id: "empty", label: "No nodes (no sources to filter by)", node: <LineageToolbar nodes={[]} /> },
       { id: "overflow", label: "Overflow: many long source names", node: <LineageToolbar nodes={OVER_NODES.concat(LINEAGE_NODES)} /> },
@@ -301,6 +314,10 @@ export const LINEAGE: ComponentSpec[] = [
     id: "LineageGroupDrawer", title: "LineageGroupDrawer", width: 460,
     states: [
       { id: "default", label: "Default roll-up bucket", node: <LineageGroupDrawer {...LINEAGE_GROUP} nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} /> },
+      { id: "expandable", label: "Rolled up, with the way to unfold it on the graph",
+        node: <LineageGroupDrawer {...LINEAGE_GROUP} nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} onExpandInPlace={() => {}} onCollapseInPlace={() => {}} /> },
+      { id: "expanded", label: "Unfolded on the graph, with the way to roll it back up",
+        node: <LineageGroupDrawer {...LINEAGE_GROUP} nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} expandedInPlace onExpandInPlace={() => {}} onCollapseInPlace={() => {}} /> },
       { id: "single", label: "One member", node: <LineageGroupDrawer groupId={LINEAGE_GROUP.groupId} totalMembers={1} members={MANY_MEMBERS.slice(0, 1)} nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} /> },
       { id: "many", label: "Far too many members", node: <LineageGroupDrawer groupId={LINEAGE_GROUP.groupId} totalMembers={248} members={MANY_MEMBERS} nodes={LINEAGE_NODES} edges={LINEAGE_EDGES} /> },
       { id: "loading", label: "Loading skeleton", node: <LineageGroupDrawer groupId={LINEAGE_GROUP.groupId} totalMembers={0} members={[]} nodes={[]} edges={[]} loading /> },

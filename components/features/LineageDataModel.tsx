@@ -114,7 +114,7 @@ export const REL: Record<RelKey, RelStyle> = {
   references: { color: "#35549d", width: 1.8, code: "REF", pattern: "Solid, thin", label: "References", out: "References", in: "Referenced by" },
   discussed: { color: "#bf4f2e", dash: "1 4", width: 2.2, code: "DISC", pattern: "Dotted", label: "Discussed in", out: "Discussed in", in: "Discusses" },
   derived: { color: "#43663c", dash: "9 4", width: 2.4, code: "DERIV", pattern: "Long dash", label: "Derived from", out: "Derived from", in: "Source of" },
-  translates: { color: "#6a5a9c", dash: "5 3 1 3", width: 2, code: "TRANS", pattern: "Dash dot", label: "Translates", out: "Translates", in: "Translated by" },
+  translates: { color: "#6a5a9c", dash: "5 3 1 3", width: 2, code: "LOC", pattern: "Dash dot", label: "Localization", out: "Localizes", in: "Localized by" },
   contradicts: { color: "#c8502e", dash: "3 3", width: 3.4, code: "CONTRA", pattern: "Short dash, heavy", label: "Contradicts", out: "Contradicts", in: "Contradicted by" },
   /* Machine-inferred, not authored: pgvector cosine similarity over document
      embeddings. Drawn thin and finely dotted so an inferred edge never reads
@@ -188,8 +188,16 @@ export type OverviewGraph = {
 
 /** Collapse a corpus into a small, stable overview. Similarity is omitted:
     an embedding-neighbour relationship is not lineage and otherwise becomes
-    the dominant source of cross-bucket noise at enterprise scale. */
-export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence = 0.8): OverviewGraph {
+    the dominant source of cross-bucket noise at enterprise scale.
+
+    `expanded` names the groups the reader has unfolded in place: those draw
+    their own member cards, and the links between those members — which the
+    roll-up has to hide, because inside one macro card there is nothing to draw
+    them between. Every other group stays one card. */
+export function buildOverviewGraph(
+  nodes: LNode[], edges: LEdge[], minConfidence = 0.8, expanded: Iterable<string> = [],
+): OverviewGraph {
+  const open = new Set(expanded);
   const membersByGroup = new Map<string, LNode[]>();
   for (const node of nodes.filter((n) => !n.macro)) {
     const key = overviewGroupId(node);
@@ -199,13 +207,31 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence
   const groups = [...membersByGroup.entries()].sort(([a], [b]) => a.localeCompare(b));
   const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(groups.length))));
   const rows = Math.max(1, Math.ceil(groups.length / cols));
-  const macroNodes = groups.map<LNode>(([group, members], index) => {
+  const slotOf = (index: number) => ({
+    x: cols === 1 ? 0.5 : 0.14 + (0.72 * (index % cols)) / (cols - 1),
+    y: rows === 1 ? 0.5 : 0.2 + (0.6 * Math.floor(index / cols)) / (rows - 1),
+  });
+
+  /* An unfolded group's members are laid out in a small square centred on the
+     slot its macro card held, so the reader can see which bucket opened. Past
+     the canvas's declutter threshold the lanes take over anyway; this is what
+     a small graph with one group open looks like. */
+  const CLUSTER = 0.15;
+  const unfolded = (members: LNode[], at: { x: number; y: number }): LNode[] => {
+    const side = Math.max(1, Math.ceil(Math.sqrt(members.length)));
+    const step = side === 1 ? 0 : CLUSTER / (side - 1);
+    return members.map((member, i) => ({
+      ...member,
+      x: clamp(at.x + step * ((i % side) - (side - 1) / 2), 0.06, 0.94),
+      y: clamp(at.y + step * (Math.floor(i / side) - (side - 1) / 2), 0.08, 0.92),
+    }));
+  };
+
+  const macroOf = (group: string, members: LNode[], at: { x: number; y: number }): LNode => {
     const source = members[0]?.source ?? "docs";
     const owners = new Map<string, number>();
     for (const member of members) if (member.owner) owners.set(member.owner, (owners.get(member.owner) ?? 0) + 1);
     const owner = [...owners].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
-    const col = index % cols;
-    const row = Math.floor(index / cols);
     return {
       id: `${MACRO_PREFIX}${group}`,
       source,
@@ -214,8 +240,8 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence
       icon: source,
       docKind: members[0]?.docKind ?? "page",
       group,
-      x: cols === 1 ? 0.5 : 0.14 + (0.72 * col) / (cols - 1),
-      y: rows === 1 ? 0.5 : 0.2 + (0.6 * row) / (rows - 1),
+      x: at.x,
+      y: at.y,
       date: members.map((n) => n.date ?? "").sort().slice(-1)[0],
       warn: members.some((n) => n.warn || n.orphan),
       owner,
@@ -228,19 +254,40 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence
       count: members.length,
       repo: group.startsWith("gh:") ? groupParts(group).repo : SOURCE_LABELS[source] ?? source,
     };
+  };
+
+  const drawnNodes: LNode[] = [];
+  groups.forEach(([group, members], index) => {
+    const at = slotOf(index);
+    if (open.has(group)) drawnNodes.push(...unfolded(members, at));
+    else drawnNodes.push(macroOf(group, members, at));
   });
 
   const groupOf = new Map<string, string>();
   for (const [group, members] of membersByGroup) for (const member of members) groupOf.set(member.id, group);
+  /* Which card an endpoint is drawn as: itself inside an unfolded group, the
+     macro card everywhere else. */
+  const drawnFor = (id: string): string | null => {
+    const group = groupOf.get(id);
+    if (!group) return null;
+    return open.has(group) ? id : `${MACRO_PREFIX}${group}`;
+  };
+
   const aggregate = new Map<string, LEdge>();
+  const direct: LEdge[] = [];
   for (const edge of edges) {
     if (edge.rel === "similar") continue;
     if (edge.llm && Number(edge.meta?.confidence ?? 0) < minConfidence) continue;
-    const fromGroup = groupOf.get(edge.from);
-    const toGroup = groupOf.get(edge.to);
-    if (!fromGroup || !toGroup || fromGroup === toGroup) continue;
-    const from = `${MACRO_PREFIX}${fromGroup}`;
-    const to = `${MACRO_PREFIX}${toGroup}`;
+    const from = drawnFor(edge.from);
+    const to = drawnFor(edge.to);
+    // `from === to` is a link inside one card: a rolled-up bucket's internal
+    // wiring, with nothing on the canvas to draw it between.
+    if (!from || !to || from === to) continue;
+    if (!from.startsWith(MACRO_PREFIX) && !to.startsWith(MACRO_PREFIX)) {
+      // Both ends are unfolded, so the real link is drawable as itself.
+      direct.push({ ...edge, from, to });
+      continue;
+    }
     const key = `${from}\u2192${to}:${edge.rel}`;
     const existing = aggregate.get(key);
     if (existing) existing.count = (existing.count ?? 1) + 1;
@@ -250,7 +297,7 @@ export function buildOverviewGraph(nodes: LNode[], edges: LEdge[], minConfidence
       dashed: edge.llm || edge.dashed,
     });
   }
-  return { nodes: macroNodes, edges: [...aggregate.values()], membersByGroup };
+  return { nodes: drawnNodes, edges: [...direct, ...aggregate.values()], membersByGroup };
 }
 
 /** A bounded semantic traversal. Edges are stored dependent -> source:
@@ -377,12 +424,24 @@ export type LineageControlState = {
       It lives here, with the other toolbar⇄canvas state, because the picking
       happens on the canvas and the button that armed it is in the toolbar. */
   path: string[] | null;
+  /** How many node cards the canvas may draw. `null` = the workspace cap the
+      page was given. Raising it is a reader's decision made in the toolbar and
+      obeyed by the canvas, which is why it sits here rather than in either. */
+  maxNodes: number | null;
+  /** Roll-up groups the reader has unfolded in place, so the overview draws
+      their members instead of one macro card. Ids are the group ids, not the
+      `grp:` macro node ids. */
+  expanded: string[];
+  /** A one-shot viewport request from the toolbar, obeyed and cleared by the
+      canvas: fit everything drawn, fit the focal node and its neighbours, or
+      drop the dragged positions and return to 100%. */
+  viewport: "fit" | "selection" | "reset" | null;
 };
 
 const DEFAULT_CONTROLS: LineageControlState = {
   query: "", sources: null, rels: null, status: "all",
   lens: "source", layout: "flow", scope: "all", zoom: 1, path: null,
-  asOf: null,
+  asOf: null, maxNodes: null, expanded: [], viewport: null,
 };
 
 let controlState: LineageControlState = DEFAULT_CONTROLS;

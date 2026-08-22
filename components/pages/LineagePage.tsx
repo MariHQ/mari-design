@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Network } from "lucide-react";
@@ -11,7 +11,7 @@ import { LineageEdgeDrawer } from "../features/LineageEdgeDrawer";
 import { LineageGroupDrawer } from "../features/LineageGroupDrawer";
 import { LineageAssertDrawer } from "../features/LineageAssertDrawer";
 import {
-  setLineageControls, overviewGroupId,
+  setLineageControls, getLineageControls, overviewGroupId, useLineageControls,
   type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
   type LayoutMode, type Lens, type LineageMode,
 } from "../features/LineageDataModel";
@@ -21,6 +21,8 @@ import { EmptyState } from "../data-display/EmptyState";
 import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Card, Chip, AvatarGroup, Breadcrumb } from "../index";
+import { buttonClasses } from "../actions/Button";
+import { Link } from "../navigation/Link";
 
 /* Product lineage (pages/lineage.md). The full-height graph "instrument":
    toolbar on top, the lineage canvas in the middle, the as-of time scrubber at
@@ -52,6 +54,9 @@ const STATES = [
   { id: "empty", label: "Empty / no graph" },
   { id: "overflow", label: "Overflow · long text" },
   { id: "stress", label: "Stress · extremes" },
+  { id: "crumbs", label: "Drilled in · trail back out" },
+  { id: "capped", label: "Capped · showing some of the graph" },
+  { id: "expanded", label: "Roll-up expanded on the graph" },
 ] as const;
 
 /** What the lineage instrument can DO. Every handler may throw and the control
@@ -79,8 +84,13 @@ export type LineageActions = {
   deriveLinks?: () => void | number | Promise<void | number>;
   /** Save the current filter/view state under a name. Omitted = the Views menu
       offers no "Save current view". Pair it with `data.views`, which is what
-      reads the saved views back. */
-  saveView?: (args: { name: string; state: string }) => void | Promise<void>;
+      reads the saved views back. Return the id the store gave it and the same
+      session can remove it again without waiting for a refetch. */
+  saveView?: (args: { name: string; state: string }) => void | number | Promise<void | number>;
+  /** Remove a saved view for good. Omitted = the Views menu offers no way to
+      remove one, so a workspace can accumulate saved views it cannot clear.
+      The toolbar confirms on the row before calling this. */
+  deleteView?: (args: { id: number; name: string }) => void | Promise<void>;
   /** Fetch one document's revision history, for whichever node the drawer is
       showing. Without it the History tab says history was not loaded rather
       than drawing an empty timeline. */
@@ -106,6 +116,10 @@ export type LineageDrawer =
       owners: { name: string; role: string }[];
       people: string[];
     };
+
+/** One step of the lineage trail. `href` is the view this crumb goes back to;
+    the last crumb is where the reader is and carries none. */
+export type LineageCrumb = { label: string; href?: string };
 
 /** A supporting card in the rail, carrying long text. Only the long-text
     states have one, which is why it is nullable. */
@@ -147,9 +161,17 @@ export type LineageData = {
   /** Saved views for this workspace, listed in the toolbar's Views menu.
       Omitted = only the built-in presets. */
   views?: GraphView[];
+  /** Roll-up groups to open unfolded on the canvas, e.g. from a deep link.
+      It seeds the shared control store the same way `search` does, and the
+      reader owns it from there: the drawer's "Expand on the graph" and the
+      canvas's Expanded chips both write to that store. */
+  expanded?: string[];
   drawer: LineageDrawer | null;
-  /** Trail above the instrument. null = none. */
-  crumbs: string[] | null;
+  /** Trail above the instrument, from the whole graph down to whatever the
+      reader has drilled into. Every crumb but the last carries the href that
+      undoes one step of the drill-down, so there is always a way back out;
+      `null` = nothing is drilled into, so there is no trail to draw. */
+  crumbs: LineageCrumb[] | null;
   extras: LineageExtras | null;
   /** The document currently being traced, shown as the header's secondary
       action. The label used to be a bare string ending in "↗" — an arrow
@@ -173,13 +195,20 @@ function railFor(data: LineageData, drawer: LineageDrawer | null): number | null
   return drawer.kind === "assert" ? 460 : 420;
 }
 
-function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal, onSelectGroupMember }: {
+function Drawer({
+  data, drawer, actions, onClose, focalId, onSetFocal, onSelectGroupMember,
+  expandedInPlace, onExpandInPlace, onCollapseInPlace,
+}: {
   data: LineageData; drawer: LineageDrawer | null;
   actions?: LineageActions;
   onClose?: () => void;
   focalId: string | null;
   onSetFocal: (nodeId: string) => void;
   onSelectGroupMember: (nodeId: string) => void;
+  /** Whether the open roll-up is already unfolded on the canvas. */
+  expandedInPlace: boolean;
+  onExpandInPlace: (groupId: string) => void;
+  onCollapseInPlace: (groupId: string) => void;
 }) {
   // Fixed desktop widths (CONVENTIONS §10). Mobile-first `w-full … lg:w-[N]`
   // made these drawers render mobile-style in the desktop canvas.
@@ -227,6 +256,9 @@ function Drawer({ data, drawer, actions, onClose, focalId, onSetFocal, onSelectG
         nodes={data.nodes}
         edges={data.edges}
         onSelectMember={onSelectGroupMember}
+        expandedInPlace={expandedInPlace}
+        onExpandInPlace={onExpandInPlace}
+        onCollapseInPlace={onCollapseInPlace}
         onClose={onClose}
       />
     );
@@ -338,6 +370,45 @@ function Body({ data, error, actions, mobile }: {
   };
   const overviewGroups = new Set(data.nodes.filter((node) => !node.macro).map(overviewGroupId)).size;
 
+  /* Unfolding a roll-up in place. The canvas reads the shared control store,
+     so the drawer's button and the canvas's own "Expanded" chips are two doors
+     onto one piece of state rather than two copies of it. */
+  const [controls, setControls] = useLineageControls();
+  const expandGroup = (groupId: string) => {
+    if (controls.expanded.includes(groupId)) return;
+    setControls({ expanded: [...controls.expanded, groupId] });
+  };
+  const collapseGroup = (groupId: string) => {
+    setControls({ expanded: controls.expanded.filter((g) => g !== groupId) });
+  };
+
+  /* What the canvas drew, so the toolbar can print an honest "showing N of M"
+     and offer to draw more. Held in a ref-equal state: the canvas reports on
+     every change and this must not turn that into a render loop. */
+  const [volume, setVolume] = useState<{ shown: number; matching: number; total: number; cap: number } | null>(null);
+  const onVolume = useCallback((next: { shown: number; matching: number; total: number; cap: number }) => {
+    setVolume((prev) => (prev && prev.shown === next.shown && prev.matching === next.matching
+      && prev.total === next.total && prev.cap === next.cap ? prev : next));
+  }, []);
+
+  /* Esc closes the open drawer, the exit its ✕ already offers to the mouse.
+     Not while the path finder is armed (Esc leaves path mode there, and the
+     toolbar says so on the button) and not while a field has focus, where Esc
+     belongs to whatever is being typed. */
+  const hasDrawer = (picked === undefined ? data.drawer : picked) !== null;
+  useEffect(() => {
+    if (!hasDrawer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || getLineageControls().path !== null) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      setPicked(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [hasDrawer]);
+
   /* One search on this page, and it lives in the toolbar. `data.search` seeds
      the shared control store the toolbar reads, so a deep-linked query still
      arrives, and re-seeds only when the data's query changes rather than
@@ -349,6 +420,17 @@ function Body({ data, error, actions, mobile }: {
     seededQuery.current = dataQuery;
     if (dataQuery !== null) setLineageControls({ query: dataQuery });
   }, [dataQuery]);
+
+  /* Same contract for the unfolded roll-ups: the data seeds them, the reader
+     owns them from there. Keyed on the joined ids so a fresh array with the
+     same groups in it does not undo an expansion the reader just collapsed. */
+  const dataExpanded = (data.expanded ?? []).join("\u0000");
+  const seededExpanded = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (seededExpanded.current === dataExpanded) return;
+    seededExpanded.current = dataExpanded;
+    setLineageControls({ expanded: dataExpanded ? dataExpanded.split("\u0000") : [] });
+  }, [dataExpanded]);
 
   const openNode = (id: string) => {
     const n = data.nodes.find((x) => x.id === id);
@@ -384,8 +466,23 @@ function Body({ data, error, actions, mobile }: {
     return (
       <div className="mt-6">
         <Card>
-          <EmptyState icon={<Network size={22} />} title="No lineage yet">
-            Connect a source and sync to build the document graph.
+          {/* An empty state that teaches the interface rather than reporting
+              an absence: it says what builds the graph and puts the first step
+              inside reach. A real anchor, so it opens in a new tab like any
+              other link (navigation/Link.tsx). */}
+          <EmptyState
+            icon={<Network size={22} />}
+            title="No lineage yet"
+            action={(
+              <Link href="/sources" className={buttonClasses({ variant: "primary" })}>
+                Connect a source
+              </Link>
+            )}
+          >
+            Mari draws this graph from what your sources already record: which
+            document a page was derived from, which pull request changed it,
+            which thread argued about it. Connect a source and sync, and the
+            first links appear on the next run.
           </EmptyState>
         </Card>
       </div>
@@ -404,11 +501,18 @@ function Body({ data, error, actions, mobile }: {
         focalId={focalId}
         onSetFocal={setFocal}
         onSelectGroupMember={selectGroupMember}
+        expandedInPlace={drawerFor?.kind === "group" && controls.expanded.includes(drawerFor.groupId)}
+        onExpandInPlace={expandGroup}
+        onCollapseInPlace={collapseGroup}
       />;
 
   return (
     <div className="mt-6 flex flex-col gap-5">
-      {data.crumbs && <Breadcrumb items={data.crumbs.map((label) => ({ label }))} />}
+      {/* The trail out of a drill-down. It is `data.crumbs` and not something
+          this page derives, because only the app knows what URL each step back
+          corresponds to — and a trail whose steps do not go anywhere is worse
+          than no trail. */}
+      {data.crumbs && data.crumbs.length > 0 && <Breadcrumb items={data.crumbs} />}
       <div className="rounded-[6px] border border-ink/15 bg-paper p-3" aria-label="Lineage question">
         <div className="flex flex-wrap items-center gap-2">
           {([
@@ -453,9 +557,12 @@ function Body({ data, error, actions, mobile }: {
               nodes={data.nodes}
               edges={data.edges}
               views={data.views}
+              volume={volume ?? undefined}
+              volumeStep={data.tuning.maxNodes}
               compact={mobile}
               onDeriveLinks={actions?.deriveLinks}
               onSaveView={actions?.saveView}
+              onDeleteView={actions?.deleteView}
             />
             {/* No `key` here. It used to be rebuilt from lens/layout/focal/
                 trace, which remounted the canvas on every one of those changes
@@ -476,6 +583,7 @@ function Body({ data, error, actions, mobile }: {
               onSelectNode={openNode}
               onSelectGroup={openGroup}
               onSelectEdge={(id) => setPicked({ kind: "edge", edgeId: id })}
+              onVolume={onVolume}
             />
             <LineageTimeScrubber dates={data.dates} activity={data.activity} value={data.asOf} />
           </>

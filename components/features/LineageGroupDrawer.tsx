@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronsUpDown, Layers } from "lucide-react";
+import { ChevronsUpDown, Layers, Ungroup, Combine } from "lucide-react";
 import { Button } from "../actions/Button";
 import { CreateReviewTaskButton, ExportButton } from "../actions/RepeatedActions";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
@@ -45,6 +45,15 @@ export type LineageGroupDrawerProps = {
   nodes: LNode[];
   edges: LEdge[];
   onSelectMember?: (id: string) => void;
+  /** Whether this bucket is already unfolded on the canvas. */
+  expandedInPlace?: boolean;
+  /** Unfold the roll-up on the canvas: the one macro card is replaced by its
+      members, and the links between them, which the roll-up has to hide,
+      become drawable. Omitted = no such control, because nothing would
+      receive it (§2). */
+  onExpandInPlace?: (groupId: string) => void;
+  /** Fold it back into one card. */
+  onCollapseInPlace?: (groupId: string) => void;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -53,7 +62,8 @@ export type LineageGroupDrawerProps = {
 
 export function LineageGroupDrawer({
   groupId, totalMembers, members, nodes, edges,
-  onSelectMember, onClose, loading = false, className = "",
+  onSelectMember, expandedInPlace = false, onExpandInPlace, onCollapseInPlace,
+  onClose, loading = false, className = "",
 }: LineageGroupDrawerProps) {
   const { repo, kind } = groupParts(groupId);
   const [isOpen, setIsOpen] = useState(false);
@@ -132,11 +142,24 @@ export function LineageGroupDrawer({
       summary="One card standing in for a whole bucket of nodes."
       footer={
         <div className="flex w-full flex-col gap-2">
-          {/* The expand/collapse toggle latches and actually redraws the list. */}
+          {/* Two different expansions, so neither is called "Expand group":
+              one lists every member in this panel, the other unfolds the
+              roll-up on the canvas. The old single "Expand group" latched the
+              list and readers went looking for a change on the graph that
+              never came. */}
           <div className="flex flex-wrap gap-2">
             <Button compact onClick={() => { setIsOpen((o) => !o); setPage(1); }} className={isOpen ? lgToggleOn : ""}>
-              <ChevronsUpDown size={13} /> {isOpen ? "Collapse group" : "Expand group"}
+              <ChevronsUpDown size={13} /> {isOpen ? "List fewer members" : "List every member"}
             </Button>
+            {(expandedInPlace ? onCollapseInPlace : onExpandInPlace) && (
+              <Button
+                compact
+                onClick={() => (expandedInPlace ? onCollapseInPlace?.(groupId) : onExpandInPlace?.(groupId))}
+                className={expandedInPlace ? lgToggleOn : ""}
+              >
+                {expandedInPlace ? <><Combine size={13} /> Roll up on the graph</> : <><Ungroup size={13} /> Expand on the graph</>}
+              </Button>
+            )}
           </div>
           {/* CONVENTIONS §2: primary bottom LEFT, export to its right. */}
           <CardActions
@@ -172,15 +195,20 @@ export function LineageGroupDrawer({
         />
         <CardMeta
           source={<LgSourceChip source="github" />}
-          status={<Chip label={isOpen ? "Expanded" : "Rolled up"} tone={isOpen ? "info" : "neutral"} icon={<Layers size={11} />} />}
+          status={<Chip label={expandedInPlace ? "On the graph" : "Rolled up"} tone={expandedInPlace ? "info" : "neutral"} icon={<Layers size={11} />} />}
           date={latest ? fmtDate(latest) : "No date recorded"}
           author={<LgAuthor name={owners[0]?.name} />}
         />
 
-        {/* Says what this panel does, not what the canvas does: expanding here
-            lists the members, it does not unfold the macro node on the graph,
-            and claiming otherwise sent readers looking for a change that never
-            happened. */}
+        {/* Each panel says what its own control did, and nothing about the
+            other one. */}
+        {expandedInPlace && (
+          <LgResultPanel title="Unfolded on the graph">
+            The graph draws these {totalMembers} members instead of one card,
+            along with the links between them. Roll it back up below, or from
+            the graph's own Expanded row.
+          </LgResultPanel>
+        )}
         {isOpen && (
           <LgResultPanel title="Members listed in full">
             All {totalMembers} members are listed below, {GROUP_PAGE_SIZE} at a

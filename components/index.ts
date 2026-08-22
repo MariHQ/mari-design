@@ -99,11 +99,15 @@ export { TagPicker, type TagPickerProps } from "./forms/TagPicker";
 
 // Chat / agent
 export { ChatDock, type ChatDockProps } from "./chat/ChatDock";
-export { ChatMessage } from "./chat/ChatMessage";
+export { ChatMessage, CHAT_INDENT, type ChatMessageProps } from "./chat/ChatMessage";
+export { Sources, citeIndex, cleanSnippet, type SourcesProps, type SourceFocus } from "./chat/Sources";
 export { ToolCall } from "./chat/ToolCall";
 export { Composer, type ComposerProps } from "./chat/Composer";
 export { TypingIndicator } from "./chat/TypingIndicator";
-export { type ChatRole, type ChatMessageData, type ToolCallData } from "./chat/types";
+export {
+  type ChatRole, type ChatMessageData, type ToolCallData, type ToolAuthData,
+  type ChatSourceData, type SourceVariant,
+} from "./chat/types";
 
 // Workflow / flows
 export type { WorkflowRun, RunStatus, RunStepRow, RunStat } from "./workflow/RunHistory";

@@ -5,17 +5,14 @@ import type { PageModule } from "./types";
 import { page as overview } from "./OverviewPage";
 import { page as knowledge } from "./KnowledgePage";
 import { page as docReview } from "./DocReviewPage";
-import { page as answers } from "./AnswersPage";
 import { page as decisions } from "./DecisionsPage";
 import { page as library } from "./LibraryPage";
 import { page as lineage } from "./LineagePage";
 import { page as facts } from "./FactsPage";
 import { page as audit } from "./AuditPage";
-import { page as flows } from "./FlowsPage";
 import { page as publish } from "./PublishPage";
 import { page as insights } from "./InsightsPage";
-import { page as trajectories } from "./TrajectoriesPage";
-import { page as tasks } from "./TasksPage";
+import { page as workflows } from "./WorkflowsPage";
 import { page as sources } from "./SourcesPage";
 import { page as preferences } from "./PreferencesPage";
 import { page as settingsGeneral } from "./SettingsGeneralPage";
@@ -33,17 +30,14 @@ export const PAGES: PageModule<any, any>[] = [
   overview,
   knowledge,
   docReview,
-  answers,
   decisions,
   library,
   lineage,
   facts,
   audit,
-  flows,
   publish,
   insights,
-  trajectories,
-  tasks,
+  workflows,
   sources,
   preferences,
   settingsGeneral,

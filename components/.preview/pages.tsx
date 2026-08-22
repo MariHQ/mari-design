@@ -19,10 +19,8 @@ const GROUPS: Group[] = [
   { group: "Overview", items: [
     { name: "OverviewStatTiles", title: "Headline stat tiles" },
     { name: "OverviewDigestCard", title: "This week's digest" },
-    { name: "OverviewTodayReview", title: "Today's review" },
     { name: "OverviewSourcePulse", title: "Source pulse" },
     { name: "OverviewLiveActivity", title: "Live activity" },
-    { name: "OverviewWorkflowStrip", title: "Workflow strip" },
     { name: "OverviewRecentDocs", title: "Recent docs" },
   ] },
   { group: "Knowledge", items: [
@@ -46,12 +44,6 @@ const GROUPS: Group[] = [
     { name: "LineageEdgeDrawer", title: "Edge drawer" },
     { name: "LineageGroupDrawer", title: "Group (roll-up) drawer" },
     { name: "LineageAssertDrawer", title: "Impact-analysis drawer" },
-  ] },
-  { group: "Flows", items: [
-    { name: "FlowsList", title: "Flows list" },
-    { name: "FlowsPipelineEditor", title: "Pipeline editor" },
-    { name: "FlowsRunPanel", title: "Run panel" },
-    { name: "FlowsRunHistory", title: "Run history" },
   ] },
   { group: "Insights", items: [
     { name: "InsightsWidgets", title: "Insights widgets" },

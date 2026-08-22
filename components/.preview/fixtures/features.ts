@@ -26,12 +26,11 @@ import type { KeyRow } from "../../features/TokenRevealFeature";
 import type { Finding } from "../../features/DocReviewMarkdown";
 import { GUIDE_PACKS } from "../../features/WelcomeGuideStep";
 
-import { FIXTURES as ANSWERS } from "./answers";
+import { ANSWERS_FIXTURE } from "./workflows";
 import { FIXTURES as AUDIT } from "./audit";
 import { FIXTURES as DECISIONS } from "./decisions";
 import { FIXTURES as DOC_REVIEW } from "./docReview";
 import { FIXTURES as FACTS } from "./facts";
-import { FIXTURES as FLOWS } from "./flows";
 import { FIXTURES as INSIGHTS } from "./insights";
 import { FIXTURES as KNOWLEDGE } from "./knowledge";
 import { FIXTURES as LIBRARY } from "./library";
@@ -47,21 +46,16 @@ import { FIXTURES as SOURCES } from "./sources";
 import { FIXTURES as WELCOME } from "./welcome";
 
 import type { DocHistoryRow, ImpactResult, LEdge, LNode } from "../../features/LineageDataModel";
-import type { EditorStep } from "../../features/FlowsPipelineEditor";
-import type { WorkflowRun } from "../../workflow/RunHistory";
 
 /* ── Overview ───────────────────────────────────────────────────────────── */
 
 const overview = OVERVIEW.default.data;
 
 export const OVERVIEW_STATS = overview.stats;
-export const OVERVIEW_TASKS = overview.tasks;
 export const OVERVIEW_TOPICS = overview.digest;
 export const OVERVIEW_TILES = overview.sources;
 export const OVERVIEW_FEED = overview.activity;
 export const OVERVIEW_DOCS = overview.docs;
-export const OVERVIEW_FLOW = overview.flow;
-export const OVERVIEW_RUN = overview.run;
 
 /* ── Knowledge ──────────────────────────────────────────────────────────── */
 
@@ -129,24 +123,6 @@ export const LINEAGE_ASSERT = assertDrawer.kind === "assert"
       people: [] as string[],
     };
 
-/* ── Flows ──────────────────────────────────────────────────────────────── */
-
-const flows = FLOWS.default.data;
-
-export const FLOWS_ROWS = flows.flows;
-export const FLOWS_SOURCES = flows.sources;
-
-/** The pipeline editor's own inputs. The default page state has no editor
-    open, so they come from the state that does. */
-const flowsEditor = FLOWS["pipeline-editor"].data.editor!;
-export const FLOWS_EDITOR: {
-  name: string; description: string; steps: EditorStep[]; runs: WorkflowRun[];
-  members: string[]; tags: string[];
-} = flowsEditor;
-
-export const FLOWS_PANEL_RUNS: WorkflowRun[] = FLOWS.run.data.runPanel!.runs;
-export const FLOWS_HISTORY_RUNS: WorkflowRun[] = FLOWS["run-history"].data.runHistory!.runs;
-
 /* ── Insights ───────────────────────────────────────────────────────────── */
 
 const insightWidgets = INSIGHTS.default.data.widgets!;
@@ -199,7 +175,7 @@ export const LIBRARY_CHECKER_DOCS = library.checkerDocs;
 
 /* ── Answers ────────────────────────────────────────────────────────────── */
 
-export const ANSWERS_ROWS = ANSWERS.default.data.answers;
+export const ANSWERS_ROWS = ANSWERS_FIXTURE.answers;
 export const ANSWER_ONE = ANSWERS_ROWS[0];
 
 /* ── Sources ────────────────────────────────────────────────────────────── */
@@ -346,10 +322,8 @@ export const CHAT_SESSIONS: ChatSession[] = [
 export const FEATURE_PROPS: Record<string, Record<string, unknown>> = {
   OverviewStatTiles: { stats: OVERVIEW_STATS },
   OverviewDigestCard: { topics: OVERVIEW_TOPICS },
-  OverviewTodayReview: { tasks: OVERVIEW_TASKS },
   OverviewSourcePulse: { tiles: OVERVIEW_TILES },
   OverviewLiveActivity: { items: OVERVIEW_FEED, pollMs: 0 },
-  OverviewWorkflowStrip: { flow: OVERVIEW_FLOW, run: OVERVIEW_RUN },
   OverviewRecentDocs: { docs: OVERVIEW_DOCS },
 
   KnowledgeBrowser: { results: KNOWLEDGE_RESULTS },
@@ -372,11 +346,6 @@ export const FEATURE_PROPS: Record<string, Record<string, unknown>> = {
   LineageEdgeDrawer: { nodes: LINEAGE_NODES, edges: LINEAGE_EDGES, edgeId: "e3" },
   LineageGroupDrawer: { ...LINEAGE_GROUP, nodes: LINEAGE_NODES, edges: LINEAGE_EDGES },
   LineageAssertDrawer: { ...LINEAGE_ASSERT },
-
-  FlowsList: { flows: FLOWS_ROWS, sources: FLOWS_SOURCES },
-  FlowsPipelineEditor: { ...FLOWS_EDITOR },
-  FlowsRunPanel: { runs: FLOWS_PANEL_RUNS },
-  FlowsRunHistory: { runs: FLOWS_HISTORY_RUNS },
 
   InsightsWidgets: {
     stats: INSIGHTS_STATS, readability: INSIGHTS_READABILITY,

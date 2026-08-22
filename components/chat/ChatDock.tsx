@@ -7,7 +7,7 @@ import { Chip } from "../data-display/Chip";
 import { ChatMessage } from "./ChatMessage";
 import { Composer } from "./Composer";
 import { TypingIndicator } from "./TypingIndicator";
-import type { ChatMessageData } from "./types";
+import type { ChatMessageData, SourceVariant } from "./types";
 
 export type ChatDockProps = {
   /** The full transcript, oldest first. Streaming is expressed by marking
@@ -25,6 +25,10 @@ export type ChatDockProps = {
   emptyState?: ReactNode;
   /** Click-to-send prompts, rendered as chips under the empty-state blurb. */
   suggestions?: string[];
+  /** Passed to every assistant message's <Sources> block: "public" links only
+   *  a document's own URL, because a console route means nothing to an
+   *  anonymous reader. */
+  sourceVariant?: SourceVariant;
   /** Monospace footnote under the composer. */
   hint?: string;
   placeholder?: string;
@@ -48,6 +52,7 @@ export function ChatDock({
   headerActions,
   emptyState,
   suggestions,
+  sourceVariant = "console",
   hint,
   placeholder,
   className = "",
@@ -101,7 +106,7 @@ export function ChatDock({
             )}
           </div>
         ) : (
-          messages.map((m) => <ChatMessage key={m.id} message={m} />)
+          messages.map((m) => <ChatMessage key={m.id} message={m} sourceVariant={sourceVariant} />)
         )}
         {showWorking && <TypingIndicator />}
       </Scrollable>

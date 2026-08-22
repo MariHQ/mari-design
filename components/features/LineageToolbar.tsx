@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, forwardRef, type ButtonHTMLAttributes } from "react";
+import { useEffect, useId, useMemo, useRef, useState, forwardRef, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ReactNode } from "react";
-import { Search, Minus, Plus, Maximize2, Sparkles, GitFork, Bookmark, ChevronDown, X } from "lucide-react";
+import { Search, Minus, Plus, Maximize2, Crosshair, RotateCcw, Sparkles, GitFork, Bookmark, ChevronDown, X, Trash2 } from "lucide-react";
+import * as RPop from "@radix-ui/react-popover";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
 import { Badge } from "../data-display/Badge";
+import { Chip } from "../data-display/Chip";
 import { Input } from "../forms/Input";
 import { WriteError } from "../feedback/WriteError";
 import { why } from "../actions/useWrite";
@@ -25,8 +27,11 @@ import {
    Three explicit rows, one gap, no wrap-roulette:
 
      1. FILTERS   search · Sources: · Relations: · Status: · zoom
-     2. VIEW      Color by: · Layout: · Flow: · Views:
-     3. ACTIONS   Assert impact · Find path · Derive links
+     2. CANVAS    how much of the graph is drawn · fit · reset layout
+     3. VIEW      Color by: · Layout: · Flow: · Views:
+     4. ACTIONS   Assert impact · Find path · Derive links
+
+   Rows 3 and 4 are expert controls and disclose together.
 
    Every control reads "Label: Selection" and carries its own accent color, and
    every one of them writes to the shared lineage control store — so the canvas
@@ -80,12 +85,27 @@ export type LineageToolbarProps = {
       links button, since there is nothing for it to run (§2). */
   onDeriveLinks?: () => void | number | Promise<void | number>;
   /** Persist the current filter/view state under a name. Omitted = the Views
-      menu offers no "Save current view", because nothing would receive it. */
-  onSaveView?: (args: { name: string; state: string }) => void | Promise<void>;
+      menu offers no "Save current view", because nothing would receive it.
+      Return the id the store gave it and the row can be removed again in this
+      same session; return nothing and it can only be removed after a refetch
+      hands it back with an id. */
+  onSaveView?: (args: { name: string; state: string }) => void | number | Promise<void | number>;
   /** The views already saved for this workspace, listed in the Views menu.
       Without them "Save view" wrote into a void: nothing ever read a saved
       view back. */
   views?: GraphView[];
+  /** Remove a saved view for good. Omitted = the Views menu offers no way to
+      manage them, because nothing would receive the removal (§2). The toolbar
+      confirms in place before calling this; it never asks the browser. */
+  onDeleteView?: (args: { id: number; name: string }) => void | Promise<void>;
+  /** What the canvas actually drew: how many cards are on screen, how many
+      documents passed the filters, how many the graph holds, and the node cap
+      in force. Omitted = no volume readout, because a count this toolbar has
+      not been given is a count it must not print. */
+  volume?: { shown: number; matching: number; total: number; cap: number };
+  /** How many more cards one "Show more" asks for. Defaults to the workspace
+      cap, so the first press doubles what is on screen. */
+  volumeStep?: number;
   /** Render a content-shaped skeleton silhouette instead of the controls. */
   loading?: boolean;
   /** Let the filters wrap within a phone viewport instead of making the
@@ -132,7 +152,8 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 }
 
 export function LineageToolbar({
-  nodes, edges = [], onDeriveLinks, onSaveView, views, loading = false, compact = false, className = "",
+  nodes, edges = [], onDeriveLinks, onSaveView, onDeleteView, views, volume, volumeStep,
+  loading = false, compact = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
   const sources = useMemo(() => Array.from(new Set(docs.map((n) => n.source))), [docs]);
@@ -150,14 +171,24 @@ export function LineageToolbar({
   const [savedAs, setSavedAs] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [locallySaved, setLocallySaved] = useState<GraphView[]>([]);
+  /* Managing saved views: a list with a remove on each row, and the removal
+     confirmed on that row rather than in a browser dialog nobody asked for
+     (§19, NN/g on confirmation). */
+  const [managing, setManaging] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<GraphView | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeErr, setRemoveErr] = useState<string | null>(null);
+  const [locallyRemoved, setLocallyRemoved] = useState<string[]>([]);
 
   /* The workspace's saved views, plus anything saved in this session that the
-     server has not handed back yet. Same name = one row, newest wins. */
+     server has not handed back yet, minus anything removed in this session
+     that it is still handing back. Same name = one row, newest wins. */
   const savedViews = useMemo(() => {
     const byName = new Map<string, GraphView>();
     for (const v of [...(views ?? []), ...locallySaved]) byName.set(v.name, v);
+    for (const name of locallyRemoved) byName.delete(name);
     return [...byName.values()];
-  }, [views, locallySaved]);
+  }, [views, locallySaved, locallyRemoved]);
 
   const onSources = controls.sources ?? sources;
   const onRels = controls.rels ?? REL_ORDER;
@@ -181,6 +212,24 @@ export function LineageToolbar({
     return () => document.removeEventListener("keydown", onKey);
   }, [picked, setControls]);
 
+  /* "/" jumps to the search box, the shortcut every tool with a search box
+     has. It is deliberately inert while the reader is already typing into a
+     field or editing content, where "/" is just a slash. */
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   const results: SearchResult[] = useMemo(() => {
     const q = controls.query.trim().toLowerCase();
     if (!q) return [];
@@ -195,6 +244,67 @@ export function LineageToolbar({
       .slice(0, 7)
       .map((node) => ({ id: node.id, node }));
   }, [controls.query, docs]);
+
+  /* The suggestions are an overlay, so they need their own open state rather
+     than being a function of the query: Escape and a click on the graph have
+     to put them away while the query, and everything it is filtering, stays
+     exactly where the reader left it. */
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const activeIdx = Math.min(active, results.length - 1);
+  const uid = useId().replace(/:/g, "");
+  const listboxId = `lineage-search-results-${uid}`;
+  const optionId = (i: number) => `${listboxId}-option-${i}`;
+
+  // A new query starts at the top of a new list.
+  useEffect(() => { setActive(0); }, [controls.query]);
+  /* Emptying the box closes the panel, including when something outside this
+     toolbar clears the shared query. */
+  useEffect(() => { if (!controls.query.trim()) setSuggestOpen(false); }, [controls.query]);
+
+  /* Radix dismisses on Escape from a document CAPTURE listener, so it runs
+     before this input's own keydown and can re-render the box as closed in
+     between. Read as state, one press would then both put the panel away and
+     empty the field. The panel marks the press it consumed; the input skips
+     exactly that one and keeps the query. */
+  const escapeConsumed = useRef<KeyboardEvent | null>(null);
+
+  const activeOptionRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { activeOptionRef.current?.scrollIntoView({ block: "nearest" }); }, [activeIdx, suggestOpen]);
+
+  const choose = (r: SearchResult) => {
+    setControls({ query: r.node.title });
+    setSuggestOpen(false);
+    searchRef.current?.focus();
+  };
+
+  const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      /* First Escape puts the suggestions away, second clears the field.
+         Reversing that would throw away a query the reader was still reading
+         results for. */
+      if (escapeConsumed.current === e.nativeEvent) { escapeConsumed.current = null; e.preventDefault(); return; }
+      setControls({ query: "" });
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!suggestOpen) { if (controls.query.trim()) setSuggestOpen(true); return; }
+      setActive((a) => Math.min(results.length - 1, a + 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      if (!suggestOpen) return;
+      e.preventDefault();
+      setActive((a) => Math.max(0, a - 1));
+      return;
+    }
+    if (e.key === "Enter" && suggestOpen && results[activeIdx]) {
+      e.preventDefault();
+      choose(results[activeIdx]);
+    }
+  };
 
   const toggleSource = (s: string, on: boolean) => {
     const next = new Set(onSources);
@@ -243,11 +353,17 @@ export function LineageToolbar({
     setSaveErr(null);
     const state = viewStateOf(controls);
     try {
-      await onSaveView({ name, state });
+      const id = await onSaveView({ name, state });
       /* A saved view has to appear in the menu it was saved from, before any
-         refetch brings it back from the server. Negative ids mark the rows
-         this session added; the server's copy replaces them by name. */
-      setLocallySaved((rows) => [...rows.filter((r) => r.name !== name), { id: -(rows.length + 1), name, state }]);
+         refetch brings it back from the server. The store's own id when the
+         handler returns one, so the row can be removed again straight away;
+         a negative placeholder when it does not, and the server's copy
+         replaces it by name. */
+      setLocallySaved((rows) => [
+        ...rows.filter((r) => r.name !== name),
+        { id: typeof id === "number" ? id : -(rows.length + 1), name, state },
+      ]);
+      setLocallyRemoved((names) => names.filter((n) => n !== name));
       setSavedAs(name);
       setSaveName(null);
       setView(name);
@@ -255,6 +371,26 @@ export function LineageToolbar({
       setSaveErr(why(err, "That view could not be saved."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /* Removing one, once the reader has confirmed it on the row. A view saved
+     in this session that the store never gave an id to has nothing to delete
+     on the server, so that row is only dropped from this menu. */
+  const removeView = async (v: GraphView) => {
+    if (!onDeleteView) return;
+    setRemoving(true);
+    setRemoveErr(null);
+    try {
+      if (v.id >= 0) await onDeleteView({ id: v.id, name: v.name });
+      setLocallySaved((rows) => rows.filter((r) => r.name !== v.name));
+      setLocallyRemoved((names) => [...names, v.name]);
+      setPendingRemove(null);
+      if (view === v.name) setView("Custom");
+    } catch (err) {
+      setRemoveErr(why(err, `“${v.name}” could not be removed.`));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -321,15 +457,22 @@ export function LineageToolbar({
           <Pending accent={CONTROL_ACCENT.status} label="Status" />
           <Pending accent={CONTROL_ACCENT.zoom} label="Zoom" />
         </Row>
-        <Row label="View" divide>
-          <Pending accent={CONTROL_ACCENT.lens} label="Color by" />
-          <Pending accent={CONTROL_ACCENT.layout} label="Layout" />
-          <Pending accent={CONTROL_ACCENT.flow} label="Flow" />
-          <Pending accent={CONTROL_ACCENT.views} label="Views" />
+        {/* The silhouette is the RESTING toolbar, not every row it can show:
+            View and Actions live behind a disclosure, so drawing them here
+            made the toolbar shrink by two rows the moment it loaded and threw
+            the whole canvas up the page (§9). */}
+        <Row label="Canvas" divide>
+          <SkeletonLine w={196} h={12} />
+          <span className="ml-auto flex items-center gap-2">
+            <SkeletonButton w={124} />
+            <SkeletonButton w={112} />
+          </span>
         </Row>
-        <Row label="Actions" divide>
-          {Array.from({ length: 3 }).map((_, i) => <SkeletonButton key={i} w={110} />)}
-        </Row>
+        <div className="border-t border-ink/10 pt-2.5">
+          <span className="font-term text-[11px] font-medium uppercase tracking-[0.08em] text-ink/45">
+            Graph options and actions
+          </span>
+        </div>
       </div>
     );
   }
@@ -338,62 +481,121 @@ export function LineageToolbar({
     <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
       {/* ── row 1: filters ─────────────────────────────────────────────── */}
       <Row label="Filter">
-        <div className="relative">
-          <div className="flex h-8 w-[168px] items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2 focus-within:border-biscay-2/60 focus-within:ring-1 focus-within:ring-biscay-2/40">
-            <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.search }} aria-hidden />
-            <Search size={14} className="shrink-0 text-ink/65" />
-            <input
-              value={controls.query}
-              onChange={(e) => setControls({ query: e.target.value })}
-              onKeyDown={(e) => { if (e.key === "Escape") setControls({ query: "" }); }}
-              placeholder="Search graph"
-              aria-label="Search the graph"
-              name="lineage-search"
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65"
-            />
-            {controls.query && (
-              <button
-                type="button"
-                onClick={() => setControls({ query: "" })}
-                aria-label="Clear search"
-                className={`grid h-4 w-4 shrink-0 place-items-center rounded-full text-ink/65 hover:bg-ink/10 hover:text-ink ${focusRing}`}
-              >
-                <X size={11} />
-              </button>
-            )}
-          </div>
-          {controls.query.trim() && (
-            <Scrollable axis="y" className={`${card} absolute left-0 top-9 z-30 max-h-[300px] w-[320px]`} scrollerClassName="p-1">
-              {results.length === 0 ? (
-                <div className="px-3 py-3 text-[13px] text-ink/70">No matches in the graph.</div>
-              ) : results.map((r) => (
+        {/* The suggestion list is a Radix popover anchored to the search box:
+            the same portaled overlay layer the Sources and Relations menus
+            sit on, so matches float over the graph instead of growing the
+            filter block. It used to be a <Scrollable className="absolute …">
+            rendered inline in this row, and Scrollable's own wrapper carries
+            `relative` — Tailwind emits `.relative` after `.absolute`, so the
+            absolute never applied, the list stayed in flow, and every search
+            pushed the toolbar (and the canvas under it) taller (§13).
+
+            Popover rather than Menu because the reader has to keep typing: a
+            dropdown menu moves focus into its own list and eats the
+            keystrokes, so the box it is attached to would stop accepting
+            them. Focus stays in the input and the list is driven by
+            aria-activedescendant; Radix still gives outside-click and
+            Escape. */}
+        <RPop.Root open={suggestOpen} onOpenChange={(o) => { if (!o) setSuggestOpen(false); }}>
+          <RPop.Anchor asChild>
+            <div className="flex h-8 w-[168px] items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2 focus-within:border-biscay-2/60 focus-within:ring-1 focus-within:ring-biscay-2/40">
+              <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.search }} aria-hidden />
+              <Search size={14} className="shrink-0 text-ink/65" />
+              <input
+                ref={searchRef}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={suggestOpen}
+                aria-controls={suggestOpen ? listboxId : undefined}
+                aria-activedescendant={suggestOpen && results[activeIdx] ? optionId(activeIdx) : undefined}
+                value={controls.query}
+                onChange={(e) => { setControls({ query: e.target.value }); setSuggestOpen(e.target.value.trim().length > 0); }}
+                onFocus={() => { if (controls.query.trim()) setSuggestOpen(true); }}
+                onClick={() => { if (controls.query.trim()) setSuggestOpen(true); }}
+                onKeyDown={onSearchKey}
+                placeholder="Search graph"
+                aria-label="Search the graph. Press slash to jump here."
+                name="lineage-search"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink/65"
+              />
+              {controls.query ? (
                 <button
-                  key={r.id}
                   type="button"
-                  /* Both paths, not just mousedown (ACC-03): keyboard
-                     activation fires `click` and never `mousedown`, so these
-                     suggestions were Tab-reachable and could not be chosen.
-                     The mousedown preventDefault stays — it is what keeps the
-                     search input focused when a suggestion is clicked — and the
-                     click handler runs only for keyboard activation, which
-                     reports `detail === 0`. */
-                  onMouseDown={(e) => { e.preventDefault(); setControls({ query: r.node.title }); }}
-                  onClick={(e) => { if (e.detail === 0) setControls({ query: r.node.title }); }}
-                  className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left hover:bg-flysch active:bg-ink/[0.07] ${focusRing}`}
+                  onClick={() => { setControls({ query: "" }); setSuggestOpen(false); }}
+                  aria-label="Clear search"
+                  className={`grid h-4 w-4 shrink-0 place-items-center rounded-full text-ink/65 hover:bg-ink/10 hover:text-ink ${focusRing}`}
                 >
-                  <span className="shrink-0 text-ink/75"><NodeGlyph node={r.node} size={16} /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-ink">{r.node.title}</span>
-                    <span className="block truncate font-term text-[11px] text-ink/70">
-                      {[r.node.owner, SOURCE_LABELS[r.node.source] ?? r.node.source, r.node.date].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} in</span>
+                  <X size={11} />
                 </button>
-              ))}
-            </Scrollable>
-          )}
-        </div>
+              ) : compact ? null : (
+                /* The shortcut, shown as a key rather than smuggled into the
+                   placeholder where it reads as part of the prompt. Decorative:
+                   the input's own label already says it out loud. Not on a
+                   phone, where there is no key to press. */
+                <kbd
+                  aria-hidden
+                  className="grid h-4 w-4 shrink-0 place-items-center rounded-[3px] border border-ink/20 bg-flysch font-term text-[10px] leading-none text-ink/65"
+                >
+                  /
+                </kbd>
+              )}
+            </div>
+          </RPop.Anchor>
+          <RPop.Portal>
+            <RPop.Content
+              align="start"
+              side="bottom"
+              sideOffset={7}
+              /* The box keeps the caret. Radix focuses its panel on open and
+                 hands focus back on close, either of which would take the
+                 reader out of the field they are still typing in. */
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onEscapeKeyDown={(e) => { escapeConsumed.current = e; }}
+              className={`${card} z-50 w-[320px]`}
+            >
+              <Scrollable axis="y" className="max-h-[300px]" scrollerClassName="p-1">
+                <div id={listboxId} role="listbox" aria-label="Graph search results">
+                  <span role="status" aria-live="polite" className="sr-only">
+                    {results.length === 0 ? "No matches" : `${results.length} match${results.length === 1 ? "" : "es"}`}
+                  </span>
+                  {results.length === 0 ? (
+                    <div className="px-3 py-3 text-[13px] text-ink/70">No matches in the graph.</div>
+                  ) : results.map((r, i) => (
+                    <button
+                      key={r.id}
+                      id={optionId(i)}
+                      type="button"
+                      role="option"
+                      aria-selected={i === activeIdx}
+                      /* Not a tab stop: the box below is the one focusable
+                         control, and the arrow keys walk this list (ACC-03).
+                         The mousedown preventDefault is what keeps the caret
+                         in the search box when a suggestion is clicked, and
+                         the click handler runs only for activation that
+                         reports `detail === 0`. */
+                      tabIndex={-1}
+                      ref={i === activeIdx ? activeOptionRef : undefined}
+                      onMouseEnter={() => setActive(i)}
+                      onMouseDown={(e) => { e.preventDefault(); choose(r); }}
+                      onClick={(e) => { if (e.detail === 0) choose(r); }}
+                      className={`flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left active:bg-ink/[0.07] ${i === activeIdx ? "bg-flysch" : ""} ${focusRing}`}
+                    >
+                      <span className="shrink-0 text-ink/75"><NodeGlyph node={r.node} size={16} /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-ink">{r.node.title}</span>
+                        <span className="block truncate font-term text-[11px] text-ink/70">
+                          {[r.node.owner, SOURCE_LABELS[r.node.source] ?? r.node.source, r.node.date].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} in</span>
+                    </button>
+                  ))}
+                </div>
+              </Scrollable>
+            </RPop.Content>
+          </RPop.Portal>
+        </RPop.Root>
 
         <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.sources} label="Sources" value={sourceValue} />}>
           {/* A workspace with 30 connected sources must not run a menu off the
@@ -447,8 +649,50 @@ export function LineageToolbar({
               in the filter row inside the shared 32px height (§13). */}
           <Button compact icon aria-label="Zoom out" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom - 0.2)}><Minus size={14} /></Button>
           <Button compact icon aria-label="Zoom in" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom + 0.2)}><Plus size={14} /></Button>
-          <Button compact icon aria-label="Fit graph" className="!h-7 !w-7" onClick={() => setControls({ zoom: 1 })}><Maximize2 size={14} /></Button>
+          {/* Fits, rather than only setting the scale back to 100% and
+              leaving the graph wherever the reader had panned it. */}
+          <Button compact icon aria-label="Fit graph to view" className="!h-7 !w-7" onClick={() => setControls({ viewport: "fit" })}><Maximize2 size={14} /></Button>
         </div>
+      </Row>
+
+      {/* ── row 2: the canvas itself ────────────────────────────────────
+          How much of the graph is on screen, and the two ways to get it back
+          into view. The count strip sits above the thing it describes and
+          below the filter bar (§13), and it prints only numbers the canvas
+          reported: a cap that silently dropped 93 documents while the header
+          said nothing is a lie the reader cannot see. */}
+      <Row label="Canvas" divide>
+        {volume && (
+          <span className="flex min-w-0 items-center gap-2">
+            {volume.shown < volume.matching && <Chip tone="attention" label="Capped" className="shrink-0" />}
+            <span className="font-term text-[11.5px] text-ink/75">
+              {volume.shown === volume.total
+                ? `Showing all ${volume.total.toLocaleString("en-US")} documents`
+                : `Showing ${volume.shown.toLocaleString("en-US")} of ${volume.matching.toLocaleString("en-US")} matching documents`}
+            </span>
+          </span>
+        )}
+        {volume && volume.shown < volume.matching && (
+          <Button
+            compact
+            onClick={() => setControls({ maxNodes: volume.cap + Math.max(1, volumeStep ?? volume.cap) })}
+          >
+            <Plus size={13} /> Show {Math.min(Math.max(1, volumeStep ?? volume.cap), volume.matching - volume.shown).toLocaleString("en-US")} more
+          </Button>
+        )}
+        {controls.maxNodes !== null && (
+          <Button compact onClick={() => setControls({ maxNodes: null })}>Back to the workspace cap</Button>
+        )}
+        {/* Direct children of the row, not a nested flex box: wrapped in one,
+            the pair overflowed the toolbar as a unit instead of wrapping, and
+            "Reset layout" sat past the right edge where only a sideways
+            scroll would reach it. */}
+        <Button compact className="ml-auto" onClick={() => setControls({ viewport: "selection" })}>
+          <Crosshair size={13} /> Fit to selection
+        </Button>
+        <Button compact onClick={() => setControls({ viewport: "reset" })}>
+          <RotateCcw size={13} /> Reset layout
+        </Button>
       </Row>
 
       {/* The resting surface answers the common question with search and
@@ -460,7 +704,7 @@ export function LineageToolbar({
           Graph options and actions
         </summary>
         <div className="mt-2.5 flex flex-col gap-2.5">
-      {/* ── row 2: view ────────────────────────────────────────────────── */}
+      {/* ── row 3: view ────────────────────────────────────────────────── */}
       <Row label="View">
         <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.lens} label="Color by" value={lensValue} />}>
           <MenuRadioGroup value={controls.lens} onValueChange={(v) => setControls({ lens: v as Lens })}>
@@ -510,18 +754,21 @@ export function LineageToolbar({
             </>
           )}
           {/* Offered only when something can receive it (§2). */}
+          {(onSaveView || (onDeleteView && savedViews.length > 0)) && <MenuSeparator />}
           {onSaveView && (
-            <>
-              <MenuSeparator />
-              <MenuItem icon={<Plus size={14} />} onSelect={() => { setSaveName(view === "Custom" ? "" : view); setSaveErr(null); }}>
-                Save current view
-              </MenuItem>
-            </>
+            <MenuItem icon={<Plus size={14} />} onSelect={() => { setSaveName(view === "Custom" ? "" : view); setSaveErr(null); }}>
+              Save current view
+            </MenuItem>
+          )}
+          {onDeleteView && savedViews.length > 0 && (
+            <MenuItem icon={<Trash2 size={14} />} onSelect={() => { setManaging(true); setPendingRemove(null); setRemoveErr(null); }}>
+              Remove a saved view
+            </MenuItem>
           )}
         </Menu>
       </Row>
 
-      {/* ── row 3: actions ─────────────────────────────────────────────── */}
+      {/* ── row 4: actions ─────────────────────────────────────────────── */}
       <Row label="Actions" divide>
         <Button
           onClick={() => setAssertOpen((a) => !a)}
@@ -557,9 +804,11 @@ export function LineageToolbar({
       {/* A refused derive or a refused save is a failed ACTION beside a
           button, not validation on the name field, so it is the banner every
           other failed write gets (§8). */}
-      {(deriveErr || saveErr) && (
+      {(deriveErr || saveErr || removeErr) && (
         <div className="pl-[66px]">
-          <WriteError onDismiss={() => { setDeriveErr(null); setSaveErr(null); }}>{deriveErr ?? saveErr}</WriteError>
+          <WriteError onDismiss={() => { setDeriveErr(null); setSaveErr(null); setRemoveErr(null); }}>
+            {deriveErr ?? saveErr ?? removeErr}
+          </WriteError>
         </div>
       )}
 
@@ -581,6 +830,43 @@ export function LineageToolbar({
             {saving ? "Saving…" : "Save view"}
           </Button>
           <Button onClick={() => { setSaveName(null); setSaveErr(null); }}>Cancel</Button>
+        </Row>
+      )}
+
+      {/* Managing saved views. Removal is confirmed on the row it affects,
+          naming the view being removed, with the safe choice on the right —
+          not a browser confirm() that says "Are you sure?" about nothing in
+          particular (§19). */}
+      {managing && onDeleteView && (
+        <Row label="Views" divide>
+          {savedViews.length === 0 ? (
+            <span className="text-[12.5px] text-ink/70">No saved views left.</span>
+          ) : pendingRemove ? (
+            <>
+              <span className="min-w-0 text-[12.5px] text-ink/85">
+                Remove “{pendingRemove.name}”? Anyone in this workspace loses it.
+              </span>
+              <Button
+                variant="danger"
+                compact
+                disabled={removing}
+                onClick={() => void removeView(pendingRemove)}
+              >
+                {removing ? "Removing…" : "Remove it"}
+              </Button>
+              <Button compact onClick={() => setPendingRemove(null)}>Keep it</Button>
+            </>
+          ) : (
+            savedViews.map((v) => (
+              <Chip
+                key={v.id}
+                label={v.name}
+                onRemove={() => { setPendingRemove(v); setRemoveErr(null); }}
+                removeLabel={`Remove ${v.name}`}
+              />
+            ))
+          )}
+          <Button compact className="ml-auto" onClick={() => { setManaging(false); setPendingRemove(null); }}>Done</Button>
         </Row>
       )}
 

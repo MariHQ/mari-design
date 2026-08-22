@@ -8,10 +8,8 @@
 // Overview
 export { OverviewStatTiles } from "./OverviewStatTiles";
 export { OverviewDigestCard } from "./OverviewDigestCard";
-export { OverviewTodayReview } from "./OverviewTodayReview";
 export { OverviewSourcePulse } from "./OverviewSourcePulse";
 export { OverviewLiveActivity } from "./OverviewLiveActivity";
-export { OverviewWorkflowStrip } from "./OverviewWorkflowStrip";
 export { OverviewRecentDocs } from "./OverviewRecentDocs";
 
 // Knowledge
@@ -35,12 +33,6 @@ export { LineageNodeDrawer } from "./LineageNodeDrawer";
 export { LineageEdgeDrawer } from "./LineageEdgeDrawer";
 export { LineageGroupDrawer } from "./LineageGroupDrawer";
 export { LineageAssertDrawer } from "./LineageAssertDrawer";
-
-// Flows
-export { FlowsList } from "./FlowsList";
-export { FlowsPipelineEditor } from "./FlowsPipelineEditor";
-export { FlowsRunPanel } from "./FlowsRunPanel";
-export { FlowsRunHistory } from "./FlowsRunHistory";
 
 // Insights
 export { InsightsWidgets } from "./InsightsWidgets";

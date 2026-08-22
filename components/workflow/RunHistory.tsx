@@ -2,16 +2,13 @@ import type { DateInput } from "../tokens/format";
 import type { RunStatus } from "../tokens/runStatus";
 
 /* The workflow run vocabulary — the one place a run's shape is declared.
-   `features/Flows*`, `features/ScanRunCard`, `pages/FlowsPage` and
-   `web/src/data/flows.ts` all type against it.
+   `features/ScanRunCard` types against it.
 
-   This file used to also ship a `RunHistory` table and a `RunStatusChip`,
-   with `PipelineView`, `RunPanel` and `WorkflowScreen` beside it. Nothing
-   outside the preview canvas ever imported any of them: the Flows features
-   render their own table, chip and inspector. Two copies of the same screen
-   drifted on status words, column sets and spinner behaviour while only one
-   of them was ever reachable (WF1/X1), so the renderers are gone and the
-   types they shared stay — the types are the actual contract. The status
+   Types only, deliberately. This file used to also ship a `RunHistory` table
+   and a `RunStatusChip`, with `PipelineView`, `RunPanel` and `WorkflowScreen`
+   beside it; the Flows pipeline-editor surface that rendered its own copies of
+   those has since been removed from the product. The types stay because they
+   are the actual contract for anything that still reports a run. The status
    words moved to tokens/runStatus.ts (XA-25) and are re-exported here
    because this is the path every workflow surface already imports from. */
 

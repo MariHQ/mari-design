@@ -10,7 +10,7 @@
 import {
   eventDates, type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
 } from "../../features/LineageDataModel";
-import type { LineageData, LineageDrawer, LineageExtras } from "../../pages/LineagePage";
+import type { LineageCrumb, LineageData, LineageDrawer, LineageExtras } from "../../pages/LineagePage";
 import type { PageFixtures } from "./types";
 import {
   LONG_TITLE, LONG_NAME, LONG_WORD, UNBREAKABLE, MIXED_SCRIPT, LONG_SOURCE,
@@ -153,6 +153,22 @@ const extras = (extreme: boolean): LineageExtras => ({
   avatarMax: extreme ? 4 : 6,
 });
 
+/* ── the trail ────────────────────────────────────────────────────────────── */
+
+/** Crumbs the way the app builds them: every step back is a real lineage URL,
+    and the last crumb is where the reader already is, so it carries none. */
+const crumbs = (labels: string[], hrefs: string[] = []): LineageCrumb[] =>
+  labels.map((label, i) => (i === labels.length - 1
+    ? { label }
+    : { label, href: hrefs[i] ?? "/lineage" }));
+
+/** What a reader who drilled from the whole graph into one PR inside one
+    repository bucket has above the instrument. */
+const DRILLED = crumbs(
+  ["Lineage", "Overview", "MariHQ/web PRs", "PR #482 · billing revamp"],
+  ["/lineage", "/lineage?mode=overview", "/lineage?mode=overview&group=gh:MariHQ/web:prs"],
+);
+
 /* ── states ───────────────────────────────────────────────────────────────── */
 
 const BASE: LineageData = {
@@ -183,9 +199,26 @@ const EMPTY: LineageData = view({ nodes: [], edges: [], dates: [], activity: [],
 
 const strained = (extreme: boolean): LineageData => view({
   nodes: strainedNodes(extreme),
-  crumbs: LONG_BREADCRUMB,
+  crumbs: crumbs(LONG_BREADCRUMB),
   extras: extras(extreme),
 });
+
+/* A roll-up unfolded on the canvas: the commits bucket has real members here,
+   so the overview can draw them in place of the one macro card and the volume
+   control in the toolbar has something to count. */
+const EXPANDED_NODES: LNode[] = [
+  ...NODES.filter((n) => !n.macro),
+  ...GROUP_MEMBERS.map((m) => ({ ...m, staleDays: 6, inbound: m.inbound ?? 0, outbound: 1 })),
+];
+
+const EXPANDED_EDGES: LEdge[] = [
+  ...EDGES.filter((e) => !e.id.startsWith("ge:")),
+  { id: "x1", from: "c1", to: "n8", rel: "references", date: "2026-07-19" },
+  { id: "x2", from: "c2", to: "n2", rel: "references", date: "2026-07-18" },
+  { id: "x3", from: "c4", to: "n3", rel: "derived", date: "2026-07-14" },
+  { id: "x4", from: "c1", to: "c2", rel: "references", date: "2026-07-19" },
+  { id: "x5", from: "c3", to: "c1", rel: "derived", date: "2026-07-16" },
+];
 
 export const FIXTURES: PageFixtures<LineageData> = {
   default: { data: BASE },
@@ -206,4 +239,39 @@ export const FIXTURES: PageFixtures<LineageData> = {
   empty: { data: EMPTY },
   overflow: { data: strained(false) },
   stress: { data: strained(true) },
+  crumbs: {
+    data: view({
+      mode: "overview",
+      focalId: "n4",
+      crumbs: DRILLED,
+      drawer: DRAWERS.node,
+      action: { label: "PR #482 · billing revamp", docId: 104 },
+    }),
+  },
+  capped: {
+    data: view({
+      mode: "documents",
+      // A cap the demo graph actually exceeds, so the toolbar prints a true
+      // "showing 4 of 9" instead of a control nobody can trigger.
+      tuning: { maxNodes: 4, hopDepth: 2, minConfidence: 0.72 },
+      crumbs: null,
+    }),
+  },
+  expanded: {
+    data: view({
+      mode: "overview",
+      nodes: EXPANDED_NODES,
+      edges: EXPANDED_EDGES,
+      expanded: ["gh:MariHQ/web:commits"],
+      focalId: null,
+      drawer: {
+        kind: "group",
+        groupId: "gh:MariHQ/web:commits",
+        totalMembers: GROUP_MEMBERS.length,
+        members: GROUP_MEMBERS,
+      },
+      crumbs: crumbs(["Lineage", "Overview", "MariHQ/web commits"], ["/lineage", "/lineage?mode=overview"]),
+      action: null,
+    }),
+  },
 };

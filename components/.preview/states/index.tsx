@@ -10,7 +10,6 @@ import { LINEAGE } from "./lineage";
 import { OVERVIEW } from "./overview";
 import { KNOWLEDGE } from "./knowledge";
 import { DOCREVIEW } from "./docreview";
-import { FLOWS } from "./flows";
 import { SOURCES } from "./sources";
 import { ADMIN } from "./admin";
 
@@ -19,7 +18,7 @@ import { ADMIN } from "./admin";
    Render one with: node scripts/shot.mjs --sheet <name> "state:<Component>" */
 export const COMPONENT_STATES: ComponentSpec[] = [
   ...CORE, ...FORMS, ...NAVIGATION, ...CARDS, ...CHATFLOW, ...INSIGHTS,
-  ...SHELL, ...LINEAGE, ...OVERVIEW, ...KNOWLEDGE, ...DOCREVIEW, ...FLOWS,
+  ...SHELL, ...LINEAGE, ...OVERVIEW, ...KNOWLEDGE, ...DOCREVIEW,
   ...SOURCES, ...ADMIN,
 ];
 

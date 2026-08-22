@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Route } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta, CardSection, CardActions } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -41,6 +42,14 @@ export type Answer = {
   served: number;
   spark: number[];
   updated: string;
+  /** The observed workflow this answer was drafted from, when it was promoted
+      out of one. The card links back to it so the wording and the run that
+      produced the wording are one click apart. */
+  trajectoryId?: number | null;
+  /** When somebody should look at this answer again. ISO date, or absent. An
+      answer mined from one conversation is the most perishable thing in the
+      library, so the date it carries is shown rather than kept in the row. */
+  recheckAfter?: string;
 };
 
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join(""); }
@@ -57,6 +66,10 @@ export type AnswerActions = {
   setStatus?: (args: { id: number; status: AnswerStatus }) => void | Promise<void>;
   /** Replace the set of channels that serve this answer. */
   setChannels?: (args: { id: number; channels: Channel[] }) => void | Promise<void>;
+  /** Open the observed workflow this answer was promoted from. Absent means
+      the host cannot reach one, and no origin link is drawn — a link that
+      cannot go anywhere is worse than no link. */
+  openWorkflow?: (trajectoryId: number) => void;
 };
 
 export type AnswerCardProps = {
@@ -247,7 +260,15 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
              makes the truncation below actually fire. */
           className="min-w-0 [&_.whitespace-nowrap]:min-w-0"
           source={a.sources[0] ? <Chip className="min-w-0" label={a.sources[0].source} tone="neutral" icon={<SourceMark provider={a.sources[0].source} size={13} />} /> : undefined}
-          status={<StatusChip status={chipStatus} />}
+          status={(
+            <>
+              <StatusChip status={chipStatus} />
+              {/* A recheck date is a state, not a second "updated": it says
+                  this wording has a shelf life. Rendered only when the answer
+                  actually carries one (§9). */}
+              {a.recheckAfter && <Chip label={`Recheck ${fmtDate(a.recheckAfter)}`} tone="attention" dot />}
+            </>
+          )}
           date={<span className="shrink-0">Updated {fmtDate(a.updated)}</span>}
           author={(
             /* The meta line is whitespace-nowrap, so the owner name has to be
@@ -290,6 +311,16 @@ export function AnswerCard({ answer: initial, loading = false, actions, classNam
             })}
           </div>
         </CardSection>
+
+        {/* Where this answer came from. Only drawn when it was promoted out of
+            an observed run AND the host can open one. */}
+        {a.trajectoryId != null && actions?.openWorkflow && (
+          <CardSection label="Origin">
+            <Button variant="link" compact onClick={() => actions.openWorkflow!(a.trajectoryId!)}>
+              <Route size={13} /> Open the workflow this came from
+            </Button>
+          </CardSection>
+        )}
 
         {/* 10 — owners */}
         <CardSection label="Owners">

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Sparkles, Calendar, Plus, X } from "lucide-react";
 import { ChatDock as ChatDockUI } from "../chat/ChatDock";
-import type { ChatMessageData, ToolCallData } from "../chat/types";
+import type { ChatMessageData, ChatSourceData, ToolCallData } from "../chat/types";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuLabel } from "../navigation/Menu";
 import { Skeleton, SkeletonLine, SkeletonText, SkeletonCircle } from "../data-display/Skeleton";
@@ -25,17 +25,58 @@ const OFFLINE_MSG = "I can't reach the agent backend right now. This is a local 
 let uid = 0;
 const nextId = () => `m${++uid}`;
 
+/* The demo answers in markdown with citations, because that is what the real
+   agent sends: the reply is a document, and every claim in it names the source
+   it came from. */
+const SEED_ANSWER = [
+  "Three documents still describe the retired **3 seat** free tier.",
+  "",
+  "# What I changed",
+  "",
+  "- `pricing.md` is customer-facing and now tagged Needs review [1].",
+  "- The onboarding guide repeats the same figure [2].",
+  "- The internal runbook is left alone, it is describing history [3].",
+].join("\n");
+
+const SEED_SOURCES: ChatSourceData[] = [
+  {
+    n: 1, source: "confluence", kind: "page", title: "Pricing and packaging, 2026",
+    snippet: "Every workspace starts on the free tier. Seats are not capped.",
+    author: "Dana Reyes", updated: "2026-08-19T09:12:00Z", tags: ["Canonical", "Customer facing"],
+    document_id: "d_881", href: "/knowledge/d_881",
+    source_url: "https://mari-hq.atlassian.net/wiki/spaces/FERN/pages/881", score: 0.93,
+  },
+  {
+    n: 2, source: "gdocs", kind: "document", title: "Onboarding guide, self serve",
+    snippet: "Invite up to 3 teammates on the free plan before you need to upgrade.",
+    author: "Priya Raman", updated: "2026-05-04T13:00:00Z", tags: ["Needs review"],
+    document_id: "d_902", href: "/knowledge/d_902",
+    source_url: "https://docs.google.com/document/d/902", score: 0.78,
+  },
+  {
+    n: 3, source: "github", kind: "pull request", title: "Remove the seat cap from billing",
+    snippet: "Drops the 3 seat check. The runbook keeps the old behaviour documented for support.",
+    author: "Sam Okafor", updated: "2026-04-28T08:20:00Z", tags: ["Internal"],
+    document_id: "d_915", href: "/knowledge/d_915",
+    source_url: "https://github.com/mari-hq/billing/pull/2210", score: 0.66,
+  },
+];
+
 function seedTranscript(): ChatMessageData[] {
   return [
     { id: nextId(), role: "user", content: "Find docs that mention the old 3-seat free tier and flag them" },
     {
       id: nextId(),
       role: "assistant",
-      content:
-        "I found 3 documents referencing the 3-seat limit. Two are customer-facing and now stale; I've flagged them for review and left the internal runbook alone.",
+      content: SEED_ANSWER,
+      sources: SEED_SOURCES,
       tools: [
         { id: "t1", name: "search_docs", args: { query: "free tier 3 seats", limit: 20 }, summary: "3 matches across handbook, pricing, onboarding", ok: true },
         { id: "t2", name: "tag_document", args: { doc: "pricing.md", tag: "needs-review" }, summary: "tagged pricing.md needs-review", ok: true },
+        {
+          id: "t3", name: "search_slack", args: { query: "free tier seats" }, ok: false, state: "auth_required",
+          auth: { provider: "slack", kind: "oauth", scopes: ["channels:read", "search:read"], setupUrl: "/settings/sources/slack" },
+        },
       ],
     },
     { id: nextId(), role: "warning", content: "Rate limit near: 8 of 10 tool calls used this minute." },
@@ -86,10 +127,10 @@ export function ChatDockFeature({ sessions, defaultOpen = true, loading = false,
       setMessages((cur) => [...cur, { id: nextId(), role: "assistant", content: "", tools: [tool], streaming: true }]);
     });
     after(1200, () => {
-      patchLast((m) => ({ ...m, tools: [{ ...tool, summary: "4 matching documents", ok: true }] }));
+      patchLast((m) => ({ ...m, tools: [{ ...tool, summary: "4 matching documents", ok: true }], sources: SEED_SOURCES }));
     });
 
-    const reply = "Done. I searched the knowledge base and pulled the relevant documents. Ask me to tag, edit, or open any of them.";
+    const reply = "Done. I searched the knowledge base and pulled the documents behind this [1]. Ask me to tag, edit, or open any of them.";
     const words = reply.split(" ");
     words.forEach((_, i) => {
       after(1500 + i * 55, () => {

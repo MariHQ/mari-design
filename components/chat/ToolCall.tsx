@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { Check, X, ChevronRight } from "lucide-react";
+import { Check, X, ChevronRight, KeyRound } from "lucide-react";
+import { buttonClasses } from "../actions/Button";
 import { Scrollable } from "../data-display/Scrollable";
 import { Spinner } from "../data-display/Spinner";
+import { SourceMark } from "../icons/marks";
 import { focusRing } from "../tokens/focusRing";
 import type { ToolCallData } from "./types";
+
+/** "slack" reads as a key, "Slack" reads as the thing the reader connects. */
+const providerLabel = (p: string) =>
+  p ? p.charAt(0).toUpperCase() + p.slice(1) : "the source";
 
 function shortArgs(args: Record<string, unknown>): string {
   return Object.entries(args)
@@ -35,7 +41,7 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
          18px indent as the assistant's reply text (CHAT_INDENT). */
       className={[
         "pl-4 border-l-2",
-        failed ? "border-espelette/45" : "border-ink/10",
+        authRequired ? "border-clay/45" : failed ? "border-espelette/45" : "border-ink/10",
       ].join(" ")}
     >
       <button
@@ -47,11 +53,16 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
         <span
           className={[
             "inline-flex items-center justify-center w-4 h-4 shrink-0",
-            failed ? "text-espelette" : "text-moss",
+            authRequired ? "text-clay" : failed ? "text-espelette" : "text-moss",
           ].join(" ")}
           aria-hidden="true"
         >
-          {running ? (
+          {/* Waiting on an authorization is not a failure — nothing went
+              wrong, the reader has something to do. A red cross says the
+              opposite and sends them looking for a bug. */}
+          {authRequired ? (
+            <KeyRound size={13} />
+          ) : running ? (
             <Spinner size="sm" label={`Running ${tool.name}`} />
           ) : failed ? (
             <X size={13} />
@@ -73,11 +84,36 @@ export function ToolCall({ tool }: { tool: ToolCallData }) {
         </span>
       </button>
 
-      <div className="pb-0.5 pl-[22px] text-[12.5px] text-ink/70 overflow-hidden text-ellipsis whitespace-nowrap">
-        {authRequired && tool.auth?.setupUrl ? (
-          <a className="font-medium text-biscay underline" href={tool.auth.setupUrl}>Authorize {tool.auth.provider}</a>
-        ) : proposed ? "Proposed speculatively" : running ? "Running…" : tool.summary}
-      </div>
+      {authRequired ? (
+        /* The one row that carries an action instead of a result. It gets a
+           block of its own because the summary line is a single clipped line
+           (§12) and a call to action that ellipsises is not one. The button is
+           BOTTOM LEFT (§2), and it is an <a> because it goes to a URL: a
+           <button onClick> would take away cmd-click and copy link address. */
+        <div className="ml-[22px] mb-1.5 px-2.5 py-2 rounded-[4px] border border-clay/35 bg-clay/[0.07]">
+          <p className="text-[12.5px] leading-snug text-clay">
+            {providerLabel(tool.auth?.provider ?? "")} is not connected, so this step did not run.
+          </p>
+          {tool.auth?.scopes && tool.auth.scopes.length > 0 && (
+            <p className="mt-1 font-term text-[11px] leading-snug text-ink/70 [overflow-wrap:anywhere]">
+              Needs {tool.auth.scopes.join(", ")}
+            </p>
+          )}
+          {tool.auth?.setupUrl && (
+            <a
+              href={tool.auth.setupUrl}
+              className={`${buttonClasses({ variant: "primary", compact: true, className: "mt-2" })}`}
+            >
+              <SourceMark provider={tool.auth.provider} size={13} />
+              Connect {providerLabel(tool.auth.provider)}
+            </a>
+          )}
+        </div>
+      ) : (
+        <div className="pb-0.5 pl-[22px] text-[12.5px] text-ink/70 overflow-hidden text-ellipsis whitespace-nowrap">
+          {proposed ? "Proposed speculatively" : running ? "Running…" : tool.summary}
+        </div>
+      )}
 
       {expanded && (
         <Scrollable fade="flysch" className="ml-[22px] mb-1.5 rounded-[4px] border border-ink/10 bg-flysch">

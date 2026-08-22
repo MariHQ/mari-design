@@ -1,17 +1,14 @@
 import type { ComponentSpec } from "./types";
 import {
-  OverviewStatTiles, OverviewDigestCard, OverviewTodayReview, OverviewSourcePulse,
-  OverviewLiveActivity, OverviewWorkflowStrip, OverviewRecentDocs,
+  OverviewStatTiles, OverviewDigestCard, OverviewSourcePulse,
+  OverviewLiveActivity, OverviewRecentDocs,
 } from "../../features";
-import type { ReviewTask } from "../../features/OverviewTodayReview";
 import type { PulseTileData } from "../../features/OverviewSourcePulse";
 import type { FeedItem } from "../../features/OverviewLiveActivity";
 import type { RecentDoc } from "../../features/OverviewRecentDocs";
-import type { WfFlow } from "../../features/OverviewWorkflowStrip";
 import type { DigestTopic } from "../../data-display/DigestCard";
 import {
-  OVERVIEW_STATS, OVERVIEW_TASKS, OVERVIEW_TOPICS, OVERVIEW_TILES,
-  OVERVIEW_FEED, OVERVIEW_DOCS, OVERVIEW_FLOW, OVERVIEW_RUN,
+  OVERVIEW_STATS, OVERVIEW_TOPICS, OVERVIEW_TILES, OVERVIEW_FEED, OVERVIEW_DOCS,
 } from "../fixtures/features";
 
 /* State matrix for the overview group. Author EVERY state worth reviewing:
@@ -53,22 +50,6 @@ const LONG_TOPICS: DigestTopic[] = [
   },
 ];
 
-/* ── Review fixtures ─────────────────────────────────────────────────── */
-const MANY_TASKS: ReviewTask[] = Array.from({ length: 14 }, (_, i) => ({
-  id: i + 1,
-  text: `Verify the proration rule in the billing runbook, pass ${i + 1}`,
-  who: ["DR", "MG", "PK", "SL"][i % 4],
-  pill: ["factcheck", "approval", "stale", "needs-review", "canonical"][i % 5],
-  pillText: ["Fact check", "Approval", "Stale", "Needs review", "Canonical"][i % 5],
-  done: i % 3 === 0,
-}));
-
-const LONG_TASKS: ReviewTask[] = [
-  { id: 1, text: LONG, who: "DR", pill: "factcheck", pillText: "Fact check" },
-  { id: 2, text: HUGE, who: "MG", pill: "needs-review", pillText: "Needs review" },
-  { id: 3, text: "Approve the SSO onboarding guide for publish", who: "PK", pill: "approval", pillText: "Approval", done: true },
-];
-
 /* ── Pulse fixtures ──────────────────────────────────────────────────── */
 const MANY_TILES: PulseTileData[] = [
   { key: "github", name: "GitHub", stat: "128", unit: "commits", status: "active", bars: [4, 7, 5, 9, 6, 11, 8] },
@@ -103,22 +84,6 @@ const MANY_FEED: FeedItem[] = Array.from({ length: 16 }, (_, i) => ({
   secondsAgo: 60 * (i + 1),
 }));
 
-/* ── Workflow fixtures ───────────────────────────────────────────────── */
-const LONG_FLOW: WfFlow = {
-  name: "Docs guardrail, nightly contradiction sweep across every connected source",
-  status: "active",
-  nodes: [
-    { kind: "trigger", label: "When any document in a tracked space changes" },
-    { kind: "fetch_docs", label: HUGE },
-    { kind: "refine", label: "Tighten" },
-    { kind: "fact_check", label: "Fact check every claim", state: "supported" },
-    { kind: "condition", label: "No contradictions", state: "supported" },
-    { kind: "approval", label: "Await a human approver", state: "queued" },
-    { kind: "notify", label: "Post to Slack", state: "succeeded" },
-    { kind: "notify", label: "Notify the documentation owner", state: "failed" },
-  ],
-};
-
 /* ── Recent docs fixtures ────────────────────────────────────────────── */
 const MANY_DOCS: RecentDoc[] = Array.from({ length: 12 }, (_, i) => ({
   id: 200 + i,
@@ -151,15 +116,6 @@ const STRESS_TOPICS: DigestTopic[] = Array.from({ length: 40 }, (_, i) => ({
   })),
 }));
 
-const STRESS_TASKS: ReviewTask[] = Array.from({ length: 320 }, (_, i) => ({
-  id: i + 1,
-  text: i % 17 === 0 ? LONG : i % 23 === 0 ? HUGE : `Verify the proration rule in the billing runbook, pass ${i + 1}`,
-  who: ["DR", "MG", "PK", "SL"][i % 4],
-  pill: ["factcheck", "approval", "stale", "needs-review", "canonical"][i % 5],
-  pillText: ["Fact check", "Approval", "Stale", "Needs review", "Canonical"][i % 5],
-  done: i % 3 === 0,
-}));
-
 const STRESS_TILES: PulseTileData[] = Array.from({ length: 40 }, (_, i) => ({
   key: ["github", "slack", "notion", "gdocs", "granola", "linear", "jira", "confluence", "zendesk", "salesforce"][i % 10],
   name: i % 11 === 0 ? HUGE : `${["GitHub", "Slack", "Notion", "Google Drive", "Granola", "Linear", "Jira", "Confluence", "Zendesk", "Salesforce"][i % 10]} workspace ${i + 1}`,
@@ -177,16 +133,6 @@ const STRESS_FEED: FeedItem[] = Array.from({ length: 400 }, (_, i) => ({
   target: i % 13 === 0 ? HUGE : `Runbook section ${i + 1}: proration, credits, expansion`,
   secondsAgo: 45 * (i + 1),
 }));
-
-const STRESS_FLOW: WfFlow = {
-  name: "Docs guardrail, nightly contradiction sweep across every connected source",
-  status: "active",
-  nodes: Array.from({ length: 60 }, (_, i) => ({
-    kind: (["trigger", "fetch_docs", "refine", "fact_check", "condition", "approval", "notify"] as const)[i % 7],
-    label: i % 7 === 0 ? HUGE : `Step ${i + 1}: check every claim in the fetched set`,
-    state: (["supported", "queued", "succeeded", "failed"] as const)[i % 4],
-  })),
-};
 
 const STRESS_DOCS: RecentDoc[] = Array.from({ length: 400 }, (_, i) => ({
   id: 1000 + i,
@@ -235,26 +181,6 @@ export const OVERVIEW: ComponentSpec[] = [
     ],
   },
   {
-    id: "OverviewTodayReview", title: "Overview / Today's review", width: 680,
-    states: [
-      { id: "default", label: "Default (collapsed)", node: <OverviewTodayReview tasks={OVERVIEW_TASKS} /> },
-      { id: "expanded", label: "Expanded (view all)", node: <OverviewTodayReview tasks={OVERVIEW_TASKS} defaultExpanded /> },
-      { id: "loading", label: "Loading", node: <OverviewTodayReview tasks={[]} loading /> },
-      { id: "empty", label: "Empty (nothing to review)", node: <OverviewTodayReview tasks={[]} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewTodayReview tasks={null} offline /> },
-      { id: "alldone", label: "All done (clear enabled)", node: (
-        <OverviewTodayReview tasks={MANY_TASKS.slice(0, 3).map((t) => ({ ...t, done: true }))} />) },
-      { id: "manyrows", label: "Overflow: 14 rows, expanded", node: (
-        <OverviewTodayReview tasks={MANY_TASKS} defaultExpanded />) },
-      { id: "longtext", label: "Overflow: long + unbreakable task text", node: (
-        <OverviewTodayReview tasks={LONG_TASKS} />) },
-      { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
-        <OverviewTodayReview tasks={LONG_TASKS} />) },
-      { id: "stress", label: "Volume: 320 tasks, expanded", node: (
-        <OverviewTodayReview tasks={STRESS_TASKS} defaultExpanded />) },
-    ],
-  },
-  {
     id: "OverviewSourcePulse", title: "Overview / Source pulse", width: 680,
     states: [
       { id: "default", label: "Default (collapsed)", node: <OverviewSourcePulse tiles={OVERVIEW_TILES} /> },
@@ -288,35 +214,6 @@ export const OVERVIEW: ComponentSpec[] = [
         <OverviewLiveActivity items={LONG_FEED} pollMs={0} />) },
       { id: "stress", label: "Volume: 400 events", node: (
         <OverviewLiveActivity items={STRESS_FEED} pollMs={0} />) },
-    ],
-  },
-  {
-    id: "OverviewWorkflowStrip", title: "Overview / Workflow strip", width: 680,
-    states: [
-      { id: "default", label: "Default", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={OVERVIEW_RUN} /> },
-      { id: "configuring", label: "Configure panel open", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={OVERVIEW_RUN} defaultConfiguring /> },
-      { id: "paused", label: "Paused flow, failed last run", node: (
-        <OverviewWorkflowStrip
-          flow={{ name: "Nightly stale sweep", status: "paused", nodes: [
-            { kind: "trigger", label: "Every night" },
-            { kind: "tag", label: "Tag stale" },
-            { kind: "condition", label: "Anything stale?", state: "contradiction" },
-            { kind: "create_task", label: "Open a task", state: "failed" },
-          ] }}
-          run={{ started: "2026-07-19T02:14:00", outcome: "Failed" }} />) },
-      { id: "unknownoutcome", label: "Unmapped run outcome (free text)", node: (
-        <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={{ started: "2026-07-20T14:57:00", outcome: "Partially applied with warnings" }} />) },
-      { id: "neverrun", label: "Never run", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={null} /> },
-      { id: "runsloading", label: "Runs still loading", node: <OverviewWorkflowStrip flow={OVERVIEW_FLOW} run={null} runsLoading /> },
-      { id: "loading", label: "Loading", node: <OverviewWorkflowStrip flow={null} run={null} loading /> },
-      { id: "empty", label: "Empty (no flows)", node: <OverviewWorkflowStrip flow={null} run={null} /> },
-      { id: "offline", label: "Offline (no API)", node: <OverviewWorkflowStrip flow={null} run={null} offline /> },
-      { id: "manysteps", label: "Overflow: 8 steps, long + unbreakable labels", node: (
-        <OverviewWorkflowStrip flow={LONG_FLOW} run={OVERVIEW_RUN} defaultConfiguring />) },
-      { id: "narrow", label: "Overflow: narrow 320 frame", width: 320, node: (
-        <OverviewWorkflowStrip flow={LONG_FLOW} run={OVERVIEW_RUN} />) },
-      { id: "stress", label: "Volume: 60-step flow, every step checked", node: (
-        <OverviewWorkflowStrip flow={STRESS_FLOW} run={OVERVIEW_RUN} defaultConfiguring />) },
     ],
   },
   {

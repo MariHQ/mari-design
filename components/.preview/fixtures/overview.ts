@@ -7,26 +7,14 @@ import type { FeedItem } from "../../features/OverviewLiveActivity";
 import type { RecentDoc } from "../../features/OverviewRecentDocs";
 import type { PulseTileData } from "../../features/OverviewSourcePulse";
 import type { OverviewStats } from "../../features/OverviewStatTiles";
-import type { ReviewTask } from "../../features/OverviewTodayReview";
-import type { WfFlow, WfRun } from "../../features/OverviewWorkflowStrip";
 import type { OverviewData } from "../../pages/OverviewPage";
 import type { PageFixtures } from "./types";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, UNBREAKABLE,
-  LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, MANY_INITIALS, repeat,
+  LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, MANY_TAGS, repeat,
 } from "./stress";
 
 const STATS: OverviewStats = { changes: 47, factsReview: 6, flowsRunning: 3 };
-
-const TASKS: ReviewTask[] = [
-  { id: 1, text: "Verify the new proration rule in the billing runbook", who: "DR", pill: "factcheck", pillText: "Fact check" },
-  { id: 2, text: "Approve the SSO onboarding guide for publish", who: "MG", pill: "approval", pillText: "Approval" },
-  { id: 3, text: "Retire two stale screenshots in auth/README", who: "PK", pill: "stale", pillText: "Stale", done: true },
-  { id: 4, text: "Review the incident escalation ladder", who: "SL", pill: "needs-review", pillText: "Needs review" },
-  { id: 5, text: "Tag the pricing FAQ as canonical", who: "DR", pill: "canonical", pillText: "Canonical" },
-  { id: 6, text: "Link the on-call guide to the escalation ladder", who: "MG", pill: "needs-review", pillText: "Needs review" },
-  { id: 7, text: "Confirm the Okta walkthrough screenshots are current", who: "PK", pill: "factcheck", pillText: "Fact check" },
-];
 
 const DIGEST: DigestTopic[] = [
   {
@@ -87,19 +75,6 @@ const DOCS: RecentDoc[] = [
   { id: 106, source: "linear", title: "On-call guide: escalation ladder", date: "2026-07-08" },
 ];
 
-const FLOW: WfFlow = {
-  name: "Docs guardrail",
-  status: "active",
-  nodes: [
-    { kind: "trigger", label: "When docs change" },
-    { kind: "refine", label: "Tighten" },
-    { kind: "condition", label: "No contradictions", state: "supported" },
-    { kind: "notify", label: "Post to Slack", state: "succeeded" },
-  ],
-};
-
-const RUN: WfRun = { started: "2026-07-20T14:57:00", outcome: "Passed" };
-
 const SOURCES: PulseTileData[] = [
   { key: "github", name: "GitHub", stat: "128", unit: "commits", status: "active", bars: [4, 7, 5, 9, 6, 11, 8] },
   { key: "slack", name: "Slack", stat: "412", unit: "messages", status: "active", bars: [30, 22, 41, 18, 35, 27, 44] },
@@ -119,8 +94,7 @@ const DEFAULT: OverviewData = {
      stores. */
   timeZone: "America/Los_Angeles",
   range: { preset: "30d" },
-  stats: STATS, tasks: TASKS, digest: DIGEST, activity: ACTIVITY,
-  docs: DOCS, flow: FLOW, run: RUN, sources: SOURCES,
+  stats: STATS, digest: DIGEST, activity: ACTIVITY, docs: DOCS, sources: SOURCES,
   activityPollMs: 0,
 };
 
@@ -129,7 +103,7 @@ const DEFAULT: OverviewData = {
 const EMPTY: OverviewData = {
   personName: "Dana",
   stats: { changes: 0, factsReview: 0, flowsRunning: 0 },
-  tasks: [], digest: [], activity: [], docs: [], flow: null, run: null, sources: [],
+  digest: [], activity: [], docs: [], sources: [],
   activityPollMs: 0,
 };
 
@@ -150,14 +124,6 @@ function strained(extreme: boolean): OverviewData {
     : [LONG_DOC_TITLE, LONG_TITLE, `${LONG_NAME}, ${LONG_SOURCE}`]
   ).map((title, i) => ({ id: 100 + i, source: ["github", "notion", "granola"][i], title, date: "2026-07-20" }));
 
-  const tasks = (extreme
-    ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT, `${HUGE_NUMBER_STR} ${UNBREAKABLE}`]
-    : repeat(() => LONG_PARAGRAPH, 4)
-  ).map((text, i) => ({
-    id: i + 1, text, who: MANY_INITIALS[i % MANY_INITIALS.length], pill: "needs-review",
-    pillText: extreme ? UNBREAKABLE : "Needs review: long editorial label that will not fit",
-  }));
-
   const activity = (extreme
     ? [UNBREAKABLE, LONG_WORD, MIXED_SCRIPT]
     : [LONG_NAME, LONG_SOURCE, LONG_DOC_TITLE]
@@ -177,19 +143,7 @@ function strained(extreme: boolean): OverviewData {
   return {
     personName: extreme ? LONG_WORD : LONG_NAME,
     stats: { changes: HUGE_NUMBER, factsReview: HUGE_NUMBER, flowsRunning: HUGE_NUMBER },
-    tasks, digest, activity, docs, sources,
-    flow: {
-      name: extreme ? UNBREAKABLE : LONG_TITLE,
-      status: "active" as const,
-      nodes: repeat((i) => ({
-        kind: (["trigger", "refine", "condition", "notify"] as const)[i % 4],
-        label: extreme ? LONG_WORD : LONG_SOURCE,
-      }), 8),
-    },
-    run: {
-      started: extreme ? UNBREAKABLE : LONG_SOURCE,
-      outcome: extreme ? MIXED_SCRIPT : "Passed after a very long retry loop",
-    },
+    digest, activity, docs, sources,
     activityPollMs: 0,
   };
 }

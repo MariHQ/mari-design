@@ -4,6 +4,7 @@ import { Minus, Plus, Maximize2, Move } from "lucide-react";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Chip } from "../data-display/Chip";
+import type { ChipTone } from "../data-display/Chip";
 import { Button } from "../actions/Button";
 import { Skeleton, SkeletonLine } from "../data-display/Skeleton";
 import { Scrollable } from "../data-display/Scrollable";
@@ -15,7 +16,8 @@ import {
   REL, REL_ORDER, NodeGlyph, staleColor, ownerColor, SOURCE_ACCENT, SOURCE_LABELS,
   NODE_CREAM, clamp, useLineageControls, nodePasses, nodeMatchesQuery,
   nodeById, tracePath, nodeEditedAfter, edgeCreatedAfter, nodeStatusKey,
-  buildOverviewGraph, buildFocusedGraph, isLineageRelation,
+  buildOverviewGraph, buildFocusedGraph, isLineageRelation, groupParts,
+  overviewGroupId, MACRO_PREFIX,
   LINEAGE_RELATIONS,
   type LNode, type LEdge, type Lens, type LayoutMode, type LineageMode,
 } from "./LineageDataModel";
@@ -24,10 +26,10 @@ import {
    Lineage graph canvas (feature: lineage-graph)
 
    The central instrument of the lineage page: a directed graph of document
-   nodes + typed edges. The real console renders this with Cytoscape.js +
-   cytoscape-dagre; that engine can't be pulled in here, so this is a faithful
-   representation — inline SVG edges + absolutely-positioned HTML node cards
-   over a faint paper grid.
+   nodes + typed edges, drawn as inline SVG edges under absolutely-positioned
+   HTML node cards over a faint paper grid. There is no graph engine behind it
+   and none is planned: the layout arrives with the data (the server does the
+   auto-layout), so the canvas only has to place, filter and draw.
 
    The canvas is live, not a picture: drag the background to pan, drag a node to
    move it, click to select, and the zoom controls drive a real scale transform.
@@ -74,6 +76,12 @@ export type LineageGraphProps = {
       May throw; the canvas shows the message over the graph. Omitted = the
       move stays local, which is what the design canvas renders. */
   onPinNode?: (args: { docId: number; x: number; y: number }) => void | Promise<void>;
+  /** What the canvas ended up drawing, reported whenever the numbers change:
+      how many cards are on screen, how many passed the filters, how many the
+      graph holds, and the cap in force. The toolbar renders this as an honest
+      "showing N of M" with a control to raise the cap — the cap is applied
+      here, so this is the only place that knows the true numbers. */
+  onVolume?: (volume: { shown: number; matching: number; total: number; cap: number }) => void;
   /** Render a content-shaped skeleton silhouette instead of the graph. */
   loading?: boolean;
   className?: string;
@@ -90,10 +98,22 @@ function accentColor(node: LNode, lens: Lens): string {
 
 /** Second, non-color channel for the left bar: what the lens is saying. */
 function accentWord(node: LNode, lens: Lens): string {
-  if (lens === "source") return (SOURCE_LABELS[node.source] ?? node.source).toUpperCase();
-  if (lens === "stale") return `${node.staleDays ?? 0}D`;
-  if (lens === "owner") return (node.owner ?? "Unowned").toUpperCase();
-  return node.warn || node.orphan ? "WARN" : "OK";
+  if (lens === "source") return SOURCE_LABELS[node.source] ?? node.source;
+  if (lens === "stale") return `${node.staleDays ?? 0} days`;
+  if (lens === "owner") return node.owner ?? "Unowned";
+  return node.warn || node.orphan ? "Warn" : "OK";
+}
+
+/** Third channel again, for readers who cannot separate the bar's hues: the
+    chip's own tone. Source and owner are categories, not verdicts, so they
+    stay neutral rather than colouring a healthy document red by accident. */
+function accentTone(node: LNode, lens: Lens): ChipTone {
+  if (lens === "health") return node.warn || node.orphan ? "blocked" : "ok";
+  if (lens === "stale") {
+    const days = node.staleDays ?? 0;
+    return days <= 14 ? "ok" : days <= 45 ? "attention" : "blocked";
+  }
+  return "neutral";
 }
 
 /** Directed BFS closure over edges (down = impact, up = provenance). */
@@ -132,12 +152,25 @@ const DEFAULT_MAX_NODES = 35;
 const DECLUTTER_AT = 18;
 /** Above this many drawn edges the per-edge codes stop being painted. */
 const LABEL_LIMIT = 40;
-/** Lane grid: 5 columns × 7 rows fits DEFAULT_MAX_NODES 152px cards with air
+/** Lane grid: 5 columns × 7 rows fits DEFAULT_MAX_NODES cards with air
     between them on a 900px canvas. More columns and the cards touch. The rows
     start below the zoom controls and stop above the drag hint so the canvas
     overlays never sit on a card. */
 const GRID_COLS = 5;
 const GRID_ROWS = 7;
+/** Node card width in px, and its half — the card is centred on its position,
+    so half a card is how far inside the canvas the centre has to stay. The
+    card's own class is the literal `w-[168px]`; keep the two in step. */
+const CARD_W = 168;
+const CARD_HALF = CARD_W / 2;
+/** Half a two-line card's height. The canvas clips at its own edges, so a card
+    whose position sits within half a card of the bottom loses its second line
+    — which is where the source, the owner and the freshness live. */
+const CARD_HALF_H = 26;
+/** Roughly what one card occupies as a fraction of the canvas, used to leave
+    the outermost cards whole when the viewport is fitted to them. */
+const CARD_FRAC_W = 0.21;
+const CARD_FRAC_H = 0.15;
 const GRID_TOP = 0.14;
 const GRID_BOTTOM = 0.85;
 
@@ -187,19 +220,26 @@ export function LineageGraph({
   nodes: rawNodes, edges: rawEdges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
   mode, hopDepth = 1, minConfidence = 0.8,
-  onSelectNode, onSelectGroup, onSelectEdge, onPinNode, loading = false, className = "",
+  onSelectNode, onSelectGroup, onSelectEdge, onPinNode, onVolume,
+  loading = false, className = "",
 }: LineageGraphProps) {
+  const [controls, setControls] = useLineageControls();
+  /* Which roll-ups the reader unfolded in place. Joined into a string so the
+     memo below re-runs when the SET changes and not on every patch that mints
+     a new array with the same ids in it. */
+  const expandedKey = controls.expanded.join("\u0000");
   const graph = useMemo(() => {
-    if (mode === "overview") return buildOverviewGraph(rawNodes, rawEdges, minConfidence);
+    if (mode === "overview") {
+      return buildOverviewGraph(rawNodes, rawEdges, minConfidence, expandedKey ? expandedKey.split("\u0000") : []);
+    }
     if (mode === "provenance" || mode === "impact") {
       return buildFocusedGraph(rawNodes, rawEdges, focalId, mode, hopDepth, minConfidence);
     }
     return { nodes: rawNodes, edges: rawEdges };
-  }, [rawNodes, rawEdges, focalId, mode, hopDepth, minConfidence]);
+  }, [rawNodes, rawEdges, focalId, mode, hopDepth, minConfidence, expandedKey]);
   const nodes = graph.nodes;
   const edges = graph.edges;
   const byId = useMemo(() => nodeById(nodes), [nodes]);
-  const [controls, setControls] = useLineageControls();
   const [sel, setSel] = useState<{ kind: "node" | "edge"; id: string } | null>(
     focalId ? { kind: "node", id: focalId } : null,
   );
@@ -268,9 +308,14 @@ export function LineageGraph({
   const path = useMemo(() => tracePath(controls.path, edges), [controls.path, edges]);
 
   /* The cap: keep the best-connected nodes, and never drop the focal node, the
-     trace origin, or anything inside an active trace closure. */
+     trace origin, or anything inside an active trace closure.
+
+     `maxNodes` is the workspace default; the reader can raise it from the
+     toolbar, and that choice lives in the shared control store so the number
+     the toolbar prints and the number the canvas obeys can never disagree. */
+  const cap = Math.max(1, controls.maxNodes ?? maxNodes);
   const visibleNodes = useMemo(() => {
-    if (passing.length <= maxNodes) return passing;
+    if (passing.length <= cap) return passing;
     const deg = degreeMap(edges);
     const keep = [...passing].sort((a, b) => {
       // A node on the current path is never capped away: dropping one end (or
@@ -278,11 +323,11 @@ export function LineageGraph({
       const pin = (n: LNode) => (n.id === focalId || n.id === trace?.originId ? 1 : 0) +
         (closure?.has(n.id) ? 1 : 0) + (path?.nodes.has(n.id) ? 2 : 0);
       return pin(b) - pin(a) || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || a.id.localeCompare(b.id);
-    }).slice(0, maxNodes);
+    }).slice(0, cap);
     const kept = new Set(keep.map((n) => n.id));
     // Restore the authored order so the layout is not reshuffled by ranking.
     return passing.filter((n) => kept.has(n.id));
-  }, [passing, maxNodes, edges, focalId, trace?.originId, closure, path]);
+  }, [passing, cap, edges, focalId, trace?.originId, closure, path]);
 
   const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -298,12 +343,19 @@ export function LineageGraph({
   const basePos = (n: LNode) => (effLayout === "timeline" ? timeline[n.id] ?? { x: n.x, y: n.y } : { x: n.x, y: n.y });
 
   /* Declutter: a dense canvas gets lanes instead of authored coordinates, so
-     no two cards can overlap. Small graphs keep the layout they were given. */
+     no two cards can overlap. Small graphs keep the layout they were given.
+
+     An unfolded roll-up always gets lanes, however few cards it produced: the
+     members arrive clustered on the slot their macro card held, and a cluster
+     tight enough to read as one bucket is tight enough for two cards to land
+     on the same clamped position at the canvas edge. Lanes are what the
+     unfolding is FOR — seeing the members apart from each other. */
+  const unfoldedOverview = mode === "overview" && controls.expanded.length > 0;
   const lanes = useMemo(
-    () => (visibleNodes.length > DECLUTTER_AT ? gridPositions(visibleNodes, basePos) : null),
+    () => (visibleNodes.length > DECLUTTER_AT || unfoldedOverview ? gridPositions(visibleNodes, basePos) : null),
     // basePos is derived from effLayout + timeline, both listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleNodes, effLayout, timeline],
+    [visibleNodes, effLayout, timeline, unfoldedOverview],
   );
 
   const posOf = (n: LNode) => moved[n.id] ?? lanes?.[n.id] ?? basePos(n);
@@ -316,6 +368,108 @@ export function LineageGraph({
     const n = byId[id];
     return n ? !nodeMatchesQuery(n, controls.query) : false;
   };
+
+  /* ── viewport: fit, fit-to-selection, reset ───────────────────────────
+     The reader can pan and zoom by hand, which means they can also lose the
+     graph off the edge of the canvas. Three ways back, all of them arriving
+     through the shared control store because the buttons are in the toolbar
+     and the geometry is only known here. */
+
+  /** The focal node and everything one link from it: what "fit to selection"
+      is actually about, since a single card fitted alone tells you nothing
+      about where it sits. */
+  const selectionSet = useMemo(() => {
+    const wanted = sel?.kind === "node" ? sel.id : focalId;
+    if (!wanted) return null;
+    /* The focal DOCUMENT is not always a card. In the overview it is folded
+       into the macro card standing for its bucket, and that card is what "the
+       selection" means on this canvas — without this the fit had nothing to
+       frame and quietly reset the zoom instead. */
+    const raw = rawNodes.find((n) => n.id === wanted);
+    const anchorId = byId[wanted] ? wanted
+      : raw ? `${MACRO_PREFIX}${overviewGroupId(raw)}` : null;
+    if (!anchorId || !byId[anchorId]) return null;
+    const keep = new Set<string>([anchorId]);
+    for (const e of visibleEdges) {
+      if (e.from === anchorId) keep.add(e.to);
+      if (e.to === anchorId) keep.add(e.from);
+    }
+    return keep;
+  }, [sel, focalId, visibleEdges, byId, rawNodes]);
+
+  /** Centre a set of cards and scale them up to fill the canvas. `null` fits
+      everything drawn. Positions are canvas fractions and the transform is
+      `translate(pan) scale(zoom)` about the centre, so the pan that lands a
+      bounding box's centre on the canvas centre is a closed form. */
+  const fitTo = (ids: Set<string> | null) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    // Nothing selected, or a selection nothing is drawing: fit the graph. A
+    // control that promises to bring something into view must not answer by
+    // resetting the zoom and leaving the reader where they were.
+    const picked = ids ? visibleNodes.filter((n) => ids.has(n.id)) : [];
+    const subject = picked.length ? picked : visibleNodes;
+    if (!rect || rect.width === 0 || subject.length === 0) {
+      setPan({ x: 0, y: 0 });
+      setControls({ zoom: 1 });
+      return;
+    }
+    let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+    for (const n of subject) {
+      const q = posOf(n);
+      x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
+      y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+    }
+    // Grow the box by a card, so the outermost cards land whole rather than
+    // with their right edge cropped at the canvas boundary.
+    const w = (x1 - x0) + CARD_FRAC_W;
+    const h = (y1 - y0) + CARD_FRAC_H;
+    const z = clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, 2.5);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    setPan({ x: -(cx - 0.5) * rect.width * z, y: -(cy - 0.5) * rect.height * z });
+    setControls({ zoom: z });
+  };
+
+  /** Back to the layout the data shipped: dragged positions dropped, pan
+      cleared, scale at 100%. */
+  const resetLayout = () => {
+    setMoved({});
+    setPan({ x: 0, y: 0 });
+    setControls({ zoom: 1 });
+  };
+
+  /* A viewport request is one-shot: obey it, then clear it, so the same button
+     works twice in a row. */
+  useEffect(() => {
+    const request = controls.viewport;
+    if (!request) return;
+    if (request === "reset") resetLayout();
+    else fitTo(request === "selection" ? selectionSet : null);
+    setControls({ viewport: null });
+    // fitTo/resetLayout read this render's positions, which is what the
+    // request is about; re-running on every position change would fight the
+    // reader's own panning.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controls.viewport]);
+
+  /* Moving the focus is a navigation, and the reader should not have to hunt
+     for where they landed: the canvas frames the new focal node and its
+     immediate neighbours. Only on a CHANGE — refitting on every render would
+     undo the reader's own zoom the moment they touched it. */
+  const framedFocal = useRef(focalId);
+  useEffect(() => {
+    if (focalId === framedFocal.current) return;
+    framedFocal.current = focalId;
+    if (!focalId) return;
+    fitTo(selectionSet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focalId]);
+
+  /* What the canvas actually drew, for the toolbar's volume readout. Keyed on
+     the numbers themselves, so this fires when they change and not once per
+     render. */
+  useEffect(() => {
+    onVolume?.({ shown: visibleNodes.length, matching: passing.length, total: nodes.length, cap });
+  }, [onVolume, visibleNodes.length, passing.length, nodes.length, cap]);
 
   /* ── pointer: drag the background to pan, drag a node to move it ────── */
   const startPan = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -493,9 +647,7 @@ export function LineageGraph({
             floating top-left would sit on the first lane of cards. */}
         <span className="ml-auto flex min-w-0 items-center gap-2">
           {cappedCount > 0 && (
-            <span className="shrink-0 rounded-[3px] border border-clay/45 bg-clay/[0.10] px-1.5 py-0.5 font-term text-[10px] font-medium uppercase tracking-[0.06em] text-ink/80">
-              Capped
-            </span>
+            <Chip tone="attention" label="Capped" className="shrink-0 !px-1.5 !py-0.5 !text-[10px]" />
           )}
           <TruncateInline className="font-term text-[11px] text-ink/65">
             {cappedCount > 0
@@ -504,6 +656,25 @@ export function LineageGraph({
           </TruncateInline>
         </span>
       </div>
+
+      {/* Unfolded roll-ups. Expanding a group happens in its drawer, which the
+          reader then closes — so the only standing record that this overview
+          is no longer purely rolled up is here, with the way back on it. */}
+      {mode === "overview" && controls.expanded.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink/10 px-3.5 py-2">
+          <span className="font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/65">Expanded</span>
+          {controls.expanded.map((group) => (
+            <Chip
+              key={group}
+              tone="info"
+              label={groupParts(group).repo}
+              onRemove={() => setControls({ expanded: controls.expanded.filter((g) => g !== group) })}
+              removeLabel={`Collapse ${groupParts(group).repo}`}
+            />
+          ))}
+          <Button compact className="ml-auto" onClick={() => setControls({ expanded: [] })}>Collapse all</Button>
+        </div>
+      )}
 
       {/* canvas */}
       <div
@@ -575,17 +746,38 @@ export function LineageGraph({
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />
-                  {/* Past LABEL_LIMIT edges these codes stack into an
-                      illegible smear; the legend keeps carrying them. */}
-                  {!quietEdges && (
-                    <text
-                      x={midX} y={midY - 5} textAnchor="middle" fontSize="9.5"
-                      fill={s.color} stroke="#ffffff" strokeWidth={3} paintOrder="stroke"
-                      className="font-term" pointerEvents="none"
-                    >
-                      {agg && e.count && e.count > 1 ? `${s.code} ×${e.count}` : s.code}
-                    </text>
-                  )}
+                  {/* Past LABEL_LIMIT edges these labels stack into an
+                      illegible smear; the legend keeps carrying them.
+
+                      A label at rest used to be a 9.5px code painted with a
+                      white halo, which on a crossing edge read as neither the
+                      code nor the edge. It is a plain chip now — paper fill,
+                      the relation's own hairline, the relation's word once it
+                      stands for more than one link — and it is sized in
+                      viewBox units, which the canvas scales down by 0.9, so
+                      11 here is the 10px it needs to be legible. */}
+                  {!quietEdges && (() => {
+                    const label = agg && e.count && e.count > 1 ? `${s.label} ×${e.count}` : s.code;
+                    // No text metrics in SVG without measuring, and the label
+                    // is set in the mono face: 6.2 units per character is that
+                    // face's advance at this size, plus the chip's padding.
+                    const w = label.length * 6.2 + 11;
+                    return (
+                      <g pointerEvents="none">
+                        <rect
+                          x={midX - w / 2} y={midY - 17} width={w} height={16} rx={3}
+                          fill="#ffffff" fillOpacity={0.94}
+                          stroke={s.color} strokeOpacity={0.4} vectorEffect="non-scaling-stroke"
+                        />
+                        <text
+                          x={midX} y={midY - 5.5} textAnchor="middle" fontSize="11"
+                          fill={s.color} className="font-term"
+                        >
+                          {label}
+                        </text>
+                      </g>
+                    );
+                  })()}
                 </g>
               );
             })}
@@ -632,12 +824,12 @@ export function LineageGraph({
                   onMouseEnter={() => setHover(n.id)}
                   onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
                   style={{
-                    // The card is 152px wide and centred on its position, so
+                    // The card is CARD_W wide and centred on its position, so
                     // its centre is held at least half a card inside the
                     // canvas. Without this the rightmost timeline column hung
                     // 26px past the canvas on a narrow console.
-                    left: `clamp(76px, ${p.x * 100}%, calc(100% - 76px))`,
-                    top: `${p.y * 100}%`,
+                    left: `clamp(${CARD_HALF}px, ${p.x * 100}%, calc(100% - ${CARD_HALF}px))`,
+                    top: `clamp(${CARD_HALF_H}px, ${p.y * 100}%, calc(100% - ${CARD_HALF_H}px))`,
                     transform: "translate(-50%, -50%)",
                     opacity: dim ? 0.22 : 1,
                     backgroundColor: NODE_CREAM,
@@ -647,21 +839,51 @@ export function LineageGraph({
                     cursor: "grab",
                   }}
                   // FLAT: no drop shadow, no gradient. Depth is not the signal.
-                  className={`absolute z-10 flex w-[152px] items-stretch overflow-hidden rounded-[4px] text-left ${focusRing} ${
+                  /* Literal `w-[168px]`, not an interpolated CARD_W: Tailwind
+                     reads these class strings at build time and cannot see a
+                     width that only exists at runtime. CARD_W carries the same
+                     number for the geometry that has to agree with it. */
+                  className={`absolute z-10 flex w-[168px] items-stretch overflow-hidden rounded-[4px] text-left ${focusRing} ${
                     n.macro ? "border-2" : "border"
                   }`}
                 >
                   {/* type/topic distinguisher: a solid bar down the LEFT edge */}
                   <span className="w-[5px] shrink-0" style={{ backgroundColor: accent }} aria-hidden />
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5">
-                    <span className="shrink-0 text-ink/75"><NodeGlyph node={n} size={16} /></span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[11.5px] font-medium leading-tight text-ink">{n.title}</span>
-                      {/* the same information the bar carries, in words, plus a
-                          high-contrast owner name (was text-ink/65) */}
-                      <span className="block truncate font-term text-[9.5px] leading-tight text-ink/70">
-                        {accentWord(n, effLens)} · {n.macro ? n.repo : n.owner ?? "Unowned"}
+                  <span className="flex min-w-0 flex-1 flex-col gap-1 px-2 py-1.5">
+                    {/* Line one is the type mark and the name. */}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="shrink-0 text-ink/75"><NodeGlyph node={n} size={15} /></span>
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium leading-tight text-ink" title={n.title}>
+                        {n.title}
                       </span>
+                    </span>
+                    {/* Line two says in words and in tone what the bar's hue is
+                        saying, then who holds it, then how fresh it is. Three
+                        channels for one colour: chip word, chip tone, and a
+                        freshness dot that never depends on the lens. */}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <Chip
+                        tone={accentTone(n, effLens)}
+                        label={accentWord(n, effLens)}
+                        className="shrink-0 !gap-1 !px-1.5 !py-0 !text-[9px] !leading-[15px] !tracking-[0.05em]"
+                      />
+                      {effLens !== "owner" && (
+                        <span className="min-w-0 flex-1 truncate font-term text-[9.5px] leading-tight text-ink/70">
+                          {n.macro ? n.repo : n.owner ?? "Unowned"}
+                        </span>
+                      )}
+                      {/* The staleness lens already IS this number, in the
+                          chip and in its colour; printing it twice on one card
+                          is noise. Every other lens gets it here. */}
+                      {effLens !== "stale" && typeof n.staleDays === "number" && (
+                        <span
+                          className="ml-auto inline-flex shrink-0 items-center gap-1 font-term text-[9.5px] leading-tight text-ink/70"
+                          title={`Last updated ${n.staleDays} day${n.staleDays === 1 ? "" : "s"} ago`}
+                        >
+                          <span className="h-[5px] w-[5px] rounded-full" style={{ backgroundColor: staleColor(n.staleDays) }} aria-hidden />
+                          {n.staleDays}d
+                        </span>
+                      )}
                     </span>
                   </span>
                   {n.warn && !n.macro && (
@@ -737,7 +959,7 @@ export function LineageGraph({
           return (
             <div
               className="pointer-events-none absolute z-20 max-w-[240px] -translate-x-1/2 rounded-[4px] border border-ink/20 bg-paper px-2.5 py-1.5"
-              style={{ left: `clamp(76px, ${p.x * 100}%, calc(100% - 76px))`, top: `calc(${p.y * 100}% - 48px)` }}
+              style={{ left: `clamp(${CARD_HALF}px, ${p.x * 100}%, calc(100% - ${CARD_HALF}px))`, top: `calc(${p.y * 100}% - 56px)` }}
             >
               <Truncate lines={2} className="text-[12px] font-semibold text-ink">{n.title}</Truncate>
               <div className="truncate font-term text-[10.5px] text-ink/70">
@@ -827,11 +1049,11 @@ export function LineageGraph({
           <Button icon aria-label="Zoom out" onClick={() => setZoom(zoom - 0.2)}><Minus size={15} /></Button>
           <span className="w-11 text-center font-term text-[11px] text-ink/70">{Math.round(zoom * 100)}%</span>
           <Button icon aria-label="Zoom in" onClick={() => setZoom(zoom + 0.2)}><Plus size={15} /></Button>
-          <Button
-            icon
-            aria-label="Fit graph"
-            onClick={() => { setControls({ zoom: 1 }); setPan({ x: 0, y: 0 }); setMoved({}); }}
-          >
+          {/* Fit, not reset: this used to also throw away every dragged
+              position, so the one control that promised to bring the graph
+              back into view silently undid the reader's layout. Resetting the
+              layout is its own control, in the toolbar. */}
+          <Button icon aria-label="Fit graph to view" onClick={() => fitTo(null)}>
             <Maximize2 size={15} />
           </Button>
         </div>

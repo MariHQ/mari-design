@@ -4,10 +4,10 @@ import type { ChipStatus } from "../data-display/Chip";
  *
  * `Chip.tsx` declares StatusChip "the single source of truth for every status
  * pill in the console", and then four separate maps translated engine words
- * into it independently: `CHIP_OF` (workflow/RunHistory), `RUN_CHIP`
- * (features/FlowsRunPanel), `SCAN_CHIP` (features/ScanRunCard) and
- * `OUTCOME_STATUS` (features/OverviewWorkflowStrip). They disagreed, and the
- * disagreement was visible in the two places a user compares:
+ * into it independently: `CHIP_OF` (workflow/RunHistory), `RUN_CHIP` and
+ * `OUTCOME_STATUS` (both on the since-removed Flows surfaces) and `SCAN_CHIP`
+ * (features/ScanRunCard). They disagreed, and the disagreement was visible in
+ * the two places a user compares:
  *
  *   - A finished run was "Approved" in Flows and "Succeeded" in Facts,
  *     Decisions and Audit. Approval is a GATE outcome — a person said yes.

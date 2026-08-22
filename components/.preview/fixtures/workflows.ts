@@ -1,14 +1,24 @@
-/* Answers canvas fixtures. Lifted verbatim out of AnswersPage and AnswerCard,
-   which now take required data props and ship no demo content of their own.
-   Nothing here is importable by a consuming app. */
+/* Workflows canvas fixtures — both tabs.
+ *
+ * The Observed rows and the approved answers used to be two fixture files for
+ * two pages. They are one file because they are one page: an answer here is
+ * promoted OUT of an observed run, and the link between them (`trajectoryId`)
+ * is only exercisable when both halves are in the same fixture.
+ *
+ * Nothing here is importable by a consuming app. */
 
 import type { Answer } from "../../features/AnswerCard";
-import type { AnswerStat, AnswersData, Harvest, HarvestCandidate, HarvestSource } from "../../pages/AnswersPage";
+import type { AnswerStat, AnswersData, Harvest, HarvestCandidate, HarvestSource } from "../../features/ApprovedAnswers";
+import type {
+  ObservedData, TrajectoryRow, WorkflowsData,
+} from "../../pages/WorkflowsPage";
 import type { PageFixtures } from "./types";
 import {
   LONG_TITLE, LONG_PARAGRAPH, LONG_NAME, LONG_DOC_TITLE, LONG_SOURCE, LONG_URL,
   UNBREAKABLE, LONG_WORD, HUGE_NUMBER, HUGE_NUMBER_STR, MIXED_SCRIPT, repeat,
 } from "./stress";
+
+/* ══════════ Approved answers tab ══════════ */
 
 const STATS: AnswerStat[] = [
   { value: "128", label: "Approved", tone: "ok", sub: "serving verbatim" },
@@ -194,28 +204,160 @@ const DEFAULT = list([APPROVED, DRAFT, APPROVED_2]);
     `isEmpty` check fires rather than the canvas faking the empty state. No
     harvest sources either: a workspace with nothing connected has nothing to
     scan, and the page draws no button for it. */
-const EMPTY: AnswersData = {
+const ANSWERS_EMPTY: AnswersData = {
   stats: STATS, filter: "all", answers: [], coverage: [],
   harvestSources: [], pane: { kind: "answers" },
 };
 
-export const FIXTURES: PageFixtures<AnswersData> = {
-  default: { data: DEFAULT },
-  approved: { data: list([APPROVED, APPROVED_2], "approved") },
-  drafts: { data: list([DRAFT, DRAFT_2], "drafts") },
-  retired: { data: list([RETIRED], "retired") },
-  "single-answer": { data: list([APPROVED]) },
-  coverage: { data: { ...DEFAULT, pane: { kind: "coverage" } } },
-  "harvest-select": { data: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("select") } } },
-  "harvest-scan": { data: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("scan") } } },
-  "harvest-review": { data: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("review") } } },
-  "harvest-importing": { data: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("importing") } } },
-  "harvest-done": { data: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("done") } } },
-  /** Nothing matches the Drafts tab, but the workspace itself is not empty. */
-  filtered: { data: list([], "drafts") },
-  empty: { data: EMPTY },
-  loading: { data: DEFAULT, loading: true },
-  error: { data: EMPTY, error: "Answers unavailable." },
-  overflow: { data: list([OVERFLOW_ANSWER, OVERFLOW_ANSWER_2]) },
-  stress: { data: list([STRESS_ANSWER, STRESS_ANSWER_2]) },
+/* ══════════ Observed tab ══════════ */
+
+const STEPS: TrajectoryRow["steps"] = [
+  { ordinal: 0, tool: "search", actionFamily: "discover", args: { query: "retention policy" }, summary: "3 documents matched", ok: true, disposition: "preferred", editedArgs: null },
+  { ordinal: 1, tool: "read_document", actionFamily: "inspect", args: { id: 1 }, summary: "Read the retention runbook", ok: true, disposition: "included", editedArgs: null },
+  { ordinal: 2, tool: "list_sources", actionFamily: "inspect", args: {}, summary: "Timed out after 30s", ok: false, disposition: "excluded", editedArgs: null },
+  { ordinal: 3, tool: "tag_document", actionFamily: "change", args: { id: 1, tag: "canonical" }, summary: "Tagged the runbook canonical", ok: true, disposition: "included", editedArgs: null },
+];
+
+const EVIDENCE: TrajectoryRow["evidence"] = [
+  { documentId: 1, title: "Retention runbook", reason: "Used as answer context", rank: 1, relevance: "pinned", note: "The only place the 30-day window is written down." },
+  { documentId: 2, title: "Data lifecycle overview", reason: "Used as answer context", rank: 2, relevance: "observed", note: "" },
+];
+
+const PHASES: TrajectoryRow["phases"] = [
+  { id: 0, name: "Discover", family: "discover", start: 0, end: 0, steps: 1, substate: "Progress", failures: 0 },
+  { id: 1, name: "Inspect", family: "inspect", start: 1, end: 2, steps: 2, substate: "Recovery", failures: 1 },
+  { id: 2, name: "Change", family: "change", start: 3, end: 3, steps: 1, substate: "Progress", failures: 0 },
+];
+
+const RUN: TrajectoryRow = {
+  id: 1,
+  sessionId: 10,
+  prompt: "How long do we keep customer data, and where is that written down?",
+  status: "ready",
+  model: "ollama:gemma3:4b",
+  layer1: "Searched the knowledge base for the retention policy, read the runbook it found, tried to list connected sources and gave up when that timed out, then tagged the runbook canonical.",
+  layer2: "Answered a retention question from the runbook and marked it canonical.",
+  category: "Documentation maintenance",
+  macroIntent: "Answer a retention question from the runbook",
+  phases: PHASES,
+  stepCount: 4,
+  failureCount: 1,
+  reworkCount: 1,
+  startedAt: "2026-08-19T12:00:00Z",
+  completedAt: "2026-08-19T12:00:14Z",
+  steps: STEPS,
+  evidence: EVIDENCE,
+  promotedWorkflowId: null,
+  promotedWorkflow: null,
+  disposition: "observed",
 };
+
+const CLEAN_RUN: TrajectoryRow = {
+  ...RUN,
+  id: 2,
+  prompt: "Which regions can we run enterprise workloads in?",
+  macroIntent: "Confirm the supported enterprise regions",
+  layer2: "Read the region list and answered without changing anything.",
+  category: "Product questions",
+  stepCount: 2, failureCount: 0, reworkCount: 0,
+  steps: STEPS.slice(0, 2),
+  evidence: EVIDENCE.slice(1),
+  phases: PHASES.slice(0, 2),
+  startedAt: "2026-08-18T09:12:00Z",
+  completedAt: "2026-08-18T09:12:06Z",
+};
+
+/** The state the whole promotion story exists for: a run that has produced a
+    paused workflow AND a draft answer, both shown on the card itself. */
+const PROMOTED_RUN: TrajectoryRow = {
+  ...RUN,
+  id: 3,
+  promotedWorkflowId: 44,
+  promotedWorkflow: { id: 44, name: "Answer a retention question", status: "paused", nodeCount: 4 },
+};
+
+const REJECTED_RUN: TrajectoryRow = { ...CLEAN_RUN, id: 4, disposition: "rejected" };
+
+const PROMOTED_ANSWER: Answer = {
+  id: 6,
+  question: "How long do we keep customer data, and where is that written down?",
+  answer: "Customer data is kept for 30 days after deletion is requested, then purged on the nightly job. The retention runbook is the source of truth.",
+  status: "draft",
+  owner: "Priya Nair",
+  channels: [],
+  sources: [{ source: "docs", title: "Retention runbook" }],
+  served: 0,
+  spark: [],
+  updated: "2026-08-19",
+  trajectoryId: 3,
+  recheckAfter: "2026-11-17",
+};
+
+const observed = (rows: TrajectoryRow[], over: Partial<ObservedData> = {}): ObservedData => ({
+  rows,
+  total: rows.length,
+  categories: ["Documentation maintenance", "Product questions"],
+  statuses: ["ready", "processing", "fallback"],
+  category: null,
+  status: null,
+  failures: null,
+  search: "",
+  offset: 0,
+  limit: 25,
+  focused: null,
+  ...over,
+});
+
+const NO_RUNS = observed([], { categories: [], statuses: [] });
+
+const page = (over: Partial<WorkflowsData> = {}): WorkflowsData => ({
+  tab: "observed",
+  observed: observed([RUN, CLEAN_RUN]),
+  answers: DEFAULT,
+  ...over,
+});
+
+const PROMOTED_PAGE = page({
+  observed: observed([PROMOTED_RUN, RUN]),
+  answers: list([PROMOTED_ANSWER, APPROVED, DRAFT]),
+});
+
+const STRESS_RUNS = Array.from({ length: 25 }, (_, index) => ({
+  ...RUN,
+  id: index + 10,
+  macroIntent: index % 3 === 0 ? LONG_TITLE : `${RUN.macroIntent} ${index + 1}`,
+  prompt: index % 3 === 0 ? UNBREAKABLE : RUN.prompt,
+}));
+
+export const FIXTURES: PageFixtures<WorkflowsData> = {
+  default: { data: page() },
+  drawer: { data: page({ observed: observed([RUN, CLEAN_RUN], { focused: RUN }) }) },
+  promoted: { data: PROMOTED_PAGE },
+  rejected: { data: page({ observed: observed([REJECTED_RUN, RUN]) }) },
+  /** Narrowed by the reader, and nothing matches: a different fact from a
+      workspace that has observed nothing, and a different empty state. */
+  filtered: {
+    data: page({ observed: observed([], { search: "settlement queue", failures: "with", total: 0 }) }),
+  },
+  answers: { data: page({ tab: "answers", answers: DEFAULT }) },
+  "answers-drafts": { data: page({ tab: "answers", answers: list([DRAFT, DRAFT_2], "drafts") }) },
+  "answers-harvest": {
+    data: page({ tab: "answers", answers: { ...DEFAULT, pane: { kind: "harvest", harvest: harvest("review") } } }),
+  },
+  loading: { data: page({ observed: NO_RUNS, answers: ANSWERS_EMPTY }), loading: true },
+  error: {
+    data: page({ observed: NO_RUNS, answers: ANSWERS_EMPTY }),
+    error: "Workflows are temporarily unavailable.",
+  },
+  empty: { data: page({ observed: NO_RUNS, answers: ANSWERS_EMPTY }) },
+  stress: {
+    data: page({
+      observed: observed(STRESS_RUNS, { total: 5000 }),
+      answers: list([STRESS_ANSWER, STRESS_ANSWER_2, OVERFLOW_ANSWER, OVERFLOW_ANSWER_2]),
+    }),
+  },
+};
+
+/* The answers half, for `features.ts` — the AnswerCard catalog entry reads a
+   real answer from here rather than baking its own. */
+export const ANSWERS_FIXTURE = DEFAULT;

@@ -23,9 +23,10 @@ import { focusRing } from "../tokens/focusRing";
    was handed. With neither, the scan honestly finds nothing and the wizard
    says so, which is the empty state it already carried and never reached.
 
-   NOTE: `pages/AnswersPage` composes its own harvest wizard inline, wired to
-   `AnswersActions.harvest` / `.importAnswers`. This standalone drawer is the
-   catalog rendition of the same flow; the page is the one that ships. */
+   NOTE: `features/ApprovedAnswers` (the Approved answers tab of Workflows)
+   composes its own harvest wizard inline, wired to `AnswersActions.harvest` /
+   `.importAnswers`. This standalone drawer is the catalog rendition of the
+   same flow; the tab is the one that ships. */
 
 export type SourceId = "slack" | "docs" | "chat";
 const SOURCES: { id: SourceId; label: string; description: string; icon: ReactNode }[] = [

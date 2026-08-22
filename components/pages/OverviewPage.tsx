@@ -4,10 +4,8 @@ import { ArrowRight, PlugZap, Sprout } from "lucide-react";
 import { OverviewStatTiles, type OverviewStats } from "../features/OverviewStatTiles";
 import { OverviewDigestCard, type DigestTopic } from "../features/OverviewDigestCard";
 import { OverviewRecentDocs, type RecentDoc } from "../features/OverviewRecentDocs";
-import { OverviewTodayReview, type ReviewTask } from "../features/OverviewTodayReview";
 import { OverviewSourcePulse, type PulseTileData } from "../features/OverviewSourcePulse";
 import { OverviewLiveActivity, type FeedItem } from "../features/OverviewLiveActivity";
-import { OverviewWorkflowStrip, type WfFlow, type WfRun } from "../features/OverviewWorkflowStrip";
 import { EmptyState } from "../data-display/EmptyState";
 import { ReadError } from "../feedback/ReadError";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -45,12 +43,9 @@ export type OverviewData = {
   /** The window the dashboard counts over, when the app can change it. */
   range?: DateRange;
   stats: OverviewStats;
-  tasks: ReviewTask[];
   digest: DigestTopic[];
   activity: FeedItem[];
   docs: RecentDoc[];
-  flow: WfFlow | null;
-  run: WfRun;
   sources: PulseTileData[];
   /** Poll interval for the live feed, ms. 0 disables it (canvas + tests). */
   activityPollMs?: number;
@@ -137,7 +132,7 @@ function Greeting({ personName, timeZone }: { personName: string; timeZone?: str
     instead of saying what to do next. What makes the dashboard worth drawing
     is content, not connections. */
 function hasContent(d: OverviewData): boolean {
-  return Boolean(d.tasks.length || d.digest.length || d.activity.length || d.docs.length || d.flow);
+  return Boolean(d.digest.length || d.activity.length || d.docs.length);
 }
 
 /** What the Overview can DO. */
@@ -171,7 +166,7 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
              on load. Captions are this page's own literals (OverviewStatTiles),
              so they render. */
           stats={["Changes", "Facts to review", "Flows running"]}
-          sections={["Today's review", "Recent docs", "Source pulse", "Workflow", "This week's digest", "Live activity"]}
+          sections={["Recent docs", "Source pulse", "This week's digest", "Live activity"]}
           /* The one header control is a date-range picker whose label IS the
              range — a value, so it stays a bar. */
           actions={1}
@@ -239,11 +234,9 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                      order. */
                   <div className="flex flex-col gap-5">
                     <OverviewStatTiles stats={data.stats} />
-                    <OverviewTodayReview tasks={data.tasks} />
                     <OverviewDigestCard topics={data.digest} />
                     <OverviewLiveActivity items={data.activity} pollMs={data.activityPollMs ?? 0} />
                     <OverviewRecentDocs docs={data.docs} />
-                    {data.flow && <OverviewWorkflowStrip flow={data.flow} run={data.run} />}
                     <OverviewSourcePulse tiles={data.sources} />
                   </div>
                 ) : (
@@ -251,17 +244,12 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                   {/* The stat strip is the one full-width row: three tiles, one
                       per column. */}
                   <Cell mobile={mobile} span={3}><OverviewStatTiles stats={data.stats} /></Cell>
-                  {/* Wide track. Both tables need two columns (their title
-                      column alone is min-w-[200px] plus four no-wrap columns);
-                      Source pulse packs a 2 x 250px tile grid and the workflow
-                      strip a row of 86px nodes, which both fit in two. */}
+                  {/* Wide track. The table needs two columns (its title
+                      column alone is min-w-[200px] plus four no-wrap columns),
+                      and Source pulse packs a 2 x 250px tile grid. */}
                   <Track mobile={mobile} span={2}>
-                    {/* Today's review sits above the weekly digest and beside
-                        it: timeliest content first (§17). */}
-                    <OverviewTodayReview tasks={data.tasks} />
                     <OverviewRecentDocs docs={data.docs} />
                     <OverviewSourcePulse tiles={data.sources} />
-                    {data.flow && <OverviewWorkflowStrip flow={data.flow} run={data.run} />}
                   </Track>
                   {/* Narrow track: the two prose feeds, which reflow. */}
                   <Track mobile={mobile} span={1}>

@@ -266,7 +266,7 @@ function GithubDrawer({
         <p className="text-[13px] text-ink/70">In the repository's <b>Settings → Webhooks → Add webhook</b>, use:</p>
         <Field label="Payload URL"><Truncate className="font-term text-[12.5px]">{payloadUrl}</Truncate></Field>
         <Field label="Content type"><span className="font-term text-[12.5px]">application/json</span></Field>
-        <Field label="Events"><span className="text-[13px]">Pushes, issues, pull requests, issue comments, and pull request review comments</span></Field>
+        <Field label="Events"><span className="text-[13px]">Choose <b>Let me select individual events</b>, then tick <b>Pushes</b>, <b>Issue comments</b>, and <b>Pull requests</b></span></Field>
       </div>
     );
     if (step === 1) return (

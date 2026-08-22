@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Home, BookOpen, Send, Sparkles, Settings, Menu as MenuIcon,
-  Search, UserRound, KeyRound, ListChecks, Database, FolderKanban, GitBranch,
-  BadgeCheck, MessageCircleQuestion, Scale, Route,
+  Search, UserRound, KeyRound, Database, FolderKanban, GitBranch,
+  BadgeCheck, Scale, Route,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -41,11 +41,12 @@ export const NAV: NavSection[] = [
     { id: "overview", label: "Home", icon: <Home size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <BookOpen size={18} /> },
     { id: "facts", label: "Facts", icon: <BadgeCheck size={18} /> },
-    { id: "answers", label: "Answers", icon: <MessageCircleQuestion size={18} /> },
     { id: "decisions", label: "Decisions", icon: <Scale size={18} /> },
     { id: "lineage", label: "Lineage", icon: <GitBranch size={18} /> },
-    { id: "trajectories", label: "Trajectories", icon: <Route size={18} /> },
-    { id: "tasks", label: "Review", icon: <ListChecks size={18} /> },
+    /* Workflows absorbed two nav items. "Trajectories" was the harvest's
+       internal word for a run, and "Answers" was a separate destination for
+       what those runs are promoted into; they are two tabs of one page now. */
+    { id: "workflows", label: "Workflows", icon: <Route size={18} /> },
     { id: "publish", label: "Destinations", icon: <Send size={18} /> },
     { id: "insights", label: "Analytics", icon: <Sparkles size={18} /> },
     { id: "sources", label: "Sources", icon: <Database size={18} /> },
@@ -210,8 +211,16 @@ function UserMenu({ onSignOut, onNavigate, projects = [], activeProjectId, onSel
     a few off-nav routes map onto the closest nav entry. */
 export function navFor(pageId: string): string {
   if (pageId.startsWith("settings") || pageId === "lookbook") return "settings";
-  if (["library", "doc-review"].includes(pageId)) return "knowledge";
-  if (pageId === "audit") return "tasks";
+  /* Audit used to fold into Review, which is no longer a nav item. It reads a
+     repository and files what it finds against the knowledge base, so
+     Knowledge is where it belongs — and an off-nav page must resolve to an
+     item that EXISTS, or the sidebar highlights nothing and the reader cannot
+     tell where in the console they are. */
+  if (["library", "doc-review", "audit"].includes(pageId)) return "knowledge";
+  /* The two page ids Workflows absorbed. Old links keep working (the app
+     redirects /trajectories and /answers), and while they resolve, the sidebar
+     has to light up the item that now owns them. */
+  if (["trajectories", "answers"].includes(pageId)) return "workflows";
   // Preferences is reached from the account menu, not the sidebar, and it is
   // about YOU rather than the workspace — so it deliberately highlights no nav
   // item instead of borrowing Settings', which is a different subject.
@@ -361,11 +370,15 @@ function MobileNav({ open, onClose, active, chrome }: { open: boolean; onClose: 
 
 /** Shortcut to the governed answers bots serve verbatim. The floating agent
     launcher is the conversational surface; this card must not pretend that
-    navigating to answer administration starts a chat. */
+    navigating to answer administration starts a chat.
+
+    It points at Workflows, which is where approved answers live now. It used
+    to name a nav id ("answers") that no longer exists, and a footer button
+    whose destination has been deleted goes nowhere silently. */
 function HelpCard({ onNavigate }: { onNavigate?: (id: string) => void }) {
   return (
     <button
-      onClick={() => onNavigate?.("answers")}
+      onClick={() => onNavigate?.("workflows")}
       className={`w-full rounded-[6px] bg-white/10 px-3 py-2 text-left text-[12.5px] text-white/80 hover:bg-white/15 ${focusRing}`}
     >
       <b className="block font-medium text-white">Approved answers</b>

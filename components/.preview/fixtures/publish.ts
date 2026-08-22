@@ -15,7 +15,7 @@ const BASE: PublishData = {
   draft: { name: "", scope: "workspace", capabilities: [], toolCount: 0 },
   created: { name: "", scopeLabel: "", toolCount: 0, token: "", snippet: "" },
   chats: [{ id: 1, name: "Company knowledge", slug: "company-knowledge", title: "Ask Acme",
-    welcome: "Ask about company policy.", status: "live", url: "/knowledge-chat/acme/company-knowledge" }],
+    welcome: "Ask about company policy.", status: "live", url: "/knowledge-chat/acme/company-knowledge", tools: ["search", "facts", "answers"] }],
   selectedChatId: null,
   slack: { configured: true, teamName: "Acme HQ", lastEventAt: "2026-07-21T13:58:00" },
   github: { webhookConfigured: true, repos: ["acme/handbook", "acme/api"] },
