@@ -41,6 +41,23 @@ import {
 
 type SearchResult = { id: string; node: LNode };
 
+/* One quiet line under a suggestion: source, then owner only when it says
+   something the source label does not (connector documents often carry the
+   source name as their owner), then the date as a short calendar day rather
+   than the raw ISO stamp the node stores for the time axis. */
+function shortDay(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+}
+function suggestionMeta(node: LNode): string {
+  const source = SOURCE_LABELS[node.source] ?? node.source;
+  const owner = node.owner && node.owner.toLowerCase() !== source.toLowerCase() && node.owner.toLowerCase() !== node.source.toLowerCase() ? node.owner : "";
+  return [source, owner, shortDay(node.date)].filter(Boolean).join(" · ");
+}
+
 /** Source rows a menu shows before it becomes a bounded scroll region. */
 const SOURCE_MENU_ROWS = 9;
 
@@ -585,10 +602,10 @@ export function LineageToolbar({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-ink">{r.node.title}</span>
                         <span className="block truncate font-term text-[11px] text-ink/70">
-                          {[r.node.owner, SOURCE_LABELS[r.node.source] ?? r.node.source, r.node.date].filter(Boolean).join(" · ")}
+                          {suggestionMeta(r.node)}
                         </span>
                       </span>
-                      <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} in</span>
+                      <span className="shrink-0 font-term text-[11px] text-ink/65">{r.node.inbound ?? 0} inbound</span>
                     </button>
                   ))}
                 </div>
