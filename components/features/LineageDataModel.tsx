@@ -85,8 +85,21 @@ export type LEdge = {
 };
 
 export type Sel = { kind: "node" | "edge"; id: string } | null;
-export type ImpactDoc = { title: string; source: string; severity: Severity; reason: string };
+export type ImpactDoc = {
+  title: string;
+  source: string;
+  severity: Severity;
+  reason: string;
+  /** The document the verdict is about. The analysis names documents, not
+      cards, so this is what lets the canvas light the right node and a task
+      point at the right document. Optional: a title is the fallback. */
+  docId?: number;
+};
 export type ImpactResult = { claim: string; summary: string; docs: ImpactDoc[] };
+
+/** An analysis, resolved against the graph on screen: which node carries which
+    severity, plus the claim it came from. `null` = no analysis is showing. */
+export type ImpactOverlay = { claim: string; docs: { id: string; severity: Severity }[] };
 export type DocHistoryRow = { at: string; actor: string; verb: string; detail: string };
 export type GraphView = { id: number; name: string; state: string };
 
@@ -384,6 +397,61 @@ export const SEVERITY_META: Record<Severity, { label: string; color: string; ton
   review: { label: "Review", color: "#c8973a", tone: "attention" },
   minor: { label: "Minor", color: "#35549d", tone: "info" },
 };
+
+export const SEVERITY_ORDER: Severity[] = ["update-required", "review", "minor"];
+
+/** Resolve an analysis against the graph on screen.
+
+    The analysis names documents and the canvas draws nodes, so the two have to
+    be matched before anything can be lit: by document id, which is the real
+    identity, and by title for a result that carries none. A verdict about a
+    document this graph does not draw is left out rather than invented onto the
+    nearest card. `null` when nothing matched, so a caller can tell "no analysis"
+    from "an analysis about documents that are not here". */
+export function impactOverlay(result: ImpactResult | null, nodes: LNode[]): ImpactOverlay | null {
+  if (!result) return null;
+  const byDocId = new Map<number, string>();
+  const byTitle = new Map<string, string>();
+  for (const node of nodes) {
+    if (node.macro) continue;
+    if (node.docId != null && !byDocId.has(node.docId)) byDocId.set(node.docId, node.id);
+    const key = node.title.trim().toLowerCase();
+    if (key && !byTitle.has(key)) byTitle.set(key, node.id);
+  }
+  const seen = new Map<string, Severity>();
+  for (const doc of result.docs) {
+    const id = (doc.docId != null ? byDocId.get(doc.docId) : undefined)
+      ?? byTitle.get(doc.title.trim().toLowerCase());
+    if (!id) continue;
+    const held = seen.get(id);
+    // Two verdicts on one card: the reader has to act on the harder one.
+    if (held && SEVERITY_ORDER.indexOf(held) <= SEVERITY_ORDER.indexOf(doc.severity)) continue;
+    seen.set(id, doc.severity);
+  }
+  if (!seen.size) return null;
+  return { claim: result.claim, docs: [...seen].map(([id, severity]) => ({ id, severity })) };
+}
+
+/** The analysis as a report the reader can keep: plain Markdown, the summary
+    and every document under the severity that was returned for it. */
+export function impactReport(result: ImpactResult): string {
+  const lines = [
+    "# Impact analysis",
+    "",
+    `Claim: ${result.claim}`,
+    "",
+    result.summary,
+  ];
+  for (const severity of SEVERITY_ORDER) {
+    const docs = result.docs.filter((doc) => doc.severity === severity);
+    if (!docs.length) continue;
+    lines.push("", `## ${SEVERITY_META[severity].label} (${docs.length})`, "");
+    for (const doc of docs) {
+      lines.push(`- ${doc.title} (${SOURCE_LABELS[doc.source] ?? doc.source}): ${doc.reason}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
 
 /* ── Node surface ───────────────────────────────────────────────────────── */
 

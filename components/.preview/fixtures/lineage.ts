@@ -79,15 +79,18 @@ const GROUP_MEMBERS: LNode[] = [
 const IMPACT: ImpactResult = {
   claim: "Free tier ends September 1",
   summary: "36 documents reference the free tier. 3 directly contradict the new end date and must be corrected before launch; 11 need a review pass; 22 mention it in passing.",
+  /* `docId` is what ties a verdict to a card: the analysis names documents and
+     the canvas draws nodes, and the page lights the graph by matching these
+     against the graph's own document ids. */
   docs: [
-    { title: "Billing FAQ", source: "docsite", severity: "update-required", reason: "states the free tier is permanent" },
-    { title: "Pricing policy", source: "docs", severity: "update-required", reason: "no sunset date recorded" },
-    { title: "Onboarding guide", source: "notion", severity: "update-required", reason: "promises free-forever workspace" },
-    { title: "Pricing deck Q3", source: "gdocs", severity: "review", reason: "tier table predates the change" },
-    { title: "#pricing thread", source: "slack", severity: "review", reason: "unresolved customer question" },
-    { title: "Free-tier limits", source: "docs", severity: "review", reason: "caps may need restating" },
-    { title: "Sept launch brief", source: "granola", severity: "minor", reason: "mentions the date in passing" },
-    { title: "Issue #91 · stale FAQ", source: "github", severity: "minor", reason: "loosely related" },
+    { title: "Billing FAQ", docId: 103, source: "docsite", severity: "update-required", reason: "states the free tier is permanent" },
+    { title: "Pricing policy", docId: 101, source: "docs", severity: "update-required", reason: "no sunset date recorded" },
+    { title: "Onboarding guide", docId: 106, source: "notion", severity: "update-required", reason: "promises free-forever workspace" },
+    { title: "Pricing deck Q3", docId: 108, source: "gdocs", severity: "review", reason: "tier table predates the change" },
+    { title: "#pricing thread", docId: 105, source: "slack", severity: "review", reason: "unresolved customer question" },
+    { title: "Free-tier limits", docId: 102, source: "docs", severity: "review", reason: "caps may need restating" },
+    { title: "Sept launch brief", docId: 109, source: "granola", severity: "minor", reason: "mentions the date in passing" },
+    { title: "Issue #91 · stale FAQ", docId: 107, source: "github", severity: "minor", reason: "loosely related" },
   ],
 };
 
@@ -119,6 +122,13 @@ const DRAWERS: Record<string, LineageDrawer> = {
   assert: {
     kind: "assert", result: IMPACT, analyzed: true,
     claim: "Free tier ends September 1", owners: IMPACT_OWNERS, people: IMPACT_PEOPLE,
+  },
+  /* What the toolbar's "Assert impact" actually opens: nothing analyzed, no
+     counts, no owners. The populated state above is the same drawer after a
+     run, and it is the only one that lights the canvas. */
+  "assert-ready": {
+    kind: "assert", result: { claim: "", summary: "", docs: [] }, analyzed: false,
+    claim: "", owners: [], people: [],
   },
 };
 
@@ -234,6 +244,7 @@ export const FIXTURES: PageFixtures<LineageData> = {
   edge: { data: view({ drawer: DRAWERS.edge }) },
   group: { data: view({ drawer: DRAWERS.group }) },
   assert: { data: view({ drawer: DRAWERS.assert }) },
+  "assert-ready": { data: view({ drawer: DRAWERS["assert-ready"] }) },
   loading: { data: BASE, loading: true },
   error: { data: EMPTY, error: "The lineage graph is temporarily unavailable. Retrying…" },
   empty: { data: EMPTY },

@@ -115,6 +115,14 @@ export type LineageToolbarProps = {
       manage them, because nothing would receive the removal (§2). The toolbar
       confirms in place before calling this; it never asks the browser. */
   onDeleteView?: (args: { id: number; name: string }) => void | Promise<void>;
+  /** Whether the impact-analysis drawer is open. Passing it makes the button
+      report the page's own state instead of a toggle it keeps to itself, so
+      closing the drawer with its ✕ also un-presses the button that opened it.
+      Omitted = the toolbar tracks it locally, which is what the canvas does. */
+  assertOpen?: boolean;
+  /** Open or close the impact-analysis drawer. Omitted = the button only
+      marks itself, which is all it can do without a rail to open into. */
+  onAssert?: (open: boolean) => void;
   /** What the canvas actually drew: how many cards are on screen, how many
       documents passed the filters, how many the graph holds, and the node cap
       in force. Omitted = no volume readout, because a count this toolbar has
@@ -170,6 +178,7 @@ function Row({ label, children, divide = false }: { label: string; children: Rea
 
 export function LineageToolbar({
   nodes, edges = [], onDeriveLinks, onSaveView, onDeleteView, views, volume, volumeStep,
+  assertOpen: assertOpenProp, onAssert,
   loading = false, compact = false, className = "",
 }: LineageToolbarProps) {
   const docs = useMemo(() => nodes.filter((n) => !n.macro), [nodes]);
@@ -181,7 +190,11 @@ export function LineageToolbar({
   /** What the last derive run reported. `null` = it has not been run. A number
       only ever comes from the handler; the run itself never counts anything. */
   const [derived, setDerived] = useState<{ count: number | null } | null>(null);
-  const [assertOpen, setAssertOpen] = useState(false);
+  /* The page's answer wins when it has one: the drawer can be closed from its
+     own ✕, and a button that stayed pressed against a closed drawer was
+     describing a panel that is not there. */
+  const [assertLocal, setAssertLocal] = useState(false);
+  const assertOpen = assertOpenProp ?? assertLocal;
   const [deriveErr, setDeriveErr] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -770,7 +783,8 @@ export function LineageToolbar({
       {/* ── row 4: actions ─────────────────────────────────────────────── */}
       <Row label="Actions" divide>
         <Button
-          onClick={() => setAssertOpen((a) => !a)}
+          onClick={() => { setAssertLocal(!assertOpen); onAssert?.(!assertOpen); }}
+          aria-pressed={assertOpen}
           className={assertOpen ? "border-biscay-2 bg-biscay-2/[0.10] text-biscay-2" : ""}
         >
           <Sparkles size={14} /> Assert impact

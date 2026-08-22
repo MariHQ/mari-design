@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor } from "./PageFrame";
 import { Network } from "lucide-react";
@@ -11,8 +11,8 @@ import { LineageEdgeDrawer } from "../features/LineageEdgeDrawer";
 import { LineageGroupDrawer } from "../features/LineageGroupDrawer";
 import { LineageAssertDrawer } from "../features/LineageAssertDrawer";
 import {
-  setLineageControls, getLineageControls, overviewGroupId, useLineageControls,
-  type DocHistoryRow, type GraphView, type ImpactResult, type LEdge, type LNode,
+  setLineageControls, getLineageControls, overviewGroupId, useLineageControls, impactOverlay,
+  type DocHistoryRow, type GraphView, type ImpactDoc, type ImpactResult, type LEdge, type LNode,
   type LayoutMode, type Lens, type LineageMode,
 } from "../features/LineageDataModel";
 import { PageHeader } from "../layout/PageHeader";
@@ -49,6 +49,7 @@ const STATES = [
   { id: "edge", label: "Edge drawer open" },
   { id: "group", label: "Roll-up drawer open" },
   { id: "assert", label: "Impact-analysis drawer" },
+  { id: "assert-ready", label: "Impact analysis · not yet run" },
   { id: "loading", label: "Loading" },
   { id: "error", label: "Error / service unavailable" },
   { id: "empty", label: "Empty / no graph" },
@@ -98,6 +99,11 @@ export type LineageActions = {
   /** Trace an assertion's blast radius. Long-running, and it is the one
       handler that answers: the drawer renders what it returns. */
   analyzeImpact?: (claim: string) => ImpactResult | Promise<ImpactResult>;
+  /** Open one task per document an analysis named, and answer with how many
+      were opened. Separate from `createReviewTask`, which is one task on one
+      document from the node drawer: this one is a batch, and its kind follows
+      each document's severity. Omitted = the drawer only echoes locally. */
+  createImpactTasks?: (docs: ImpactDoc[]) => number | Promise<number>;
 };
 
 /** Which drawer is open, and everything that drawer needs. Exactly one at a
@@ -197,11 +203,16 @@ function railFor(data: LineageData, drawer: LineageDrawer | null): number | null
 
 function Drawer({
   data, drawer, actions, onClose, focalId, onSetFocal, onSelectGroupMember,
-  expandedInPlace, onExpandInPlace, onCollapseInPlace,
+  expandedInPlace, onExpandInPlace, onCollapseInPlace, onImpactResult, impactOwners,
 }: {
   data: LineageData; drawer: LineageDrawer | null;
   actions?: LineageActions;
   onClose?: () => void;
+  /** An analysis that just finished, on its way to the canvas. */
+  onImpactResult: (result: ImpactResult) => void;
+  /** The owners of the documents the live analysis named. Empty until one has
+      run, when the drawer falls back to whatever the data carried. */
+  impactOwners: { owners: { name: string; role: string }[]; people: string[] };
   focalId: string | null;
   onSetFocal: (nodeId: string) => void;
   onSelectGroupMember: (nodeId: string) => void;
@@ -268,9 +279,11 @@ function Drawer({
       result={d.result}
       analyzed={d.analyzed}
       claim={d.claim}
-      owners={d.owners}
-      people={d.people}
+      owners={impactOwners.owners.length ? impactOwners.owners : d.owners}
+      people={impactOwners.people.length ? impactOwners.people : d.people}
       onAnalyze={actions?.analyzeImpact}
+      onResult={onImpactResult}
+      onCreateTasks={actions?.createImpactTasks}
       onClose={onClose}
     />
   );
@@ -344,7 +357,20 @@ function Body({ data, error, actions, mobile }: {
      so a deep-linked drawer could never be dismissed. */
   const [picked, setPicked] = useState<LineageDrawer | null | undefined>(undefined);
   const [seenDrawer, setSeenDrawer] = useState(data.drawer);
-  if (seenDrawer !== data.drawer) { setSeenDrawer(data.drawer); setPicked(undefined); }
+  /* The analysis the assert drawer last returned, and the reason this page
+     holds it rather than the drawer: an impact analysis is a statement about
+     the graph, and the graph is the other half of this screen. The drawer
+     hands it over, this resolves it against the nodes on the canvas, and the
+     canvas lights them. An assert drawer that arrives already analyzed seeds
+     it, so a page opened on a finished analysis draws one. */
+  const seededAnalysis = (d: LineageDrawer | null) =>
+    (d?.kind === "assert" && d.analyzed ? d.result : null);
+  const [analysis, setAnalysis] = useState<ImpactResult | null>(seededAnalysis(data.drawer));
+  if (seenDrawer !== data.drawer) {
+    setSeenDrawer(data.drawer);
+    setPicked(undefined);
+    setAnalysis(seededAnalysis(data.drawer));
+  }
   const drawerFor = picked === undefined ? data.drawer : picked;
   const [focalId, setFocalId] = useState<string | null>(data.focalId);
   const [seenFocal, setSeenFocal] = useState(data.focalId);
@@ -362,6 +388,50 @@ function Body({ data, error, actions, mobile }: {
     setPicked(null);
     setLineageControls({ scope: "focus" });
     actions?.setMode?.("provenance", nodeId);
+  };
+
+  const impact = useMemo(() => impactOverlay(analysis, data.nodes), [analysis, data.nodes]);
+  const takeResult = (result: ImpactResult) => {
+    setAnalysis(result);
+    /* The analysis reaches across the whole corpus, so it has to be drawn on
+       a canvas that can hold the whole corpus. Overview folds documents into
+       roll-up cards and the two focused modes traverse a handful of links out
+       from one node; in either, most of what the analysis named has no card to
+       light. Documents is the mode that can answer, so that is the mode the
+       reader lands in. */
+    if (data.mode !== "documents") actions?.setMode?.("documents");
+  };
+  const clearImpact = () => setAnalysis(null);
+
+  /* Who has to act on the analysis, read off the documents it named rather
+     than authored beside it: the drawer's Owners section is a real list of
+     the people who hold the impacted documents, or empty until there is one. */
+  const impactOwners = useMemo(() => {
+    const byId = new Map(data.nodes.map((node) => [node.id, node]));
+    const counts = new Map<string, number>();
+    for (const doc of impact?.docs ?? []) {
+      const owner = byId.get(doc.id)?.owner?.trim();
+      if (owner) counts.set(owner, (counts.get(owner) ?? 0) + 1);
+    }
+    const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return {
+      owners: ranked.map(([name, count]) => ({ name, role: `${count} document${count === 1 ? "" : "s"}` })),
+      people: ranked.map(([name]) => name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")),
+    };
+  }, [impact, data.nodes]);
+
+  /* Opening the assert drawer from the toolbar. It is the reader's own
+     selection, like every other drawer on this page, so it goes through the
+     same `picked` slot; `data.drawer` can still deep-link one. Nothing is
+     analyzed yet, so the payload it opens on is empty rather than a canned
+     result the reader never asked for. */
+  const toggleAssert = (open: boolean) => {
+    if (!open) { setPicked(null); clearImpact(); return; }
+    setPicked({
+      kind: "assert", analyzed: false, claim: "",
+      result: { claim: "", summary: "", docs: [] },
+      owners: [], people: [],
+    });
   };
 
   const openGroup = (groupId: string) => {
@@ -404,6 +474,7 @@ function Body({ data, error, actions, mobile }: {
       const tag = el?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
       setPicked(null);
+      setAnalysis(null);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -497,7 +568,12 @@ function Body({ data, error, actions, mobile }: {
         data={data}
         drawer={drawerFor}
         actions={actions}
-        onClose={() => setPicked(null)}
+        onImpactResult={takeResult}
+        impactOwners={impactOwners}
+        /* Closing the drawer takes the analysis off the canvas with it. The
+           panel and the highlight are one answer, and leaving the graph lit
+           with no way back to what lit it is the trap the ✕ used to set. */
+        onClose={() => { setPicked(null); clearImpact(); }}
         focalId={focalId}
         onSetFocal={setFocal}
         onSelectGroupMember={selectGroupMember}
@@ -527,7 +603,10 @@ function Body({ data, error, actions, mobile }: {
               variant={data.mode === mode ? "primary" : "default"}
               disabled={(mode === "provenance" || mode === "impact") && !focalId}
               aria-pressed={data.mode === mode}
-              onClick={() => actions?.setMode?.(mode)}
+              /* Picking a question takes the last answer down: an analysis
+                 lit on a Documents canvas means nothing once the reader has
+                 asked the graph something else. This row is the way back. */
+              onClick={() => { clearImpact(); actions?.setMode?.(mode); }}
             >
               {label}
             </Button>
@@ -563,6 +642,8 @@ function Body({ data, error, actions, mobile }: {
               onDeriveLinks={actions?.deriveLinks}
               onSaveView={actions?.saveView}
               onDeleteView={actions?.deleteView}
+              assertOpen={drawerFor?.kind === "assert"}
+              onAssert={toggleAssert}
             />
             {/* No `key` here. It used to be rebuilt from lens/layout/focal/
                 trace, which remounted the canvas on every one of those changes
@@ -579,6 +660,8 @@ function Body({ data, error, actions, mobile }: {
               minConfidence={data.tuning.minConfidence}
               maxNodes={data.tuning.maxNodes}
               focalId={focalId}
+              impact={impact}
+              onClearImpact={clearImpact}
               onPinNode={actions?.pinNode}
               onSelectNode={openNode}
               onSelectGroup={openGroup}

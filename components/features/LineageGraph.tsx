@@ -18,8 +18,9 @@ import {
   nodeById, tracePath, nodeEditedAfter, edgeCreatedAfter, nodeStatusKey,
   buildOverviewGraph, buildFocusedGraph, isLineageRelation, groupParts,
   overviewGroupId, MACRO_PREFIX,
-  LINEAGE_RELATIONS,
+  LINEAGE_RELATIONS, SEVERITY_META, SEVERITY_ORDER,
   type LNode, type LEdge, type Lens, type LayoutMode, type LineageMode,
+  type ImpactOverlay, type Severity,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -61,6 +62,16 @@ export type LineageGraphProps = {
   /** The user question this canvas answers. Overview aggregates; the two
       focused modes traverse only directional lineage relations. */
   mode?: LineageMode;
+  /** An impact analysis's answer, drawn over whatever this canvas is showing:
+      the documents it named keep their colour and take their severity, and
+      everything else recedes. Unlike `trace`, which walks recorded edges, this
+      is a semantic verdict about documents that may share no link at all,
+      which is why it arrives as an explicit set rather than being derived. */
+  impact?: ImpactOverlay | null;
+  /** Take the analysis back off the canvas. Without it the overlay's own
+      "Clear" is not offered, because it would clear nothing the page knows
+      about and the analysis would come straight back on the next render. */
+  onClearImpact?: () => void;
   /** Maximum dependency hops in provenance / impact mode. */
   hopDepth?: number;
   /** Minimum confidence for machine-proposed dependency edges. */
@@ -428,7 +439,7 @@ function timelinePositions(nodes: LNode[]): Record<string, { x: number; y: numbe
 export function LineageGraph({
   nodes: rawNodes, edges: rawEdges, layout, lens, focalId = "n1",
   trace: traceProp = null, maxNodes = DEFAULT_MAX_NODES,
-  mode, hopDepth = 1, minConfidence = 0.8,
+  mode, hopDepth = 1, minConfidence = 0.8, impact = null, onClearImpact,
   onSelectNode, onSelectGroup, onSelectEdge, onPinNode, onVolume,
   loading = false, className = "",
 }: LineageGraphProps) {
@@ -527,6 +538,12 @@ export function LineageGraph({
     [trace, edges],
   );
 
+  /** Node id → the severity the analysis gave that document. */
+  const impactBy = useMemo(() => {
+    if (!impact?.docs.length) return null;
+    return new Map<string, Severity>(impact.docs.map((d) => [d.id, d.severity]));
+  }, [impact]);
+
   /* The toolbar's "Find path" arms `controls.path`; the picking happens here,
      because the two ends are nodes on this canvas. Two picks resolve to a
      route, which is drawn and holds everything else back. */
@@ -547,13 +564,17 @@ export function LineageGraph({
       // A node on the current path is never capped away: dropping one end (or
       // a hop in the middle) would draw a route with a hole in it.
       const pin = (n: LNode) => (n.id === focalId || n.id === trace?.originId ? 1 : 0) +
-        (closure?.has(n.id) ? 1 : 0) + (path?.nodes.has(n.id) ? 2 : 0);
+        (closure?.has(n.id) ? 1 : 0) + (path?.nodes.has(n.id) ? 2 : 0) +
+        // A document the analysis named is the answer on screen. Capping one
+        // away would leave the reader a report listing a card that is not
+        // drawn anywhere.
+        (impactBy?.has(n.id) ? 2 : 0);
       return pin(b) - pin(a) || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || a.id.localeCompare(b.id);
     }).slice(0, cap);
     const kept = new Set(keep.map((n) => n.id));
     // Restore the authored order so the layout is not reshuffled by ranking.
     return passing.filter((n) => kept.has(n.id));
-  }, [passing, cap, edges, focalId, trace?.originId, closure, path]);
+  }, [passing, cap, edges, focalId, trace?.originId, closure, path, impactBy]);
 
   const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -611,6 +632,9 @@ export function LineageGraph({
     // A resolved path is the strongest statement on the canvas: everything off
     // it recedes, including whatever the search or a trace was spotlighting.
     if (path) return !path.nodes.has(id);
+    // An analysis is the next strongest: the reader asked one question and the
+    // answer is a set of documents, so the rest of the corpus stands back.
+    if (impactBy) return !impactBy.has(id);
     if (closure && !closure.has(id)) return true;
     const n = byId[id];
     return n ? !nodeMatchesQuery(n, controls.query) : false;
@@ -648,7 +672,7 @@ export function LineageGraph({
       everything drawn. Positions are canvas fractions and the transform is
       `translate(pan) scale(zoom)` about the centre, so the pan that lands a
       bounding box's centre on the canvas centre is a closed form. */
-  const fitTo = (ids: Set<string> | null) => {
+  const fitTo = (ids: Set<string> | null, ceiling = 2.5) => {
     // A fit is a zoom the reader asked for, so the canvas stops fitting the
     // packed grid under them afterwards.
     userZoomed.current = true;
@@ -680,7 +704,7 @@ export function LineageGraph({
       const w = (x1 - x0) + (rect.width ? CARD_W / rect.width : CARD_FRAC_W);
       const h = (y1 - y0) + (rect.height ? cardH / rect.height : CARD_FRAC_H);
       return {
-        z: clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, 2.5),
+        z: clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, ceiling),
         cx: (x0 + x1) / 2, cy: (y0 + y1) / 2,
       };
     };
@@ -777,6 +801,25 @@ export function LineageGraph({
     fitTo(selectionSet);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focalId]);
+
+  /* A finished analysis is a navigation too: the answer is a handful of cards
+     that can be anywhere on the graph, and leaving the reader at whatever pan
+     they had would hand them a canvas of dimmed cards with the lit ones off
+     screen. Only on a CHANGE of analysis, for the same reason the focal fit
+     is: refitting on every render would undo the reader's own zoom. */
+  const framedImpact = useRef<string | null>(null);
+  useEffect(() => {
+    const key = impact ? `${impact.claim} ${impact.docs.map((d) => d.id).join(",")}` : null;
+    if (framedImpact.current === key) return;
+    framedImpact.current = key;
+    if (!impactBy?.size) return;
+    /* Never past 100%: an analysis that named two documents would otherwise
+       be framed at 250%, filling the canvas with two cards and hiding the
+       corpus they were picked out of. The point of the overlay is that the
+       lit documents are read AGAINST the graph around them. */
+    fitTo(new Set(impactBy.keys()), 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [impact]);
 
   /* What the canvas actually drew, for the toolbar's volume readout. Keyed on
      the numbers themselves, so this fires when they change and not once per
@@ -904,13 +947,16 @@ export function LineageGraph({
 
   /** What a screen reader is told about one card: everything the card's own
       colors and glyphs say, in words. */
-  const nodeLabel = (n: LNode, editedAfter: boolean) => [
+  const nodeLabel = (n: LNode, editedAfter: boolean, severity: Severity | null) => [
     n.title,
     n.macro ? `${n.count ?? 0} rolled-up documents from ${n.repo ?? "a repository"}` : SOURCE_LABELS[n.source] ?? n.source,
     n.macro ? null : n.owner ? `owned by ${n.owner}` : "unowned",
     n.macro ? null : nodeStatusKey(n) === "warning" ? "needs attention" : nodeStatusKey(n) === "review" ? "needs review" : "verified",
     typeof n.staleDays === "number" ? `${n.staleDays} days since the last update` : null,
     editedAfter ? "edited after the as-of date" : null,
+    // The bar's colour is not readable to a screen reader; the verdict is the
+    // reason this card is lit, so it is said in words.
+    severity ? `impact ${SEVERITY_META[severity].label.toLowerCase()}` : null,
   ].filter(Boolean).join(", ");
 
   if (loading) {
@@ -994,7 +1040,12 @@ export function LineageGraph({
             <Chip tone="attention" label="Capped" className="shrink-0 !px-1.5 !py-0.5 !text-[10px]" />
           )}
           <TruncateInline className="font-term text-[11px] text-ink/65">
-            {cappedCount > 0
+            {/* While an analysis is on the canvas the colour is the severity,
+                not the lens, and saying "Lens: source" then would describe a
+                bar that is no longer coloured by source. */}
+            {impactBy
+              ? `Impact analysis · ${impactBy.size} of ${nodes.length} documents affected`
+              : cappedCount > 0
               ? `Lens: ${effLens} · showing ${visibleNodes.length} of ${nodes.length} nodes, ${visibleEdges.length} of ${edges.length} links, best-connected first`
               : `Lens: ${effLens} · showing ${visibleNodes.length} of ${nodes.length} nodes`}
           </TruncateInline>
@@ -1027,7 +1078,7 @@ export function LineageGraph({
         // The whole page is this canvas, so it needs to describe itself: what
         // it is, how big it is, and what state it is in. Nothing else on the
         // page tells a reader who cannot see it what is on screen.
-        aria-label={`Lineage graph${controls.asOf ? ` as of ${fmtDate(controls.asOf)}` : ""}: ${visibleNodes.length} documents, ${visibleEdges.length} links, colored by ${effLens}`}
+        aria-label={`Lineage graph${controls.asOf ? ` as of ${fmtDate(controls.asOf)}` : ""}: ${visibleNodes.length} documents, ${visibleEdges.length} links, ${impactBy ? `${impactBy.size} affected by the analysis, colored by impact severity` : `colored by ${effLens}`}`}
         /* Clipped and isolated: a panned card must slide under the legend
            header above, never over it, and nothing in here may stack above
            the card's own chrome. */
@@ -1151,7 +1202,12 @@ export function LineageGraph({
               const isSel = sel?.kind === "node" && sel.id === n.id;
               const isFocal = focalId === n.id;
               const dim = dimmed(n.id);
-              const accent = accentColor(n, effLens);
+              /* While an analysis is on the canvas it IS the lens: the card's
+                 left bar takes the severity's colour, and the chip beside it
+                 says the severity in words and in tone. Three channels for one
+                 verdict, the same three every other lens uses (§4). */
+              const severity = impactBy?.get(n.id) ?? null;
+              const accent = severity ? SEVERITY_META[severity].color : accentColor(n, effLens);
               const changed = trace?.direction === "up" && closure?.has(n.id) &&
                 n.date && byId[trace.originId]?.date && n.date > (byId[trace.originId].date as string);
               // A picked end of a path outranks selection and focus: while the
@@ -1167,7 +1223,7 @@ export function LineageGraph({
                   key={n.id}
                   ref={(el) => { nodeRefs.current[n.id] = el; }}
                   type="button"
-                  aria-label={nodeLabel(n, editedAfter)}
+                  aria-label={nodeLabel(n, editedAfter, severity)}
                   aria-pressed={isSel && !pathMode}
                   onPointerDown={(e) => startNode(e, n)}
                   onPointerMove={onMove}
@@ -1232,8 +1288,8 @@ export function LineageGraph({
                         freshness dot that never depends on the lens. */}
                     <span className="flex min-w-0 items-center gap-1.5">
                       <Chip
-                        tone={accentTone(n, effLens)}
-                        label={accentWord(n, effLens)}
+                        tone={severity ? SEVERITY_META[severity].tone : accentTone(n, effLens)}
+                        label={severity ? SEVERITY_META[severity].label : accentWord(n, effLens)}
                         className="shrink-0 !gap-1 !px-1.5 !py-0 !text-[9px] !leading-[15px] !tracking-[0.05em]"
                       />
                       {effLens !== "owner" && (
@@ -1354,8 +1410,31 @@ export function LineageGraph({
           );
         })()}
 
+        {/* impact analysis — the answer to the question the drawer asked,
+            standing where the trace summary stands, because it is the same
+            kind of statement: this is what is lit, and here is the way out. */}
+        {impact && impactBy && !pathMode && (
+          <div className="absolute bottom-3 left-3 z-20 max-w-[320px] rounded-[5px] border border-ink/20 bg-paper/95 p-3 backdrop-blur">
+            <Truncate lines={2} className="text-[12.5px] font-semibold text-ink" title={impact.claim}>
+              {`Impact of “${impact.claim}”`}
+            </Truncate>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {SEVERITY_ORDER.map((severity) => {
+                const count = impact.docs.filter((d) => d.severity === severity).length;
+                if (!count) return null;
+                return <Chip key={severity} label={`${SEVERITY_META[severity].label} ${count}`} tone={SEVERITY_META[severity].tone} dot />;
+              })}
+            </div>
+            {onClearImpact && (
+              <div className="mt-2">
+                <Button compact onClick={onClearImpact}>Clear</Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* trace summary — stood down while the path finder owns this corner */}
-        {trace && closure && !pathMode && (() => {
+        {trace && closure && !pathMode && !impactBy && (() => {
           const origin = byId[trace.originId];
           const groups = new Map<string, number>();
           for (const e of visibleEdges) {

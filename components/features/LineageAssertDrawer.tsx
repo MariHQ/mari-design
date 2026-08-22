@@ -3,7 +3,7 @@ import { Sparkles, Globe, ChevronDown } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
 import { ExportButton } from "../actions/RepeatedActions";
-import { why } from "../actions/useWrite";
+import { useWrite, why } from "../actions/useWrite";
 import { CardActions, CardBody, CardMeta, CardSection, CardTitleBlock } from "../layout/CardShell";
 import { Input } from "../forms/Input";
 import { Chip } from "../data-display/Chip";
@@ -14,7 +14,8 @@ import { WriteError } from "../feedback/WriteError";
 import { SkeletonText, SkeletonList, Skeleton } from "../data-display/Skeleton";
 import {
   LgDrawerShell, LG_DRAWER_W_WIDE, SEVERITY_META, SOURCE_LABELS, LgSourceChip, LgAuthor, LgOwners,
-  type ImpactResult, type Severity,
+  downloadText, impactReport,
+  type ImpactDoc, type ImpactResult, type Severity,
 } from "./LineageDataModel";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -57,6 +58,16 @@ export type LineageAssertDrawerProps = {
       Analyze button says so. May throw; the drawer shows the message. Omitted
       = the drawer resolves to `result`, which is what the canvas renders. */
   onAnalyze?: (claim: string) => ImpactResult | Promise<ImpactResult>;
+  /** What came back, handed to whoever renders this drawer, so an analysis is
+      not trapped inside the panel that ran it: the page lights the impacted
+      documents on the canvas beside it. Fired only on a successful run. */
+  onResult?: (result: ImpactResult) => void;
+  /** Open one task per impacted document and answer with how many were
+      created. The count is the reader's receipt, so it comes from whoever did
+      the writing rather than from the length of the list. May throw; the
+      message lands in the drawer. Omitted = the local echo the design canvas
+      renders, which claims one task per listed document and nothing more. */
+  onCreateTasks?: (docs: ImpactDoc[]) => number | Promise<number>;
   onClose?: () => void;
   /** Render a content-shaped skeleton silhouette instead of the drawer body. */
   loading?: boolean;
@@ -65,7 +76,7 @@ export type LineageAssertDrawerProps = {
 
 export function LineageAssertDrawer({
   result: outcome, analyzed, claim: initialClaim, owners, people,
-  onAnalyze, onClose, loading = false, className = "",
+  onAnalyze, onResult, onCreateTasks, onClose, loading = false, className = "",
 }: LineageAssertDrawerProps) {
   const initial = analyzed ? outcome : null;
   const [claim, setClaim] = useState(initial?.claim ?? initialClaim);
@@ -74,7 +85,13 @@ export function LineageAssertDrawer({
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(initial ? "just now" : null);
   const [filter, setFilter] = useState<Severity | null>(null);
   const [taskState, setTaskState] = useState<"idle" | "creating" | "done">("idle");
+  /** How many tasks were actually opened, straight from the handler. */
+  const [created, setCreated] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
+  /* A failed bulk-create is its own banner. Sharing one with the analysis
+     meant the message from a refused write vanished the moment the reader
+     re-ran the analysis it had nothing to do with. */
+  const taskWrite = useWrite();
   const [exported, setExported] = useState(false);
   const [docPage, setDocPage] = useState(1);
 
@@ -91,6 +108,9 @@ export function LineageAssertDrawer({
     setRunning(true);
     setFailed(null);
     setTaskState("idle");
+    setCreated(0);
+    taskWrite.setFailed(null);
+    setExported(false);
     setFilter(null);
     try {
       // Mari reads the whole graph, so this is genuinely slow and the button
@@ -100,6 +120,9 @@ export function LineageAssertDrawer({
         : await new Promise<ImpactResult>((r) => setTimeout(() => r(outcome), 1400));
       setResult(next);
       setAnalyzedAt("just now");
+      // The analysis is about the graph, not about this panel: whoever renders
+      // the drawer gets the result and can light the documents it names.
+      onResult?.(next);
     } catch (err) {
       setFailed(why(err, "The analysis could not run."));
     } finally {
@@ -107,10 +130,24 @@ export function LineageAssertDrawer({
     }
   };
 
-  const createTasks = () => {
-    if (!result || taskState !== "idle") return;
+  const createTasks = async () => {
+    if (!result || taskState !== "idle" || !result.docs.length) return;
     setTaskState("creating");
-    setTimeout(() => setTaskState("done"), 1200);
+    const count = onCreateTasks
+      ? await taskWrite.runFor(() => onCreateTasks(result.docs))
+      : result.docs.length;
+    // A refused write leaves the button offering the same action again, with
+    // the server's message above it, rather than claiming tasks nobody has.
+    if (count === undefined) { setTaskState("idle"); return; }
+    setCreated(count);
+    setTaskState("done");
+  };
+
+  const exportReport = () => {
+    if (!result) return;
+    const stem = result.claim.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    downloadText(`impact-${stem.slice(0, 60) || "analysis"}.md`, impactReport(result), "text/markdown");
+    setExported(true);
   };
 
   const state: "running" | "completed" | "ready" = running ? "running" : result ? "completed" : "ready";
@@ -124,7 +161,9 @@ export function LineageAssertDrawer({
   const hiddenDocs = matching.length - shown.length;
 
   const taskLabel =
-    taskState === "creating" ? "Creating tasks…" : taskState === "done" ? `Created ${taskCount} tasks ✓` : `Create ${taskCount} tasks`;
+    taskState === "creating" ? "Creating tasks…"
+      : taskState === "done" ? `Created ${created} task${created === 1 ? "" : "s"} ✓`
+      : `Create ${taskCount} task${taskCount === 1 ? "" : "s"}`;
 
   if (loading) {
     return (
@@ -164,17 +203,27 @@ export function LineageAssertDrawer({
         /* CONVENTIONS §2: primary bottom LEFT, secondary on the same line to
            its right. */
         <div className="flex w-full flex-col gap-2">
+          {/* A refused bulk-create is a failed WRITE with no field to accuse,
+              so it is the banner (§8), and it sits above the button that will
+              be pressed again rather than at the top of a scrolled panel. */}
+          <WriteError onDismiss={() => taskWrite.setFailed(null)}>{taskWrite.failed}</WriteError>
           <CardActions
             className="pt-0"
             primary={
-              <Button variant="primary" onClick={createTasks} disabled={!result || taskState !== "idle"}>
+              <Button
+                variant="primary"
+                onClick={() => void createTasks()}
+                disabled={!result || !taskCount || taskState !== "idle"}
+              >
                 {taskLabel}
               </Button>
             }
             secondary={
               // <Send> said "this goes somewhere else"; the report lands on the
               // reader's own machine, so it carries the Download glyph (§16).
-              <ExportButton format="report" state={exported ? "done" : "idle"} onClick={() => setExported(true)} />
+              // It writes a real Markdown file now: summary, then every
+              // document under the severity the analysis gave it.
+              <ExportButton format="report" state={exported ? "done" : "idle"} onClick={exportReport} disabled={!result} />
             }
           />
           <span className="inline-flex items-center gap-1.5 font-term text-[11px] text-ink/65">
