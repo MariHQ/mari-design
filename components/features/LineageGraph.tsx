@@ -474,6 +474,10 @@ export function LineageGraph({
   /* ── pointer: drag the background to pan, drag a node to move it ────── */
   const startPan = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    /* Overlays inside the canvas (find-path panel, drawers, zoom controls)
+       are real controls. Capturing the pointer here would route their click
+       to the canvas and they would never fire. */
+    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='button'], [role='menu']")) return;
     drag.current = { mode: "pan", startX: e.clientX, startY: e.clientY, origin: pan, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
