@@ -684,7 +684,10 @@ export function LineageGraph({
         // it is, how big it is, and what state it is in. Nothing else on the
         // page tells a reader who cannot see it what is on screen.
         aria-label={`Lineage graph${controls.asOf ? ` as of ${fmtDate(controls.asOf)}` : ""}: ${visibleNodes.length} documents, ${visibleEdges.length} links, colored by ${effLens}`}
-        className="relative touch-none select-none"
+        /* Clipped and isolated: a panned card must slide under the legend
+           header above, never over it, and nothing in here may stack above
+           the card's own chrome. */
+        className="relative isolate touch-none select-none overflow-hidden"
         style={{ aspectRatio: `${VB_W} / ${VB_H}`, cursor: "grab" }}
         onPointerDown={startPan}
         onPointerMove={onMove}
