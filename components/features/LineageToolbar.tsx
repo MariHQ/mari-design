@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, forwardRef, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ReactNode } from "react";
-import { Search, Minus, Plus, Maximize2, Crosshair, RotateCcw, Sparkles, GitFork, Bookmark, ChevronDown, X, Trash2 } from "lucide-react";
+import { Search, Plus, Crosshair, RotateCcw, Sparkles, GitFork, Bookmark, ChevronDown, X, Trash2 } from "lucide-react";
 import * as RPop from "@radix-ui/react-popover";
 import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
@@ -16,7 +16,7 @@ import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
 import {
   REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
-  useLineageControls, clamp, nodeById, tracePath,
+  useLineageControls, nodeById, tracePath,
   type GraphView, type LEdge, type LineageControlState, type LNode, type Lens,
   type LayoutMode, type RelKey, type StatusFilter,
 } from "./LineageDataModel";
@@ -26,7 +26,7 @@ import {
 
    Three explicit rows, one gap, no wrap-roulette:
 
-     1. FILTERS   search · Sources: · Relations: · Status: · zoom
+     1. FILTERS   search · Sources: · Relations: · Status:
      2. CANVAS    how much of the graph is drawn · fit · reset layout
      3. VIEW      Color by: · Layout: · Flow: · Views:
      4. ACTIONS   Assert impact · Find path · Derive links
@@ -439,7 +439,6 @@ export function LineageToolbar({
   const layoutValue = controls.layout === "flow" ? "Flow" : "Timeline";
   const flowValue = controls.scope === "focus" ? "Focal closure" : "Whole graph";
 
-  const setZoom = (z: number) => setControls({ zoom: clamp(Number(z.toFixed(2)), 0.3, 2.5) });
 
   const pathLabel = !picked
     ? "Find path"
@@ -466,13 +465,12 @@ export function LineageToolbar({
       </span>
     );
     return (
-      <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
+      <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[720px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
         <Row label="Filter">
           <Skeleton width={168} height={32} rounded="rounded-[4px]" />
           <Pending accent={CONTROL_ACCENT.sources} label="Sources" />
           <Pending accent={CONTROL_ACCENT.relations} label="Relations" />
           <Pending accent={CONTROL_ACCENT.status} label="Status" />
-          <Pending accent={CONTROL_ACCENT.zoom} label="Zoom" />
         </Row>
         {/* The silhouette is the RESTING toolbar, not every row it can show:
             View and Actions live behind a disclosure, so drawing them here
@@ -495,7 +493,7 @@ export function LineageToolbar({
   }
 
   return (
-    <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[840px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
+    <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[720px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()}>
       {/* ── row 1: filters ─────────────────────────────────────────────── */}
       <Row label="Filter">
         {/* The suggestion list is a Radix popover anchored to the search box:
@@ -654,22 +652,6 @@ export function LineageToolbar({
           </MenuRadioGroup>
         </Menu>
 
-        <div className="flex h-8 items-center gap-0.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-1">
-          <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.zoom }} aria-hidden />
-          <span className="pl-1.5 text-[13px] text-ink/70">Zoom:</span>
-          <span className="w-9 text-center font-term text-[12px] font-medium" style={{ color: CONTROL_ACCENT.zoom }}>
-            {Math.round(controls.zoom * 100)}%
-          </span>
-          {/* !h-7/!w-7: the icon size prop is w-9 h-9, which outranked the
-              plain h-6 override and poked 4px out of this 32px group, reading
-              as a stray button behind the control. 28px keeps every control
-              in the filter row inside the shared 32px height (§13). */}
-          <Button compact icon aria-label="Zoom out" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom - 0.2)}><Minus size={14} /></Button>
-          <Button compact icon aria-label="Zoom in" className="!h-7 !w-7" onClick={() => setZoom(controls.zoom + 0.2)}><Plus size={14} /></Button>
-          {/* Fits, rather than only setting the scale back to 100% and
-              leaving the graph wherever the reader had panned it. */}
-          <Button compact icon aria-label="Fit graph to view" className="!h-7 !w-7" onClick={() => setControls({ viewport: "fit" })}><Maximize2 size={14} /></Button>
-        </div>
       </Row>
 
       {/* ── row 2: the canvas itself ────────────────────────────────────
