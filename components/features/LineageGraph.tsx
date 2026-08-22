@@ -166,10 +166,15 @@ const CARD_HALF = CARD_W / 2;
 const CARD_H = 50;
 const CARD_H_MIN = 36;
 const CARD_H_MAX = 120;
-/** The air the packer leaves between two card boxes. Small enough that a lane
-    still reads as one column, big enough that two cards never look joined. */
+/** The air the packer leaves between two card boxes. This is a FLOOR, not a
+    fixed value: the grid opens out to fill whatever room the current scale
+    gives it, and closes back down to exactly this and never less. */
 const GAP_X = 16;
 const GAP_Y = 12;
+/** …and a ceiling on that opening out, in cells. Zoomed far enough out the
+    room is unbounded, and a grid that keeps growing with it stops reading as
+    a grid and starts reading as scattered cards. */
+const SPREAD_MAX = 2.6;
 /** The canvas overlays — zoom cluster, filter readout, drag hint, trace panel
     — sit in the corners at a fixed size whatever the zoom, so the packed rows
     start below them and stop above them rather than under them. */
@@ -296,20 +301,34 @@ function timeColumns(
   return cols.filter((c) => c.length > 0);
 }
 
-type Packed = {
-  /** id → canvas-fraction centre. Outside 0..1 when the packed grid is bigger
-      than the canvas; `fit` is then below 1 and the canvas zooms out to it. */
-  pos: Record<string, Pt>;
-  /** The scale that brings the whole grid into view. 1 = it already fits. */
+/** WHAT the grid is: which cards stand in which column, in which order. It is
+    worked out from the card box and the canvas alone, never from the scale, so
+    zooming never reshuffles a reader's graph — only the air between the cards
+    changes. */
+type Plan = {
+  cols: LNode[][];
+  rows: number;
+  /** The scale that brings the whole grid into view at its tightest packing.
+      1 = it already fits the canvas. */
   fit: number;
 };
 
-/** Pack every visible card into lanes of whole card boxes, centred on the
-    canvas and spread over it when there is room to spare. */
-function packLayout(args: {
+/** WHERE that grid lands at one particular scale. */
+type Placed = {
+  /** id → canvas-fraction centre. Outside 0..1 when the grid is wider than the
+      canvas, which is either a grid awaiting its zoom-to-fit or a reader who
+      has zoomed out and is being given the room they asked for. */
+  pos: Record<string, Pt>;
+  /** Does the whole grid stand inside the canvas box at this scale? */
+  inside: boolean;
+};
+
+/** Work out the grid: how many rows deep a column runs, which cards fill it,
+    and how much of the canvas the tightest version of it needs. */
+function planLayout(args: {
   nodes: LNode[]; at: (n: LNode) => Pt; degree: Map<string, number>;
   width: number; height: number; box: CardBox; timeline: boolean;
-}): Packed | null {
+}): Plan | null {
   const { nodes, at, degree, width, height, box, timeline } = args;
   if (!width || !height || nodes.length === 0) return null;
   const cellW = box.w + GAP_X;
@@ -343,28 +362,40 @@ function packLayout(args: {
     if (!best || fit >= best.fit) best = { cols, rows, fit };
   }
   if (!best) return null;
+  return { cols: best.cols, rows: best.rows, fit: Math.min(best.fit, 1) };
+}
 
-  const { cols, rows } = best;
-  const fit = Math.min(best.fit, 1);
-  /* Room to spare is spread, not hoarded: the grid opens out over the canvas
-     instead of sitting as one dense block in the middle. Capped, because a
-     three-card graph pushed into the four corners stops reading as a graph. */
-  const pitchX = fit >= 1 ? Math.min(availW / cols.length, cellW * 1.55) : cellW;
-  const pitchY = fit >= 1 ? Math.min(availH / rows, cellH * 1.7) : cellH;
+/** Lay the plan out at one scale.
+
+    Zoom is not a lens over a fixed grid, it is how much room the grid has. The
+    node layer is scaled about the canvas centre, so at 60% the reader can see
+    a logical area two thirds larger than the canvas box — and the answer to
+    that is to open the columns and rows out into it, not to leave the same
+    tight block sitting in the middle of an empty canvas. Zooming back in
+    closes the grid down again, never past the minimum gap: cards may then run
+    past the canvas edge, which is what fit and pan are for. */
+function placeLayout(plan: Plan, args: {
+  width: number; height: number; box: CardBox; zoom: number;
+}): Placed {
+  const { width, height, box, zoom } = args;
+  const { cols, rows } = plan;
+  const scale = Math.max(zoom, 0.05);
+  const cellW = box.w + GAP_X;
+  const cellH = box.h + GAP_Y;
+  // The room the reader can actually see, in the layer's own units: the canvas
+  // box grown by the scale, less the overlays, which keep their screen size
+  // and so shrink in these units as the canvas zooms out.
+  const roomW = Math.max(cellW, (width - PAD_X * 2) / scale);
+  const roomH = Math.max(cellH, (height - PAD_TOP - PAD_BOTTOM) / scale);
+  const pitchX = clamp(roomW / cols.length, cellW, cellW * SPREAD_MAX);
+  const pitchY = clamp(roomH / rows, cellH, cellH * SPREAD_MAX);
   const spreadW = cols.length * pitchX;
   const spreadH = rows * pitchY;
-  /* Where the grid has to start so that it LANDS centred between the overlays.
-     A grid that fits is simply placed there. A grid that does not is about to
-     be scaled by `fit` about the canvas centre, so it is placed where that
-     scaling will drop it — otherwise the top row slides under the zoom cluster
-     on the way in. */
-  const land = (extent: number, pad: number, avail: number, spread: number) => {
-    const target = pad + avail / 2;
-    const middle = extent / 2;
-    return middle + (target - middle) / fit - spread / 2;
-  };
-  const originX = land(width, PAD_X, availW, spreadW);
-  const originY = land(height, PAD_TOP, availH, spreadH);
+  // Centred on the room, not on the canvas: the room's own centre sits a
+  // little below the canvas centre, by however much the top overlays outweigh
+  // the bottom ones at this scale.
+  const originX = width / 2 - spreadW / 2;
+  const originY = height / 2 + (PAD_TOP - PAD_BOTTOM) / (2 * scale) - spreadH / 2;
 
   const pos: Record<string, Pt> = {};
   cols.forEach((col, c) => {
@@ -376,7 +407,9 @@ function packLayout(args: {
       };
     });
   });
-  return { pos, fit };
+  const inside = originX >= 0 && originY >= 0
+    && originX + spreadW <= width && originY + spreadH <= height;
+  return { pos, inside };
 }
 
 /** Timeline layout: x by event date rank, y kept from the flow layout. */
@@ -545,10 +578,10 @@ export function LineageGraph({
      graph, a narrower console, a roll-up unfolded onto the slot its macro card
      held — the packer takes the whole visible set over, whichever mode drew
      it. */
-  const packed = useMemo(() => {
+  const plan = useMemo(() => {
     if (!canvas.w || !canvas.h || visibleNodes.length === 0) return null;
     if (!anyCollision(visibleNodes, basePos, canvas.w, canvas.h, cardBox)) return null;
-    return packLayout({
+    return planLayout({
       nodes: visibleNodes, at: basePos, degree: degrees,
       width: canvas.w, height: canvas.h, box: cardBox,
       timeline: effLayout === "timeline",
@@ -558,7 +591,19 @@ export function LineageGraph({
   }, [visibleNodes, effLayout, timeline, canvas.w, canvas.h, cardBox, degrees]);
 
   /** The scale that brings the packed grid into view, 1 when it needs none. */
-  const fitScale = packed ? packed.fit : 1;
+  const fitScale = plan ? plan.fit : 1;
+
+  /** Where that grid lands at the scale on screen. Only the air between the
+      cards depends on the zoom, so this is a cheap derivation off the plan
+      rather than a repack: the columns, the order and the fit are already
+      settled by the memo above and do not move when a reader zooms. */
+  const placeAt = (z: number) =>
+    plan ? placeLayout(plan, { width: canvas.w, height: canvas.h, box: cardBox, zoom: z }) : null;
+  const packed = useMemo(
+    () => placeAt(zoom),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan, canvas.w, canvas.h, cardBox, zoom],
+  );
 
   const posOf = (n: LNode) => moved[n.id] ?? packed?.pos[n.id] ?? basePos(n);
   const px = (n: LNode) => { const p = posOf(n); return { x: p.x * VB_W, y: p.y * VB_H }; };
@@ -618,21 +663,37 @@ export function LineageGraph({
       setControls({ zoom: 1 });
       return;
     }
-    let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
-    for (const n of subject) {
-      const q = posOf(n);
-      x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
-      y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
-    }
-    // Grow the box by a card, so the outermost cards land whole rather than
-    // with their right edge cropped at the canvas boundary. A card's share of
-    // the canvas is a measurement, not a guess, once the canvas has been read.
-    const w = (x1 - x0) + (rect.width ? CARD_W / rect.width : CARD_FRAC_W);
-    const h = (y1 - y0) + (rect.height ? cardH / rect.height : CARD_FRAC_H);
-    const z = clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, 2.5);
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    setPan({ x: -(cx - 0.5) * rect.width * z, y: -(cy - 0.5) * rect.height * z });
-    setControls({ zoom: z });
+    /* Frame a set of cards at a given scale. The grid opens out as the scale
+       drops, so the box to frame is not the one on screen — it is the one the
+       answer will produce, which is why this runs twice: once to find the
+       scale, once on the layout that scale lays down. */
+    const frame = (at: (n: LNode) => Pt) => {
+      let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+      for (const n of subject) {
+        const q = at(n);
+        x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
+        y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+      }
+      // Grow the box by a card, so the outermost cards land whole rather than
+      // with their right edge cropped at the canvas boundary. A card's share
+      // of the canvas is a measurement, not a guess, once it has been read.
+      const w = (x1 - x0) + (rect.width ? CARD_W / rect.width : CARD_FRAC_W);
+      const h = (y1 - y0) + (rect.height ? cardH / rect.height : CARD_FRAC_H);
+      return {
+        z: clamp(Number(Math.min(0.94 / w, 0.94 / h).toFixed(2)), 0.3, 2.5),
+        cx: (x0 + x1) / 2, cy: (y0 + y1) / 2,
+      };
+    };
+    const first = frame(posOf);
+    const settled = placeAt(first.z);
+    const answer = settled
+      ? frame((n) => moved[n.id] ?? settled.pos[n.id] ?? basePos(n))
+      : first;
+    setPan({
+      x: -(answer.cx - 0.5) * rect.width * answer.z,
+      y: -(answer.cy - 0.5) * rect.height * answer.z,
+    });
+    setControls({ zoom: answer.z });
   };
 
   /** Back to the layout the data shipped: dragged positions dropped, pan
@@ -884,9 +945,11 @@ export function LineageGraph({
   const hiddenCount = nodes.length - passing.length;
   const cappedCount = passing.length - visibleNodes.length;
   const quietEdges = visibleEdges.length > LABEL_LIMIT;
-  /** Does the drawn graph fit the canvas box? A grid too big for it is drawn
-      at its own size and zoomed to fit, so nothing about it is clamped. */
-  const inFrame = fitScale >= 1;
+  /** Does the drawn graph stand inside the canvas box at this scale? A grid
+      bigger than the box — one awaiting its zoom-to-fit, or one opened out
+      because the reader zoomed away from it — is drawn at its own size, and
+      clamping it back inside would stack its outer cards on the edges. */
+  const inFrame = packed ? packed.inside : fitScale >= 1;
 
   /* Card boxes in viewBox units, so an edge label can be slid along its own
      edge to a spot that is not on top of a card. The edge layer is a 1000×560
