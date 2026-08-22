@@ -39,7 +39,7 @@ export type GithubStatus = { webhookConfigured: boolean; lastDeliveryAt?: string
 export type SourcesBotsActions = {
   /** Store the bot token and signing secret server-side. Throws with the
       server's own words: "invalid_auth" is the one thing the user can fix. */
-  saveSlackCredentials?: (v: { botToken: string; signingSecret: string }) => void | Promise<void>;
+  saveSlackCredentials?: (v: { botToken: string; appToken: string; signingSecret: string }) => void | Promise<void>;
   /** Read the deployment-generated Slack manifest. The callback matters:
       browser origin is not necessarily the public API origin Slack calls. */
   loadSlackManifest?: () => Promise<string>;
@@ -104,6 +104,7 @@ function SlackDrawer({
 }: { open: boolean; onClose: () => void; status: SlackStatus; actions?: SourcesBotsActions }) {
   const [step, setStep] = useState(0);
   const [token, setToken] = useState("");
+  const [appToken, setAppToken] = useState("");
   const [secret, setSecret] = useState("");
   const [saved, setSaved] = useState(false);
   const [manifest, setManifest] = useState(fallbackSlackManifest);
@@ -127,7 +128,7 @@ function SlackDrawer({
   }, [open, step, actions?.loadSlackManifest]);
 
   const save = () => write.run(
-    actions?.saveSlackCredentials && (() => actions.saveSlackCredentials!({ botToken: token, signingSecret: secret.trim() })),
+    actions?.saveSlackCredentials && (() => actions.saveSlackCredentials!({ botToken: token, appToken, signingSecret: secret.trim() })),
     () => setSaved(true),
   );
   const test = async () => {
@@ -138,7 +139,9 @@ function SlackDrawer({
 
   const tokenOk = token.startsWith("xoxb-");
   const tokenErr = token.length > 0 && (token.startsWith("xoxp-") || !token.startsWith("xoxb-"));
-  const canSave = tokenOk && secret.trim().length > 0;
+  const appTokenOk = appToken.startsWith("xapp-");
+  const appTokenErr = appToken.length > 0 && !appTokenOk;
+  const canSave = tokenOk && appTokenOk && secret.trim().length > 0;
 
   const body = () => {
     if (step === 0) return (
@@ -154,6 +157,11 @@ function SlackDrawer({
         <Field label="Bot token">
           <Input className="w-full font-term" type="password" placeholder="xoxb-…" value={token} onChange={(e) => { setToken(e.target.value); setSaved(false); }} />
           {tokenErr && <p className="mt-1 text-[11.5px] text-espelette">Bot tokens start with <code>xoxb-</code> (not <code>xoxp-</code>).</p>}
+        </Field>
+        <Field label="App-level token">
+          <Input className="w-full font-term" type="password" placeholder="xapp-…" value={appToken} onChange={(e) => { setAppToken(e.target.value); setSaved(false); }} />
+          {appTokenErr && <p className="mt-1 text-[11.5px] text-espelette">App-level tokens start with <code>xapp-</code>.</p>}
+          <p className="mt-1 text-[11.5px] text-ink/60">Create it under Basic Information → App-Level Tokens with <code>connections:write</code>. Mari uses it for immediate Socket Mode delivery.</p>
         </Field>
         <Field label="Signing secret">
           <Input className="w-full font-term" type="password" placeholder="••••••••" value={secret} onChange={(e) => { setSecret(e.target.value); setSaved(false); }} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  CheckCircle2, CircleAlert, GitBranch, MessageCircleQuestion, Save, Search,
+  CheckCircle2, CircleAlert, Database, GitBranch, MessageCircleQuestion, RefreshCw, Save, Search,
   SlidersHorizontal, Trash2, Undo2, Workflow, X,
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
@@ -20,6 +20,7 @@ import { Tabs } from "../navigation/Tabs";
 import { Input } from "../forms/Input";
 import { Select } from "../forms/Select";
 import { SkeletonPage } from "../data-display/Skeletons";
+import { Spinner } from "../data-display/Spinner";
 import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite } from "../actions/useWrite";
@@ -119,6 +120,41 @@ export type TrajectoryRow = {
   /** "observed" or "rejected". Rejecting keeps the evidence; only Delete
       removes it. */
   disposition: string;
+  /* How the assistant answered this turn: which codified workflow it selected
+     (and how close the match was), whether the reply came from a reviewed
+     cache, an approved answer, or generation, and the cluster it belongs to. */
+  selectedWorkflowId?: number | null;
+  selectedWorkflowScore?: number | null;
+  selectedWorkflowExact?: boolean;
+  executionMode?: string;
+  observedClusterId?: number | null;
+  /* The codified workflow this run seeds or belongs to, as a cluster: its
+     name, every observation grouped under it, its enabled state, its
+     reviewed-answer cache, and the embedding projection that places it. */
+  promotedWorkflowName?: string;
+  workflowRootTrajectoryId?: number | null;
+  workflowObservationCount?: number;
+  clusterObservations?: TrajectoryRow[];
+  promotedWorkflowStatus?: string;
+  promotedWorkflowCachePolicy?: "none" | "reviewed_answer";
+  promotedWorkflowCacheState?: "disabled" | "empty" | "fresh" | "stale";
+  promotedWorkflowCacheRefreshedAt?: string;
+  promotedWorkflowDependencyCount?: number;
+  promotedWorkflowEmbeddingMap?: {
+    profile: string;
+    points: Array<{ kind: "intent" | "phase" | "tool"; label: string; x: number; y: number }>;
+  };
+};
+
+export type WorkflowHarvestCandidate = {
+  seedTrajectoryId: number;
+  name: string;
+  reason: string;
+  observationIds: number[];
+  prompts: string[];
+  existingWorkflowId: number | null;
+  suggested?: boolean;
+  accepted?: boolean;
 };
 
 /** The Observed tab's filters. Every one of them is applied by the server, so
@@ -171,6 +207,17 @@ export type WorkflowsActions = AnswersActions & {
   reject?: (trajectoryId: number, rejected: boolean) => void | Promise<void>;
   /** Remove a run and everything harvested with it. */
   remove?: (trajectoryId: number) => void | Promise<void>;
+  /* Codified workflow lifecycle. */
+  setWorkflowEnabled?: (workflowId: number, enabled: boolean) => void | Promise<void>;
+  setWorkflowCache?: (workflowId: number, enabled: boolean) => void | Promise<void>;
+  reconcileStale?: () => number | Promise<number>;
+  deleteWorkflow?: (workflowId: number) => void | Promise<void>;
+  /* Clusters: carve one observation out into its own workflow. */
+  suggestSplitName?: (trajectoryId: number) => string | Promise<string>;
+  splitWorkflow?: (trajectoryId: number, name: string) => number | Promise<number>;
+  /* Guided harvesting of new workflows from recent assistant turns. */
+  harvestCandidates?: () => WorkflowHarvestCandidate[] | Promise<WorkflowHarvestCandidate[]>;
+  codifyCandidate?: (candidate: WorkflowHarvestCandidate) => number | Promise<number>;
 };
 
 /* Re-exported under their old names for one release: `web/src/data` and the
@@ -341,33 +388,243 @@ function EvidenceEditor({ trajectoryId, evidence, actions }: {
 
 /* ── Promotion ────────────────────────────────────────────────────────────── */
 
-/** The paused workflow a run produced, drawn IN PLACE.
+/** The codified workflow a run produced or belongs to, drawn IN PLACE.
  *
- * "Create paused workflow" used to answer with a button that navigated to
- * /flows — a page that no longer exists, and which even when it did meant the
- * only way to see whether promotion had worked was to leave the run behind.
- * The workflow's name, status and size say what was made, where it was made. */
-function PromotedWorkflowBlock({ workflow }: { workflow: PromotedWorkflow }) {
+ * Promotion used to answer with a button that navigated to /flows, a page
+ * that no longer exists. The workflow's name, state, size and controls live
+ * here: enable or pause it for assistants, cache its reviewed answer, delete
+ * it (the observed run is kept), and see the chat observations clustered
+ * under it with the embedding projection that places them. */
+function PromotedWorkflowPanel({ row, workflow, actions }: {
+  row: TrajectoryRow; workflow: PromotedWorkflow; actions?: WorkflowsActions;
+}) {
+  const status = row.promotedWorkflowStatus ?? workflow.status;
+  const [enabled, setEnabled] = useState(status === "active");
+  const [cachePolicy, setCachePolicy] = useState(row.promotedWorkflowCachePolicy ?? "none");
+  const [cacheState, setCacheState] = useState(row.promotedWorkflowCacheState ?? "disabled");
+  const [gone, setGone] = useState(false);
+  const statusWrite = useWrite();
+  const cacheWrite = useWrite();
+  const deleteWrite = useWrite();
+  if (gone) return <p className="text-[12px] text-ink/70">Workflow deleted. The observed run is kept.</p>;
   return (
-    <div className="rounded-[6px] border border-ink/12 bg-flysch/50 px-3 py-2.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Workflow size={14} className="shrink-0 text-biscay-2" aria-hidden />
-        <span className="min-w-0 flex-1 text-[13px] font-semibold text-ink">
-          <Truncate>{workflow.name}</Truncate>
-        </span>
-        {/* Only a status the console has a chip for. A workflow status this
-            build does not know renders as the word itself rather than as a
-            chip claiming a lifecycle it does not have. */}
-        {workflow.status === "paused"
-          ? <StatusChip status="paused" />
-          : <Chip label={workflow.status || "unknown"} tone="neutral" />}
+    <div className="flex flex-col gap-3">
+      <div className="rounded-[6px] border border-ink/12 bg-flysch/50 px-3 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Workflow size={14} className="shrink-0 text-biscay-2" aria-hidden />
+          <span className="min-w-0 flex-1 text-[13px] font-semibold text-ink">
+            <Truncate>{row.promotedWorkflowName || workflow.name}</Truncate>
+          </span>
+          <Chip label={enabled ? "Enabled for assistants" : "Paused"} tone={enabled ? "ok" : "neutral"} />
+        </div>
+        <p className="mt-1 text-[11.5px] text-ink/70">
+          {workflow.nodeCount} node{workflow.nodeCount === 1 ? "" : "s"}.
+          {enabled ? " Assistants may select it for matching intents." : " Nothing runs until someone enables it."}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button compact disabled={statusWrite.busy}
+            onClick={() => void statusWrite.run(actions?.setWorkflowEnabled && (() => actions.setWorkflowEnabled!(workflow.id, !enabled)))
+              .then((ok) => { if (ok) setEnabled(!enabled); })}>
+            <Workflow size={13} /> {enabled ? "Pause workflow" : "Enable workflow"}
+          </Button>
+          <ConfirmButton compact confirmLabel="Confirm delete"
+            onConfirm={() => void deleteWrite.run(actions?.deleteWorkflow && (() => actions.deleteWorkflow!(workflow.id)))
+              .then((ok) => { if (ok) setGone(true); })}>
+            <Trash2 size={13} /> Delete workflow
+          </ConfirmButton>
+        </div>
+        <WriteError onDismiss={() => statusWrite.setFailed(null)}>{statusWrite.failed}</WriteError>
+        <WriteError onDismiss={() => deleteWrite.setFailed(null)}>{deleteWrite.failed}</WriteError>
       </div>
-      <p className="mt-1 text-[11.5px] text-ink/70">
-        {workflow.nodeCount} node{workflow.nodeCount === 1 ? "" : "s"}.
-        {workflow.status === "paused" ? " Nothing runs until someone starts it." : ""}
-      </p>
+
+      <div className="rounded-[6px] border border-ink/12 bg-ink/[0.02] px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Database size={14} className="shrink-0" aria-hidden />
+          <strong className="text-[12px]">Reviewed-answer cache</strong>
+          <Chip label={cachePolicy === "none" ? "Not cached" : cacheState === "fresh" ? "Current" : cacheState === "stale" ? "Stale" : "Needs reconciliation"} />
+          <Button compact disabled={cacheWrite.busy}
+            onClick={() => void cacheWrite.run(actions?.setWorkflowCache && (() => actions.setWorkflowCache!(workflow.id, cachePolicy === "none")))
+              .then((ok) => {
+                if (ok) { const enabling = cachePolicy === "none"; setCachePolicy(enabling ? "reviewed_answer" : "none"); setCacheState(enabling ? "fresh" : "disabled"); }
+              })}>
+            {cachePolicy === "none" ? "Cache reviewed answer" : "Disable cache"}
+          </Button>
+        </div>
+        <p className="mt-1 text-[11px] text-ink/65">Optional. A current cache returns the reviewed answer without generation. It becomes stale when any tracked document revision changes.</p>
+        {cachePolicy !== "none" && (
+          <p className="mt-1 text-[11px] text-ink/55">
+            Tracking {row.promotedWorkflowDependencyCount ?? 0} document{row.promotedWorkflowDependencyCount === 1 ? "" : "s"}
+            {row.promotedWorkflowCacheRefreshedAt ? `, refreshed ${fmtDate(row.promotedWorkflowCacheRefreshedAt)}` : ""}
+          </p>
+        )}
+        <WriteError onDismiss={() => cacheWrite.setFailed(null)}>{cacheWrite.failed}</WriteError>
+      </div>
+
+      <ClusterObservations row={row} actions={actions} />
     </div>
   );
+}
+
+/** The chat observations grouped under a codified workflow, with the
+    projection that places them and a way to carve one out on its own. */
+function ClusterObservations({ row, actions }: { row: TrajectoryRow; actions?: WorkflowsActions }) {
+  const observations = row.clusterObservations ?? [row];
+  const count = row.workflowObservationCount ?? observations.length;
+  const splitWrite = useWrite();
+  const [splitTarget, setSplitTarget] = useState<number | null>(null);
+  const [splitName, setSplitName] = useState("");
+  return (
+    <details className="rounded-[6px] border border-ink/12 bg-ink/[0.015] px-3 py-2">
+      <summary className="cursor-pointer text-[12px] font-semibold text-biscay">
+        {count} chat observation{count === 1 ? "" : "s"} in this workflow
+      </summary>
+      <div className="mt-3"><EmbeddingMap map={row.promotedWorkflowEmbeddingMap} /></div>
+      <ol className="mt-2 grid gap-2" aria-label="Workflow observations">
+        {observations.map((observation) => (
+          <li key={observation.id} className="rounded border border-ink/12 bg-paper p-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1"><strong><Truncate>{observation.prompt}</Truncate></strong> {observation.stepCount} tool step{observation.stepCount === 1 ? "" : "s"}</span>
+              <Chip label={observation.executionMode === "cache" ? "Cached response"
+                : observation.executionMode === "approved_answer" ? "Approved answer"
+                : observation.selectedWorkflowId ? "Workflow selected, generated" : "Generated without workflow"} />
+              {observation.id === row.workflowRootTrajectoryId ? <Chip label="Cluster seed" /> : (
+                <Button compact disabled={splitWrite.busy}
+                  onClick={() => void splitWrite.runFor(actions?.suggestSplitName && (() => actions.suggestSplitName!(observation.id)))
+                    .then((name) => { if (name) { setSplitTarget(observation.id); setSplitName(name); } })}>
+                  Split from cluster
+                </Button>
+              )}
+            </div>
+            {splitTarget === observation.id && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Input aria-label="New workflow name" value={splitName} onChange={(event) => setSplitName(event.target.value)} className="min-w-[220px] flex-1" />
+                <Button compact onClick={() => { setSplitTarget(null); setSplitName(""); }}>Cancel</Button>
+                <Button compact variant="primary" disabled={!splitName.trim() || splitWrite.busy}
+                  onClick={() => void splitWrite.runFor(actions?.splitWorkflow && (() => actions.splitWorkflow!(observation.id, splitName)))
+                    .then((id) => { if (id) { setSplitTarget(null); setSplitName(""); } })}>
+                  Create split workflow
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+      <WriteError onDismiss={() => splitWrite.setFailed(null)}>{splitWrite.failed}</WriteError>
+    </details>
+  );
+}
+
+function EmbeddingMap({ map }: { map?: TrajectoryRow["promotedWorkflowEmbeddingMap"] }) {
+  const points = map?.points ?? [];
+  if (!points.length) return (
+    <div className="rounded-[6px] border border-dashed border-ink/15 bg-paper px-4 py-8 text-center text-[11px] text-ink/55">
+      The embedding map will appear after this workflow has been indexed.
+    </div>
+  );
+  const colors = { intent: "#294f78", phase: "#707746", tool: "#b05d3b" } as const;
+  return (
+    <figure className="overflow-hidden rounded-[7px] border border-ink/10 bg-paper p-3" aria-label="Workflow embedding">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">Workflow embedding</h3>
+          <p className="mt-1 text-[11px] text-ink/55">A two-dimensional projection of the stored intent, phases, and tool steps.</p>
+        </div>
+        {map?.profile && <span className="max-w-[280px] truncate font-mono text-[10px] text-ink/45" title={map.profile}>{map.profile}</span>}
+      </div>
+      <svg viewBox="0 0 600 240" role="img" aria-label={`Embedding projection with ${points.length} points`} className="mt-2 h-auto w-full min-w-0">
+        <rect x="0" y="0" width="600" height="240" rx="8" fill="#f8f6f1" />
+        {[100, 200, 300, 400, 500].map((x) => <line key={`x-${x}`} x1={x} y1="18" x2={x} y2="222" stroke="#17202a" strokeOpacity="0.055" />)}
+        {[60, 120, 180].map((y) => <line key={`y-${y}`} x1="18" y1={y} x2="582" y2={y} stroke="#17202a" strokeOpacity="0.055" />)}
+        {points.map((point, index) => {
+          const x = 300 + point.x * 245;
+          const y = 120 - point.y * 82;
+          const labelRight = x < 420;
+          return <g key={`${point.kind}-${point.label}-${index}`}>
+            {point.kind === "intent" && <circle cx={x} cy={y} r="14" fill={colors.intent} fillOpacity="0.12" />}
+            <circle cx={x} cy={y} r={point.kind === "intent" ? 7 : 5} fill={colors[point.kind]} stroke="#fff" strokeWidth="2" />
+            <text x={labelRight ? x + 10 : x - 10} y={y + 4} textAnchor={labelRight ? "start" : "end"} fontSize="11" fill="#17202a">{point.label.slice(0, 34)}</text>
+          </g>;
+        })}
+      </svg>
+      <figcaption className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink/55">
+        {(["intent", "phase", "tool"] as const).map((kind) => <span key={kind} className="flex items-center gap-1"><i className="h-2 w-2 rounded-full" style={{ backgroundColor: colors[kind] }} />{kind === "intent" ? "Canonical intent" : kind === "phase" ? "Phase" : "Tool step"}</span>)}
+        <span className="ml-auto">Distance is relative within this workflow.</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Guided discovery of new workflows from recent assistant turns. Every
+    candidate is reviewed and named before anything is created. */
+function WorkflowHarvestWizard({ actions }: { actions?: WorkflowsActions }) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"intro" | "scanning" | "review" | "done">("intro");
+  const [candidates, setCandidates] = useState<WorkflowHarvestCandidate[]>([]);
+  const scan = useWrite();
+  const create = useWrite();
+  const start = async () => {
+    setStep("scanning");
+    const rows = await scan.runFor(actions?.harvestCandidates && (() => actions.harvestCandidates!()));
+    if (rows) {
+      setCandidates(rows.map((row) => ({ ...row, accepted: row.suggested !== false })));
+      setStep("review");
+    } else setStep("intro");
+  };
+  const finish = async () => {
+    const selected = candidates.filter((candidate) => candidate.accepted && candidate.name.trim());
+    const result = await create.runFor(async () => {
+      let count = 0;
+      for (const candidate of selected) {
+        await actions?.codifyCandidate?.({ ...candidate, name: candidate.name.trim() });
+        count += 1;
+      }
+      return count;
+    });
+    if (result !== undefined) setStep("done");
+  };
+  const busy = scan.busy || create.busy;
+  const close = () => { if (!busy) { setOpen(false); setStep("intro"); setCandidates([]); } };
+  const update = (index: number, patch: Partial<WorkflowHarvestCandidate>) =>
+    setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  return <>
+    <Button compact onClick={() => setOpen(true)}><GitBranch size={13} /> Harvest new workflows</Button>
+    <Drawer open={open} onClose={close} title="Harvest new workflows" subtitle="Guided workflow discovery" closable={!busy}
+      footer={step === "review" ? <>
+        <Button compact onClick={close}>Cancel</Button>
+        <Button compact variant="primary" disabled={create.busy || !candidates.some((candidate) => candidate.accepted && candidate.name.trim())} onClick={() => void finish()}>
+          Codify selected
+        </Button>
+      </> : step === "done" ? <Button compact variant="primary" onClick={close}>Done</Button> : undefined}>
+      {step === "intro" && <div className="flex flex-col gap-4">
+        <p className="text-[13px] leading-5 text-ink/70">Mari inspects recent assistant turns and proposes distinct reusable workflows. You review every candidate before anything is created.</p>
+        <div className="rounded-[7px] border border-ink/10 bg-ink/[0.02] p-3 text-[12px] text-ink/65">The scan considers unclustered turns and narrower intents inside existing clusters. Greetings and one-off chatter are excluded.</div>
+        <div><Button variant="primary" compact disabled={scan.busy} onClick={() => void start()}>Analyze recent turns</Button></div>
+        <WriteError onDismiss={() => scan.setFailed(null)}>{scan.failed}</WriteError>
+      </div>}
+      {step === "scanning" && <div className="flex flex-col items-center gap-3 py-14 text-center"><Spinner label="Finding workflow candidates" /><strong className="text-[13px]">Clustering observed intent</strong><span className="text-[12px] text-ink/60">Comparing recent turns with current workflow clusters</span></div>}
+      {step === "review" && <div className="flex flex-col gap-3">
+        <p className="text-[12px] text-ink/65">{candidates.length ? "Suggested workflows are selected. Generated recent turns remain visible for manual promotion or splitting." : "No recent assistant turns were found."}</p>
+        {candidates.map((candidate, index) => <Card key={`${candidate.seedTrajectoryId}-${index}`} className={candidate.accepted ? "" : "opacity-60"}>
+          <CardBody>
+            <p className={`mb-2 text-[10px] font-semibold uppercase tracking-wide ${candidate.suggested === false ? "text-ink/50" : "text-olive"}`}>{candidate.suggested === false ? "Recent generated turn" : "Suggested workflow"}</p>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" aria-label={`Select candidate ${index + 1}`} checked={Boolean(candidate.accepted)} onChange={(event) => update(index, { accepted: event.target.checked })} className="mt-1" />
+              <span className="min-w-0 flex-1">
+                <Input aria-label={`Candidate ${index + 1} name`} value={candidate.name} onChange={(event) => update(index, { name: event.target.value })} className="w-full font-semibold" />
+                <span className="mt-2 block text-[12px] leading-5 text-ink/65">{candidate.reason}</span>
+              </span>
+            </label>
+            <details className="mt-3"><summary className="cursor-pointer text-[11px] font-semibold text-biscay">{candidate.observationIds.length} supporting turn{candidate.observationIds.length === 1 ? "" : "s"}</summary>
+              <ul className="mt-2 space-y-1 text-[11px] text-ink/65">{candidate.prompts.map((prompt, promptIndex) => <li key={promptIndex} className="rounded bg-ink/[0.025] px-2 py-1.5">{prompt}</li>)}</ul>
+            </details>
+            {candidate.existingWorkflowId && <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-rust">Will split from workflow {candidate.existingWorkflowId}</p>}
+          </CardBody>
+        </Card>)}
+        <WriteError onDismiss={() => create.setFailed(null)}>{create.failed}</WriteError>
+      </div>}
+      {step === "done" && <div className="py-12 text-center"><CheckCircle2 className="mx-auto text-olive" size={28} /><h3 className="mt-3 text-[15px] font-semibold">Workflows codified</h3><p className="mt-1 text-[12px] text-ink/65">The selected candidates are now available to chat, Slack, and other agent destinations.</p></div>}
+    </Drawer>
+  </>;
 }
 
 function PromoteToWorkflow({ row, actions }: { row: TrajectoryRow; actions?: WorkflowsActions }) {
@@ -380,7 +637,7 @@ function PromoteToWorkflow({ row, actions }: { row: TrajectoryRow; actions?: Wor
   const [seen, setSeen] = useState(row.promotedWorkflow);
   if (seen !== row.promotedWorkflow) { setSeen(row.promotedWorkflow); setMade(row.promotedWorkflow); }
 
-  if (made) return <PromotedWorkflowBlock workflow={made} />;
+  if (made) return <PromotedWorkflowPanel row={row} workflow={made} actions={actions} />;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
@@ -400,7 +657,7 @@ function PromoteToWorkflow({ row, actions }: { row: TrajectoryRow; actions?: Wor
           onClick={() => void write.runFor(actions?.promote && (() => actions.promote!(row.id, name)))
             .then((made) => { if (made) setMade(made); })}
         >
-          <Workflow size={13} /> {write.busy ? "Creating…" : "Create paused workflow"}
+          <Workflow size={13} /> {write.busy ? "Codifying…" : "Codify workflow"}
         </Button>
       </div>
       <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
@@ -451,7 +708,7 @@ function ObservedCard({ data, row, actions, onInspect }: {
             <CardTitleBlock
               className="flex-1 basis-[260px]"
               eyebrow={row.category || "Unclassified"}
-              title={<span id={`workflow-${row.id}`}><Truncate>{row.macroIntent || row.prompt || `Workflow ${row.id}`}</Truncate></span>}
+              title={<span id={`workflow-${row.id}`}><Truncate>{row.promotedWorkflowName || row.macroIntent || row.prompt || `Workflow ${row.id}`}</Truncate></span>}
               summary={<Truncate lines={2}>{row.layer2 || "The abstraction for this run is still being written."}</Truncate>}
             />
             <div className="shrink-0"><StatTrio row={row} /></div>
@@ -471,8 +728,8 @@ function ObservedCard({ data, row, actions, onInspect }: {
           </CardSection>
 
           {row.promotedWorkflow && (
-            <CardSection label="Promoted workflow">
-              <PromotedWorkflowBlock workflow={row.promotedWorkflow} />
+            <CardSection label="Workflow cluster">
+              <PromotedWorkflowPanel row={row} workflow={row.promotedWorkflow} actions={actions} />
             </CardSection>
           )}
 
@@ -658,7 +915,11 @@ function ObservedSearch({ value, onSearch }: { value: string; onSearch?: (q: str
 }
 
 function ObservedToolbar({ observed, actions }: { observed: ObservedData; actions?: WorkflowsActions }) {
+  const staleCaches = observed.rows.filter((row) =>
+    (row.promotedWorkflowCachePolicy ?? "none") !== "none" && row.promotedWorkflowCacheState !== "fresh").length;
+  const reconciliation = useWrite();
   return (
+    <div className="flex flex-col gap-2">
     <div className="flex flex-wrap items-center gap-2.5">
       <ObservedSearch value={observed.search} onSearch={actions?.setSearch} />
       <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70">
@@ -695,6 +956,15 @@ function ObservedToolbar({ observed, actions }: { observed: ObservedData; action
           ))}
         </Select>
       </label>
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        <WorkflowHarvestWizard actions={actions} />
+        <Button compact disabled={reconciliation.busy}
+          onClick={() => void reconciliation.runFor(actions?.reconcileStale && (() => actions.reconcileStale!()))}>
+          <RefreshCw size={13} /> Reconcile stale caches{staleCaches ? ` (${staleCaches})` : ""}
+        </Button>
+      </span>
+    </div>
+    <WriteError onDismiss={() => reconciliation.setFailed(null)}>{reconciliation.failed}</WriteError>
     </div>
   );
 }
