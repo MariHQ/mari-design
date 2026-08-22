@@ -62,6 +62,11 @@ export type TrajectoryRow = {
   reworkCount: number;
   startedAt: string;
   completedAt: string;
+  selectedWorkflowId?: number | null;
+  selectedWorkflowScore?: number | null;
+  selectedWorkflowExact?: boolean;
+  executionMode?: string;
+  observedClusterId?: number | null;
   steps: TrajectoryStep[];
   evidence: TrajectoryEvidence[];
   promotedWorkflowId: number | null;
@@ -114,6 +119,7 @@ export type WorkflowHarvestCandidate = {
   observationIds: number[];
   prompts: string[];
   existingWorkflowId: number | null;
+  suggested?: boolean;
   accepted?: boolean;
 };
 
@@ -127,7 +133,7 @@ function WorkflowHarvestWizard({ actions }: { actions?: TrajectoriesActions }) {
     setStep("scanning");
     const rows = await scan.runFor(actions?.harvestCandidates && (() => actions.harvestCandidates!()));
     if (rows) {
-      setCandidates(rows.map((row) => ({ ...row, accepted: true })));
+      setCandidates(rows.map((row) => ({ ...row, accepted: row.suggested !== false })));
       setStep("review");
     } else setStep("intro");
   };
@@ -161,10 +167,11 @@ function WorkflowHarvestWizard({ actions }: { actions?: TrajectoriesActions }) {
       </div>}
       {step === "scanning" && <div className="flex flex-col items-center gap-3 py-14 text-center"><Spinner label="Finding workflow candidates" /><strong className="text-[13px]">Clustering observed intent</strong><span className="text-[12px] text-ink/60">Comparing recent turns with current workflow clusters…</span></div>}
       {step === "review" && <div className="space-y-3">
-        <p className="text-[12px] text-ink/65">{candidates.length ? `${candidates.length} candidate${candidates.length === 1 ? "" : "s"} found. Rename, inspect, or skip each one.` : "No distinct workflow candidates were found in recent turns."}</p>
+        <p className="text-[12px] text-ink/65">{candidates.length ? "Suggested workflows are selected. Generated recent turns remain visible for manual promotion or splitting." : "No recent assistant turns were found."}</p>
         {candidates.map((candidate, index) => <Card key={`${candidate.seedTrajectoryId}-${index}`} className={candidate.accepted ? "" : "opacity-60"}>
+          <p className={`mb-2 text-[10px] font-semibold uppercase tracking-wide ${candidate.suggested === false ? "text-ink/50" : "text-olive"}`}>{candidate.suggested === false ? "Recent generated turn" : "Suggested workflow"}</p>
           <label className="flex items-start gap-2">
-            <input type="checkbox" checked={Boolean(candidate.accepted)} onChange={(event) => setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, accepted: event.target.checked } : row))} className="mt-1" />
+            <input type="checkbox" aria-label={`Select candidate ${index + 1}`} checked={Boolean(candidate.accepted)} onChange={(event) => setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, accepted: event.target.checked } : row))} className="mt-1" />
             <span className="min-w-0 flex-1">
               <input aria-label={`Candidate ${index + 1} name`} value={candidate.name} onChange={(event) => setCandidates((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} className="w-full rounded border border-ink/15 bg-paper px-2 py-1.5 text-[13px] font-semibold" />
               <span className="mt-2 block text-[12px] leading-5 text-ink/65">{candidate.reason}</span>
@@ -338,6 +345,7 @@ function TrajectoryCard({ row, actions }: { row: TrajectoryRow; actions?: Trajec
             {observations.map((observation) => <li key={observation.id} className="rounded border border-ink/10 bg-paper p-2 text-[11px]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 flex-1"><strong>{observation.prompt}</strong> · {observation.stepCount} tool step{observation.stepCount === 1 ? "" : "s"}</span>
+                <Chip label={observation.executionMode === "cache" ? "Cached response" : observation.executionMode === "approved_answer" ? "Approved answer" : observation.selectedWorkflowId ? "Workflow selected · generated" : "Generated without workflow"} />
                 {observation.id === row.workflowRootTrajectoryId ? <Chip label="Cluster seed" /> :
                   <Button compact disabled={splitWrite.busy} onClick={() => void splitWrite.runFor(actions?.suggestSplitName && (() => actions.suggestSplitName!(observation.id))).then((name) => {
                     if (name) { setSplitTarget(observation.id); setSplitName(name); }
