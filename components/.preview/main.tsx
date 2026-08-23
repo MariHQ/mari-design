@@ -285,9 +285,9 @@ const SHELL_SECTIONS = [
   { heading: "Workspace", items: [
     { id: "overview", label: "Overview", icon: <FileText size={17} /> },
     { id: "knowledge", label: "Knowledge", icon: <Folder size={17} />, count: 128 },
-    { id: "flows", label: "Flows", icon: <GitBranch size={17} />, children: [
-      { id: "flows-active", label: "Active", count: 3 },
-      { id: "flows-drafts", label: "Drafts" },
+    { id: "workflows", label: "Workflows", icon: <GitBranch size={17} />, children: [
+      { id: "workflows-observed", label: "Observed", count: 3 },
+      { id: "workflows-answers", label: "Approved answers" },
     ] },
     { id: "publish", label: "Publish", icon: <Rocket size={17} />, badge: <CountChip count={2} /> },
   ] },

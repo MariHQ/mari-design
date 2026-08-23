@@ -89,7 +89,7 @@ export const SOURCES: ComponentSpec[] = [
         ]} />) },
       { id: "paused", label: "Paused / disconnected", node: (
         <SourcesConnectorCard sources={[
-          { id: "web", provider: "website", name: "docs.acme.com", tier: "legacy", state: "paused",
+          { id: "web", provider: "dropbox", name: "Dropbox · /docs", tier: "legacy", state: "paused",
             docsCount: 143, lastSyncAt: "2026-07-19T18:02:00" },
           { id: "gd", provider: "gdrive", name: "Google Drive · Design", tier: "actionless", state: "healthy",
             docsCount: 88, lastSyncAt: null },

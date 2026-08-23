@@ -4,7 +4,7 @@ import {
   AppShell, Sidebar, HeaderBar, SearchTrigger, Logo, Brandmark,
   MenuItem, MenuSeparator, NotificationBell, CountChip, StatusChip,
   Button, EmptyState, type NavSection,
-  IconHome, IconBook, IconCheckCircle, IconLayers, IconFlow, IconSend,
+  IconHome, IconBook, IconLayers, IconFlow, IconSend,
   IconSparkle, IconGear, IconShieldCheck, IconTag,
 } from "../../index";
 
@@ -22,13 +22,12 @@ const NAV: NavSection[] = [
   { heading: "Workspace", items: [
     { id: "overview", label: "Overview", icon: <IconHome size={18} /> },
     { id: "knowledge", label: "Knowledge", icon: <IconBook size={18} />, count: 128 },
-    { id: "answers", label: "Answers", icon: <IconCheckCircle size={18} /> },
     { id: "library", label: "Library", icon: <IconTag size={18} /> },
     { id: "lineage", label: "Lineage", icon: <IconLayers size={18} /> },
     { id: "facts", label: "Facts", icon: <IconShieldCheck size={18} /> },
-    { id: "flows", label: "Flows", icon: <IconFlow size={18} />, children: [
-      { id: "flows-active", label: "Active", count: 3 },
-      { id: "flows-drafts", label: "Drafts" },
+    { id: "workflows", label: "Workflows", icon: <IconFlow size={18} />, children: [
+      { id: "workflows-observed", label: "Observed", count: 3 },
+      { id: "workflows-answers", label: "Approved answers" },
     ] },
     { id: "publish", label: "Publish", icon: <IconSend size={18} />, badge: <CountChip count={2} /> },
     { id: "insights", label: "Insights", icon: <IconSparkle size={18} /> },
@@ -175,7 +174,7 @@ export const SHELL: ComponentSpec[] = [
     states: [
       { id: "default", label: "Default: no Admin label, rule before Settings", node: <SidebarDemo /> },
       { id: "collapsed", label: "Collapsed rail", width: 140, node: <SidebarDemo collapsed /> },
-      { id: "expanded-group", label: "Expandable group, child selected", node: <SidebarDemo active="flows-active" /> },
+      { id: "expanded-group", label: "Expandable group, child selected", node: <SidebarDemo active="workflows-observed" /> },
       { id: "footer", label: "With a pinned footer slot", node: <SidebarDemo footer /> },
       { id: "nobrand", label: "No brand slot", node: <SidebarDemo brand={false} /> },
       { id: "disabled", label: "Disabled items (must stay legible)", node: <SidebarDemo sections={NAV_DISABLED} active="overview" /> },

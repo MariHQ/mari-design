@@ -1,7 +1,7 @@
 // Source / provider brand marks harvested from the console's connector catalog.
 // Bespoke glyphs (GitHub, Slack, Google Drive, Notion, Granola, Google Docs)
 // keep their brand colors; providers without a bespoke glyph fall back to a
-// neutral plug drawn with `currentColor`. Upload → send glyph, website → globe.
+// neutral plug drawn with `currentColor`. Upload → send glyph, doc sites → globe.
 
 import { IconUpload, IconGlobe } from "./ui";
 
@@ -147,17 +147,6 @@ export function ZendeskMark({ size = 22, className }: MarkProps) {
   );
 }
 
-export function SalesforceMark({ size = 22, className }: MarkProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden>
-      <path
-        fill="#00A1E0"
-        d="M9.9 6.6a4.3 4.3 0 0 1 7.1 1.3 3.7 3.7 0 0 1 1.6-.4 3.8 3.8 0 0 1 .5 7.5c-.2 0-.4.1-.6.1H6.5a4 4 0 0 1-.6-8c.6 0 1.1.1 1.6.4a4.3 4.3 0 0 1 2.4-.9z"
-      />
-    </svg>
-  );
-}
-
 export function S3Mark({ size = 22, className }: MarkProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden>
@@ -237,9 +226,9 @@ export function PlugMark({ size = 22, className }: MarkProps) {
 /** Every provider the console's connector catalog defines. */
 export const PROVIDERS = [
   "github", "slack", "gdocs", "gdrive", "notion", "granola", "docs",
-  "confluence", "jira", "linear", "figma", "zendesk", "salesforce",
+  "confluence", "jira", "linear", "figma", "zendesk",
   "asana", "trello", "airtable", "dropbox", "s3", "webhook",
-  "upload", "website", "docsite",
+  "upload", "docsite",
 ] as const;
 
 export type Provider = (typeof PROVIDERS)[number];
@@ -249,9 +238,9 @@ export const PROVIDER_NAME: Record<string, string> = {
   github: "GitHub", slack: "Slack", gdocs: "Google Drive", gdrive: "Google Drive",
   docs: "Google Docs", notion: "Notion", granola: "Granola",
   confluence: "Confluence", jira: "Jira", linear: "Linear", figma: "Figma",
-  zendesk: "Zendesk", salesforce: "Salesforce", asana: "Asana", trello: "Trello",
+  zendesk: "Zendesk", asana: "Asana", trello: "Trello",
   airtable: "Airtable", dropbox: "Dropbox", s3: "Amazon S3", webhook: "Webhook",
-  upload: "Upload", website: "Website", docsite: "Doc site",
+  upload: "Upload", docsite: "Doc site",
 };
 
 /** Aliases callers use interchangeably for the same provider. */
@@ -263,14 +252,12 @@ const ALIAS: Record<string, string> = {
   "google-docs": "docs",
   atlassian: "confluence",
   aws: "s3",
-  docsite: "website",
-  web: "website",
 };
 
 /**
  * Keyed provider mark: a real brand glyph for every provider the console
  * references, and a neutral plug only for genuinely unknown keys.
- * `upload`/`website` reuse UI icons rather than a brand mark.
+ * `upload`/`docsite` reuse UI icons rather than a brand mark.
  */
 export function SourceMark({ provider, size = 22, className }: MarkProps & { provider: string }) {
   const key = ALIAS[provider] ?? provider;
@@ -286,7 +273,6 @@ export function SourceMark({ provider, size = 22, className }: MarkProps & { pro
     case "linear": return <LinearMark size={size} className={className} />;
     case "figma": return <FigmaMark size={size} className={className} />;
     case "zendesk": return <ZendeskMark size={size} className={className} />;
-    case "salesforce": return <SalesforceMark size={size} className={className} />;
     case "asana": return <AsanaMark size={size} className={className} />;
     case "trello": return <TrelloMark size={size} className={className} />;
     case "airtable": return <AirtableMark size={size} className={className} />;
@@ -294,7 +280,7 @@ export function SourceMark({ provider, size = 22, className }: MarkProps & { pro
     case "s3": return <S3Mark size={size} className={className} />;
     case "webhook": return <WebhookMark size={size} className={className} />;
     case "upload": return <IconUpload size={size} className={className} />;
-    case "website": return <IconGlobe size={size} className={className} />;
+    case "docsite": return <IconGlobe size={size} className={className} />;
     default: return <PlugMark size={size} className={className} />;
   }
 }

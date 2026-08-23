@@ -42,7 +42,7 @@ const SOURCES: Source[] = [
     docsCount: 88, lastSyncAt: null,
   },
   {
-    id: "web", provider: "website", name: "docs.acme.com", tier: "legacy", state: "paused",
+    id: "web", provider: "dropbox", name: "Dropbox · /docs", tier: "legacy", state: "paused",
     docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3],
   },
   {
@@ -271,7 +271,7 @@ function strained(extreme: boolean): SourcesData {
     sources: [
       { id: "gh", provider: "github", name: `GitHub · ${LONG_SOURCE}`, tier: "live", state: "running", phase: "embedding", done: 340, total: 512, docCount: 1284, chunkCount: 8912, embeddedCount: 8340, lastSyncAt: "2026-07-21T14:12:00", bars: [3, 5, 4, 8, 6, 9, 7, 11] },
       { id: "conf", provider: "confluence", name: `Confluence · ${LONG_TITLE}`, tier: "live", state: "failed", docCount: 512, chunkCount: 3100, embeddedCount: 2870, lastSyncAt: "2026-07-20T22:15:00", lastError: LONG_PARAGRAPH },
-      { id: "web", provider: "website", name: LONG_DOC_TITLE, tier: "legacy", state: "paused", docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3] },
+      { id: "web", provider: "dropbox", name: LONG_DOC_TITLE, tier: "legacy", state: "paused", docsCount: 143, lastSyncAt: "2026-07-19T18:02:00", bars: [4, 3, 5, 2, 4, 3, 4, 3] },
     ],
     connector: {
       key: "github", name: LONG_SOURCE, blurb: LONG_PARAGRAPH, docsUrl: LONG_URL, detail: LONG_TITLE,

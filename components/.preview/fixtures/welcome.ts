@@ -66,7 +66,7 @@ const CANDIDATES: Candidate[] = [
   { term: "Content hash", definition: "A fingerprint of a chunk's text; unchanged chunks are skipped on re-sync.", evidence: "architecture/dedupe.md" },
   { term: "Canonical", definition: "The single source-of-truth version of a fact or document.", evidence: "glossary/status.md" },
   { term: "Embedding", definition: "A vector representation of a text chunk used for semantic retrieval.", evidence: "search/retrieval.md" },
-  { term: "Flow", definition: "A scheduled or triggered pipeline that keeps knowledge fresh.", evidence: "flows/overview.md" },
+  { term: "Workflow", definition: "A recorded run of what Mari did, promoted into a trusted answer once approved.", evidence: "workflows/overview.md" },
 ];
 
 const BASE: WelcomeData = {

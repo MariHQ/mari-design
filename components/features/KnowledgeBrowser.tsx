@@ -117,7 +117,7 @@ const SOURCE_LABELS: Record<string, string> = {
   airtable: "Airtable", asana: "Asana", confluence: "Confluence",
   docs: "Google Docs", gdrive: "Google Drive", github: "GitHub",
   jira: "Jira", linear: "Linear", notion: "Notion", slack: "Slack",
-  trello: "Trello", upload: "Uploads", website: "Website", zendesk: "Zendesk",
+  trello: "Trello", upload: "Uploads", zendesk: "Zendesk",
 };
 
 /** Sources can be qualified (`github:owner/repo`); the connector key still

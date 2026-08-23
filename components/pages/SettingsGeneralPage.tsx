@@ -369,7 +369,7 @@ function GeneralRail({ summary, onNavigate }: { summary: PropertyItem[]; onNavig
         <PropertyList items={summary} />
       </Card>
       <LinkCard icon={<Tag size={18} />} title="Editorial library" blurb="Tags, glossary, and style guides now live in the Library." cta="Open Library" to="library" onNavigate={onNavigate} />
-      <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Flows (cross-cluster runs)." cta="Open Flows" to="flows" onNavigate={onNavigate} />
+      <LinkCard icon={<Clock size={18} />} title="Weekly digest" blurb="The digest schedule moved to Workflows (cross-cluster runs)." cta="Open Workflows" to="workflows" onNavigate={onNavigate} />
     </>
   );
 }

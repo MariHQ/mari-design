@@ -61,7 +61,7 @@ const MANY_TILES: PulseTileData[] = [
   { key: "jira", name: "Jira", stat: "203", unit: "issues", status: "active", bars: [12, 9, 15, 11, 14, 10, 18] },
   { key: "confluence", name: "Confluence", stat: "88", unit: "pages", status: "moderate", bars: [2, 6, 3, 7, 4, 5, 6] },
   { key: "zendesk", name: "Zendesk", stat: "1,204", unit: "tickets", status: "active", bars: [40, 55, 38, 61, 47, 52, 66] },
-  { key: "salesforce", name: "Salesforce", stat: "77", unit: "records", status: "moderate", bars: [3, 4, 2, 6, 5, 3, 7] },
+  { key: "airtable", name: "Airtable", stat: "77", unit: "records", status: "moderate", bars: [3, 4, 2, 6, 5, 3, 7] },
 ];
 
 const LONG_TILES: PulseTileData[] = [
@@ -117,8 +117,8 @@ const STRESS_TOPICS: DigestTopic[] = Array.from({ length: 40 }, (_, i) => ({
 }));
 
 const STRESS_TILES: PulseTileData[] = Array.from({ length: 40 }, (_, i) => ({
-  key: ["github", "slack", "notion", "gdocs", "granola", "linear", "jira", "confluence", "zendesk", "salesforce"][i % 10],
-  name: i % 11 === 0 ? HUGE : `${["GitHub", "Slack", "Notion", "Google Drive", "Granola", "Linear", "Jira", "Confluence", "Zendesk", "Salesforce"][i % 10]} workspace ${i + 1}`,
+  key: ["github", "slack", "notion", "gdocs", "granola", "linear", "jira", "confluence", "zendesk", "airtable"][i % 10],
+  name: i % 11 === 0 ? HUGE : `${["GitHub", "Slack", "Notion", "Google Drive", "Granola", "Linear", "Jira", "Confluence", "Zendesk", "Airtable"][i % 10]} workspace ${i + 1}`,
   stat: (1000 + i * 137).toLocaleString(),
   unit: i % 2 ? "documents touched" : "messages",
   status: (i % 3 === 0 ? "moderate" : "active") as PulseTileData["status"],
