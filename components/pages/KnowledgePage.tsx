@@ -45,6 +45,11 @@ export type KnowledgeData = {
   /** How many documents match `query` corpus-wide, when `results` is one page
       of that answer. Absent means `results` IS the answer. */
   total?: number;
+  /** The freshness window behind `results`, in days (7, 30) or null for any
+      time. Pass it (with `setFreshness`) when the app runs the search: the
+      backend answers the window corpus-wide, which a client-side facet over
+      one page of the newest documents never could. */
+  freshness?: number | null;
 };
 
 /** What the Knowledge page can DO. Search, facets, sort and bookmarks are all
@@ -68,6 +73,9 @@ export type KnowledgeActions = KnowledgeInspectorActions & {
       Without the handler the search box filters what is already loaded, which
       is what the design canvas does. */
   setQuery?: (args: { query: string }) => void;
+  /** The freshness window changed. Same contract as `setQuery`: the app puts
+      it in the URL and re-runs the search behind `data.results`. */
+  setFreshness?: (args: { days: number | null }) => void;
   /** Fetch the next page of results for the current query. */
   showMore?: () => void;
 };
@@ -131,6 +139,8 @@ function Feed({ data, error, mobile, actions }: {
          reason as the selection above (§2). */
       query={searching ? data.query ?? "" : undefined}
       onQueryChange={actions?.setQuery && ((query) => actions.setQuery!({ query }))}
+      freshness={actions?.setFreshness ? data.freshness ?? null : undefined}
+      onFreshnessChange={actions?.setFreshness && ((days) => actions.setFreshness!({ days }))}
       total={data.total}
       onShowMore={actions?.showMore}
     />

@@ -69,7 +69,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-type FacetRowData = { label: string; icon?: ReactNode; count: number; active: boolean; onToggle: () => void; single?: boolean };
+type FacetRowData = { label: string; icon?: ReactNode; count?: number; active: boolean; onToggle: () => void; single?: boolean };
 
 function FacetRow({ row }: { row: FacetRowData }) {
   return (
@@ -88,7 +88,7 @@ function FacetRow({ row }: { row: FacetRowData }) {
       )}
       <input type="checkbox" className="sr-only" checked={row.active} onChange={row.onToggle} />
       <span className={`flex-1 text-[12.5px] ${row.active ? "text-ink font-medium" : "text-ink/70 group-hover:text-ink"}`}>{row.label}</span>
-      <span className="font-term text-[11px] text-ink/65">{row.count}</span>
+      {row.count !== undefined && <span className="font-term text-[11px] text-ink/65">{row.count}</span>}
     </label>
   );
 }
@@ -195,6 +195,14 @@ export type KnowledgeBrowserProps = {
   query?: string;
   /** The search text changed. Debouncing and requerying belong to the owner. */
   onQueryChange?: (query: string) => void;
+  /** The freshness window in days (7, 30) or null for any time. Same contract
+      as `query`: pass it (with the handler) to CONTROL the facet, and the
+      window becomes the owner's — it can live in the URL and, above all, be
+      handed to the search backend, which is the only place a freshness filter
+      over a paged corpus can be honest. Uncontrolled, the facet filters the
+      loaded rows, which is all a canvas has. */
+  freshness?: number | null;
+  onFreshnessChange?: (days: number | null) => void;
   /** How many documents match this search corpus-wide. Pass it when `results`
       is one PAGE of a larger answer: the count line then describes the corpus
       instead of claiming the loaded page is all there is, and the facet rail
@@ -253,7 +261,7 @@ function KnowledgeBrowserSkeleton({ stacked = false, className = "" }: { stacked
 
 export function KnowledgeBrowser({
   results, loading = false, stacked = false, selectedId, onSelect,
-  query, onQueryChange, total, onShowMore, className = "",
+  query, onQueryChange, freshness, onFreshnessChange, total, onShowMore, className = "",
 }: KnowledgeBrowserProps) {
   /* Same fallback idiom as `selectedId`: the owner's query wins when there is
      one, and the local box still works when nobody is listening. */
@@ -283,8 +291,11 @@ export function KnowledgeBrowser({
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
   const [ownerSel, setOwnerSel] = useState<Set<string>>(new Set());
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set());
-  const [fresh, setFresh] = useState(FRESH_ROWS[0].label);
-  const freshDays = FRESH_ROWS.find((f) => f.label === fresh)?.days ?? null;
+  const [localFresh, setLocalFresh] = useState<number | null>(null);
+  const freshServed = onFreshnessChange !== undefined;
+  const freshDays = freshServed ? (freshness ?? null) : localFresh;
+  const pickFresh = (days: number | null) =>
+    freshServed ? onFreshnessChange(days) : setLocalFresh(days);
   const [tab, setTab] = useState("all");
   const [sort, setSort] = useState("best");
   /* The selection used to be this state alone, seeded with a fixture's id —
@@ -315,9 +326,11 @@ export function KnowledgeBrowser({
     }
     if (ownerSel.size && !ownerSel.has(r.author || "Unknown owner")) return false;
     if (statusSel.size && !(r.status && statusSel.has(r.status))) return false;
-    if (!fresherThan(r.date, freshDays)) return false;
+    // A controlled window was already answered by the backend, corpus-wide;
+    // re-filtering the page here would only re-shrink the answer.
+    if (!freshServed && !fresherThan(r.date, freshDays)) return false;
     return true;
-  }), [results, served, q, srcSel, typeSel, ownerSel, statusSel, freshDays]);
+  }), [results, served, q, srcSel, typeSel, ownerSel, statusSel, freshServed, freshDays]);
 
   const tabMatch = (r: KnowledgeResult) => tab === "all"
     || (tab === "docs" && r.kind === "page")
@@ -364,7 +377,16 @@ export function KnowledgeBrowser({
         <FacetGroup name="Source" rows={sources.map((key) => ({ label: sourceLabel(key), icon: <SourceMark provider={key} size={15} />, count: count((r) => sourceKey(r.source) === key), active: srcSel.has(key), onToggle: () => toggle(srcSel, setSrcSel, key) }))} />
         <FacetGroup name="Content type" rows={TYPE_ROWS.map((t) => ({ label: t.label, count: count(t.match), active: typeSel.has(t.label), onToggle: () => toggle(typeSel, setTypeSel, t.label) }))} />
         <FacetGroup name="Owner" rows={owners.map((owner) => ({ label: owner, count: count((r) => (r.author || "Unknown owner") === owner), active: ownerSel.has(owner), onToggle: () => toggle(ownerSel, setOwnerSel, owner) }))} />
-        <FacetGroup name="Freshness" rows={FRESH_ROWS.map((f) => ({ label: f.label, single: true, count: count((r) => fresherThan(r.date, f.days)), active: fresh === f.label, onToggle: () => setFresh(f.label) }))} />
+        <FacetGroup name="Freshness" rows={FRESH_ROWS.map((f) => ({
+          label: f.label,
+          single: true,
+          /* A controlled window is answered corpus-wide, so a count over the
+             loaded page would be a different (and smaller) claim — no number
+             beats a wrong number. */
+          count: freshServed ? undefined : count((r) => fresherThan(r.date, f.days)),
+          active: freshDays === f.days,
+          onToggle: () => pickFresh(f.days),
+        }))} />
         <FacetGroup name="Status" rows={STATUS_ROWS.map((s) => ({ label: s.label, count: count((r) => r.status === s.key), active: statusSel.has(s.key), onToggle: () => toggle(statusSel, setStatusSel, s.key) }))} />
       </Card>
 
