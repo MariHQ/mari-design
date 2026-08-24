@@ -466,7 +466,13 @@ export function KnowledgeBrowser({
         />
 
         {sorted.length === 0 ? (
-          <Card><EmptyState icon={<Search size={20} />} title="No results">No results match these filters.</EmptyState></Card>
+          <Card><EmptyState icon={<Search size={20} />} title="No results">
+            {/* Name the actual cause. Blaming "these filters" when none are
+                active sent readers hunting for a filter they never set. */}
+            {(query ?? "").trim()
+              ? <>Nothing in the knowledge base matches &ldquo;{(query ?? "").trim()}&rdquo;.</>
+              : "No results match these filters."}
+          </EmptyState></Card>
         ) : (
           <div className="flex flex-col gap-2.5">
             {visible.map((r) => {
