@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Search, X, Bookmark, ArrowUpDown } from "lucide-react";
+import { Check, Search, X, Bookmark, ArrowUpDown } from "lucide-react";
 import { Card } from "../layout/Card";
 import { CardBody, CardTitleBlock, CardMeta } from "../layout/CardShell";
 import { Button } from "../actions/Button";
@@ -78,7 +78,12 @@ function FacetRow({ row }: { row: FacetRowData }) {
         <span className={`grid place-items-center w-4 h-4 shrink-0 ${row.active ? "" : "opacity-70"}`}>{row.icon}</span>
       ) : (
         <span className={`grid place-items-center w-[15px] h-[15px] shrink-0 ${row.single ? "rounded-full" : "rounded-[3px]"} border ${row.active ? "border-biscay bg-biscay" : "border-ink/25 bg-paper"}`}>
-          {row.active && <span className={row.single ? "w-1.5 h-1.5 rounded-full bg-white" : "w-2 h-2 bg-white rounded-[1px]"} />}
+          {/* A white square inside a filled square read as a hollow outline,
+              not as a checked box. The check glyph is the checked state,
+              matching forms/Checkbox; the radio keeps its dot. */}
+          {row.active && (row.single
+            ? <span className="w-1.5 h-1.5 rounded-full bg-white" />
+            : <Check size={11} strokeWidth={3.5} className="text-white" />)}
         </span>
       )}
       <input type="checkbox" className="sr-only" checked={row.active} onChange={row.onToggle} />
