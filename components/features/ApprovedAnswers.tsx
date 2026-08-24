@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { Sparkles, Plus, MessageSquare, CheckCircle2, Circle, MessagesSquare, FileText } from "lucide-react";
 import { AnswerCard, type Answer, type AnswerActions } from "./AnswerCard";
 import { Card, Stat, Tabs, Button, Chip, Stepper, Spinner, Textarea, EmptyState, Input } from "../index";
@@ -494,6 +494,15 @@ function HarvestWizard({ harvest, actions, onClose }: {
           <Spinner size="md" label="Scanning" />
           <div className="text-[13px] text-ink/70">{harvest.scanning}</div>
           <div className="font-term text-[11.5px] text-ink/65">Clustering threads · extracting question/answer pairs</div>
+          {/* A model pass over a corpus is minutes, not moments, on a local
+              model — without a clock and an honest expectation, a working
+              scan reads as a dead one and gets abandoned. */}
+          <ScanClock />
+          <div className="max-w-[46ch] text-[11.5px] text-ink/60">
+            The workspace model reads every selected document in one pass.
+            On a hosted model this is under a minute; on a local model it can
+            take several.
+          </div>
         </div>
       )}
 
@@ -772,3 +781,19 @@ export function ApprovedAnswers({ data, error = null, actions, mobile = false }:
 }
 
 export default ApprovedAnswers;
+
+/** Elapsed time under a long scan. Its own component so one ticking second
+    does not re-render the wizard around it. */
+function ScanClock() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setSeconds((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  return (
+    <div className="font-term text-[11.5px] text-ink/65" role="timer">
+      {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} elapsed
+    </div>
+  );
+}
+
