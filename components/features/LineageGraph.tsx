@@ -312,6 +312,94 @@ function timeColumns(
   return cols.filter((c) => c.length > 0);
 }
 
+/* ── The force layout ─────────────────────────────────────────────────────
+   The flow view is a graph, not a table: a card belongs next to the cards it
+   is actually linked to, whatever source lane the seed put it in. Edges pull
+   their endpoints together, everything repels softly, the canvas centre holds
+   the cloud, and a rectangle pass keeps whole cards apart. Deterministic —
+   seeded by the server layout, fixed iterations, no randomness — so the same
+   graph always lands the same way. */
+function forceLayout(args: {
+  nodes: LNode[]; edges: LEdge[]; at: (n: LNode) => Pt;
+  width: number; height: number; box: CardBox;
+}): { pos: Record<string, Pt>; fit: number } {
+  const { nodes, edges, at, width, height, box } = args;
+  const index = new Map(nodes.map((n, i) => [n.id, i]));
+  const px = nodes.map((n) => at(n).x * width);
+  const py = nodes.map((n) => at(n).y * height);
+  const springs: Array<[number, number]> = [];
+  for (const e of edges) {
+    const a = index.get(e.from), b = index.get(e.to);
+    if (a !== undefined && b !== undefined && a !== b) springs.push([a, b]);
+  }
+  const needX = box.w + TOUCH_X;
+  const needY = box.h + TOUCH_Y;
+  const edgeLength = Math.hypot(needX, needY) * 1.15;
+  const repelRadius = edgeLength * 1.6;
+  const cx = width / 2, cy = height / 2 + (PAD_TOP - PAD_BOTTOM) / 2;
+  const STEPS = 220;
+  for (let step = 0; step < STEPS; step++) {
+    const heat = 1 - step / STEPS;
+    // Springs: linked cards drift toward one edge-length apart.
+    for (const [a, b] of springs) {
+      const dx = px[b] - px[a], dy = py[b] - py[a];
+      const d = Math.hypot(dx, dy) || 1;
+      const pull = ((d - edgeLength) / d) * 0.12 * heat;
+      px[a] += dx * pull; py[a] += dy * pull;
+      px[b] -= dx * pull; py[b] -= dy * pull;
+    }
+    // Repulsion: nothing huddles, including cards no edge mentions.
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = px[j] - px[i], dy = py[j] - py[i];
+        const d = Math.hypot(dx, dy) || 1;
+        if (d >= repelRadius) continue;
+        const push = ((repelRadius - d) / d) * 0.06 * heat;
+        px[i] -= dx * push; py[i] -= dy * push;
+        px[j] += dx * push; py[j] += dy * push;
+      }
+    }
+    // Centering: the cloud stays on the canvas instead of drifting off it.
+    for (let i = 0; i < nodes.length; i++) {
+      px[i] += (cx - px[i]) * 0.012 * heat;
+      py[i] += (cy - py[i]) * 0.014 * heat;
+    }
+    // Collision: cards are rectangles, not points; separate overlaps along
+    // the cheaper axis so neighbours settle beside, not on, each other.
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = px[j] - px[i], dy = py[j] - py[i];
+        const ox = needX - Math.abs(dx), oy = needY - Math.abs(dy);
+        if (ox <= 0 || oy <= 0) continue;
+        if (ox / needX < oy / needY) {
+          const move = (ox / 2) * (dx >= 0 ? 1 : -1) || ox / 2;
+          px[i] -= move; px[j] += move;
+        } else {
+          const move = (oy / 2) * (dy >= 0 ? 1 : -1) || oy / 2;
+          py[i] -= move; py[j] += move;
+        }
+      }
+    }
+  }
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < nodes.length; i++) {
+    x0 = Math.min(x0, px[i]); x1 = Math.max(x1, px[i]);
+    y0 = Math.min(y0, py[i]); y1 = Math.max(y1, py[i]);
+  }
+  // Recentre the settled cloud on the canvas, then report the scale that
+  // brings all of it into view (the Fit button's answer).
+  const shiftX = cx - (x0 + x1) / 2;
+  const shiftY = cy - (y0 + y1) / 2;
+  const pos: Record<string, Pt> = {};
+  nodes.forEach((n, i) => {
+    pos[n.id] = { x: (px[i] + shiftX) / width, y: (py[i] + shiftY) / height };
+  });
+  const availW = Math.max(1, width - PAD_X * 2);
+  const availH = Math.max(1, height - PAD_TOP - PAD_BOTTOM);
+  const fit = Math.min(availW / Math.max(1, x1 - x0 + box.w), availH / Math.max(1, y1 - y0 + box.h), 1);
+  return { pos, fit };
+}
+
 /** WHAT the grid is: which cards stand in which column, in which order. It is
     worked out from the card box and the canvas alone, never from the scale, so
     zooming never reshuffles a reader's graph — only the air between the cards
@@ -599,15 +687,26 @@ export function LineageGraph({
      it. */
   const plan = useMemo(() => {
     if (!canvas.w || !canvas.h || visibleNodes.length === 0) return null;
+    if (effLayout !== "timeline") {
+      // The flow view is a graph: cards stand next to what they are linked
+      // to, not in source columns. The timeline keeps its date-band grid —
+      // time order IS that layout's reading.
+      const settled = forceLayout({
+        nodes: visibleNodes, edges: visibleEdges, at: basePos,
+        width: canvas.w, height: canvas.h, box: cardBox,
+      });
+      return { kind: "force" as const, ...settled };
+    }
     if (!anyCollision(visibleNodes, basePos, canvas.w, canvas.h, cardBox)) return null;
-    return planLayout({
+    const grid = planLayout({
       nodes: visibleNodes, at: basePos, degree: degrees,
       width: canvas.w, height: canvas.h, box: cardBox,
-      timeline: effLayout === "timeline",
+      timeline: true,
     });
+    return grid ? { kind: "grid" as const, ...grid } : null;
     // basePos is derived from effLayout + timeline, both listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleNodes, effLayout, timeline, canvas.w, canvas.h, cardBox, degrees]);
+  }, [visibleNodes, visibleEdges, effLayout, timeline, canvas.w, canvas.h, cardBox, degrees]);
 
   /** The scale that brings the packed grid into view, 1 when it needs none. */
   const fitScale = plan ? plan.fit : 1;
@@ -615,10 +714,11 @@ export function LineageGraph({
   /** Where the grid lands on the canvas. Zoom plays no part: the scale
       transform shows this same placement larger or smaller, so zooming never
       moves a card relative to its neighbours. */
-  const packed = useMemo(
-    () => (plan ? placeLayout(plan, { width: canvas.w, height: canvas.h, box: cardBox }) : null),
-    [plan, canvas.w, canvas.h, cardBox],
-  );
+  const packed = useMemo(() => {
+    if (!plan) return null;
+    if (plan.kind === "force") return { pos: plan.pos, inside: plan.fit >= 1 };
+    return placeLayout(plan, { width: canvas.w, height: canvas.h, box: cardBox });
+  }, [plan, canvas.w, canvas.h, cardBox]);
 
   const posOf = (n: LNode) => moved[n.id] ?? packed?.pos[n.id] ?? basePos(n);
   const px = (n: LNode) => { const p = posOf(n); return { x: p.x * VB_W, y: p.y * VB_H }; };
