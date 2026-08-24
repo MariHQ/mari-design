@@ -1037,10 +1037,10 @@ export function LineageGraph({
       colors and glyphs say, in words. */
   const nodeLabel = (n: LNode, editedAfter: boolean, severity: Severity | null) => [
     n.title,
-    n.macro ? `${n.count ?? 0} rolled-up documents from ${n.repo ?? "a repository"}` : SOURCE_LABELS[n.source] ?? n.source,
+    n.macro ? `${n.count ?? 0} rolled-up document${(n.count ?? 0) === 1 ? "" : "s"} from ${n.repo ?? "a repository"}` : SOURCE_LABELS[n.source] ?? n.source,
     n.macro ? null : n.owner ? `owned by ${n.owner}` : "unowned",
     n.macro ? null : nodeStatusKey(n) === "warning" ? "needs attention" : nodeStatusKey(n) === "review" ? "needs review" : "verified",
-    typeof n.staleDays === "number" ? `${n.staleDays} days since the last update` : null,
+    typeof n.staleDays === "number" ? `${n.staleDays} day${n.staleDays === 1 ? "" : "s"} since the last update` : null,
     editedAfter ? "edited after the as-of date" : null,
     // The bar's colour is not readable to a screen reader; the verdict is the
     // reason this card is lit, so it is said in words.

@@ -256,6 +256,9 @@ export function buildOverviewGraph(
       x: at.x,
       y: at.y,
       date: members.map((n) => n.date ?? "").sort().slice(-1)[0],
+      // The bucket exists from its first member's birth: without a birthday,
+      // time travel hid a roll-up's edges but left the card floating.
+      createdDate: members.map((n) => n.createdDate ?? n.date ?? "").filter(Boolean).sort()[0],
       warn: members.some((n) => n.warn || n.orphan),
       owner,
       tags: [],
@@ -562,10 +565,11 @@ export function nodeStatusKey(n: LNode): NodeStatusKey {
 /** The date a node came into existence, as far as the graph knows. */
 const bornOn = (n: LNode) => n.createdDate ?? n.date;
 
-/** Did this node not exist yet on `asOf`? Macro roll-ups stand for a whole
-    bucket and carry no birthday of their own, so they are never hidden. */
+/** Did this node not exist yet on `asOf`? A macro roll-up's birthday is its
+    earliest member's, so a bucket whose first document postdates the cutoff
+    hides with its edges instead of floating unconnected. */
 export const nodeCreatedAfter = (n: LNode, asOf: string | null): boolean => {
-  if (!asOf || n.macro) return false;
+  if (!asOf) return false;
   const born = bornOn(n);
   return !!born && born > asOf;
 };
@@ -682,10 +686,10 @@ export function downloadText(name: string, text: string, type = "text/plain") {
 
 /* ── Presentational helpers (shared across drawers + graph) ─────────────── */
 
-/** Source/kind node glyph. Brand mark for known sources, GitHub mark for the
-    roll-up macro, else a neutral source mark. */
+/** Source/kind node glyph: the node's own source mark, roll-up or not. The
+    macro branch hard-coded the GitHub mark, which put an octocat on Notion,
+    Slack, and Drive buckets beside their correct source chips. */
 export function NodeGlyph({ node, size = 18 }: { node: Pick<LNode, "source" | "macro">; size?: number }) {
-  if (node.macro) return <GithubMark size={size} />;
   return <SourceMark provider={node.source === "gdocs" ? "gdocs" : node.source} size={size} />;
 }
 

@@ -84,13 +84,20 @@ export function LineageGroupDrawer({
     [members],
   );
 
-  /* Edges that leave the bucket: the group's References / Endpoints. */
+  /* Edges that leave the bucket: the group's References / Endpoints. The
+     edges handed in are the RAW member edges, so filtering for the macro id
+     alone counted zero forever while the canvas drew a REF into this very
+     group. An edge leaves the bucket when exactly one endpoint is inside. */
   const graphById = useMemo(() => nodeById(nodes), [nodes]);
   const macroId = `grp:${groupId}`;
-  const references = useMemo(
-    () => edges.filter((e) => e.from === macroId || e.to === macroId),
-    [edges, macroId],
-  );
+  const references = useMemo(() => {
+    const inside = new Set(members.map((m) => m.id));
+    return edges.filter((e) => {
+      const from = inside.has(e.from) || e.from === macroId;
+      const to = inside.has(e.to) || e.to === macroId;
+      return (from || to) && !(inside.has(e.from) && inside.has(e.to));
+    });
+  }, [edges, macroId, members]);
 
   const owners = useMemo(() => {
     const tally = new Map<string, number>();
@@ -194,7 +201,7 @@ export function LineageGroupDrawer({
           summary={`Rolled up from ${repo}. ${members.length} of ${totalMembers} listed here.`}
         />
         <CardMeta
-          source={<LgSourceChip source="github" />}
+          source={<LgSourceChip source={members[0]?.source ?? "docs"} />}
           status={<Chip label={expandedInPlace ? "On the graph" : "Rolled up"} tone={expandedInPlace ? "info" : "neutral"} icon={<Layers size={11} />} />}
           date={latest ? fmtDate(latest) : "No date recorded"}
           author={<LgAuthor name={owners[0]?.name} />}
