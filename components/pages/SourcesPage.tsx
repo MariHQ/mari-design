@@ -117,8 +117,10 @@ export type SourcesActions = {
   /** Pre-flight credential check. Answers rather than throws: "not ok" is a
       normal result of a test, not a broken request. */
   testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
-  /** Create the source and start its first sync. */
-  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | Promise<void>;
+  /** Create the source and start its first sync. May answer with the new
+      source's id, which is what lets the dialog follow that sync to its end
+      through `syncProgress` instead of spinning on its first phase forever. */
+  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | string | Promise<void | string>;
   /** Ingest files directly, no credentials involved. */
   uploadFiles?: (files: File[]) => void | Promise<void>;
   /** Start an incremental sync on an existing source. Long-running: it
@@ -135,6 +137,20 @@ export type SourcesActions = {
   /** How often this source syncs itself. `null` is manual only. Drawn only
       for sources whose schedule the server actually reports. */
   setSyncSchedule?: (s: Source, everyMinutes: number | null) => void | Promise<void>;
+  /** One reading of a source's sync. The card and the connect dialog poll it
+      after starting a run — without it they hold their first optimistic phase
+      ("Listing…") until someone reloads the page, however long ago the sync
+      actually finished. */
+  syncProgress?: (sourceId: string) => Promise<SyncReading>;
+};
+
+/** What one syncProgress poll answers. `done`/`total` are items this run. */
+export type SyncReading = {
+  state: "running" | "done" | "failed";
+  phase?: string;
+  done?: number;
+  total?: number;
+  error?: string;
 };
 
 /** Everything Sources renders. */

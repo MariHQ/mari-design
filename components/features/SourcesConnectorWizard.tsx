@@ -34,7 +34,13 @@ function demoTest(_provider: string, _config: Record<string, string>): ConnectTe
     `testConnection` answers rather than throws, because "not ok" is a normal
     outcome of a test. */
 export type ConnectorWizardActions = {
-  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | Promise<void>;
+  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | string | Promise<void | string>;
+  /** One reading of a started run; the dialog polls it to completion when
+      connectSource answered with the new source's id. */
+  syncProgress?: (sourceId: string) => Promise<{
+    state: "running" | "done" | "failed";
+    phase?: string; done?: number; total?: number; error?: string;
+  }>;
   testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<ConnectTestResult>;
 };
 
@@ -94,17 +100,46 @@ export function SourcesConnectorWizard({
       return;
     }
 
-    /* Real connect. "Queued" is the honest state while the POST is in flight,
-       and it stays "Syncing" afterwards with NO counts — the server started a
-       background sync and this dialog does not know how far it has got. The
-       Connectors grid behind it does. */
+    /* Real connect. "Queued" is the honest state while the POST is in flight.
+       When the server answers with the new source's id and the page can poll
+       (`syncProgress`), the dialog follows the run to its end; otherwise it
+       stays on "Syncing" with no counts, which held the FIRST phase label
+       forever and read as a hang however fast the server finished. */
     setSync({ ...base, state: "queued" });
     setLanded(null);
     void (async () => {
       try {
-        await actions.connectSource!({ provider, config });
+        const sourceId = await actions.connectSource!({ provider, config });
         setSync({ ...base, state: "syncing", phase: "Listing" });
         setLanded(base.name);
+        const poll = actions.syncProgress;
+        if (typeof sourceId !== "string" || !poll) return;
+        for (let tick = 0; tick < 600; tick++) {
+          await new Promise((r) => window.setTimeout(r, 2000));
+          let reading;
+          try {
+            reading = await poll(sourceId);
+          } catch {
+            continue; // one failed poll is not a failed sync
+          }
+          if (reading.state === "running") {
+            setSync({
+              ...base, state: "syncing",
+              phase: reading.phase ? reading.phase[0].toUpperCase() + reading.phase.slice(1) : "Listing",
+              done: reading.done, total: reading.total,
+            });
+            continue;
+          }
+          if (reading.state === "failed") {
+            setSync({ ...base, state: "error", error: reading.error || "The first sync failed." });
+          } else {
+            setSync({
+              ...base, state: "done", phase: undefined,
+              docCount: reading.done, lastSyncAt: new Date().toISOString(),
+            });
+          }
+          return;
+        }
       } catch (err) {
         setSync({
           ...base, state: "error",

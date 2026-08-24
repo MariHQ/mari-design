@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Clock, Plug } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
 import { ConnectorCard as ConnectorCardUI, type ConnectorHealth } from "../data-display/ConnectorCard";
@@ -85,6 +85,11 @@ export type SourceCardActions = {
   fullResync?: (s: Source) => void | Promise<void>;
   /** Destructive: goes through <ConfirmButton> inside the card. */
   disconnect?: (s: Source) => void | Promise<void>;
+  /** One reading of a started run; the card polls it to completion. */
+  syncProgress?: (sourceId: string) => Promise<{
+    state: "running" | "done" | "failed";
+    phase?: string; done?: number; total?: number; error?: string;
+  }>;
 };
 
 export type SourcesConnectorCardProps = {
@@ -134,6 +139,48 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
      lands on the card verbatim.
      Without a handler (the canvas): the old local echo, so the control is
      still visibly alive with no server behind it. */
+  /* Polling stops when the card leaves the page — a poll that outlives its
+     component patches state nobody renders. */
+  const alive = useRef(true);
+  useEffect(() => {
+    // Set on the way IN as well: StrictMode runs mount/cleanup/mount, and a
+    // cleanup-only guard stays false forever after the rehearsal unmount.
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  /** Follow a started run to its end. Without this the card held its first
+      optimistic phase — "Listing…" — until a reload, however quickly the
+      server actually finished. */
+  const follow = async (id: string) => {
+    const poll = actions?.syncProgress;
+    if (!poll) return;
+    for (let tick = 0; tick < 600 && alive.current; tick++) {
+      await new Promise((r) => window.setTimeout(r, 2000));
+      if (!alive.current) return;
+      let reading;
+      try {
+        reading = await poll(id);
+      } catch {
+        continue; // one failed poll is not a failed sync
+      }
+      if (!alive.current) return;
+      if (reading.state === "running") {
+        patch(id, { state: "running", phase: reading.phase || "listing", done: reading.done, total: reading.total });
+        continue;
+      }
+      if (reading.state === "failed") {
+        patch(id, { state: "failed", phase: undefined, lastError: reading.error || "The sync failed." });
+      } else {
+        patch(id, {
+          state: "healthy", phase: undefined, lastSyncAt: new Date().toISOString(),
+          ...(reading.done ? { docsCount: reading.done } : {}),
+        });
+      }
+      return;
+    }
+  };
+
   const kick = (s: Source, handler?: (s: Source) => void | Promise<void>) => {
     const id = s.id;
     setFailed((f) => ({ ...f, [id]: "" }));
@@ -151,6 +198,7 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
       try {
         await handler(s);
         patch(id, { state: "running", phase: "listing" });
+        void follow(id);
       } catch (err) {
         setFailed((f) => ({ ...f, [id]: why(err, "Sync could not be started.") }));
       } finally {
