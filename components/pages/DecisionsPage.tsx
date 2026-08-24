@@ -482,7 +482,9 @@ function ScanButton({ scan, onStarted }: {
   };
   return (
     <span className="inline-flex flex-col items-start">
-      <Button variant="default" compact disabled={write.busy} onClick={run}>
+      {/* Full size, not compact: this stands beside the full-size primary in
+          the page header, and the height difference read as misalignment. */}
+      <Button variant="default" disabled={write.busy} onClick={run}>
         <Workflow size={15} /> {write.busy ? "Starting…" : "Scan for decisions"}
       </Button>
       {/* A scan that would not start is a failed write, not a bad field. */}
