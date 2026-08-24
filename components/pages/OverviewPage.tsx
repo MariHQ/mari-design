@@ -143,6 +143,10 @@ export type OverviewActions = {
   /** Open first-run source onboarding. Omitted: the empty-source card keeps
       its explanation but draws no dead button. */
   connectSources?: () => void;
+  /** Open the area a headline stat tile summarizes ("knowledge", "facts",
+      "workflows"). Omitted: the tiles stay informational. A number that names
+      work to do should take the reader to where the work is done. */
+  openArea?: (area: string) => void;
 };
 
 function OverviewPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<OverviewData, OverviewActions>) {
@@ -233,7 +237,7 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                      desktop composition; on a phone the order is the reading
                      order. */
                   <div className="flex flex-col gap-5">
-                    <OverviewStatTiles stats={data.stats} />
+                    <OverviewStatTiles stats={data.stats} onNavigate={actions?.openArea} />
                     <OverviewDigestCard topics={data.digest} />
                     <OverviewLiveActivity items={data.activity} pollMs={data.activityPollMs ?? 0} />
                     <OverviewRecentDocs docs={data.docs} />
@@ -243,7 +247,7 @@ function OverviewPage({ data, loading = false, error = null, actions, chrome, mo
                 <DashGrid mobile={mobile}>
                   {/* The stat strip is the one full-width row: three tiles, one
                       per column. */}
-                  <Cell mobile={mobile} span={3}><OverviewStatTiles stats={data.stats} /></Cell>
+                  <Cell mobile={mobile} span={3}><OverviewStatTiles stats={data.stats} onNavigate={actions?.openArea} /></Cell>
                   {/* Wide track. The table needs two columns (its title
                       column alone is min-w-[200px] plus four no-wrap columns),
                       and Source pulse packs a 2 x 250px tile grid. */}
