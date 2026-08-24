@@ -603,7 +603,7 @@ function WorkflowHarvestWizard({ actions }: { actions?: WorkflowsActions }) {
       </div>}
       {step === "scanning" && <div className="flex flex-col items-center gap-3 py-14 text-center"><Spinner label="Finding workflow candidates" /><strong className="text-[13px]">Clustering observed intent</strong><span className="text-[12px] text-ink/60">Comparing recent turns with current workflow clusters</span></div>}
       {step === "review" && <div className="flex flex-col gap-3">
-        <p className="text-[12px] text-ink/65">{candidates.length ? "Suggested workflows are selected. Generated recent turns remain visible for manual promotion or splitting." : "No recent assistant turns were found."}</p>
+        <p className="text-[12px] text-ink/65">{candidates.length ? "Suggested workflows are selected. Generated recent turns remain visible for manual promotion or splitting." : "No recent assistant turns were found. Ask the Mari agent something first — every dock conversation becomes an observed turn this scan can mine."}</p>
         {candidates.map((candidate, index) => <Card key={`${candidate.seedTrajectoryId}-${index}`} className={candidate.accepted ? "" : "opacity-60"}>
           <CardBody>
             <p className={`mb-2 text-[10px] font-semibold uppercase tracking-wide ${candidate.suggested === false ? "text-ink/50" : "text-olive"}`}>{candidate.suggested === false ? "Recent generated turn" : "Suggested workflow"}</p>
