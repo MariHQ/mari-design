@@ -1,9 +1,12 @@
 import type { SVGProps } from "react";
 
-/* Brandmark — a blueprint mark in currentColor, so it reads on the dark
-   biscay sidebar (light stroke) or the light header (ink stroke) alike.
-   A geometric cloud with two "data" lines: the source app's hand-woven
-   CloudLogo, redrawn in the console's ruled/blueprint idiom. */
+/* Brandmark — the canonical stroked M (the landing page's Mark), in
+   currentColor so it reads on the dark biscay sidebar (light stroke) or a
+   light page (ink stroke) alike. The corner squares are the blueprint
+   "data point" idiom; the centre square sits at reduced opacity instead of
+   a fixed brand blue so the mark stays one-colour on any surface. The
+   previous cloud glyph was the retired Mari Cloud identity redrawn, and it
+   kept the old brand alive in every sidebar (Eric, 2026-08-25). */
 export function Brandmark({ size = 28, ...rest }: { size?: number } & Omit<SVGProps<SVGSVGElement>, "width" | "height">) {
   return (
     <svg
@@ -12,17 +15,16 @@ export function Brandmark({ size = 28, ...rest }: { size?: number } & Omit<SVGPr
       viewBox="0 0 32 32"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeWidth={1.6}
       aria-hidden="true"
       {...rest}
     >
-      {/* cloud outline */}
-      <path d="M9.5 22.5 A5 5 0 0 1 9 12.6 A6.5 6.5 0 0 1 21.7 11.3 A4.6 4.6 0 0 1 23 22.5 Z" />
-      {/* ruled lines inside the mark */}
-      <path d="M11 15.5 H21.5" opacity={0.55} />
-      <path d="M10 18.5 H22" opacity={0.4} />
+      <path d="M4 27 V7 L16 18 L28 7 V27" />
+      <rect x="2.2" y="5.2" width="3.6" height="3.6" fill="currentColor" stroke="none" />
+      <rect x="14.2" y="16.2" width="3.6" height="3.6" fill="currentColor" stroke="none" opacity={0.55} />
+      <rect x="26.2" y="5.2" width="3.6" height="3.6" fill="currentColor" stroke="none" />
+      <rect x="2.2" y="25.2" width="3.6" height="3.6" fill="currentColor" stroke="none" />
+      <rect x="26.2" y="25.2" width="3.6" height="3.6" fill="currentColor" stroke="none" />
     </svg>
   );
 }
