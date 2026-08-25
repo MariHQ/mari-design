@@ -35,20 +35,23 @@ export type BandKey = "fresh" | "aging" | "stale";
 
 /* One band = one colour AND one texture. The texture is drawn with CSS
    gradients so it needs no asset and survives any bar height. */
-/* XA-25: "Stale" was espelette (#B23A1E, the failure red) here and clay
-   attention in every chip that spells the same word, so one document state had
-   two colours on two pages a reader flips between. Stale takes the chip's clay.
-   Aging then moves off clay to a tint of it: the two "not fresh" bands stay an
-   ordinal ramp within one hue, and the textures (§6's non-colour channel) still
-   separate them. Fresh keeps moss, which is what "ok" is everywhere. */
+/* Freshness fades: the ramp is one Blueprint hue losing saturation, vivid
+   biscay for fresh through a faded mid to a washed grey-blue for stale. Age
+   is ordinal, so a single-hue ramp is the honest encoding, and the textures
+   (§6's non-colour channel) still separate the bands without colour. The
+   earlier moss/tan/clay set was the sand era's earth ramp; it also made the
+   chart's stale match the stale CHIP, but a chip flags a state while this
+   chart shows an age distribution, and the brand outranks that echo
+   (Eric, 2026-08-25). All three stops derive from tokens: biscay-2, biscay
+   at 55% over paper, ink at 30% over paper. */
 const BAND: Record<BandKey, { label: string; color: string; pattern?: string; size?: string }> = {
-  fresh: { label: "Fresh", color: "#2C6E49" },
+  fresh: { label: "Fresh", color: "#1E6FA8" },
   aging: {
-    label: "Aging", color: "#CFA265",
+    label: "Aging", color: "#8299B0",
     pattern: "repeating-linear-gradient(45deg, rgba(255,255,255,0.85) 0 2px, rgba(255,255,255,0) 2px 5px)",
   },
   stale: {
-    label: "Stale", color: "#A05E1C",
+    label: "Stale", color: "#B7C1CB",
     pattern: "radial-gradient(rgba(255,255,255,0.9) 1.1px, rgba(255,255,255,0) 1.2px)",
     size: "5px 5px",
   },
