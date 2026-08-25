@@ -215,6 +215,29 @@ function Hero() {
           </li>
         ))}
       </ul>
+      {/* The two ledgers, told apart before the reader meets either page.
+          People conflate them, and the distinction is the product's spine. */}
+      <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="rounded-md border border-ink/12 p-3.5">
+          <div className="font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-biscay-2">Facts</div>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-ink/75">
+            What is true right now. Each claim carries an owner, a verification
+            state, and a freshness date. When a source changes, the facts that
+            leaned on it get flagged.
+          </p>
+        </div>
+        <div className="rounded-md border border-ink/12 p-3.5">
+          <div className="font-term text-[10.5px] font-medium uppercase tracking-[0.08em] text-biscay-2">Decisions</div>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-ink/75">
+            What was chosen, and why. Ratified by the people accountable, and
+            kept as the record of intent until someone decides differently.
+          </p>
+        </div>
+      </div>
+      <p className="mt-2.5 text-[12.5px] text-ink/60">
+        Rule of thumb: if a document could invalidate it, it is a fact. If only
+        a new decision could, it is a decision.
+      </p>
     </div>
   );
 }
