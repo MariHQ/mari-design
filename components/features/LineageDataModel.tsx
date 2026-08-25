@@ -386,10 +386,10 @@ export function ownerColor(owner: string): string {
 }
 
 /* The same freshness palette the analytics chart uses — biscay-2 blue for
-   fresh, ink-toned grey for aging, clay orange for stale — so the product
-   has ONE freshness language. Every stop clears WCAG 1.4.11 against paper,
-   and blue against orange is the colour-vision-safe axis. */
-export const staleColor = (d: number) => (d <= 14 ? "#1E6FA8" : d <= 45 ? "#5F707F" : "#A05E1C");
+   fresh, light ink-toned grey for aging, the blue's complement orange for
+   stale — so the product has ONE freshness language. Every stop clears
+   WCAG 1.4.11 against paper. */
+export const staleColor = (d: number) => (d <= 14 ? "#1E6FA8" : d <= 45 ? "#8290A0" : "#CB5E0E");
 
 /* ── Severity (impact analysis) ─────────────────────────────────────────── */
 

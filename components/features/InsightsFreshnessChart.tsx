@@ -35,23 +35,16 @@ export type BandKey = "fresh" | "aging" | "stale";
 
 /* One band = one colour AND one texture. The texture is drawn with CSS
    gradients so it needs no asset and survives any bar height. */
-/* Freshness in three hues: biscay-2 blue for fresh, an ink-toned grey for
-   aging, clay orange for stale (Eric, 2026-08-25). Blue against orange is
-   the colour-vision-safe axis, grey sits neutral between, and every stop
-   clears WCAG 1.4.11 against paper (5.4, 5.1, 5.1). Stale in clay also
-   matches the stale CHIP again, so one word wears one colour across pages.
-   The textures stay as the non-colour channel (§6). */
+/* Freshness in three solid hues (Eric, 2026-08-25): biscay-2 blue for
+   fresh, a light ink-toned grey for aging, and the blue's complement orange
+   for stale. Blue against orange is the colour-vision-safe axis, and every
+   stop clears WCAG 1.4.11 against paper (5.4, 3.3, 4.1). Solid fills by
+   direction — the earlier textures retired with the ramp they separated;
+   the white hairlines between segments keep adjacent bands apart. */
 const BAND: Record<BandKey, { label: string; color: string; pattern?: string; size?: string }> = {
   fresh: { label: "Fresh", color: "#1E6FA8" },
-  aging: {
-    label: "Aging", color: "#5F707F",
-    pattern: "repeating-linear-gradient(45deg, rgba(255,255,255,0.85) 0 2px, rgba(255,255,255,0) 2px 5px)",
-  },
-  stale: {
-    label: "Stale", color: "#A05E1C",
-    pattern: "radial-gradient(rgba(255,255,255,0.9) 1.1px, rgba(255,255,255,0) 1.2px)",
-    size: "5px 5px",
-  },
+  aging: { label: "Aging", color: "#8290A0" },
+  stale: { label: "Stale", color: "#CB5E0E" },
 };
 
 const BAND_ORDER: BandKey[] = ["fresh", "aging", "stale"];
@@ -82,7 +75,7 @@ function PatternLegend() {
           {BAND[k].label}
         </span>
       ))}
-      <span className="font-term text-[11px] text-ink/65">Solid, hatched, and dotted so the bands read without colour.</span>
+      <span className="font-term text-[11px] text-ink/65">Fresh is blue, aging grey, stale orange.</span>
     </div>
   );
 }
