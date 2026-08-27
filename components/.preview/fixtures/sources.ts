@@ -50,6 +50,9 @@ const SOURCES: Source[] = [
     docCount: 512, chunkCount: 3100, embeddedCount: 2870,
     lastSyncAt: "2026-07-20T22:15:00",
     lastError: "GET /rest/api/content returned 401, the token expired.",
+    /* Stored settings as the API reports them: secrets masked, never in the
+       clear. The edit-connection dialog prefills the non-secret values. */
+    config: { base_url: "https://acme.atlassian.net/wiki", email: "dana@acme.com", api_token: "••••••" },
   },
 ];
 

@@ -5,7 +5,14 @@ import { ConnectorCard as ConnectorCardUI, type ConnectorHealth } from "../data-
 import { Spinner } from "../data-display/Spinner";
 import { SkeletonLine, SkeletonCircle, SkeletonChip, SkeletonButton } from "../data-display/Skeleton";
 import { Button } from "../actions/Button";
-import { why } from "../actions/useWrite";
+import { useWrite, why } from "../actions/useWrite";
+import { Dialog } from "../layout/Dialog";
+import { FormField } from "../forms/FormField";
+import { Input } from "../forms/Input";
+import { Textarea } from "../forms/Textarea";
+import { WriteError } from "../feedback/WriteError";
+import type { ConnectorField } from "../forms/ConnectorWizard";
+import type { WizardProviderSpec } from "./SourcesConnectorWizard";
 import { SourceMark } from "../icons/marks";
 import { Truncate } from "../data-display/Truncate";
 import { fmtDateTime } from "../tokens/format";
@@ -57,6 +64,10 @@ export type Source = {
    *  and the schedule control is then not drawn at all: a select showing
    *  "Every hour" over an unknown value would be inventing the answer. */
   syncIntervalMinutes?: number | null;
+  /** Stored connector settings, as the API is willing to show them: secret
+   *  values arrive masked or not at all. The edit dialog prefills non-secret
+   *  fields from here; omit it and every field simply starts empty. */
+  config?: Record<string, string>;
 };
 
 const HEALTH: Record<SyncState, ConnectorHealth> = {
@@ -83,6 +94,10 @@ function counts(s: Source): ReactNode {
 export type SourceCardActions = {
   syncNow?: (s: Source) => void | Promise<void>;
   fullResync?: (s: Source) => void | Promise<void>;
+  /** Merge changed settings into a source's stored config: only the keys the
+      user actually edited are passed, so untouched secrets stay stored. The
+      handler also starts the full resync that makes the change take effect. */
+  updateConfig?: (s: Source, config: Record<string, string>) => void | Promise<void>;
   /** Destructive: goes through <ConfirmButton> inside the card. */
   disconnect?: (s: Source) => void | Promise<void>;
   /** One reading of a started run; the card polls it to completion. */
@@ -96,14 +111,127 @@ export type SourcesConnectorCardProps = {
   /** Override the baked-in demo sources. */
   sources: Source[];
   actions?: SourceCardActions;
+  /** The connector catalog, for the edit-connection dialog's field
+      definitions. Without it, or without `actions.updateConfig`, the edit
+      action is simply not drawn (§2: no control without a behaviour). */
+  catalog?: WizardProviderSpec[];
   loading?: boolean;
   className?: string;
 };
 
-export function SourcesConnectorCard({ sources, actions, loading = false, className = "" }: SourcesConnectorCardProps) {
+/* ── Edit connection ───────────────────────────────────────────────────────
+   The fix for a wrong config value (a bad Confluence space key, a rotated
+   token) used to be disconnect-and-reconnect. This dialog reuses the wizard's
+   field definitions for the provider, prefills what the API is willing to
+   show, and saves ONLY the fields the user changed: the server merges them
+   into the stored config, so an untouched secret stays exactly as stored. */
+
+const KEEP_BLANK = "Leave blank to keep the current value.";
+
+function EditConnectionDialog({ source, spec, onSave, onSaved, onClose }: {
+  source: Source;
+  spec: WizardProviderSpec;
+  onSave: (config: Record<string, string>) => void | Promise<void>;
+  /** Fired after the server accepted the save, with the changed NON-secret
+      fields, so the card can echo them. Secrets never live in page state. */
+  onSaved: (shown: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  /* Prefill only what the API actually reported. Secret values never arrive
+     in the clear (the server masks them), so a secret field starts empty and
+     blank means "keep what is stored". A masked value is not a value either,
+     whatever field it sits in. */
+  const stored = (f: ConnectorField): string => {
+    if (f.secret) return "";
+    const v = source.config?.[f.key];
+    if (v == null || String(v).includes("•")) return "";
+    return String(v);
+  };
+  const [values, setValues] = useState<Record<string, string>>(
+    () => Object.fromEntries(spec.fields.map((f) => [f.key, stored(f)])));
+  const write = useWrite();
+
+  /* Only what the user changed or filled travels: the server merges keys into
+     the stored config, so sending an untouched field would be restating it and
+     sending an untouched secret would overwrite it with nothing. */
+  const changed = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const f of spec.fields) {
+      const v = (values[f.key] ?? "").trim();
+      if (f.secret) { if (v) out[f.key] = v; continue; }
+      if (v !== stored(f)) out[f.key] = v;
+    }
+    return out;
+  };
+  const dirty = Object.keys(changed()).length > 0;
+
+  const save = async () => {
+    const cfg = changed();
+    const ok = await write.run(() => onSave(cfg));
+    if (!ok) return;
+    const secret = new Set(spec.fields.filter((f) => f.secret).map((f) => f.key));
+    onSaved(Object.fromEntries(Object.entries(cfg).filter(([k]) => !secret.has(k))));
+  };
+
+  const hintFor = (f: ConnectorField): string | undefined =>
+    f.secret ? (f.help ? `${f.help} ${KEEP_BLANK}` : KEEP_BLANK) : f.help;
+
+  /* §2: primary bottom LEFT, secondary to its right. */
+  const footer = (
+    <div className="flex flex-1 items-center gap-2">
+      <Button variant="primary" disabled={write.busy || !dirty} onClick={() => void save()}>
+        {write.busy ? <><Spinner size="sm" /> Saving…</> : <>Save &amp; resync</>}
+      </Button>
+      <Button disabled={write.busy} onClick={onClose}>Cancel</Button>
+    </div>
+  );
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Edit connection" description={source.name} width={520} footer={footer}>
+      <p className="text-[13px] text-ink/70">
+        Correct the settings for {spec.name}. Only the fields you change are saved.
+      </p>
+      <div className="mt-3 flex flex-col gap-3">
+        {spec.fields.map((f) => (
+          <FormField key={f.key} label={f.label} hint={hintFor(f)}>
+            {f.multiline ? (
+              <Textarea
+                rows={5}
+                className="font-term"
+                autoComplete="off"
+                placeholder={f.placeholder}
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
+              />
+            ) : (
+              <Input
+                className="w-full"
+                type={f.secret ? "password" : "text"}
+                autoComplete={f.secret ? "new-password" : "off"}
+                placeholder={f.placeholder}
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
+              />
+            )}
+          </FormField>
+        ))}
+      </div>
+      {/* XA-02: a refused save accuses no one field (the server rejects the
+          set), so it is a WriteError carrying the server's own words. */}
+      {write.failed && <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
+      <p className="mt-3 text-[12px] text-ink/65">Saving starts a full resync so the change takes effect.</p>
+    </Dialog>
+  );
+}
+
+export function SourcesConnectorCard({ sources, actions, catalog, loading = false, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
+  /* Which source's edit-connection dialog is open. The id, not the row: the
+     grid re-renders under a running sync and the dialog must follow the row's
+     current truth, not the snapshot it opened over. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   /* `sources` is the server's truth and it changes under us: the parent
      re-reads after every write. Without this the grid froze on the rows it
      mounted with, so a sync that really did add 400 documents looked inert. */
@@ -224,6 +352,16 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
     })();
   };
 
+  /* The wizard's field definitions for this source's provider. A provider
+     string can carry a qualifier ("confluence:OPS"), so the bare key is the
+     fallback match. No fields means nothing to edit, so no edit action. */
+  const specFor = (s: Source): WizardProviderSpec | null => {
+    if (!catalog) return null;
+    const p = catalog.find((x) => x.key === s.provider)
+      ?? catalog.find((x) => x.key === s.provider.split(":")[0]);
+    return p && p.fields.length > 0 ? p : null;
+  };
+
   const syncLine = (s: Source, isBusy: boolean): ReactNode => {
     if (s.state === "paused") {
       return (
@@ -311,6 +449,10 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
             canResync={isConnectorKind}
             onSyncNow={() => kick(s, actions?.syncNow)}
             onFullResync={isConnectorKind ? () => kick(s, actions?.fullResync ?? actions?.syncNow) : undefined}
+            /* Drawn only where it can act: a connector-kind source, a real
+               updateConfig handler behind it, and a catalog entry that names
+               fields to edit (§2). */
+            onEditConnection={isConnectorKind && actions?.updateConfig && specFor(s) ? () => setEditingId(s.id) : undefined}
             /* With a real disconnect wired, pausing IS disconnecting, and a
                destructive action may not fire from a first menu click (§2):
                it moves to the ConfirmButton on the card. */
@@ -325,6 +467,32 @@ export function SourcesConnectorCard({ sources, actions, loading = false, classN
       <p className="mt-1 flex w-full !flex-none items-center gap-1.5 font-term text-[11px] text-ink/65">
         <Clock size={12} /> Live sources poll while a sync runs; legacy sources show only what the server reports.
       </p>
+      {(() => {
+        const editing = editingId ? items.find((s) => s.id === editingId) ?? null : null;
+        const spec = editing ? specFor(editing) : null;
+        if (!editing || !spec || !actions?.updateConfig) return null;
+        return (
+          <EditConnectionDialog
+            key={editing.id}
+            source={editing}
+            spec={spec}
+            onSave={(cfg) => actions.updateConfig!(editing, cfg)}
+            onSaved={(shown) => {
+              /* The handler saved AND started the full resync, so the card
+                 takes the same aftermath kick() does: mark the row running
+                 and follow the run to its end. The non-secret changes are
+                 echoed so the next open prefills the corrected values. */
+              setEditingId(null);
+              patch(editing.id, {
+                config: { ...(editing.config ?? {}), ...shown },
+                state: "running", phase: "listing",
+              });
+              void follow(editing.id);
+            }}
+            onClose={() => setEditingId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

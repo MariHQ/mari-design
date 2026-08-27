@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Unplug } from "lucide-react";
+import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Unplug } from "lucide-react";
 import { card } from "../tokens/card";
 import { Chip } from "./Chip";
 import { Sparkline } from "./Sparkline";
@@ -52,6 +52,9 @@ export type ConnectorCardProps = {
   canResync?: boolean;
   onSyncNow?: () => void;
   onFullResync?: () => void;
+  /** Open the edit-connection dialog: correct a stored config value (a wrong
+      space key, a rotated token) without disconnecting the source. */
+  onEditConnection?: () => void;
   onPause?: () => void;
   onResume?: () => void;
   /** Destructive: drops the connection. Rendered as a two-step
@@ -68,7 +71,7 @@ export type ConnectorCardProps = {
 export function ConnectorCard({
   name, mark, health = "Healthy", counts, sync, bars, barsNote,
   busy = false, running = false, paused = false, canResync = false,
-  onSyncNow, onFullResync, onPause, onResume, onDisconnect, actionError = null,
+  onSyncNow, onFullResync, onEditConnection, onPause, onResume, onDisconnect, actionError = null,
   loading = false, className = "",
 }: ConnectorCardProps) {
   /* WHICH connector this card is for is the caller's own choice — the name
@@ -96,7 +99,7 @@ export function ConnectorCard({
     );
   }
   const h = HEALTH[health];
-  const hasMenu = Boolean(onSyncNow || onFullResync || onPause || onResume);
+  const hasMenu = Boolean(onSyncNow || onFullResync || onEditConnection || onPause || onResume);
   return (
     <div className={`${card} p-4 ${paused ? "opacity-70" : ""} ${className}`.trim()}>
       <div className="flex items-center gap-3">
@@ -114,6 +117,9 @@ export function ConnectorCard({
             )}
             {canResync && onFullResync && (
               <MenuItem icon={<Sparkles size={13} />} disabled={busy || running} onSelect={onFullResync}>Full resync</MenuItem>
+            )}
+            {onEditConnection && (
+              <MenuItem icon={<Pencil size={13} />} disabled={busy} onSelect={onEditConnection}>Edit connection</MenuItem>
             )}
             {paused
               ? onResume && <MenuItem icon={<Play size={13} />} disabled={busy} onSelect={onResume}>Resume</MenuItem>

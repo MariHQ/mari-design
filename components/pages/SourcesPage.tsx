@@ -128,6 +128,12 @@ export type SourcesActions = {
   syncNow?: (s: Source) => void | Promise<void>;
   /** Full rebuild of one source. */
   fullResync?: (s: Source) => void | Promise<void>;
+  /** Merge corrected settings into a source's stored config, then start the
+      full resync that makes them take effect. Receives ONLY the fields the
+      user changed or filled: the server merges keys, so an untouched secret
+      stays stored. The edit-connection dialog is drawn only with this
+      handler and a catalog entry that names fields for the provider. */
+  updateConfig?: (s: Source, config: Record<string, string>) => void | Promise<void>;
   /** Destructive: stops syncing this source. Goes through <ConfirmButton>. */
   disconnect?: (s: Source) => void | Promise<void>;
   /** Start the first sync again after it failed. Takes the provider key the
@@ -640,7 +646,7 @@ function Body({ data, error, actions }: {
      every real workspace's connectors. The live sync state for this workspace
      is the `sync-status` view and each card's own sync line, both of which are
      the workspace's own data. */
-  return <SourcesConnectorCard sources={data.sources} actions={actions} />;
+  return <SourcesConnectorCard sources={data.sources} catalog={data.catalog} actions={actions} />;
 }
 
 function SourcesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SourcesData, SourcesActions>) {
