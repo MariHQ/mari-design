@@ -54,6 +54,16 @@ const SOURCES: Source[] = [
        clear. The edit-connection dialog prefills the non-secret values. */
     config: { base_url: "https://acme.atlassian.net/wiki", email: "dana@acme.com", api_token: "••••••" },
   },
+  /* A SECOND instance of the same provider: the multi-instance case the
+     wizard's Add-another tile and the card menu's "Add another Confluence"
+     exist for. Never given a display name, so every surface that shows it
+     falls back to its qualifier. */
+  {
+    id: "conf2", provider: "confluence", name: "rippling.atlassian.net", tier: "live", state: "healthy",
+    docCount: 96, chunkCount: 540, embeddedCount: 540,
+    lastSyncAt: "2026-07-21T07:40:00",
+    config: { base_url: "https://rippling.atlassian.net/wiki", email: "dana@acme.com", api_token: "••••••" },
+  },
 ];
 
 const CATALOG: WizardProviderSpec[] = [
@@ -66,7 +76,11 @@ const CATALOG: WizardProviderSpec[] = [
     ],
   },
   {
+    /* Connected WITH instance data: the tile names the live source and offers
+       "Add another" in place of the Connected chip. */
     key: "slack", name: "Slack", blurb: "Import channel history into your knowledge library.",
+    connected: true,
+    instances: [{ sourceId: "slack", name: "Slack · #engineering", qualifier: "" }],
     fields: [
       { key: "bot_token", label: "Bot token", secret: true, placeholder: "xoxb-…", help: "Needs channels:history + channels:read." },
       { key: "channel", label: "Channel", placeholder: "#engineering" },
@@ -91,7 +105,14 @@ const CATALOG: WizardProviderSpec[] = [
     fields: [{ key: "api_key", label: "API key", secret: true, placeholder: "gr-…" }],
   },
   {
+    /* Two live instances, the second with no display name: the tile's list
+       falls back to the qualifier for it, which is the fallback's demo. */
     key: "confluence", name: "Confluence", blurb: "Index spaces and pages from Confluence Cloud.",
+    connected: true,
+    instances: [
+      { sourceId: "conf", name: "Confluence · Ops", qualifier: "acme.atlassian.net" },
+      { sourceId: "conf2", name: "", qualifier: "rippling.atlassian.net" },
+    ],
     fields: [
       { key: "base_url", label: "Base URL", placeholder: "https://acme.atlassian.net/wiki" },
       { key: "email", label: "Email", placeholder: "you@acme.com" },
@@ -206,7 +227,7 @@ const FIRST_SYNC: FirstSync = {
 };
 
 const SUMMARY: PropertyItem[] = [
-  { label: "Connected sources", value: "6 of 14" },
+  { label: "Connected sources", value: "7 of 14" },
   { label: "Documents", value: "12,480" },
   { label: "Chunks embedded", value: "12,201" },
   { label: "Last sync", value: "Jul 21, 2026" },

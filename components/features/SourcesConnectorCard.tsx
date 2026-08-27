@@ -120,6 +120,16 @@ export type SourcesConnectorCardProps = {
       definitions. Without it, or without `actions.updateConfig`, the edit
       action is simply not drawn (§2: no control without a behaviour). */
   catalog?: WizardProviderSpec[];
+  /** "Add another <Provider>" on a card's menu: receives the CATALOG key to
+      preselect in the Add-source wizard, which the parent owns. Drawn only
+      with this handler and a catalog entry that names the provider (§2). */
+  onAddAnother?: (providerKey: string) => void;
+  /** Ask the grid to open one source's Edit connection dialog: the wizard's
+      "Edit the existing source" on a duplicate refusal lands here. Re-fires
+      whenever `token` changes. With no `updateConfig` handler or no catalog
+      fields for the provider the dialog cannot be drawn, and the request is
+      dropped rather than half-honoured. */
+  editRequest?: { sourceId: string; token: number } | null;
   loading?: boolean;
   className?: string;
 };
@@ -270,7 +280,9 @@ function RemoveSourceDialog({ source, onRemove, onRemoved, onClose }: {
   );
 }
 
-export function SourcesConnectorCard({ sources, actions, catalog, loading = false, className = "" }: SourcesConnectorCardProps) {
+export function SourcesConnectorCard({
+  sources, actions, catalog, onAddAnother, editRequest = null, loading = false, className = "",
+}: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
@@ -285,6 +297,14 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
      mounted with, so a sync that really did add 400 documents looked inert. */
   const [seen, setSeen] = useState(sources);
   if (seen !== sources) { setSeen(sources); setItems(sources); }
+  /* The wizard's "Edit the existing source" arrives as a prop, because the
+     dialog's open/closed state lives here. Same render-time watch as above:
+     each new token opens the named source's dialog. */
+  const [seenEdit, setSeenEdit] = useState(editRequest);
+  if (editRequest !== seenEdit) {
+    setSeenEdit(editRequest);
+    if (editRequest) setEditingId(editRequest.sourceId);
+  }
 
   if (loading) {
     return (
@@ -410,6 +430,17 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
     return p && p.fields.length > 0 ? p : null;
   };
 
+  /* The catalog entry "Add another" preselects: fields or none, because adding
+     an instance needs a wizard tile and a name, not editable fields. Uploads
+     stay out. The Sources page shapes upload onto its own button and out of
+     the wizard, so a preselect could land on a tile that is not there. */
+  const addTargetFor = (s: Source): WizardProviderSpec | null => {
+    if (!catalog) return null;
+    const p = catalog.find((x) => x.key === s.provider)
+      ?? catalog.find((x) => x.key === s.provider.split(":")[0]);
+    return p && p.key !== "upload" ? p : null;
+  };
+
   const syncLine = (s: Source, isBusy: boolean): ReactNode => {
     if (s.state === "paused") {
       return (
@@ -477,6 +508,7 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
         const running = s.state === "running";
         const paused = s.state === "paused";
         const isConnectorKind = s.tier === "live" || s.tier === "actionless";
+        const addTarget = onAddAnother ? addTargetFor(s) : null;
         return (
           <ConnectorCardUI
             key={s.id}
@@ -501,6 +533,10 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
                updateConfig handler behind it, and a catalog entry that names
                fields to edit (§2). */
             onEditConnection={isConnectorKind && actions?.updateConfig && specFor(s) ? () => setEditingId(s.id) : undefined}
+            /* A second instance of the same system, any tier: drawn only with
+               a handler and a catalog entry to preselect (§2). */
+            onAddAnother={addTarget ? () => onAddAnother!(addTarget.key) : undefined}
+            providerName={addTarget?.name}
             /* With a real disconnect wired, pausing IS disconnecting, and a
                destructive action may not fire from a first menu click (§2):
                it moves to the ConfirmButton on the card. */

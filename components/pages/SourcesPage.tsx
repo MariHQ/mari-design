@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, SPLIT } from "./PageFrame";
 import { Layers, ShieldCheck, CheckCircle2, ArrowRight, ExternalLink, UploadCloud, FileText } from "lucide-react";
@@ -117,10 +117,14 @@ export type SourcesActions = {
   /** Pre-flight credential check. Answers rather than throws: "not ok" is a
       normal result of a test, not a broken request. */
   testConnection?: (v: { provider: string; config: Record<string, string> }) => Promise<{ ok: boolean; error?: string }>;
-  /** Create the source and start its first sync. May answer with the new
-      source's id, which is what lets the dialog follow that sync to its end
-      through `syncProgress` instead of spinning on its first phase forever. */
-  connectSource?: (v: { provider: string; config: Record<string, string> }) => void | string | Promise<void | string>;
+  /** Create the source and start its first sync. `name` is the optional
+      display name from the wizard's configure step, absent when left blank.
+      May answer with the new source's id, which is what lets the dialog follow
+      that sync to its end through `syncProgress` instead of spinning on its
+      first phase forever. A duplicate-active refusal thrown as
+      `DuplicateSourceError` (features/SourcesConnectorWizard) additionally
+      offers "Edit the existing source" on the failure. */
+  connectSource?: (v: { provider: string; config: Record<string, string>; name?: string }) => void | string | Promise<void | string>;
   /** Ingest files directly, no credentials involved. */
   uploadFiles?: (files: File[]) => void | Promise<void>;
   /** Start an incremental sync on an existing source. Long-running: it
@@ -612,8 +616,14 @@ function isEmpty(d: SourcesData): boolean {
   return d.sources.length === 0 && d.connector === null && d.view === "grid";
 }
 
-function Body({ data, error, actions }: {
+function Body({ data, error, actions, onAddAnother, editRequest }: {
   data: SourcesData; error: string | null; actions?: SourcesActions;
+  /** "Add another <Provider>" on a connected card: the page opens the wizard
+      preselected to the catalog key it receives. */
+  onAddAnother?: (providerKey: string) => void;
+  /** The page asks the grid to open one source's Edit connection dialog (the
+      wizard's duplicate-refusal follow-up). */
+  editRequest?: { sourceId: string; token: number } | null;
 }): ReactNode {
   // XA-01: a failed read is a blocked banner, never the "nothing here yet" surface.
   if (error) return <ReadError>{error}</ReadError>;
@@ -651,7 +661,15 @@ function Body({ data, error, actions }: {
      every real workspace's connectors. The live sync state for this workspace
      is the `sync-status` view and each card's own sync line, both of which are
      the workspace's own data. */
-  return <SourcesConnectorCard sources={data.sources} catalog={data.catalog} actions={actions} />;
+  return (
+    <SourcesConnectorCard
+      sources={data.sources}
+      catalog={data.catalog}
+      actions={actions}
+      onAddAnother={onAddAnother}
+      editRequest={editRequest}
+    />
+  );
 }
 
 function SourcesPage({ data, loading = false, error = null, actions, chrome, mobile = false }: PageProps<SourcesData, SourcesActions>) {
@@ -659,6 +677,15 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
   const bare = error !== null || isEmpty(data);
   /* Add source / Upload belong to the connectors grid, and only there. */
   const showConnectorTools = !pinned && (data.view === "grid" || data.view === "wizard");
+
+  /* Multi-instance wiring, all local: a card's "Add another <Provider>" opens
+     the header wizard preselected to that provider, and the wizard's
+     duplicate-refusal follow-up opens the colliding card's Edit connection
+     dialog. Tokens make the same request fire twice in a row; the counter
+     never repeats within a session, which Date.now() cannot promise. */
+  const tokens = useRef(0);
+  const [preselect, setPreselect] = useState<{ provider: string; token: number } | null>(null);
+  const [editRequest, setEditRequest] = useState<{ sourceId: string; token: number } | null>(null);
 
   if (loading) {
     return (
@@ -686,12 +713,24 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
         />
         {!bare && showConnectorTools && (
           <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
-            <SourcesConnectorWizard defaultOpen={data.view === "wizard"} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
+            <SourcesConnectorWizard
+              defaultOpen={data.view === "wizard"}
+              providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))}
+              actions={actions}
+              preselect={preselect}
+              onEditExisting={(sourceId) => setEditRequest({ sourceId, token: ++tokens.current })}
+            />
           </div>
         )}
         <div className="mt-6">
           <SplitBody mobile={mobile} rail={<SourcesRail data={data} actions={actions} />}>
-            <Body data={data} error={error} actions={actions} />
+            <Body
+              data={data}
+              error={error}
+              actions={actions}
+              onAddAnother={(providerKey) => setPreselect({ provider: providerKey, token: ++tokens.current })}
+              editRequest={editRequest}
+            />
           </SplitBody>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Trash2, Unplug } from "lucide-react";
+import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Plus, Trash2, Unplug } from "lucide-react";
 import { card } from "../tokens/card";
 import { Chip } from "./Chip";
 import { Sparkline } from "./Sparkline";
@@ -55,6 +55,14 @@ export type ConnectorCardProps = {
   /** Open the edit-connection dialog: correct a stored config value (a wrong
       space key, a rotated token) without disconnecting the source. */
   onEditConnection?: () => void;
+  /** Start connecting a SECOND instance of this card's provider ("Add another
+      Confluence"): opens the Add-source wizard preselected to it. Drawn only
+      when provided (§2). */
+  onAddAnother?: () => void;
+  /** The provider's display name, for the Add-another item's label. Falls
+      back to the card name, so pass it whenever the card name carries an
+      instance detail ("Confluence · Ops"). */
+  providerName?: string;
   onPause?: () => void;
   onResume?: () => void;
   /** Open the remove-source confirm. A menu entry is allowed for this
@@ -75,7 +83,8 @@ export type ConnectorCardProps = {
 export function ConnectorCard({
   name, mark, health = "Healthy", counts, sync, bars, barsNote,
   busy = false, running = false, paused = false, canResync = false,
-  onSyncNow, onFullResync, onEditConnection, onPause, onResume, onRemove, onDisconnect, actionError = null,
+  onSyncNow, onFullResync, onEditConnection, onAddAnother, providerName,
+  onPause, onResume, onRemove, onDisconnect, actionError = null,
   loading = false, className = "",
 }: ConnectorCardProps) {
   /* WHICH connector this card is for is the caller's own choice — the name
@@ -103,7 +112,7 @@ export function ConnectorCard({
     );
   }
   const h = HEALTH[health];
-  const hasMenu = Boolean(onSyncNow || onFullResync || onEditConnection || onPause || onResume || onRemove);
+  const hasMenu = Boolean(onSyncNow || onFullResync || onEditConnection || onAddAnother || onPause || onResume || onRemove);
   return (
     <div className={`${card} p-4 ${paused ? "opacity-70" : ""} ${className}`.trim()}>
       <div className="flex items-center gap-3">
@@ -124,6 +133,13 @@ export function ConnectorCard({
             )}
             {onEditConnection && (
               <MenuItem icon={<Pencil size={13} />} disabled={busy} onSelect={onEditConnection}>Edit connection</MenuItem>
+            )}
+            {/* Constructive, so no confirm: selecting it only opens the
+                Add-source wizard on this provider's configure step. */}
+            {onAddAnother && (
+              <MenuItem icon={<Plus size={13} />} disabled={busy} onSelect={onAddAnother}>
+                Add another {providerName ?? name}
+              </MenuItem>
             )}
             {paused
               ? onResume && <MenuItem icon={<Play size={13} />} disabled={busy} onSelect={onResume}>Resume</MenuItem>

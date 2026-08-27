@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Plug } from "lucide-react";
 import { EmptyState } from "../data-display/EmptyState";
-import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, ShieldCheck, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, ShieldCheck, ExternalLink, Plus } from "lucide-react";
 import { focusRing } from "../tokens/focusRing";
 import { Dialog } from "../layout/Dialog";
 import { Stepper } from "../data-display/Stepper";
@@ -34,6 +34,12 @@ export type ConnectorField = {
   multiline?: boolean;
 };
 
+/** One live instance of a provider: a source that already exists. `sourceId`
+    is the library's opaque string id. `qualifier` is what scopes the instance
+    ("rippling.atlassian.net"), or "" when the provider has one natural scope,
+    and it is the label of last resort when `name` is empty. */
+export type WizardInstance = { sourceId: string; name: string; qualifier: string };
+
 export type WizardProvider = {
   key: string;
   name: string;
@@ -43,6 +49,10 @@ export type WizardProvider = {
   fields: ConnectorField[];
   docsUrl?: string;
   connected?: boolean;
+  /** The provider's live sources. With any listed, the chooser tile names
+      them and offers "Add another" in place of the plain Connected badge:
+      connecting again is a normal thing to do, not a state to be warned off. */
+  instances?: WizardInstance[];
 };
 
 export type ConnectTestResult = { ok: boolean; error?: string };
@@ -58,11 +68,17 @@ export type ConnectorWizardProps = {
   title?: string;
   /** Optional "Test connection" handler — omit to hide the button. */
   onTest?: (provider: string, config: Record<string, string>) => Promise<ConnectTestResult> | ConnectTestResult;
-  /** Fired when the user clicks Connect & sync; advances to the sync step. */
-  onFinish: (values: { provider: string; config: Record<string, string> }) => void;
+  /** Fired when the user clicks Connect & sync; advances to the sync step.
+      `name` is the optional display name typed on the configure step, absent
+      when the user left it blank. */
+  onFinish: (values: { provider: string; config: Record<string, string>; name?: string }) => void;
   /** Parent-driven live sync status for the final step (no hooks here). */
   syncStatus?: SyncSource | null;
   onRetrySync?: () => void;
+  /** Rendered under the sync step's status panel: the caller's follow-up
+      action for a failure it understands (e.g. "Edit the existing source"
+      after a duplicate refusal). */
+  syncExtra?: ReactNode;
   /** Render a skeleton in the dialog body while the catalog/form loads. */
   loading?: boolean;
 };
@@ -95,11 +111,12 @@ function ProviderMark({ p, size = 24 }: { p: WizardProvider; size?: number }) {
 
 export function ConnectorWizard({
   open, onOpenChange, providers, initialProvider = null, title = "Connect a source",
-  onTest, onFinish, syncStatus = null, onRetrySync, loading = false,
+  onTest, onFinish, syncStatus = null, onRetrySync, syncExtra, loading = false,
 }: ConnectorWizardProps) {
   const [step, setStep] = useState(0);
   const [provider, setProvider] = useState<string | null>(initialProvider);
   const [config, setConfig] = useState<Record<string, string>>({});
+  const [sourceName, setSourceName] = useState("");
   const [test, setTest] = useState<TestState>(IDLE_TEST);
 
   // Reset the flow each time the dialog is opened.
@@ -108,6 +125,7 @@ export function ConnectorWizard({
     setStep(initialProvider ? 1 : 0);
     setProvider(initialProvider);
     setConfig({});
+    setSourceName("");
     setTest(IDLE_TEST);
   }, [open, initialProvider]);
 
@@ -121,6 +139,7 @@ export function ConnectorWizard({
   const pick = (key: string) => {
     setProvider(key);
     setConfig({});
+    setSourceName("");
     setTest(IDLE_TEST);
   };
   const setField = (key: string, value: string) => {
@@ -142,7 +161,8 @@ export function ConnectorWizard({
 
   const connect = () => {
     if (!provider) return;
-    onFinish({ provider, config: trimmed() });
+    const name = sourceName.trim();
+    onFinish({ provider, config: trimmed(), ...(name ? { name } : {}) });
     setStep(2);
   };
 
@@ -167,6 +187,9 @@ export function ConnectorWizard({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {providers.map((p) => {
               const selected = provider === p.key;
+              /* Each live instance is named by its display name, falling back
+                 to its qualifier: both come from the server, never invented. */
+              const live = (p.instances ?? []).map((i) => i.name || i.qualifier || p.name);
               return (
                 <button
                   key={p.key}
@@ -180,9 +203,24 @@ export function ConnectorWizard({
                   <span className="flex items-center gap-2 w-full">
                     <ProviderMark p={p} size={22} />
                     <span className="text-[13px] font-semibold text-ink truncate flex-1">{p.name}</span>
-                    {p.connected && <Chip label="Connected" tone="ok" caps className="shrink-0" />}
+                    {/* A provider with live instances is not a closed door: the
+                        badge slot says the tile ADDS one more, and the names
+                        below say what already exists. Without instance data the
+                        old Connected chip stands, so nothing regresses. */}
+                    {p.connected && (live.length > 0
+                      ? (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-biscay-2">
+                          <Plus size={11} /> Add another
+                        </span>
+                      )
+                      : <Chip label="Connected" tone="ok" caps className="shrink-0" />)}
                   </span>
                   <span className="text-[11.5px] text-ink/65 leading-snug line-clamp-2">{p.blurb}</span>
+                  {live.length > 0 && (
+                    <span className="w-full truncate font-term text-[11px] text-ink/65" title={live.join(", ")}>
+                      Connected: {live.join(", ")}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -240,6 +278,20 @@ export function ConnectorWizard({
               ))}
             </div>
           )}
+          {/* Last in the field list, and never required: the display name is
+              what tells two instances of the same system apart on Sources, so
+              it belongs to every provider rather than any one field spec. */}
+          <div className="mt-3">
+            <FormField label="Name" hint="Optional. A display name that tells multiple connections of the same system apart.">
+              <Input
+                className="w-full"
+                autoComplete="off"
+                placeholder={`${chosen.name} · production`}
+                value={sourceName}
+                onChange={(e) => setSourceName(e.target.value)}
+              />
+            </FormField>
+          </div>
           {test.ok === true && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] text-moss">
               <CheckCircle2 size={14} /> Connection OK: credentials verified.
@@ -264,7 +316,10 @@ export function ConnectorWizard({
           The initial sync runs on the server. Closing this dialog won’t interrupt it.
         </div>
         {syncStatus ? (
-          <SyncPanel sources={[syncStatus]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />
+          <>
+            <SyncPanel sources={[syncStatus]} onRetry={onRetrySync ? () => onRetrySync() : undefined} />
+            {syncExtra}
+          </>
         ) : (
           <div className="flex items-center gap-2 text-[13px] text-ink/70 py-4">
             <Spinner size="sm" /> Starting sync for <b className="font-term">{chosen?.name}</b>…
