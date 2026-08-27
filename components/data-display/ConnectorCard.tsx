@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Unplug } from "lucide-react";
+import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Trash2, Unplug } from "lucide-react";
 import { card } from "../tokens/card";
 import { Chip } from "./Chip";
 import { Sparkline } from "./Sparkline";
@@ -57,6 +57,10 @@ export type ConnectorCardProps = {
   onEditConnection?: () => void;
   onPause?: () => void;
   onResume?: () => void;
+  /** Open the remove-source confirm. A menu entry is allowed for this
+      destructive action because selecting it only opens the dialog that owns
+      the deliberate second step (§2) — nothing is deleted on the click. */
+  onRemove?: () => void;
   /** Destructive: drops the connection. Rendered as a two-step
       <ConfirmButton> at the card's bottom left (CONVENTIONS.md §2), not as a
       menu item, because a kebab entry fires on first click. */
@@ -71,7 +75,7 @@ export type ConnectorCardProps = {
 export function ConnectorCard({
   name, mark, health = "Healthy", counts, sync, bars, barsNote,
   busy = false, running = false, paused = false, canResync = false,
-  onSyncNow, onFullResync, onEditConnection, onPause, onResume, onDisconnect, actionError = null,
+  onSyncNow, onFullResync, onEditConnection, onPause, onResume, onRemove, onDisconnect, actionError = null,
   loading = false, className = "",
 }: ConnectorCardProps) {
   /* WHICH connector this card is for is the caller's own choice — the name
@@ -99,7 +103,7 @@ export function ConnectorCard({
     );
   }
   const h = HEALTH[health];
-  const hasMenu = Boolean(onSyncNow || onFullResync || onEditConnection || onPause || onResume);
+  const hasMenu = Boolean(onSyncNow || onFullResync || onEditConnection || onPause || onResume || onRemove);
   return (
     <div className={`${card} p-4 ${paused ? "opacity-70" : ""} ${className}`.trim()}>
       <div className="flex items-center gap-3">
@@ -124,6 +128,9 @@ export function ConnectorCard({
             {paused
               ? onResume && <MenuItem icon={<Play size={13} />} disabled={busy} onSelect={onResume}>Resume</MenuItem>
               : onPause && <MenuItem icon={<Clock size={13} />} disabled={busy} onSelect={onPause}>Pause</MenuItem>}
+            {onRemove && (
+              <MenuItem danger icon={<Trash2 size={13} />} disabled={busy || running} onSelect={onRemove}>Remove…</MenuItem>
+            )}
           </Menu>
         )}
       </div>

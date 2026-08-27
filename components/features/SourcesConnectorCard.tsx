@@ -100,6 +100,11 @@ export type SourceCardActions = {
   updateConfig?: (s: Source, config: Record<string, string>) => void | Promise<void>;
   /** Destructive: goes through <ConfirmButton> inside the card. */
   disconnect?: (s: Source) => void | Promise<void>;
+  /** Destructive for real: deletes the source and its indexed documents.
+      Goes through the remove dialog's confirm, and on success the row leaves
+      the grid — there is nothing left to draw. Without this handler the
+      Remove action is simply not drawn (§2). */
+  removeSource?: (s: Source) => void | Promise<void>;
   /** One reading of a started run; the card polls it to completion. */
   syncProgress?: (sourceId: string) => Promise<{
     state: "running" | "done" | "failed";
@@ -224,6 +229,47 @@ function EditConnectionDialog({ source, spec, onSave, onSaved, onClose }: {
   );
 }
 
+/* ── Remove source ─────────────────────────────────────────────────────────
+   Disconnect only pauses. This is the real delete for a source that should
+   never have existed — a misconfigured connector holding 0 documents had no
+   way out at all. The menu entry only opens this dialog; the deliberate
+   destructive step lives on the danger button here (§2), and a refusal (the
+   server declines while a sync is running) lands in the dialog verbatim. */
+
+function RemoveSourceDialog({ source, onRemove, onRemoved, onClose }: {
+  source: Source;
+  onRemove: () => void | Promise<void>;
+  /** Fired after the server accepted the delete: the row leaves the grid. */
+  onRemoved: () => void;
+  onClose: () => void;
+}) {
+  const write = useWrite();
+
+  const remove = async () => {
+    const ok = await write.run(() => onRemove());
+    if (ok) onRemoved();
+  };
+
+  /* §2: primary bottom LEFT, secondary to its right. */
+  const footer = (
+    <div className="flex flex-1 items-center gap-2">
+      <Button variant="danger" disabled={write.busy} onClick={() => void remove()}>
+        {write.busy ? <><Spinner size="sm" /> Removing…</> : <>Remove source</>}
+      </Button>
+      <Button disabled={write.busy} onClick={onClose}>Cancel</Button>
+    </div>
+  );
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Remove source" description={source.name} width={440} footer={footer}>
+      <p className="text-[13px] text-ink/70">
+        This deletes the source and its indexed documents. It cannot be undone.
+      </p>
+      {write.failed && <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
+    </Dialog>
+  );
+}
+
 export function SourcesConnectorCard({ sources, actions, catalog, loading = false, className = "" }: SourcesConnectorCardProps) {
   const [items, setItems] = useState<Source[]>(sources);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -232,6 +278,8 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
      grid re-renders under a running sync and the dialog must follow the row's
      current truth, not the snapshot it opened over. */
   const [editingId, setEditingId] = useState<string | null>(null);
+  /* Which source's remove confirm is open. Same id-not-row rule as above. */
+  const [removingId, setRemovingId] = useState<string | null>(null);
   /* `sources` is the server's truth and it changes under us: the parent
      re-reads after every write. Without this the grid froze on the rows it
      mounted with, so a sync that really did add 400 documents looked inert. */
@@ -458,6 +506,9 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
                it moves to the ConfirmButton on the card. */
             onPause={!paused && !actions?.disconnect ? () => patch(s.id, { state: "paused" }) : undefined}
             onResume={paused ? () => kick(s, actions?.syncNow) : undefined}
+            /* Drawn only with a real handler behind it (§2): the menu entry
+               opens the confirm dialog, which owns the destructive step. */
+            onRemove={isConnectorKind && actions?.removeSource ? () => setRemovingId(s.id) : undefined}
             onDisconnect={actions?.disconnect && !paused ? () => disconnect(s) : undefined}
             actionError={failed[s.id] || null}
           />
@@ -490,6 +541,25 @@ export function SourcesConnectorCard({ sources, actions, catalog, loading = fals
               void follow(editing.id);
             }}
             onClose={() => setEditingId(null)}
+          />
+        );
+      })()}
+      {(() => {
+        const removing = removingId ? items.find((s) => s.id === removingId) ?? null : null;
+        if (!removing || !actions?.removeSource) return null;
+        return (
+          <RemoveSourceDialog
+            key={removing.id}
+            source={removing}
+            onRemove={() => actions.removeSource!(removing)}
+            onRemoved={() => {
+              /* The server deleted the row, so the grid stops drawing it —
+                 unlike disconnect, there is no paused state to fall back to.
+                 The parent's re-read then confirms what is already shown. */
+              setRemovingId(null);
+              setItems((xs) => xs.filter((x) => x.id !== removing.id));
+            }}
+            onClose={() => setRemovingId(null)}
           />
         );
       })()}
