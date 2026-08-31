@@ -67,7 +67,18 @@ export type NewFact = { claim: string; source: string; owner: string };
     vocabulary the Flows page uses for every other run in the product. Mining
     the corpus takes minutes and touches the ledger, so it is a flow with steps
     and a progress reading, not something a link fires and forgets. */
-export type FactScan = ScanRun;
+export type FactCandidate = {
+  id: number;
+  documentTitle: string;
+  claim: string;
+  evidence: string;
+  confidence: number;
+  status: "pending" | "accepted" | "rejected";
+  reviewReason: string;
+  reviewer: string;
+};
+
+export type FactScan = ScanRun & { candidates: FactCandidate[] };
 
 /** What the Facts page can DO. Every handler may throw and the control that
     called it shows the message. All optional: without actions the page keeps
@@ -93,6 +104,10 @@ export type FactsActions = {
   /** Re-read a scan the page started. Polled until the run stops running;
       without it the page shows the run once and does not follow it. */
   scanProgress?: (id: string) => FactScan | Promise<FactScan>;
+  /** Persist one candidate verdict and return the refreshed run output. */
+  reviewFactCandidate?: (runId: string, candidateId: number, accept: boolean, reason?: string) => FactScan | Promise<FactScan>;
+  /** Resume a human-gated run after every candidate has a verdict. */
+  completeFactReview?: (runId: string) => FactScan | Promise<FactScan>;
   /** Open a re-verification task on a stale fact. */
   createReviewTask?: (fact: Fact) => void | Promise<void>;
 };
@@ -458,11 +473,88 @@ function isEmpty(d: FactsData): boolean {
   return !d.facts.length && !d.audit?.length && !d.taskAudit && !d.impact && !d.extras;
 }
 
-function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissScan, onEditFact }: {
+function FactCandidateReview({ run, onReview, onContinue }: {
+  run: FactScan;
+  onReview?: (candidateId: number, accept: boolean, reason: string) => Promise<void>;
+  onContinue?: () => Promise<void>;
+}) {
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState<number | "continue" | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!run.candidates.length) return null;
+  const pending = run.candidates.filter((candidate) => candidate.status === "pending").length;
+  const accepted = run.candidates.filter((candidate) => candidate.status === "accepted").length;
+  const rejected = run.candidates.filter((candidate) => candidate.status === "rejected").length;
+
+  const decide = async (candidate: FactCandidate, accept: boolean) => {
+    if (!onReview || busy !== null) return;
+    setBusy(candidate.id); setFailed(null);
+    try { await onReview(candidate.id, accept, notes[candidate.id] ?? ""); }
+    catch (error) { setFailed(why(error, "The review decision could not be saved.")); }
+    finally { setBusy(null); }
+  };
+  const complete = async () => {
+    if (!onContinue || busy !== null || pending) return;
+    setBusy("continue"); setFailed(null);
+    try { await onContinue(); }
+    catch (error) { setFailed(why(error, "The workflow could not continue.")); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <Card variant="plain" title="Review extracted facts" eyebrow={`${pending} pending · ${accepted} accepted · ${rejected} rejected`}>
+      <div className="flex flex-col gap-3">
+        {failed && <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>}
+        {run.candidates.map((candidate) => (
+          <section key={candidate.id} className="rounded border border-ink/12 bg-white p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13.5px] font-medium text-ink">{candidate.claim}</div>
+                <div className="mt-1 font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/55">{candidate.documentTitle}</div>
+              </div>
+              <span className="shrink-0 rounded border border-ink/15 px-2 py-1 font-term text-[10px] uppercase tracking-[0.06em] text-ink/65">
+                {candidate.status}
+              </span>
+            </div>
+            {candidate.evidence && <blockquote className="mt-2 border-l-2 border-moss/35 pl-3 text-[12.5px] text-ink/70">{candidate.evidence}</blockquote>}
+            {candidate.status === "pending" && onReview ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Input aria-label={`Review note for ${candidate.claim}`} placeholder="Review note (optional)"
+                  value={notes[candidate.id] ?? ""}
+                  onChange={(event) => setNotes((current) => ({ ...current, [candidate.id]: event.target.value }))}
+                  className="min-w-[240px] flex-1" />
+                <Button variant="default" disabled={busy !== null} onClick={() => void decide(candidate, false)}>Reject</Button>
+                <Button variant="primary" disabled={busy !== null} onClick={() => void decide(candidate, true)}>Accept</Button>
+              </div>
+            ) : (candidate.reviewReason || candidate.reviewer) && (
+              <div className="mt-2 text-[11.5px] text-ink/60">
+                {[candidate.reviewer, candidate.reviewReason].filter(Boolean).join(" · ")}
+              </div>
+            )}
+          </section>
+        ))}
+        {run.status === "waiting" && onContinue && (
+          <div className="flex items-center justify-between gap-3 border-t border-ink/10 pt-3">
+            <span className="text-[12px] text-ink/65">
+              {pending ? `Decide ${pending} remaining candidate${pending === 1 ? "" : "s"} to continue.` : "All candidates have a verdict."}
+            </span>
+            <Button variant="primary" disabled={pending > 0 || busy !== null} onClick={() => void complete()}>
+              {busy === "continue" ? "Publishing…" : "Continue & publish"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissScan, onEditFact, onReviewCandidate, onContinueReview }: {
   data: FactsData; error: string | null; actions?: FactsActions;
   auditOpen: boolean; onCloseAudit: () => void;
   scan: FactScan | null; onDismissScan: () => void;
   onEditFact: (fact: Fact) => void;
+  onReviewCandidate: (candidateId: number, accept: boolean, reason: string) => Promise<void>;
+  onContinueReview: () => Promise<void>;
 }) {
   /* Which status tab is showing. `data.filter` seeds it and an app can still
      serve pre-filtered rows, but the row itself is a view over the rows already
@@ -514,6 +606,8 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
         {/* The scan strip belongs here too: an empty ledger is exactly where
             someone presses the button, and the run has to be visible then. */}
         {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
+        {scan && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
+          onContinue={actions?.completeFactReview ? onContinueReview : undefined} />}
         <EmptyState title="No facts yet">
           {actions?.scanFacts
             ? "Capture a claim or run “Scan for facts” to start building your verified knowledge base."
@@ -543,6 +637,8 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
         </div>
       )}
       {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
+      {scan && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
+        onContinue={actions?.completeFactReview ? onContinueReview : undefined} />}
       {data.banner && <Alert tone="blocked" title={data.banner.title}>{data.banner.body}</Alert>}
       {data.extras && <Extras extras={data.extras} />}
       {data.impact ? (
@@ -651,6 +747,16 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
     const started = await scanWrite.runFor(scanFacts);
     if (started) setScan(started);
   };
+  const reviewCandidate = async (candidateId: number, accept: boolean, reason: string) => {
+    if (!scan || !actions?.reviewFactCandidate) return;
+    const next = await actions.reviewFactCandidate(scan.id, candidateId, accept, reason);
+    setScan(next);
+  };
+  const continueReview = async () => {
+    if (!scan || !actions?.completeFactReview) return;
+    const next = await actions.completeFactReview(scan.id);
+    setScan(next);
+  };
 
   const headerActions = (
     <>
@@ -695,6 +801,8 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           scan={scan}
           onDismissScan={() => setScan(null)}
           onEditFact={(fact) => setEditing({ fact })}
+          onReviewCandidate={reviewCandidate}
+          onContinueReview={continueReview}
         />
       </div>
       {editing && (
