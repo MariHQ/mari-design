@@ -565,6 +565,41 @@ function isEmpty(d: FactsData): boolean {
   return !d.facts.length && !d.audit?.length && !d.taskAudit && !d.impact && !d.extras;
 }
 
+const AI_RECOMMENDATION_LABELS: Record<string, string> = {
+  new_fact: "Accept as a new fact",
+  supersede: "Supersede the related fact",
+  qualify: "Accept with temporal qualification",
+  duplicate: "Link to the existing fact",
+  reject: "Reject",
+  needs_review: "Needs human judgment",
+};
+
+function AiFactProposal({ intelligence }: { intelligence?: FactIntelligence }) {
+  const proposal = intelligence?.adjudication ?? {};
+  const recommendation = typeof proposal.recommendation === "string" ? proposal.recommendation : "";
+  if (!recommendation) return null;
+  const confidence = typeof proposal.confidence === "number" ? proposal.confidence : null;
+  const relation = typeof proposal.relation === "string" ? proposal.relation : "";
+  const reason = typeof proposal.reason === "string" ? proposal.reason : "";
+  const needsHuman = proposal.needs_human_review !== false;
+  return (
+    <section className="mt-3 rounded border border-biscay-2/20 bg-biscay-2/[0.045] p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-term text-[10px] uppercase tracking-[0.1em] text-biscay-2">AI recommendation</span>
+        <span className="rounded bg-white px-2 py-0.5 text-[11px] font-medium text-ink/80">
+          {AI_RECOMMENDATION_LABELS[recommendation] ?? recommendation.split("_").join(" ")}
+        </span>
+        {confidence !== null && <span className="font-term text-[10px] text-ink/60">{Math.round(confidence * 100)}% confidence</span>}
+        <span className={`rounded px-2 py-0.5 font-term text-[9.5px] uppercase ${
+          needsHuman ? "bg-espelette/10 text-espelette" : "bg-moss/10 text-moss"
+        }`}>{needsHuman ? "Human decision required" : "Eligible for bounded auto-review"}</span>
+      </div>
+      {reason && <p className="mt-1.5 text-[11.5px] leading-5 text-ink/70">{reason}</p>}
+      {relation && <div className="mt-1 font-term text-[10px] text-ink/50">Evidence relation · {relation}</div>}
+    </section>
+  );
+}
+
 function FactCandidateReview({ run, onReview, onContinue }: {
   run: FactScan;
   onReview?: (candidateId: number, accept: boolean, reason: string) => Promise<void>;
@@ -628,6 +663,7 @@ function FactCandidateReview({ run, onReview, onContinue }: {
               </span>
             </div>
             {candidate.evidence && <blockquote className="mt-2 border-l-2 border-moss/35 pl-3 text-[12.5px] text-ink/70">{candidate.evidence}</blockquote>}
+            <AiFactProposal intelligence={candidate.intelligence} />
             {candidate.semanticLinks.length > 0 && (
               <div className="mt-3 rounded border border-ink/10 bg-ink/[0.018] p-2.5">
                 <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/70">Impact neighborhood</div>
@@ -667,9 +703,8 @@ function FactCandidateReview({ run, onReview, onContinue }: {
                     <div className="font-medium text-ink/80">Temporal scope and AI proposal</div>
                     <div className="mt-1">Valid {candidate.intelligence.validFrom ? fmtDate(candidate.intelligence.validFrom) : "from an unspecified date"}
                       {candidate.intelligence.validTo ? ` until ${fmtDate(candidate.intelligence.validTo)}` : " · no end recorded"}</div>
-                    {Object.keys(candidate.intelligence.adjudication).length > 0 && (
-                      <pre className="mt-1 whitespace-pre-wrap rounded bg-white p-2 font-term text-[10px] text-ink/65">{JSON.stringify(candidate.intelligence.adjudication, null, 2)}</pre>
-                    )}
+                    {Object.keys(candidate.intelligence.adjudication).length > 0 &&
+                      <div className="mt-1 text-[10.5px] text-ink/55">The recommendation and rationale are shown above.</div>}
                   </div>
                 </div>
                 {candidate.intelligence.evidenceGroups.map((group, index) => (
