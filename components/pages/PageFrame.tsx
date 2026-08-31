@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   Home, BookOpen, Send, Sparkles, BarChart3, Settings, Menu as MenuIcon,
   Search, UserRound, KeyRound, Database, FolderKanban, GitBranch,
-  BadgeCheck, Scale, Route,
+  BadgeCheck, CalendarClock, Scale, Route,
 } from "lucide-react";
 import { AppShell } from "../shell/AppShell";
 import { Sidebar, type NavSection } from "../shell/Sidebar";
@@ -47,6 +47,7 @@ export const NAV: NavSection[] = [
        internal word for a run, and "Answers" was a separate destination for
        what those runs are promoted into; they are two tabs of one page now. */
     { id: "workflows", label: "Workflows", icon: <Route size={18} /> },
+    { id: "scheduled-tasks", label: "Scheduled tasks", icon: <CalendarClock size={18} /> },
     { id: "publish", label: "Destinations", icon: <Send size={18} /> },
     // A bar chart, not sparkles: the agent dock's floating button is the
     // sparkle, and two controls wearing one glyph read as one feature.

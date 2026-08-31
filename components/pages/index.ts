@@ -13,6 +13,7 @@ import { page as audit } from "./AuditPage";
 import { page as publish } from "./PublishPage";
 import { page as insights } from "./InsightsPage";
 import { page as workflows } from "./WorkflowsPage";
+import { page as scheduledTasks } from "./ScheduledTasksPage";
 import { page as sources } from "./SourcesPage";
 import { page as preferences } from "./PreferencesPage";
 import { page as settingsGeneral } from "./SettingsGeneralPage";
@@ -38,6 +39,7 @@ export const PAGES: PageModule<any, any>[] = [
   publish,
   insights,
   workflows,
+  scheduledTasks,
   sources,
   preferences,
   settingsGeneral,

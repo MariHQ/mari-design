@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  CalendarClock, CheckCircle2, CircleAlert, Database, GitBranch, MessageCircleQuestion, Pause,
-  Play, RefreshCw, Save, Search, SlidersHorizontal, Trash2, Undo2, Workflow, X,
+  CheckCircle2, CircleAlert, Database, GitBranch, MessageCircleQuestion,
+  RefreshCw, Save, Search, SlidersHorizontal, Trash2, Undo2, Workflow, X,
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, PAGE_CONTAINER } from "./PageFrame";
@@ -24,7 +24,7 @@ import { Spinner } from "../data-display/Spinner";
 import { ReadError } from "../feedback/ReadError";
 import { WriteError } from "../feedback/WriteError";
 import { useWrite } from "../actions/useWrite";
-import { fmtDate, fmtDateTime } from "../tokens/format";
+import { fmtDate } from "../tokens/format";
 import { ApprovedAnswers, type AnswersActions, type AnswersData } from "../features/ApprovedAnswers";
 
 /* Workflows — what Mari did while it worked, and what came out of it.
@@ -61,7 +61,7 @@ const STATES = [
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
-export type WorkflowsTab = "observed" | "answers" | "scheduled";
+export type WorkflowsTab = "observed" | "answers";
 
 export type TrajectoryStep = {
   ordinal: number;
@@ -179,29 +179,14 @@ export type ObservedData = ObservedFilters & {
   focused: TrajectoryRow | null;
 };
 
-export type ScheduledTask = {
-  id: number;
-  name: string;
-  description: string;
-  status: string;
-  scheduleMinutes: number | null;
-  lastRunNumber: number | null;
-  lastRunStatus: string;
-  lastRunStarted: string;
-};
-
 export type WorkflowsData = {
   tab: WorkflowsTab;
   observed: ObservedData;
   answers: AnswersData;
-  scheduled: ScheduledTask[];
 };
 
 export type WorkflowsActions = AnswersActions & {
   setTab?: (tab: WorkflowsTab) => void;
-  setScheduledTaskStatus?: (workflowId: number, status: "active" | "paused") => void | Promise<void>;
-  setScheduledTaskSchedule?: (workflowId: number, everyMinutes: number | null) => void | Promise<void>;
-  runScheduledTask?: (workflowId: number) => number | Promise<number>;
   setCategory?: (category: string | null) => void;
   setStatusFilter?: (status: string | null) => void;
   setFailures?: (failures: string | null) => void;
@@ -1049,147 +1034,6 @@ function Observed({ data, error, actions, onInspect }: {
   );
 }
 
-const SCHEDULE_OPTIONS = [
-  { value: "", label: "Manual only" },
-  { value: "60", label: "Every hour" },
-  { value: "360", label: "Every 6 hours" },
-  { value: "1440", label: "Every day" },
-  { value: "10080", label: "Every week" },
-];
-
-function scheduleLabel(minutes: number): string {
-  if (minutes % 1440 === 0) return `Every ${minutes / 1440} days`;
-  if (minutes % 60 === 0) return `Every ${minutes / 60} hours`;
-  return `Every ${minutes} min`;
-}
-
-function ScheduledTaskRow({ task, actions }: { task: ScheduledTask; actions?: WorkflowsActions }) {
-  const [status, setStatus] = useState(task.status);
-  const [minutes, setMinutes] = useState<number | null>(task.scheduleMinutes);
-  const [startedRun, setStartedRun] = useState<number | null>(null);
-  const [seen, setSeen] = useState(`${task.status}:${task.scheduleMinutes}:${task.lastRunNumber}`);
-  const write = useWrite();
-  const signature = `${task.status}:${task.scheduleMinutes}:${task.lastRunNumber}`;
-  if (seen !== signature) {
-    setSeen(signature);
-    setStatus(task.status);
-    setMinutes(task.scheduleMinutes);
-  }
-  const active = status === "active" && minutes !== null;
-  const options = minutes !== null && !SCHEDULE_OPTIONS.some((option) => option.value === String(minutes))
-    ? [...SCHEDULE_OPTIONS, { value: String(minutes), label: scheduleLabel(minutes) }]
-    : SCHEDULE_OPTIONS;
-  let next = "Manual only";
-  if (minutes !== null && status === "paused") next = "Paused — cadence is preserved";
-  else if (active && task.lastRunStatus === "running") next = "After the current run finishes";
-  else if (active && task.lastRunStarted) {
-    next = fmtDateTime(new Date(new Date(task.lastRunStarted).getTime() + minutes! * 60_000));
-  } else if (active) next = "On the next scheduler check";
-
-  const changeSchedule = (value: string) => {
-    const nextMinutes = value ? Number(value) : null;
-    void write.run(
-      actions?.setScheduledTaskSchedule && (() => actions.setScheduledTaskSchedule!(task.id, nextMinutes)),
-      () => setMinutes(nextMinutes),
-    );
-  };
-  const toggle = () => {
-    const nextStatus = status === "active" ? "paused" : "active";
-    void write.run(
-      actions?.setScheduledTaskStatus && (() => actions.setScheduledTaskStatus!(task.id, nextStatus)),
-      () => setStatus(nextStatus),
-    );
-  };
-  const runNow = async () => {
-    const run = await write.runFor(actions?.runScheduledTask && (() => actions.runScheduledTask!(task.id)));
-    if (run !== undefined) setStartedRun(run);
-  };
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CalendarClock size={17} className="shrink-0 text-biscay-2" />
-            <h3 className="min-w-0 font-semibold text-ink"><Truncate>{task.name}</Truncate></h3>
-            <Chip
-              label={minutes === null ? "Manual" : status === "paused" ? "Paused" : task.lastRunStatus === "running" ? "Running" : "Active"}
-              tone={minutes === null ? "neutral" : status === "paused" ? "attention" : task.lastRunStatus === "failed" ? "blocked" : "ok"}
-              dot={minutes !== null}
-            />
-          </div>
-          {task.description && <p className="mt-1 text-[12.5px] text-ink/70">{task.description}</p>}
-        </div>
-        <div className="grid min-w-0 gap-3 sm:grid-cols-3 lg:w-[610px] lg:grid-cols-[180px_1fr_auto] lg:items-end">
-          <label className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/60">
-            Cadence
-            <Select
-              aria-label={`${task.name} cadence`}
-              className="mt-1 h-9 w-full text-[12px] normal-case tracking-normal"
-              value={minutes === null ? "" : String(minutes)}
-              disabled={write.busy}
-              onChange={(event) => changeSchedule(event.target.value)}
-            >
-              {options.map((option) => <option key={option.value || "manual"} value={option.value}>{option.label}</option>)}
-            </Select>
-          </label>
-          <div className="min-w-0 text-[11px] text-ink/65">
-            <div className="font-semibold uppercase tracking-[0.08em]">Last / next</div>
-            <div className="mt-1 truncate text-[12px] text-ink/80">
-              {task.lastRunStarted
-                ? `#${task.lastRunNumber} ${task.lastRunStatus} · ${fmtDateTime(task.lastRunStarted)}`
-                : "Not run yet"}
-            </div>
-            <div className="truncate text-[12px] text-ink/65">Next: {next}</div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:col-span-3 lg:col-span-1">
-            {minutes !== null && (
-              <Button compact disabled={write.busy} onClick={toggle}>
-                {status === "active" ? <Pause size={12} /> : <Play size={12} />}
-                {status === "active" ? "Pause" : "Resume"}
-              </Button>
-            )}
-            <Button compact variant="primary" disabled={write.busy || task.lastRunStatus === "running"} onClick={() => void runNow()}>
-              <Play size={12} /> {write.busy ? "Working…" : "Run now"}
-            </Button>
-          </div>
-        </div>
-      </div>
-      {(startedRun !== null || write.failed) && (
-        <div className="border-t border-ink/10 px-5 py-2 text-[12px] text-ink/70">
-          {startedRun !== null && <>Run #{startedRun} started. Its status will update here.</>}
-          <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ScheduledTasks({ tasks, error, actions }: {
-  tasks: ScheduledTask[]; error: string | null; actions?: WorkflowsActions;
-}) {
-  if (error) return <Card><ReadError>{error}</ReadError></Card>;
-  if (!tasks.length) {
-    return (
-      <Card>
-        <EmptyState icon={<CalendarClock size={22} />} title="No recurring workflows">
-          Recurring connector syncs and knowledge workflows will appear here when they are configured.
-        </EmptyState>
-      </Card>
-    );
-  }
-  const active = tasks.filter((task) => task.status === "active" && task.scheduleMinutes !== null).length;
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink/70">
-        <p>Schedules stay configured when paused. Manual runs do not turn a schedule back on.</p>
-        <span className="font-term">{active} active · {tasks.length - active} paused or manual</span>
-      </div>
-      {tasks.map((task) => <ScheduledTaskRow key={task.id} task={task} actions={actions} />)}
-    </div>
-  );
-}
-
 /* ── The page ─────────────────────────────────────────────────────────────── */
 
 function WorkflowsPage({ data, loading = false, error = null, actions, chrome, mobile = false }:
@@ -1229,8 +1073,8 @@ function WorkflowsPage({ data, loading = false, error = null, actions, chrome, m
           variant="list"
           eyebrow="Agent operations"
           title="Workflows"
-          description="Review agent work, manage recurring jobs, and approve reusable answers."
-          tabs={["Observed", "Scheduled tasks", "Approved answers"]}
+          description="Review agent trajectories and approve reusable answers."
+          tabs={["Observed", "Approved answers"]}
           mobile={mobile}
         />
       </PageFrame>
@@ -1243,7 +1087,7 @@ function WorkflowsPage({ data, loading = false, error = null, actions, chrome, m
         <PageHeader
           eyebrow="Agent operations"
           title="Workflows"
-          description="Review agent work, manage recurring jobs, and approve reusable answers."
+          description="Review agent trajectories and approve reusable answers."
         />
         <div className="mt-6 flex flex-col gap-5">
           <Tabs
@@ -1253,14 +1097,11 @@ function WorkflowsPage({ data, loading = false, error = null, actions, chrome, m
             onChange={changeTab}
             options={[
               { id: "observed", label: "Observed", count: data.observed.total },
-              { id: "scheduled", label: "Scheduled tasks", count: data.scheduled.length },
               { id: "answers", label: "Approved answers", count: data.answers.answers.length },
             ]}
           />
           {tab === "observed" ? (
             <Observed data={data} error={error} actions={actions} onInspect={(id) => open(id)} />
-          ) : tab === "scheduled" ? (
-            <ScheduledTasks tasks={data.scheduled} error={error} actions={actions} />
           ) : (
               <ApprovedAnswers
                 data={data.answers}
