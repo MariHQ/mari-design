@@ -365,7 +365,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
                 {(f.highImpact || f.impactCount) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {f.highImpact && <Chip label="High impact" tone="attention" dot />}
-                    <span className="text-[10.5px] text-ink/55">
+                    <span className="text-[10.5px] text-ink/70">
                       {f.impactCount} related evidence link{f.impactCount === 1 ? "" : "s"}
                       {f.validFrom ? ` · valid since ${fmtDate(f.validFrom)}` : ""}
                     </span>
@@ -424,10 +424,10 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
               <div key={`${link.targetType}-${link.targetId}`} className="rounded border border-ink/10 p-3">
                 <div className="flex items-center gap-2">
                   <Chip label={link.relation} tone={link.relation === "contradicts" ? "blocked" : link.relation === "source" ? "ok" : "info"} dot />
-                  <span className="font-term text-[10.5px] text-ink/55">{Math.round(link.similarity * 100)}% similar</span>
+                  <span className="font-term text-[10.5px] text-ink/70">{Math.round(link.similarity * 100)}% similar</span>
                 </div>
                 <div className="mt-1.5 text-[12.5px] font-medium text-ink/80">{link.targetLabel}</div>
-                <div className="mt-1 text-[11px] text-ink/55">
+                <div className="mt-1 text-[11px] text-ink/70">
                   {link.targetType}{link.targetUpdatedAt ? ` · source revised ${fmtDate(link.targetUpdatedAt)}` : ""}
                   {link.observedAt ? ` · mapped ${fmtDate(link.observedAt)}` : ""}
                 </div>
@@ -599,15 +599,15 @@ function FactCandidateReview({ run, onReview, onContinue }: {
         {failed && <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>}
         {Boolean(run.llmBudgets?.length) && (
           <section className="rounded border border-ink/12 bg-ink/[0.018] p-3">
-            <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/55">Bounded LLM usage</div>
+            <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/70">Bounded LLM usage</div>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               {run.llmBudgets!.map((budget) => (
                 <div key={`${budget.stage}-${budget.purpose}`} className="rounded border border-ink/10 bg-white px-2.5 py-2">
                   <div className="text-[11.5px] font-medium text-ink/80">{budget.stage.split("_").join(" ")}</div>
-                  <div className="mt-0.5 font-term text-[10px] text-ink/55">
+                  <div className="mt-0.5 font-term text-[10px] text-ink/70">
                     {budget.callsUsed}/{budget.maxCalls} calls · {budget.inputTokens}/{budget.maxInputTokens} in · {budget.outputTokens}/{budget.maxOutputTokens} out
                   </div>
-                  <div className="mt-1 text-[10.5px] text-ink/55">{budget.model || "Configured model"} · {budget.status}</div>
+                  <div className="mt-1 text-[10.5px] text-ink/70">{budget.model || "Configured model"} · {budget.status}</div>
                 </div>
               ))}
             </div>
@@ -621,7 +621,7 @@ function FactCandidateReview({ run, onReview, onContinue }: {
                   <div className="text-[13.5px] font-medium text-ink">{candidate.claim}</div>
                   {candidate.highImpact && <Chip label={`High impact · ${candidate.impactScore}`} tone="attention" dot />}
                 </div>
-                <div className="mt-1 font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/55">{candidate.documentTitle}</div>
+                <div className="mt-1 font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/70">{candidate.documentTitle}</div>
               </div>
               <span className="shrink-0 rounded border border-ink/15 px-2 py-1 font-term text-[10px] uppercase tracking-[0.06em] text-ink/65">
                 {candidate.status}
@@ -630,7 +630,7 @@ function FactCandidateReview({ run, onReview, onContinue }: {
             {candidate.evidence && <blockquote className="mt-2 border-l-2 border-moss/35 pl-3 text-[12.5px] text-ink/70">{candidate.evidence}</blockquote>}
             {candidate.semanticLinks.length > 0 && (
               <div className="mt-3 rounded border border-ink/10 bg-ink/[0.018] p-2.5">
-                <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/55">Impact neighborhood</div>
+                <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/70">Impact neighborhood</div>
                 <ul className="mt-1.5 flex flex-col gap-1.5">
                   {candidate.semanticLinks.map((link) => (
                     <li key={`${link.targetType}-${link.targetId}`} className="flex items-start gap-2 text-[11.5px] text-ink/70">
