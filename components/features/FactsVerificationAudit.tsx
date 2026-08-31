@@ -38,6 +38,9 @@ export type Fact = {
      however it likes and `factStatusKey` below is what normalises it. */
   status: "verified" | "unsupported" | "draft" | "retired" | "contradiction" | string;
   verified?: DateInput | null;
+  validFrom?: DateInput | null;
+  impactCount?: number;
+  highImpact?: boolean;
 };
 
 /** A ledger status reduced to one comparable token: case, spacing and

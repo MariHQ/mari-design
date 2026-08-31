@@ -76,6 +76,17 @@ export type FactCandidate = {
   status: "pending" | "accepted" | "rejected";
   reviewReason: string;
   reviewer: string;
+  impactScore: number;
+  highImpact: boolean;
+  semanticLinks: {
+    targetType: "fact" | "document";
+    targetId: number;
+    relation: string;
+    similarity: number;
+    targetLabel: string;
+    targetUpdatedAt: string;
+    observedAt: string;
+  }[];
 };
 
 export type FactScan = ScanRun & { candidates: FactCandidate[] };
@@ -94,6 +105,8 @@ export type FactsActions = {
   /** Retire a claim the team no longer relies on. Destructive, so the row
       offers it through <ConfirmButton> and never on a first click (§2). */
   retireFact?: (id: number) => void | Promise<void>;
+  /** Read the embedding-space neighborhood used for invalidation impact. */
+  inspectFactImpact?: (id: number) => FactSemanticImpactLink[] | Promise<FactSemanticImpactLink[]>;
   /** Start the corpus scan as a background run, and answer with the run so the
       page can follow it. Long-running: the run outlives this call.
 
@@ -112,6 +125,16 @@ export type FactsActions = {
   completeFactReview?: (runId: string) => FactScan | Promise<FactScan>;
   /** Open a re-verification task on a stale fact. */
   createReviewTask?: (fact: Fact) => void | Promise<void>;
+};
+
+export type FactSemanticImpactLink = {
+  targetType: "fact" | "document";
+  targetId: number;
+  relation: string;
+  similarity: number;
+  targetLabel: string;
+  targetUpdatedAt: string;
+  observedAt: string;
 };
 
 /** One status filter tab, with the count the workspace actually holds. */
@@ -209,6 +232,7 @@ const FACT_STATUS: Record<string, ChipStatus> = {
   stale: "stale",
   draft: "draft",
   retired: "retired",
+  invalidated: "retired",
   contradicted: "contradiction",
   contradiction: "contradiction",
   "needs-review": "needs-review",
@@ -221,16 +245,18 @@ const FACT_STATUS: Record<string, ChipStatus> = {
 };
 
 function factChip(status: string) {
+  if (factStatusKey(status) === "invalidated") return <Chip label="Invalidated" tone="neutral" dot />;
   const known = FACT_STATUS[factStatusKey(status)];
   if (known) return <StatusChip status={known} />;
   return <Chip label={status || "Unrecorded"} tone="neutral" dot />;
 }
 
-function FactsTable({ facts, onVerify, onEdit, onRetire }: {
+function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
   facts: Fact[];
   onVerify?: (id: number) => void | Promise<void>;
   onEdit?: (fact: Fact) => void;
   onRetire?: (id: number) => void | Promise<void>;
+  onImpact?: (id: number) => FactSemanticImpactLink[] | Promise<FactSemanticImpactLink[]>;
 }) {
   /* Local overlay so the row visibly settles the moment it is verified, with
      or without a server behind the page (§2). With `onVerify` wired the write
@@ -245,6 +271,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
   const [busy, setBusy] = useState<number | null>(null);
   const [failed, setFailed] = useState<Record<number, string>>({});
   const [seenFacts, setSeenFacts] = useState(facts);
+  const [impact, setImpact] = useState<{ fact: Fact; links: FactSemanticImpactLink[] } | null>(null);
   if (seenFacts !== facts) {
     setSeenFacts(facts);
     setVerified([]);
@@ -272,7 +299,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
   const verify = (f: Fact) =>
     write(f, () => onVerify?.(f.id), () => setVerified((v) => [...v, f.id]), "Could not verify that claim.");
   const retire = (f: Fact) =>
-    write(f, () => onRetire?.(f.id), () => setRetired((r) => [...r, f.id]), "Could not retire that claim.");
+    write(f, () => onRetire?.(f.id), () => setRetired((r) => [...r, f.id]), "Could not invalidate that claim.");
 
   return (
     /* <Table> draws its own card. It used to be wrapped in a second, flush
@@ -297,8 +324,9 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
       >
         {facts.map((f) => {
           const isRetired = retired.includes(f.id);
-          const isVerified = !isRetired && (verified.includes(f.id) || isVerifiedFact(f));
-          const status = isRetired ? "Retired" : isVerified ? "Verified" : f.status;
+          const isClosed = isRetired || ["invalidated", "retired"].includes(factStatusKey(f.status));
+          const isVerified = !isClosed && (verified.includes(f.id) || isVerifiedFact(f));
+          const status = isRetired ? "Invalidated" : isVerified ? "Verified" : f.status;
           return (
             <tr key={f.id} className="border-b border-ink/[0.06] last:border-0">
               {/* §12: claim, source and owner are arbitrarily long user values,
@@ -308,6 +336,15 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
               <td className="px-4 py-3 align-top">
                 <Truncate lines={2} className="text-[13px] font-medium text-ink">{f.claim}</Truncate>
                 <Truncate className="mt-0.5 font-term text-[11px] text-ink/65">{f.source}</Truncate>
+                {(f.highImpact || f.impactCount) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {f.highImpact && <Chip label="High impact" tone="attention" dot />}
+                    <span className="text-[10.5px] text-ink/55">
+                      {f.impactCount} related evidence link{f.impactCount === 1 ? "" : "s"}
+                      {f.validFrom ? ` · valid since ${fmtDate(f.validFrom)}` : ""}
+                    </span>
+                  </div>
+                )}
               </td>
               <td className="px-4 py-3 align-top text-[12.5px] text-ink/70"><Truncate>{f.owner}</Truncate></td>
               <td className="px-4 py-3 align-top text-center text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : "Not recorded"}</td>
@@ -326,17 +363,23 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
                     reaches the reader, in the cell the action fired from. */}
                 {failed[f.id] ? (
                   <FieldError>{failed[f.id]}</FieldError>
-                ) : isRetired ? null : (
+                ) : isClosed ? null : (
                   <span className="inline-flex items-center justify-end gap-2">
                     {!isVerified && (
                       <Button compact variant="primary" disabled={busy === f.id} onClick={() => void verify(f)}>
                         {busy === f.id ? "Verifying…" : "Verify"}
                       </Button>
                     )}
+                    {onImpact && (f.impactCount ?? 0) > 0 && (
+                      <Button compact disabled={busy === f.id} onClick={() => void write(
+                        f, async () => setImpact({ fact: f, links: await onImpact(f.id) }), () => {},
+                        "Could not read this fact's impact neighborhood.",
+                      )}>Impact</Button>
+                    )}
                     {onEdit && <Button compact disabled={busy === f.id} onClick={() => onEdit(f)}>Edit</Button>}
                     {onRetire && (
-                      <ConfirmButton compact confirmLabel="Retire this claim?" disabled={busy === f.id} onConfirm={() => void retire(f)}>
-                        Retire
+                      <ConfirmButton compact confirmLabel="Invalidate this claim and preserve its impact history?" disabled={busy === f.id} onConfirm={() => void retire(f)}>
+                        Invalidate
                       </ConfirmButton>
                     )}
                   </span>
@@ -346,6 +389,27 @@ function FactsTable({ facts, onVerify, onEdit, onRetire }: {
           );
         })}
       </Table>
+      {impact && (
+        <Drawer open onClose={() => setImpact(null)} title="Fact impact neighborhood"
+          subtitle="Embedding-related facts and temporally versioned evidence">
+          <div className="flex flex-col gap-3">
+            <div className="rounded border border-ink/12 bg-ink/[0.02] p-3 text-[13px] font-medium text-ink">{impact.fact.claim}</div>
+            {impact.links.map((link) => (
+              <div key={`${link.targetType}-${link.targetId}`} className="rounded border border-ink/10 p-3">
+                <div className="flex items-center gap-2">
+                  <Chip label={link.relation} tone={link.relation === "contradicts" ? "blocked" : link.relation === "source" ? "ok" : "info"} dot />
+                  <span className="font-term text-[10.5px] text-ink/55">{Math.round(link.similarity * 100)}% similar</span>
+                </div>
+                <div className="mt-1.5 text-[12.5px] font-medium text-ink/80">{link.targetLabel}</div>
+                <div className="mt-1 text-[11px] text-ink/55">
+                  {link.targetType}{link.targetUpdatedAt ? ` · source revised ${fmtDate(link.targetUpdatedAt)}` : ""}
+                  {link.observedAt ? ` · mapped ${fmtDate(link.observedAt)}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Drawer>
+      )}
     </>
   );
 }
@@ -511,7 +575,10 @@ function FactCandidateReview({ run, onReview, onContinue }: {
           <section key={candidate.id} className="rounded border border-ink/12 bg-white p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[13.5px] font-medium text-ink">{candidate.claim}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[13.5px] font-medium text-ink">{candidate.claim}</div>
+                  {candidate.highImpact && <Chip label={`High impact · ${candidate.impactScore}`} tone="attention" dot />}
+                </div>
                 <div className="mt-1 font-term text-[10.5px] uppercase tracking-[0.08em] text-ink/55">{candidate.documentTitle}</div>
               </div>
               <span className="shrink-0 rounded border border-ink/15 px-2 py-1 font-term text-[10px] uppercase tracking-[0.06em] text-ink/65">
@@ -519,6 +586,27 @@ function FactCandidateReview({ run, onReview, onContinue }: {
               </span>
             </div>
             {candidate.evidence && <blockquote className="mt-2 border-l-2 border-moss/35 pl-3 text-[12.5px] text-ink/70">{candidate.evidence}</blockquote>}
+            {candidate.semanticLinks.length > 0 && (
+              <div className="mt-3 rounded border border-ink/10 bg-ink/[0.018] p-2.5">
+                <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/55">Impact neighborhood</div>
+                <ul className="mt-1.5 flex flex-col gap-1.5">
+                  {candidate.semanticLinks.map((link) => (
+                    <li key={`${link.targetType}-${link.targetId}`} className="flex items-start gap-2 text-[11.5px] text-ink/70">
+                      <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-term text-[9.5px] uppercase ${
+                        link.relation === "contradicts" ? "bg-espelette/10 text-espelette" :
+                        link.relation === "source" ? "bg-moss/10 text-moss" : "bg-biscay-2/10 text-biscay-2"
+                      }`}>{link.relation}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium text-ink/80">{link.targetLabel}</span>
+                        <span className="ml-1.5 text-ink/50">
+                          {Math.round(link.similarity * 100)}%{link.targetUpdatedAt ? ` · source revised ${fmtDate(link.targetUpdatedAt)}` : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {candidate.status === "pending" && onReview ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Input aria-label={`Review note for ${candidate.claim}`} placeholder="Review note (optional)"
@@ -663,6 +751,7 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
             onVerify={actions?.verifyFact}
             onEdit={actions?.editFact ? onEditFact : undefined}
             onRetire={actions?.retireFact}
+            onImpact={actions?.inspectFactImpact}
           />
         )
       )}
