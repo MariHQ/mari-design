@@ -234,7 +234,9 @@ function Hero() {
           </p>
         </div>
       </div>
-      <p className="mt-2.5 text-[12.5px] text-ink/60">
+      {/* ink/70, not /60: 12.5px body text needs 4.5:1 on this ground and
+          ink at 60% over white lands at ~4.25 (axe color-contrast). */}
+      <p className="mt-2.5 text-[12.5px] text-ink/70">
         Rule of thumb: if a document could invalidate it, it is a fact. If only
         a new decision could, it is a decision.
       </p>

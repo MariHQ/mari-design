@@ -107,7 +107,9 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
           {task.description && <p className="mt-1 text-[12.5px] text-ink/70">{task.description}</p>}
         </div>
         <div className="grid min-w-0 gap-3 sm:grid-cols-3 lg:w-[610px] lg:grid-cols-[180px_1fr_auto] lg:items-end">
-          <label className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/60">
+          {/* ink/70, not /60: 11px text on a white card needs 4.5:1, and
+              ink at 60% over white lands at ~4.25 (axe color-contrast). */}
+          <label className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/70">
             Cadence
             <Select aria-label={`${task.name} cadence`} className="mt-1 h-9 w-full text-[12px] normal-case tracking-normal"
               value={minutes === null ? "" : String(minutes)} disabled={write.busy}
