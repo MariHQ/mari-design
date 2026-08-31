@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { CalendarClock, Pause, Play } from "lucide-react";
+import { CalendarClock, Pause, Play, Trash2 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, PAGE_CONTAINER } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Button } from "../actions/Button";
+import { ConfirmButton } from "../actions/ConfirmButton";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
 import { Truncate } from "../data-display/Truncate";
@@ -32,6 +33,7 @@ export type ScheduledTasksActions = {
   setStatus?: (taskId: number, status: "active" | "paused") => void | Promise<void>;
   setSchedule?: (taskId: number, everyMinutes: number | null) => void | Promise<void>;
   runNow?: (taskId: number) => number | Promise<number>;
+  remove?: (taskId: number) => void | Promise<void>;
 };
 
 const OPTIONS = [
@@ -52,6 +54,7 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
   const [status, setStatus] = useState(task.status);
   const [minutes, setMinutes] = useState<number | null>(task.scheduleMinutes);
   const [startedRun, setStartedRun] = useState<number | null>(null);
+  const [removed, setRemoved] = useState(false);
   const [seen, setSeen] = useState(`${task.status}:${task.scheduleMinutes}:${task.lastRunNumber}`);
   const write = useWrite();
   const signature = `${task.status}:${task.scheduleMinutes}:${task.lastRunNumber}`;
@@ -82,6 +85,11 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
     const number = await write.runFor(actions?.runNow && (() => actions.runNow!(task.id)));
     if (number !== undefined) setStartedRun(number);
   };
+  const remove = () => {
+    void write.run(actions?.remove && (() => actions.remove!(task.id)), () => setRemoved(true));
+  };
+
+  if (removed) return null;
 
   return (
     <Card className="overflow-hidden">
@@ -115,6 +123,10 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
             <div className="truncate text-[12px] text-ink/65">Next: {next}</div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:col-span-3 lg:col-span-1">
+            {actions?.remove && <ConfirmButton compact disabled={write.busy || task.lastRunStatus === "running"}
+              confirmLabel="Really remove?" onConfirm={remove}>
+              <Trash2 size={12} /> Remove
+            </ConfirmButton>}
             {minutes !== null && <Button compact disabled={write.busy} onClick={toggle}>
               {status === "active" ? <Pause size={12} /> : <Play size={12} />}{status === "active" ? "Pause" : "Resume"}
             </Button>}
