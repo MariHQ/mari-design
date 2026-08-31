@@ -104,6 +104,8 @@ export type FactsActions = {
   /** Re-read a scan the page started. Polled until the run stops running;
       without it the page shows the run once and does not follow it. */
   scanProgress?: (id: string) => FactScan | Promise<FactScan>;
+  /** Recover the newest run so scheduled output survives navigation/reloads. */
+  latestFactScan?: () => FactScan | null | Promise<FactScan | null>;
   /** Persist one candidate verdict and return the refreshed run output. */
   reviewFactCandidate?: (runId: string, candidateId: number, accept: boolean, reason?: string) => FactScan | Promise<FactScan>;
   /** Resume a human-gated run after every candidate has a verdict. */
@@ -689,6 +691,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
      `{ fact }` = correcting an existing one. */
   const [editing, setEditing] = useState<{ fact: Fact | null } | null>(null);
   const [scan, setScan] = useState<FactScan | null>(null);
+  const [scanRecovered, setScanRecovered] = useState(false);
   /* The scan's busy/failed pair, from the one hook (XA-04). The poll below
      reports through the same surface, so a run that starts and then stops
      answering has one banner, not two. */
@@ -702,6 +705,14 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
      outlives the run it is reading. */
   const progress = actions?.scanProgress;
   const runId = scan && (scan.status === "running" || scan.status === "pending") ? scan.id : null;
+  const activeRunId = scan && (scan.status === "running" || scan.status === "pending" || scan.status === "waiting") ? scan.id : null;
+  const latestScan = actions?.latestFactScan;
+  useEffect(() => {
+    if (scanRecovered || !latestScan) return;
+    setScanRecovered(true);
+    void Promise.resolve(latestScan()).then((latest) => { if (latest) setScan(latest); })
+      .catch((err) => setScanFailed(why(err, "The latest fact workflow could not be read.")));
+  }, [latestScan, scanRecovered, setScanFailed]);
   useEffect(() => {
     if (!runId || !progress) return;
     let alive = true;
@@ -742,7 +753,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
   const scanFacts = actions?.scanFacts;
 
   const startScan = async () => {
-    if (!scanFacts || scanWrite.busy || runId) return;
+    if (!scanFacts || scanWrite.busy || activeRunId) return;
     // `runFor`: the run itself is the result the page then follows.
     const started = await scanWrite.runFor(scanFacts);
     if (started) setScan(started);
@@ -766,8 +777,8 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           to fabricate a progress bar that climbed to a "passed" nothing had
           run (P-FA-5, §2). */}
       {scanFacts && (
-        <Button variant="default" disabled={scanWrite.busy || Boolean(runId)} onClick={() => void startScan()}>
-          <Workflow size={14} /> {scanWrite.busy || runId ? "Scanning…" : "Scan for facts"}
+        <Button variant="default" disabled={scanWrite.busy || Boolean(activeRunId)} onClick={() => void startScan()}>
+          <Workflow size={14} /> {scan?.status === "waiting" ? "Review pending" : scanWrite.busy || runId ? "Scanning…" : "Scan for facts"}
         </Button>
       )}
       <Button variant="default" aria-expanded={auditOpen} onClick={() => setAuditOpen((v) => !v)}>
