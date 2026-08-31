@@ -104,7 +104,7 @@ export type SourceCardActions = {
       Goes through the remove dialog's confirm, and on success the row leaves
       the grid — there is nothing left to draw. Without this handler the
       Remove action is simply not drawn (§2). */
-  removeSource?: (s: Source) => void | Promise<void>;
+  removeSource?: (s: Source, deleteDocuments: boolean) => void | Promise<void>;
   /** One reading of a started run; the card polls it to completion. */
   syncProgress?: (sourceId: string) => Promise<{
     state: "running" | "done" | "failed";
@@ -248,15 +248,16 @@ function EditConnectionDialog({ source, spec, onSave, onSaved, onClose }: {
 
 function RemoveSourceDialog({ source, onRemove, onRemoved, onClose }: {
   source: Source;
-  onRemove: () => void | Promise<void>;
+  onRemove: (deleteDocuments: boolean) => void | Promise<void>;
   /** Fired after the server accepted the delete: the row leaves the grid. */
   onRemoved: () => void;
   onClose: () => void;
 }) {
   const write = useWrite();
+  const [deleteDocuments, setDeleteDocuments] = useState(true);
 
   const remove = async () => {
-    const ok = await write.run(() => onRemove());
+    const ok = await write.run(() => onRemove(deleteDocuments));
     if (ok) onRemoved();
   };
 
@@ -272,9 +273,22 @@ function RemoveSourceDialog({ source, onRemove, onRemoved, onClose }: {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Remove source" description={source.name} width={440} footer={footer}>
-      <p className="text-[13px] text-ink/70">
-        This deletes the source and its indexed documents. It cannot be undone.
-      </p>
+      <p className="text-[13px] text-ink/70">Choose what happens to documents already indexed from this source.</p>
+      <fieldset className="mt-4 space-y-2" disabled={write.busy}>
+        <legend className="sr-only">Indexed document handling</legend>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-[4px] border border-ink/15 p-3 text-[13px]">
+          <input type="radio" name="document-handling" className="mt-0.5" checked={deleteDocuments}
+            onChange={() => setDeleteDocuments(true)} />
+          <span><strong className="block font-semibold text-ink">Delete indexed documents</strong>
+            <span className="text-ink/65">Remove the connector’s documents and derived chunks. This cannot be undone.</span></span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-[4px] border border-ink/15 p-3 text-[13px]">
+          <input type="radio" name="document-handling" className="mt-0.5" checked={!deleteDocuments}
+            onChange={() => setDeleteDocuments(false)} />
+          <span><strong className="block font-semibold text-ink">Keep indexed documents</strong>
+            <span className="text-ink/65">Keep a disconnected snapshot in Knowledge; it will no longer sync.</span></span>
+        </label>
+      </fieldset>
       {write.failed && <div className="mt-3"><WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError></div>}
     </Dialog>
   );
@@ -587,7 +601,7 @@ export function SourcesConnectorCard({
           <RemoveSourceDialog
             key={removing.id}
             source={removing}
-            onRemove={() => actions.removeSource!(removing)}
+            onRemove={(deleteDocuments) => actions.removeSource!(removing, deleteDocuments)}
             onRemoved={() => {
               /* The server deleted the row, so the grid stops drawing it —
                  unlike disconnect, there is no paused state to fall back to.

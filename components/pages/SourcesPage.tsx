@@ -144,7 +144,7 @@ export type SourcesActions = {
       Disconnect only pauses, and a misconfigured source needs a way out. The
       card puts it behind a confirm dialog, and on success the row leaves the
       grid. Without this handler the Remove action is not drawn. */
-  removeSource?: (s: Source) => void | Promise<void>;
+  removeSource?: (s: Source, deleteDocuments: boolean) => void | Promise<void>;
   /** Start the first sync again after it failed. Takes the provider key the
       failed row carries, because that run has no source row behind it yet.
       Without it the failure has no retry button rather than an inert one. */
