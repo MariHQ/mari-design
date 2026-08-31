@@ -149,6 +149,8 @@ export type FactsActions = {
   reviewFactCandidate?: (runId: string, candidateId: number, accept: boolean, reason?: string) => FactScan | Promise<FactScan>;
   /** Resume a human-gated run after every candidate has a verdict. */
   completeFactReview?: (runId: string) => FactScan | Promise<FactScan>;
+  /** Persistently hide a recovered run for the current user. */
+  dismissFactScan?: (runId: string) => void | Promise<void>;
   /** Open a re-verification task on a stale fact. */
   createReviewTask?: (fact: Fact) => void | Promise<void>;
 };
@@ -977,6 +979,17 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
     const next = await actions.completeFactReview(scan.id);
     setScan(next);
   };
+  const dismissScan = async () => {
+    if (!scan || scanWrite.busy) return;
+    if (actions?.dismissFactScan) {
+      const dismissed = await scanWrite.runFor(async () => {
+        await actions.dismissFactScan!(scan.id);
+        return true;
+      });
+      if (!dismissed) return;
+    }
+    setScan(null);
+  };
 
   const headerActions = (
     <>
@@ -1019,7 +1032,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           auditOpen={auditOpen}
           onCloseAudit={() => setAuditOpen(false)}
           scan={scan}
-          onDismissScan={() => setScan(null)}
+          onDismissScan={() => void dismissScan()}
           onEditFact={(fact) => setEditing({ fact })}
           onReviewCandidate={reviewCandidate}
           onContinueReview={continueReview}
