@@ -87,9 +87,35 @@ export type FactCandidate = {
     targetUpdatedAt: string;
     observedAt: string;
   }[];
+  intelligence?: FactIntelligence;
 };
 
-export type FactScan = ScanRun & { candidates: FactCandidate[] };
+export type FactLlmBudget = {
+  stage: string;
+  purpose: string;
+  model: string;
+  maxCalls: number;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  callsUsed: number;
+  inputTokens: number;
+  outputTokens: number;
+  status: string;
+};
+
+export type FactIntelligence = {
+  structuredClaim: Record<string, unknown>;
+  adjudication: Record<string, unknown>;
+  validFrom: string;
+  validTo: string;
+  components: { role: string; text: string }[];
+  relations: { targetClaim: string; relation: string; similarity: number | null; decisionKind: string; rationale: string }[];
+  evidenceGroups: { verdict: string; sufficient: boolean; confidence: number; rationale: string; decisionKind: string;
+    spans: { documentTitle: string; quote: string; role: string; similarity: number | null }[] }[];
+  clusters: { label: string; stableKey: string; labelKind: string; membershipScore: number }[];
+};
+
+export type FactScan = ScanRun & { candidates: FactCandidate[]; llmBudgets?: FactLlmBudget[] };
 
 /** What the Facts page can DO. Every handler may throw and the control that
     called it shows the message. All optional: without actions the page keeps
@@ -128,8 +154,8 @@ export type FactsActions = {
 };
 
 export type FactSemanticImpactLink = {
-  targetType: "fact" | "document";
-  targetId: number;
+  targetType: string;
+  targetId: number | string;
   relation: string;
   similarity: number;
   targetLabel: string;
@@ -571,6 +597,22 @@ function FactCandidateReview({ run, onReview, onContinue }: {
     <Card variant="plain" title="Review extracted facts" eyebrow={`${pending} pending · ${accepted} accepted · ${rejected} rejected`}>
       <div className="flex flex-col gap-3">
         {failed && <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>}
+        {Boolean(run.llmBudgets?.length) && (
+          <section className="rounded border border-ink/12 bg-ink/[0.018] p-3">
+            <div className="font-term text-[10px] uppercase tracking-[0.1em] text-ink/55">Bounded LLM usage</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {run.llmBudgets!.map((budget) => (
+                <div key={`${budget.stage}-${budget.purpose}`} className="rounded border border-ink/10 bg-white px-2.5 py-2">
+                  <div className="text-[11.5px] font-medium text-ink/80">{budget.stage.split("_").join(" ")}</div>
+                  <div className="mt-0.5 font-term text-[10px] text-ink/55">
+                    {budget.callsUsed}/{budget.maxCalls} calls · {budget.inputTokens}/{budget.maxInputTokens} in · {budget.outputTokens}/{budget.maxOutputTokens} out
+                  </div>
+                  <div className="mt-1 text-[10.5px] text-ink/55">{budget.model || "Configured model"} · {budget.status}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         {run.candidates.map((candidate) => (
           <section key={candidate.id} className="rounded border border-ink/12 bg-white p-3">
             <div className="flex items-start justify-between gap-3">
@@ -606,6 +648,49 @@ function FactCandidateReview({ run, onReview, onContinue }: {
                   ))}
                 </ul>
               </div>
+            )}
+            {candidate.intelligence && (
+              <details className="mt-3 rounded border border-ink/10 bg-ink/[0.018] p-2.5">
+                <summary className="cursor-pointer font-term text-[10px] uppercase tracking-[0.1em] text-ink/60">
+                  Assertion, evidence, and temporal context
+                </summary>
+                <div className="mt-2 grid gap-3 text-[11.5px] text-ink/70 sm:grid-cols-2">
+                  <div>
+                    <div className="font-medium text-ink/80">Embedding components</div>
+                    <ul className="mt-1 space-y-1">
+                      {candidate.intelligence.components.map((component, index) => (
+                        <li key={`${component.role}-${index}`}><span className="font-term text-[9.5px] uppercase text-ink/45">{component.role}</span> · {component.text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="font-medium text-ink/80">Temporal scope and AI proposal</div>
+                    <div className="mt-1">Valid {candidate.intelligence.validFrom ? fmtDate(candidate.intelligence.validFrom) : "from an unspecified date"}
+                      {candidate.intelligence.validTo ? ` until ${fmtDate(candidate.intelligence.validTo)}` : " · no end recorded"}</div>
+                    {Object.keys(candidate.intelligence.adjudication).length > 0 && (
+                      <pre className="mt-1 whitespace-pre-wrap rounded bg-white p-2 font-term text-[10px] text-ink/65">{JSON.stringify(candidate.intelligence.adjudication, null, 2)}</pre>
+                    )}
+                  </div>
+                </div>
+                {candidate.intelligence.evidenceGroups.map((group, index) => (
+                  <div key={`${group.verdict}-${index}`} className="mt-2 rounded border border-ink/10 bg-white p-2">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-medium text-ink/80">{group.verdict}</span>
+                      <span>{Math.round(group.confidence * 100)}% · {group.decisionKind}{group.sufficient ? " · sufficient" : " · needs review"}</span>
+                    </div>
+                    {group.rationale && <div className="mt-1 text-[11px] text-ink/60">{group.rationale}</div>}
+                    {group.spans.map((span, spanIndex) => (
+                      <blockquote key={`${span.documentTitle}-${spanIndex}`} className="mt-1.5 border-l-2 border-moss/30 pl-2 text-[11px] text-ink/65">
+                        {span.quote}<span className="ml-1 text-ink/45">— {span.documentTitle} · {span.role}{span.similarity !== null ? ` · ${Math.round(span.similarity * 100)}%` : ""}</span>
+                      </blockquote>
+                    ))}
+                  </div>
+                ))}
+                {candidate.intelligence.clusters.length > 0 && (
+                  <div className="mt-2 text-[11px] text-ink/60">Clusters: {candidate.intelligence.clusters.map((cluster) =>
+                    `${cluster.label || cluster.stableKey} (${cluster.labelKind})`).join(" · ")}</div>
+                )}
+              </details>
             )}
             {candidate.status === "pending" && onReview ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
