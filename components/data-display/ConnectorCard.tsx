@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Plus, Trash2, Unplug } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { CheckCircle2, Play, XCircle, Clock, RefreshCw, Sparkles, MoreVertical, Pencil, Plus, Trash2, Unplug, UploadCloud } from "lucide-react";
 import { card } from "../tokens/card";
 import { Chip } from "./Chip";
 import { Sparkline } from "./Sparkline";
@@ -73,6 +73,10 @@ export type ConnectorCardProps = {
       <ConfirmButton> at the card's bottom left (CONVENTIONS.md §2), not as a
       menu item, because a kebab entry fires on first click. */
   onDisconnect?: () => void;
+  /** Add files to this source — the upload source's own primary action, so
+      it lives on the card footer beside Pause, at Pause's size, not in a
+      toolbar two scrolls away from the card it feeds. */
+  onUpload?: (files: File[]) => void | Promise<void>;
   /** A write this card attempted that the server refused, verbatim. */
   actionError?: string | null;
   /** Render a content-shaped skeleton placeholder instead of the card. */
@@ -84,7 +88,7 @@ export function ConnectorCard({
   name, mark, health = "Healthy", counts, sync, bars, barsNote,
   busy = false, running = false, paused = false, canResync = false,
   onSyncNow, onFullResync, onEditConnection, onAddAnother, providerName,
-  onPause, onResume, onRemove, onDisconnect, actionError = null,
+  onPause, onResume, onRemove, onDisconnect, onUpload, actionError = null,
   loading = false, className = "",
 }: ConnectorCardProps) {
   /* WHICH connector this card is for is the caller's own choice — the name
@@ -169,13 +173,59 @@ export function ConnectorCard({
           a generic apology: "bad credentials" and "repository not found" both
           tell the user exactly what to change. */}
       {actionError && <div className="mt-3"><WriteError>{actionError}</WriteError></div>}
-      {onDisconnect && (
-        <div className="mt-3 border-t border-ink/10 pt-3">
-          <ConfirmButton compact disabled={busy} confirmLabel="Pause this source?" onConfirm={onDisconnect}>
-            <Unplug size={13} /> Pause
-          </ConfirmButton>
+      {(onDisconnect || onUpload) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3">
+          {onUpload && <UploadFilesAction busy={busy} onUpload={onUpload} />}
+          {onDisconnect && (
+            <ConfirmButton compact disabled={busy} confirmLabel="Pause this source?" onConfirm={onDisconnect}>
+              <Unplug size={13} /> Pause
+            </ConfirmButton>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** The upload source's footer action: a compact button at Pause's size that
+    opens the file picker and reports what landed. Self-contained busy/failed
+    state, the same way the card's other writes report (XA-02). */
+function UploadFilesAction({ busy, onUpload }: {
+  busy: boolean;
+  onUpload: (files: File[]) => void | Promise<void>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [working, setWorking] = useState(false);
+  const [added, setAdded] = useState(0);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const choose = async (files: File[]) => {
+    if (files.length === 0) return;
+    setWorking(true);
+    setFailed(null);
+    try {
+      await onUpload(files);
+      setAdded(files.length);
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : "The upload failed.");
+    } finally {
+      setWorking(false);
+      if (input.current) input.current.value = "";
+    }
+  };
+
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <input ref={input} type="file" multiple className="sr-only" accept=".md,.mdx,.markdown,.txt"
+        aria-label="Choose files to upload"
+        onChange={(e) => void choose(Array.from(e.target.files ?? []))} />
+      <Button compact disabled={busy || working} onClick={() => input.current?.click()}>
+        <UploadCloud size={13} /> {working ? "Uploading…" : "Upload files"}
+      </Button>
+      {failed && <WriteError onDismiss={() => setFailed(null)}>{failed}</WriteError>}
+      {!failed && added > 0 && (
+        <span className="text-[12px] text-moss">{added} file{added === 1 ? "" : "s"} ingested.</span>
+      )}
+    </span>
   );
 }

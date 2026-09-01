@@ -105,6 +105,9 @@ export type SourceCardActions = {
       the grid — there is nothing left to draw. Without this handler the
       Remove action is simply not drawn (§2). */
   removeSource?: (s: Source, deleteDocuments: boolean) => void | Promise<void>;
+  /** Add files to the upload source. Drawn only on the card whose provider is
+      "upload" (§2): every other source gets its documents from its connector. */
+  uploadFiles?: (files: File[]) => void | Promise<void>;
   /** One reading of a started run; the card polls it to completion. */
   syncProgress?: (sourceId: string) => Promise<{
     state: "running" | "done" | "failed";
@@ -560,6 +563,8 @@ export function SourcesConnectorCard({
                opens the confirm dialog, which owns the destructive step. */
             onRemove={isConnectorKind && actions?.removeSource ? () => setRemovingId(s.id) : undefined}
             onDisconnect={actions?.disconnect && !paused ? () => disconnect(s) : undefined}
+            onUpload={s.provider === "upload" && actions?.uploadFiles
+              ? (files) => actions.uploadFiles!(files) : undefined}
             actionError={failed[s.id] || null}
           />
         );

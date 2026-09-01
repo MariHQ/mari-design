@@ -718,11 +718,13 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
         />
         {!bare && showConnectorTools && (
           <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
-            {/* §2: drawn only with a handler behind it. This control existed,
-                was documented, and was never mounted — so the only way to
-                upload a file was the onboarding flow, once, and the upload
-                source's grid card could re-sync but never take another file. */}
-            {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
+            {/* The upload source's card owns the Upload action once it
+                exists (ConnectorCard footer, beside Pause). This toolbar
+                copy exists only for the workspace that has connectors but no
+                upload source yet — without it there would be no way to
+                create one. */}
+            {actions?.uploadFiles && !data.sources.some((s) => s.provider === "upload")
+              && <UploadSourceButton onUpload={actions.uploadFiles} />}
             <SourcesConnectorWizard
               defaultOpen={data.view === "wizard"}
               providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))}
