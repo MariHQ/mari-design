@@ -25,6 +25,10 @@ export type ScheduledTask = {
   lastRunNumber: number | null;
   lastRunStatus: string;
   lastRunStarted: string;
+  /** A connector sync. Syncs are cheap per run (unchanged chunks are never
+      re-embedded), so their cadence list adds the sub-hourly options the
+      Sources page offers; model-backed jobs never get a 10-minute loop. */
+  sync?: boolean;
 };
 
 export type ScheduledTasksData = { tasks: ScheduledTask[] };
@@ -42,6 +46,16 @@ const OPTIONS = [
   { value: "360", label: "Every 6 hours" },
   { value: "1440", label: "Every day" },
   { value: "10080", label: "Every week" },
+];
+
+/* Sync rows offer the same sub-hourly cadences Sources does, so a value set
+   there is a real option here rather than a synthesized orphan you could
+   leave but never return to. */
+const SYNC_OPTIONS = [
+  OPTIONS[0],
+  { value: "10", label: "Every 10 min" },
+  { value: "15", label: "Every 15 min" },
+  ...OPTIONS.slice(1),
 ];
 
 function scheduleLabel(minutes: number): string {
@@ -62,8 +76,9 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
     setSeen(signature); setStatus(task.status); setMinutes(task.scheduleMinutes);
   }
   const active = status === "active" && minutes !== null;
-  const options = minutes !== null && !OPTIONS.some((option) => option.value === String(minutes))
-    ? [...OPTIONS, { value: String(minutes), label: scheduleLabel(minutes) }] : OPTIONS;
+  const base = task.sync ? SYNC_OPTIONS : OPTIONS;
+  const options = minutes !== null && !base.some((option) => option.value === String(minutes))
+    ? [...base, { value: String(minutes), label: scheduleLabel(minutes) }] : base;
   let next = "Manual only";
   if (minutes !== null && status === "paused") next = "Paused — cadence is preserved";
   else if (active && task.lastRunStatus === "running") next = "After the current run finishes";
