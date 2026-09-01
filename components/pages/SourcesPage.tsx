@@ -633,9 +633,14 @@ function Body({ data, error, actions, onAddAnother, editRequest }: {
     return (
       <EmptyState
         title="No sources connected yet"
-        action={<SourcesConnectorWizard defaultOpen={false} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />}
+        action={
+          <span className="flex flex-wrap items-start justify-center gap-2">
+            {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
+            <SourcesConnectorWizard defaultOpen={false} providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))} actions={actions} />
+          </span>
+        }
       >
-        Connect GitHub or another source to start building your knowledge base.
+        Connect GitHub or another source, or upload files directly, to start building your knowledge base.
       </EmptyState>
     );
   }
@@ -713,6 +718,11 @@ function SourcesPage({ data, loading = false, error = null, actions, chrome, mob
         />
         {!bare && showConnectorTools && (
           <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
+            {/* §2: drawn only with a handler behind it. This control existed,
+                was documented, and was never mounted — so the only way to
+                upload a file was the onboarding flow, once, and the upload
+                source's grid card could re-sync but never take another file. */}
+            {actions?.uploadFiles && <UploadSourceButton onUpload={actions.uploadFiles} />}
             <SourcesConnectorWizard
               defaultOpen={data.view === "wizard"}
               providers={wizardCatalog(data.catalog, Boolean(actions?.uploadFiles))}
