@@ -838,12 +838,15 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
     : inTab;
   const owners = Array.from(new Set(data.facts.map((f) => f.owner).filter(Boolean))).sort();
   const byOwner = owner ? searched.filter((f) => f.owner === owner) : searched;
-  /* A fact's date for the range filter: when it entered the ledger, falling
-     back to its verification for rows that predate the captured column. A
-     dated range keeps only dated rows — a filter that waved undated rows
-     through would answer a date question with rows that have no date. */
+  /* A fact's date for the range filter: EXACTLY the date the row displays —
+     verification first, capture for unverified rows. The filter used to rank
+     capture first, so a row verified today slipped through an August-only
+     range while visibly reading "Sep 1" (the reader judges the filter by the
+     column they can see). A dated range keeps only dated rows — waving
+     undated rows through would answer a date question with rows that have
+     no date. */
   const factTime = (f: Fact): number | null => {
-    const raw: DateInput | null | undefined = f.capturedAt || f.verified || f.validFrom;
+    const raw: DateInput | null | undefined = f.verified || f.capturedAt || f.validFrom;
     if (!raw) return null;
     const t = new Date(raw as Date | string | number).getTime();
     return Number.isNaN(t) ? null : t;
@@ -913,12 +916,12 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
           </Select>
           <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
             From
-            <Input type="date" aria-label="Captured from" value={dateFrom} max={dateTo || undefined}
+            <Input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
               onChange={(e) => setDateFrom(e.target.value)} className="w-[150px]" />
           </label>
           <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
             To
-            <Input type="date" aria-label="Captured to" value={dateTo} min={dateFrom || undefined}
+            <Input type="date" aria-label="Date to" value={dateTo} min={dateFrom || undefined}
               onChange={(e) => setDateTo(e.target.value)} className="w-[150px]" />
           </label>
           <Input
