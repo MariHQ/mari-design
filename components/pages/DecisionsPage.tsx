@@ -13,7 +13,6 @@ import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Card } from "../layout/Card";
-import { Tabs } from "../navigation/Tabs";
 import { FilterField, FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
@@ -175,11 +174,10 @@ function StressExtras({ extras }: { extras: DecisionExtras }) {
     roughly 600px of empty right column on the default state. The band keeps the
     1fr/320px plumb line the rail drew, and the timeline below it gets the whole
     container width (§11). */
-function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter, bar, children }: {
+function Shell({ data, mobile, actions, composerOpen, onCloseComposer, bar, children }: {
   bar?: React.ReactNode;
   data: DecisionsData; mobile: boolean; actions?: DecisionsActions;
   composerOpen: boolean; onCloseComposer: () => void;
-  filter: string; onFilter: (id: string) => void;
   children: React.ReactNode;
 }) {
   const composer = data.composer ?? (composerOpen ? BLANK_COMPOSER : null);
@@ -190,15 +188,9 @@ function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, o
       {/* Counts describe the records this page holds, not a workspace-wide
           total the timeline cannot show: a tab used to promise a number the
           ledger below it never rendered (C2). */}
-      {/* The ledger's filter bar, in the console's shared idiom (the
-          Workflows bar): status tabs, then search / owner / dates when the
-          page supplies them. */}
+      {/* The ledger's filter bar, in the console's shared idiom and order
+          (the Workflows bar): search, Status, Owner, Dates. */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <LedgerFilter
-          filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
-          filter={filter}
-          onChange={onFilter}
-        />
         {bar}
       </div>
       {data.extras && <StressExtras extras={data.extras} />}
@@ -286,16 +278,19 @@ function SupportBand({ howItWorks, decisions, mobile, actions }: {
   );
 }
 
-/** The ledger filter lives in the main column, above the timeline: the same
-    place Facts puts its status filter, and wide enough that no tab clips.
-
-    It is the ledger's only filter. The timeline used to carry a second row of
-    facet chips with its own state, so this strip changed nothing and the two
-    could disagree about what was selected. */
+/** The ledger's status filter, as a labelled select in the shared filter
+    idiom — the same control, in the same slot, as Facts and Workflows. It
+    used to be a tab strip, which was the fourth spelling of "status filter"
+    in the console. */
 function LedgerFilter({ filters, filter, onChange }: {
   filters: LedgerFilterTab[]; filter: string; onChange: (id: string) => void;
 }) {
-  return <Tabs ariaLabel="Filter the ledger" options={filters} value={filter} onChange={onChange} />;
+  return (
+    <FilterSelect label="Status" aria-label="Filter the ledger" value={filter}
+      onChange={(e) => onChange(e.target.value)}>
+      {filters.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+    </FilterSelect>
+  );
 }
 
 /* The composer sits at the top of the main column, not above the whole layout:
@@ -469,8 +464,10 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   };
   const bar = (
     <>
+      {/* The shared bar's order: search, Status, Owner, Dates. */}
       <FilterSearch aria-label="Search decisions" value={query} onSearch={setQuery}
         placeholder="Search statements, sources, owners" />
+      <LedgerFilter filters={data.filters} filter={filter} onChange={setFilter} />
       <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
         onChange={(e) => setOwner(e.target.value)}>
         <option value="">All owners</option>
@@ -488,7 +485,7 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
     </>
   );
 
-  const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter, bar };
+  const shell = { data, mobile, actions, composerOpen, onCloseComposer, bar };
   /* An EmptyState is the "nothing here yet" surface: reporting a failed read
      through one told the reader the ledger was empty when the request simply
      did not come back (§8, XA-01). */

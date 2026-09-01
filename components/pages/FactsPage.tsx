@@ -6,7 +6,6 @@ import { FactsVerificationAudit, factStatusKey, isVerifiedFact, type Fact } from
 import { ImpactPanelFeature } from "../features/ImpactPanelFeature";
 import type { ImpactDoc } from "../data-display/ImpactPanel";
 import { PageHeader } from "../layout/PageHeader";
-import { Tabs } from "../navigation/Tabs";
 import { Button } from "../actions/Button";
 import { Card } from "../layout/Card";
 import { Table } from "../data-display/Table";
@@ -866,15 +865,6 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
     return (fromTime === null || t >= fromTime) && (toTime === null || t < toTime);
   });
 
-  /* Counts describe the rows this page holds, not a workspace-wide total the
-     table cannot show: a tab used to promise 240 rows and render 40 (C2). */
-  const tabs = data.filters.map((f) => ({
-    ...f,
-    count: f.status
-      ? data.facts.filter((x) => factStatusKey(x.status) === factStatusKey(f.status!)).length
-      : data.facts.length,
-  }));
-
   if (error) {
     return (
       <div className="mt-6">
@@ -912,18 +902,20 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
           Needs review 0 · Contradicted 0 · Stale 0` above a verified fact. */}
       {!data.impact && (
         <div className="flex flex-wrap items-center gap-3">
-          <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
-          {/* The rest of the filter bar in the console's shared filter idiom
-              (navigation/FilterTrigger, the Workflows bar): search stretching,
-              then owner and a date range, beside the status tabs. Every one a
-              view over the rows on screen; cleared by picking All / blanking
-              a date. */}
+          {/* The filter bar in the console's shared idiom (navigation/
+              FilterTrigger, the Workflows bar), in its order: search
+              stretching, then Status, Owner, Dates. Every one a view over
+              the rows on screen; cleared by picking All / blanking a date. */}
           <FilterSearch
             aria-label="Search claims"
             value={query}
             onSearch={setQuery}
             placeholder="Search claims, sources, owners"
           />
+          <FilterSelect label="Status" aria-label="Filter by status"
+            value={selected?.id ?? data.filter} onChange={(e) => setTab(e.target.value)}>
+            {data.filters.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </FilterSelect>
           <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
             onChange={(e) => setOwner(e.target.value)}>
             <option value="">All owners</option>
