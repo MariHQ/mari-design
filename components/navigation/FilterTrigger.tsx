@@ -23,6 +23,18 @@ import { focusRing } from "../tokens/focusRing";
 
 const LABEL = "flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70";
 
+/** Local midnight for a date input's "YYYY-MM-DD" value.
+ *
+ *  `new Date("2026-09-01")` is UTC midnight, but every date a filtered column
+ *  renders is the reader's LOCAL day — so a UTC-day window dropped a fact
+ *  captured at 6 PM Pacific from a range whose To visibly included it, and
+ *  pulled last evening's rows into a From that visibly excluded them. A date
+ *  range means the reader's own days; parse it that way. */
+export function localDayStart(value: string): number {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day).getTime();
+}
+
 export function FilterSelect({ label, children, ...rest }:
   { label: string } & SelectHTMLAttributes<HTMLSelectElement>) {
   return (

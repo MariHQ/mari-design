@@ -12,7 +12,10 @@ export type DateInput = Date | string | number;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-function toDate(input: DateInput): Date {
+/** Exported for the filter kit: a range filter must parse a value the same
+    way the cell renders it, or "2026-08-18" sits on different days in the
+    column and in the comparison. */
+export function toDate(input: DateInput): Date {
   if (input instanceof Date) return input;
   if (typeof input === "string") {
     // Parse date-only strings as LOCAL dates ("2026-07-14" must not shift a day).

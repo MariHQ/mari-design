@@ -13,7 +13,8 @@ import { PageHeader } from "../layout/PageHeader";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Card } from "../layout/Card";
-import { FilterField, FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
+import { FilterField, FilterSearch, FilterSelect, localDayStart } from "../navigation/FilterTrigger";
+import { toDate } from "../tokens/format";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate } from "../data-display/Truncate";
@@ -445,19 +446,24 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const owners = Array.from(new Set(data.decisions.flatMap((d) => d.owners))).sort();
+  /* A selection the list no longer holds is treated as the All the select
+     already displays — same stale-owner trap as the facts ledger. */
+  const activeOwner = owners.includes(owner) ? owner : "";
   const narrow = (list: Decision[]) => {
     const q = query.trim().toLowerCase();
     let rows = q
       ? list.filter((d) => `${d.statement} ${d.context ?? ""} ${d.source} ${d.owners.join(" ")}`
           .toLowerCase().includes(q))
       : list;
-    if (owner) rows = rows.filter((d) => d.owners.includes(owner));
-    const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTime = dateTo ? new Date(dateTo).getTime() + 86_400_000 : null;
+    if (activeOwner) rows = rows.filter((d) => d.owners.includes(activeOwner));
+    /* Local midnights, matching the local dates the timeline renders. */
+    const fromTime = dateFrom ? localDayStart(dateFrom) : null;
+    const toTime = dateTo ? localDayStart(dateTo) + 86_400_000 : null;
     if (fromTime !== null || toTime !== null) {
       rows = rows.filter((d) => {
         if (!d.decidedOn) return false;
-        const t = new Date(d.decidedOn).getTime();
+        // toDate: a date-only decidedOn sits on the local day it renders on.
+        const t = toDate(d.decidedOn).getTime();
         return !Number.isNaN(t)
           && (fromTime === null || t >= fromTime) && (toTime === null || t < toTime);
       });
@@ -472,7 +478,7 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
       <LedgerFilter
         filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
         filter={filter} onChange={setFilter} />
-      <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
+      <FilterSelect label="Owner" aria-label="Filter by owner" value={activeOwner}
         onChange={(e) => setOwner(e.target.value)}>
         <option value="">All owners</option>
         {owners.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -510,12 +516,32 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
       </Shell>
     );
   }
+  const selectedFilter = data.filters.find((f) => f.id === filter);
+  const visible = narrow(inTab(data.decisions, selectedFilter));
   return (
     <Shell {...shell}>
-      <DecisionCardFeature
-        decisions={narrow(inTab(data.decisions, data.filters.find((f) => f.id === filter)))}
-        actions={actions}
-      />
+      {data.decisions.length > 0 && visible.length === 0 ? (
+        /* Same contract as the facts ledger: name the filters narrowing the
+           view and hand back the way out, instead of a generic empty. */
+        <EmptyState
+          title="No decisions match these filters"
+          action={<Button compact onClick={() => {
+            setQuery(""); setOwner(""); setDateFrom(""); setDateTo("");
+            setFilter(data.filters.find((f) => !f.status)?.id ?? data.filter);
+          }}>Clear filters</Button>}
+        >
+          {`The ledger holds ${data.decisions.length} decision${data.decisions.length === 1 ? "" : "s"} outside this view, narrowed by ${[
+            query.trim() && `search "${query.trim()}"`,
+            selectedFilter?.status && `status ${selectedFilter.label}`,
+            activeOwner && `owner ${activeOwner}`,
+            (dateFrom || dateTo) && (dateFrom && dateTo
+              ? `dates ${dateFrom} to ${dateTo}`
+              : dateFrom ? `dates from ${dateFrom}` : `dates to ${dateTo}`),
+          ].filter(Boolean).join(", ")}.`}
+        </EmptyState>
+      ) : (
+        <DecisionCardFeature decisions={visible} actions={actions} />
+      )}
     </Shell>
   );
 }

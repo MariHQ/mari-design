@@ -28,8 +28,8 @@ import type { ChipStatus } from "../data-display/Chip";
 import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
-import { fmtDate, type DateInput } from "../tokens/format";
-import { FilterField, FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
+import { fmtDate, toDate, type DateInput } from "../tokens/format";
+import { FilterField, FilterSearch, FilterSelect, localDayStart } from "../navigation/FilterTrigger";
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
@@ -843,22 +843,28 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
     ? inTab.filter((f) => `${f.claim} ${f.source} ${f.owner}`.toLowerCase().includes(q))
     : inTab;
   const owners = Array.from(new Set(data.facts.map((f) => f.owner).filter(Boolean))).sort();
-  const byOwner = owner ? searched.filter((f) => f.owner === owner) : searched;
+  /* A refetch can remove the last fact by the selected owner. The native
+     select then DISPLAYS "All owners" (a value with no matching option)
+     while the stale state filters every row away — the bar looked clean over
+     an empty table. A selection the list no longer holds is treated as the
+     All it already reads as. */
+  const activeOwner = owners.includes(owner) ? owner : "";
+  const byOwner = activeOwner ? searched.filter((f) => f.owner === activeOwner) : searched;
   /* A fact's date for the range filter: EXACTLY the date the row displays —
-     verification first, capture for unverified rows. The filter used to rank
-     capture first, so a row verified today slipped through an August-only
-     range while visibly reading "Sep 1" (the reader judges the filter by the
-     column they can see). A dated range keeps only dated rows — waving
-     undated rows through would answer a date question with rows that have
-     no date. */
+     verification first, capture for unverified rows, and nothing else: the
+     old validFrom fallback made a row filterable by a date its cell never
+     shows. A dated range keeps only dated rows — waving undated rows
+     through would answer a date question with rows that have no date. */
   const factTime = (f: Fact): number | null => {
-    const raw: DateInput | null | undefined = f.verified || f.capturedAt || f.validFrom;
+    const raw: DateInput | null | undefined = f.verified || f.capturedAt;
     if (!raw) return null;
-    const t = new Date(raw as Date | string | number).getTime();
+    // toDate, not new Date: a date-only value like "2026-08-18" must sit on
+    // the same local day the cell renders it on, not on UTC midnight.
+    const t = toDate(raw).getTime();
     return Number.isNaN(t) ? null : t;
   };
-  const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
-  const toTime = dateTo ? new Date(dateTo).getTime() + 86_400_000 : null;
+  const fromTime = dateFrom ? localDayStart(dateFrom) : null;
+  const toTime = dateTo ? localDayStart(dateTo) + 86_400_000 : null;
   const rows = fromTime === null && toTime === null ? byOwner : byOwner.filter((f) => {
     const t = factTime(f);
     if (t === null) return false;
@@ -924,7 +930,7 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
               return <option key={f.id} value={f.id}>{`${f.label} (${count})`}</option>;
             })}
           </FilterSelect>
-          <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
+          <FilterSelect label="Owner" aria-label="Filter by owner" value={activeOwner}
             onChange={(e) => setOwner(e.target.value)}>
             <option value="">All owners</option>
             {owners.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -958,9 +964,30 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
           />
         </Card>
       ) : (
-        // The table stands down for a ledger with no rows at all; a tab that
-        // filters every row out is the table's own empty state, which says so.
-        data.facts.length > 0 && (
+        // The table stands down for a ledger with no rows at all; filters
+        // that narrow every row out get the named empty state below instead.
+        data.facts.length > 0 && rows.length === 0 ? (
+          /* Four filters compose here, and "nothing matches the current
+             filter" named none of them — a stale owner or a date window was
+             indistinguishable from an empty ledger. Say which filters are
+             narrowing, and hand back the way out. */
+          <EmptyState
+            title="No facts match these filters"
+            action={<Button compact onClick={() => {
+              setQuery(""); setOwner(""); setDateFrom(""); setDateTo("");
+              setTab(data.filters.find((f) => !f.status)?.id ?? data.filter);
+            }}>Clear filters</Button>}
+          >
+            {`The ledger holds ${data.facts.length} fact${data.facts.length === 1 ? "" : "s"} outside this view, narrowed by ${[
+              query.trim() && `search "${query.trim()}"`,
+              selected?.status && `status ${selected.label}`,
+              activeOwner && `owner ${activeOwner}`,
+              (dateFrom || dateTo) && (dateFrom && dateTo
+                ? `dates ${dateFrom} to ${dateTo}`
+                : dateFrom ? `dates from ${dateFrom}` : `dates to ${dateTo}`),
+            ].filter(Boolean).join(", ")}.`}
+          </EmptyState>
+        ) : data.facts.length > 0 && (
           <FactsTable
             facts={rows}
             onVerify={actions?.verifyFact}
