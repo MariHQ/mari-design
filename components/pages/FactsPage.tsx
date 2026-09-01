@@ -30,7 +30,12 @@ import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
 import { fmtDate, type DateInput } from "../tokens/format";
-import { Select } from "../forms/Select";
+import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
+import { FilterTrigger, FilterField } from "../navigation/FilterTrigger";
+
+/* Accents for this page's filter pills, from the lineage toolbar's family so
+   the two pages read as one filter language. */
+const FILTER_ACCENT = { owner: "#1E6FA8", dates: "#2C6E49" } as const;
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
@@ -366,7 +371,10 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onRestore, onImpact }: 
         head={[
           { label: "Claim", key: "claim" },
           { label: "Owner", key: "owner" },
-          { label: "Verified", key: "verified", align: "center" },
+          /* "Date", not "Verified": the cell shows the verification date OR
+             the captured date (title says which), and a header claiming every
+             date below it is a verification would lie about half of them. */
+          { label: "Date", key: "verified", align: "center" },
           { label: "Status", key: "status" },
           { label: "", key: "actions", sortable: false },
         ]}
@@ -400,9 +408,13 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onRestore, onImpact }: 
                 )}
               </td>
               <td className="px-4 py-3 align-top text-[12.5px] text-ink/70"><Truncate>{f.owner}</Truncate></td>
+              {/* The bare date; which date it is rides in the title. The cell
+                  used to spell "Captured" out, which read as clutter against
+                  a column of plain dates. */}
               <td className="px-4 py-3 align-top text-center text-[12.5px] text-ink/70 whitespace-nowrap">
-                {f.verified ? fmtDate(f.verified)
-                  : f.capturedAt ? `Captured ${fmtDate(f.capturedAt)}` : "Not recorded"}
+                {f.verified ? <span title="Verified">{fmtDate(f.verified)}</span>
+                  : f.capturedAt ? <span title="Captured, not yet verified">{fmtDate(f.capturedAt)}</span>
+                  : "Not recorded"}
               </td>
               <td className="px-4 py-3 align-top">{factChip(status)}</td>
               {/* nowrap: a long owner name pushed this column narrow enough to
@@ -906,24 +918,27 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
       {!data.impact && (
         <div className="flex flex-wrap items-center gap-3">
           <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
-          {/* The rest of the filter bar, lineage-toolbar style: owner and a
-              date range beside the status tabs, all views over the rows on
-              screen. Cleared by picking "All owners" / blanking a date. */}
-          <Select aria-label="Filter by owner" value={owner}
-            onChange={(e) => setOwner(e.target.value)} className="w-[150px]">
-            <option value="">All owners</option>
-            {owners.map((name) => <option key={name} value={name}>{name}</option>)}
-          </Select>
-          <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
-            From
-            <Input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
-              onChange={(e) => setDateFrom(e.target.value)} className="w-[150px]" />
-          </label>
-          <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
-            To
-            <Input type="date" aria-label="Date to" value={dateTo} min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)} className="w-[150px]" />
-          </label>
+          {/* The rest of the filter bar in the console's shared filter idiom
+              (navigation/FilterTrigger, grown in the lineage toolbar): owner
+              and a date range beside the status tabs, all views over the rows
+              on screen. Cleared by picking All / blanking a date. */}
+          <Menu align="start" trigger={
+            <FilterTrigger accent={FILTER_ACCENT.owner} label="Owner" value={owner || "All"} />
+          }>
+            <MenuRadioGroup value={owner} onValueChange={setOwner}>
+              <MenuRadioItem value="">All</MenuRadioItem>
+              {owners.map((name) => <MenuRadioItem key={name} value={name}>{name}</MenuRadioItem>)}
+            </MenuRadioGroup>
+          </Menu>
+          <FilterField accent={FILTER_ACCENT.dates} label="Dates">
+            <input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
+            <span className="text-[12px] text-ink/50">to</span>
+            <input type="date" aria-label="Date to" value={dateTo} min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
+          </FilterField>
           <Input
             type="search"
             aria-label="Search claims"
@@ -1038,7 +1053,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           /* The same head the loaded table renders, so the grid does not
              reflow when the rows land. */
           icon={<span className="text-moss"><Shield size={26} /></span>}
-          columns={["Claim", "Owner", "Verified", "Status"]}
+          columns={["Claim", "Owner", "Date", "Status"]}
           search="Search claims, sources, owners"
           sections={["Verification audit"]}
           actions={["Audit documents", { label: "New fact", variant: "primary" }]}

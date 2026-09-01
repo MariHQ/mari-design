@@ -6,6 +6,10 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
+/* The shared filter pill (navigation/FilterTrigger): this toolbar is where
+   the idiom grew up, and Facts wears the same one now, so the two pages read
+   as one filter language. */
+import { FilterTrigger as ControlTrigger } from "../navigation/FilterTrigger";
 import { Badge } from "../data-display/Badge";
 import { Chip } from "../data-display/Chip";
 import { Input } from "../forms/Input";
@@ -146,24 +150,6 @@ export type LineageToolbarProps = {
     trigger, and Radix passes a ref to position the popup and to return focus
     on close. A plain function component drops that ref with a console warning
     and the menu loses its anchor. */
-const ControlTrigger = forwardRef<
-  HTMLButtonElement,
-  { accent: string; label: string; value: string } & ButtonHTMLAttributes<HTMLButtonElement>
->(function ControlTrigger({ accent, label, value, className = "", ...rest }, ref) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      {...rest}
-      className={`inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85 transition-colors hover:border-ink/45 active:bg-ink/[0.05] data-[state=open]:border-ink/45 data-[state=open]:bg-flysch ${focusRing} ${className}`.trim()}
-    >
-      <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: accent }} aria-hidden />
-      <span className="pl-0.5 shrink-0 text-ink/70">{label}:</span>
-      <span className="max-w-[96px] truncate font-medium" style={{ color: accent }} title={value}>{value}</span>
-      <ChevronDown size={13} className="text-ink/65" />
-    </button>
-  );
-});
 
 /* One labelled band. The rows are separated by a hairline so the three
    groups (filters / view / actions) read as three decisions, not one wall. */
