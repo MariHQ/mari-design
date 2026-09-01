@@ -75,11 +75,12 @@ export function WelcomeGenericConnect({
       </Button>
       {landed && !open && (
         <div className="mt-3">
-          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}
-            action={<Button compact onClick={() => setLanded(null)}>Open Connectors</Button>}>
+          {/* "The Connectors tab" was removed releases ago, and Open
+              Connectors only dismissed. Name the real destination. */}
+          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 size={14} className="text-moss" />
-              {landed} now lives on Sources, under the Connectors tab. Its first sync keeps running there.
+              {landed} now lives on Sources. Its first sync keeps running there.
             </span>
           </Alert>
         </div>

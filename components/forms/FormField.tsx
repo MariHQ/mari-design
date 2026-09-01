@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SectionLabel } from "./SectionLabel";
+import { HelpText } from "./HelpText";
 
 /* An editable form row: label + control + optional hint. Not to be confused
    with Field (this repo), which is a read-only key/value display row —
@@ -10,7 +11,7 @@ export function FormField({ label, hint, children }: { label: string; hint?: str
     <label className="flex flex-col gap-1.5">
       <SectionLabel>{label}</SectionLabel>
       {children}
-      {hint && <span className="text-[12px] text-ink/70">{hint}</span>}
+      {hint && <span className="text-[12px] text-ink/70"><HelpText>{hint}</HelpText></span>}
     </label>
   );
 }

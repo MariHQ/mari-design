@@ -219,17 +219,23 @@ export function SourcesConnectorWizard({
   }
 
   return (
-    <div className={className}>
+    /* grow + items-end: the trigger hugs the toolbar's right edge while the
+       landed banner below takes the FULL row. The banner used to live inside
+       a shrink-wrapped flex item, which dragged the button toward center and
+       squeezed the banner to two-thirds of the page. */
+    <div className={`min-w-0 grow flex flex-col items-end ${className}`.trim()}>
       <Button variant="primary" onClick={() => { setSync(null); setDuplicate(null); setPre(null); setOpen(true); }}>
         <Plus size={14} /> Add source
       </Button>
       {landed && !open && (
-        <div className="mt-3">
-          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}
-            action={<Button compact onClick={() => setLanded(null)}>Open Connectors</Button>}>
+        <div className="mt-3 w-full text-left">
+          {/* The copy used to send people to "the Connectors tab", a surface
+              removed releases ago, via an Open Connectors button that only
+              dismissed. The card is already on this page; say so. */}
+          <Alert tone="info" title="Source connected" onDismiss={() => setLanded(null)}>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 size={14} className="text-moss" />
-              {landed} now lives on Sources, under the Connectors tab. Its first sync keeps running there.
+              {landed} is connected. Its card is below, and its first sync keeps running there.
             </span>
           </Alert>
         </div>

@@ -14,6 +14,7 @@ import { Button } from "../actions/Button";
 import { useWrite, why } from "../actions/useWrite";
 import { Field } from "../forms/Field";
 import { Input } from "../forms/Input";
+import { HelpText } from "../forms/HelpText";
 import { Select } from "../forms/Select";
 import { Textarea } from "../forms/Textarea";
 import { SectionLabel } from "../forms/SectionLabel";
@@ -252,7 +253,7 @@ function ConfigureBody({ c, values, onChange, tested }: {
               ) : (
                 <Input className="w-full font-term" type={f.secret ? "password" : "text"} value={values[k] ?? ""} onChange={(e) => onChange(k, e.target.value)} />
               )}
-              {f.help && <p className="mt-1 text-[11.5px] text-ink/65">{f.help}</p>}
+              {f.help && <p className="mt-1 text-[11.5px] text-ink/65"><HelpText>{f.help}</HelpText></p>}
             </Field>
           );
         })}
