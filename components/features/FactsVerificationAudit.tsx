@@ -39,6 +39,10 @@ export type Fact = {
   status: "verified" | "unsupported" | "draft" | "retired" | "contradiction" | string;
   verified?: DateInput | null;
   validFrom?: DateInput | null;
+  /** When the fact entered the ledger. The date an unverified row shows:
+      before this, a claim captured today rendered with no date at all,
+      because verification is the only other date the ledger keeps. */
+  capturedAt?: DateInput | null;
   impactCount?: number;
   highImpact?: boolean;
 };

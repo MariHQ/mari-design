@@ -375,7 +375,10 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
                 )}
               </td>
               <td className="px-4 py-3 align-top text-[12.5px] text-ink/70"><Truncate>{f.owner}</Truncate></td>
-              <td className="px-4 py-3 align-top text-center text-[12.5px] text-ink/70 whitespace-nowrap">{f.verified ? fmtDate(f.verified) : "Not recorded"}</td>
+              <td className="px-4 py-3 align-top text-center text-[12.5px] text-ink/70 whitespace-nowrap">
+                {f.verified ? fmtDate(f.verified)
+                  : f.capturedAt ? `Captured ${fmtDate(f.capturedAt)}` : "Not recorded"}
+              </td>
               <td className="px-4 py-3 align-top">{factChip(status)}</td>
               {/* nowrap: a long owner name pushed this column narrow enough to
                   break "Verify" across two lines. */}
@@ -760,10 +763,10 @@ function FactCandidateReview({ run, onReview, onContinue }: {
   );
 }
 
-function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissScan, onEditFact, onReviewCandidate, onContinueReview }: {
+function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissScan, onRetryScan, onEditFact, onReviewCandidate, onContinueReview }: {
   data: FactsData; error: string | null; actions?: FactsActions;
   auditOpen: boolean; onCloseAudit: () => void;
-  scan: FactScan | null; onDismissScan: () => void;
+  scan: FactScan | null; onDismissScan: () => void; onRetryScan?: () => void;
   onEditFact: (fact: Fact) => void;
   onReviewCandidate: (candidateId: number, accept: boolean, reason: string) => Promise<void>;
   onContinueReview: () => Promise<void>;
@@ -817,8 +820,11 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
       <div className="mt-6 flex flex-col gap-5">
         {/* The scan strip belongs here too: an empty ledger is exactly where
             someone presses the button, and the run has to be visible then. */}
-        {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
-        {scan && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
+        {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} onRetry={onRetryScan} />}
+        {/* The review queue waits for a real run: the optimistic starting
+            card carries no id yet, and an empty queue under it reads as a
+            result nothing has produced. */}
+        {scan && scan.id && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
           onContinue={actions?.completeFactReview ? onContinueReview : undefined} />}
         <EmptyState title="No facts yet">
           {actions?.scanFacts
@@ -848,8 +854,8 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
           />
         </div>
       )}
-      {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} />}
-      {scan && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
+      {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} onRetry={onRetryScan} />}
+      {scan && scan.id && <FactCandidateReview run={scan} onReview={actions?.reviewFactCandidate ? onReviewCandidate : undefined}
         onContinue={actions?.completeFactReview ? onContinueReview : undefined} />}
       {data.banner && <Alert tone="blocked" title={data.banner.title}>{data.banner.body}</Alert>}
       {data.extras && <Extras extras={data.extras} />}
@@ -965,9 +971,15 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
 
   const startScan = async () => {
     if (!scanFacts || scanWrite.busy || activeRunId) return;
+    // The card appears the moment the click lands. Starting a scan writes
+    // the workflow configuration before a run exists, and the page used to
+    // show nothing for that whole round trip. The placeholder has no id, so
+    // the poll and the review queue both wait for the real run.
+    setScan({ id: "", label: "Fact scan · starting", status: "pending",
+              progress: 0, steps: [], added: null, candidates: [] });
     // `runFor`: the run itself is the result the page then follows.
     const started = await scanWrite.runFor(scanFacts);
-    if (started) setScan(started);
+    setScan(started || null);
   };
   const reviewCandidate = async (candidateId: number, accept: boolean, reason: string) => {
     if (!scan || !actions?.reviewFactCandidate) return;
@@ -1033,6 +1045,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           onCloseAudit={() => setAuditOpen(false)}
           scan={scan}
           onDismissScan={() => void dismissScan()}
+          onRetryScan={scanFacts ? () => void startScan() : undefined}
           onEditFact={(fact) => setEditing({ fact })}
           onReviewCandidate={reviewCandidate}
           onContinueReview={continueReview}

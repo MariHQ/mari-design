@@ -40,6 +40,10 @@ export type ScanRunCardProps = {
   run: ScanRun;
   /** Dismiss the card once the run has stopped. */
   onDismiss: () => void;
+  /** Start the scan again after a failure. Drawn only on a failed run and
+      only with a handler (§2): retrying a run that passed is a new scan, and
+      the page's own scan button already says so. */
+  onRetry?: () => void;
   /** What the run is doing, under the progress bar. */
   label?: string;
   /** Singular noun for what it captures ("claim", "decision"). */
@@ -49,13 +53,17 @@ export type ScanRunCardProps = {
 };
 
 export function ScanRunCard({
-  run, onDismiss,
+  run, onDismiss, onRetry,
   label = "Scanning the corpus",
   noun = "record",
   destination = "waiting for review",
 }: ScanRunCardProps) {
   const running = run.status === "running" || run.status === "pending";
   const tone = run.status === "failed" ? "blocked" : run.status === "passed" ? "ok" : "info";
+  // Name the stage that is actually executing. A minutes-long model pass sat
+  // behind the generic label with a motionless bar, which read as hung.
+  const runningStep = run.steps.find((s) => s.status === "running");
+  const barLabel = running && runningStep ? `${runningStep.step}…` : label;
   // Nothing is claimed until the run has reported a count: "0 captured" and
   // "still counting" are different answers and must not look the same.
   const outcome = run.added == null
@@ -69,14 +77,20 @@ export function ScanRunCard({
       variant="plain"
       icon={<Workflow size={17} className="text-biscay-2" />}
       title={run.label}
-      actions={!running && <Button variant="link" onClick={onDismiss}>Dismiss</Button>}
+      actions={!running && (
+        <span className="flex items-center gap-3">
+          {run.status === "failed" && onRetry
+            && <Button variant="link" onClick={onRetry}>Retry</Button>}
+          <Button variant="link" onClick={onDismiss}>Dismiss</Button>
+        </span>
+      )}
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <StatusChip status={RUN_STATUS_CHIP[run.status]} />
           {outcome && <span className="min-w-0 text-[12.5px] text-ink/70">{outcome}</span>}
         </div>
-        <Progress value={run.progress} tone={tone} label={label} />
+        <Progress value={run.progress} tone={tone} label={barLabel} active={running} />
         {run.steps.length > 0 && (
           <ul className="flex flex-col gap-1">
             {run.steps.map((s, i) => (

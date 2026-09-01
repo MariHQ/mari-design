@@ -13,11 +13,15 @@ const FILL: Record<ProgressTone, string> = {
 /* Determinate linear progress — distinct from Spinner (indeterminate) and
    Stepper (discrete steps). For an import/sync percentage. */
 export function Progress({
-  value, label, tone = "info", "aria-label": ariaLabel,
+  value, label, tone = "info", active = false, "aria-label": ariaLabel,
 }: {
   value: number;
   label?: string;
   tone?: ProgressTone;
+  /** The job is still working. A long model pass can hold one percentage for
+      minutes, and a bar that does not move is indistinguishable from a bar
+      whose job died — the pulse is the difference between the two. */
+  active?: boolean;
   /** Name for a bar drawn without a visible `label`. */
   "aria-label"?: string;
 }) {
@@ -46,7 +50,10 @@ export function Progress({
         aria-valuetext={`${Math.round(v)}%`}
         className="relative h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.08]"
       >
-        <RP.Indicator className={`h-full ${FILL[tone]} transition-transform duration-300`} style={{ transform: `translateX(-${100 - v}%)` }} />
+        <RP.Indicator
+          className={`h-full ${FILL[tone]} transition-transform duration-300${active ? " motion-safe:animate-pulse" : ""}`}
+          style={{ transform: `translateX(-${100 - v}%)` }}
+        />
       </RP.Root>
     </div>
   );
