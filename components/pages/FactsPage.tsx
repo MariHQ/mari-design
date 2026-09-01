@@ -934,7 +934,8 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
             <input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
               onChange={(e) => setDateFrom(e.target.value)}
               className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
-            <span className="text-[12px] text-ink/50">to</span>
+            {/* ink/70: the contrast floor for small text (axe color-contrast) */}
+            <span className="text-[12px] text-ink/70">to</span>
             <input type="date" aria-label="Date to" value={dateTo} min={dateFrom || undefined}
               onChange={(e) => setDateTo(e.target.value)}
               className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
