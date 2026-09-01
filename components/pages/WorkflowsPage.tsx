@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, PAGE_CONTAINER } from "./PageFrame";
+import { FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
 import { Drawer } from "../layout/Drawer";
@@ -889,31 +890,6 @@ function WorkflowDrawer({ data, row, actions, onClose }: {
 
 /** The search box. Local while typing, committed on a pause, so the URL is
     shareable without every keystroke becoming a place to go back to. */
-function ObservedSearch({ value, onSearch }: { value: string; onSearch?: (q: string) => void }) {
-  const [query, setQuery] = useState(value);
-  const [seen, setSeen] = useState(value);
-  if (seen !== value) { setSeen(value); setQuery(value); }
-
-  useEffect(() => {
-    if (query === value) return;
-    const timer = window.setTimeout(() => onSearch?.(query), 300);
-    return () => window.clearTimeout(timer);
-  }, [query, value, onSearch]);
-
-  return (
-    <div className="relative min-w-[220px] flex-1">
-      <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/65" aria-hidden />
-      <Input
-        aria-label="Search observed workflows"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search intents, prompts and categories"
-        className="w-full pl-8"
-      />
-    </div>
-  );
-}
-
 function ObservedToolbar({ observed, actions }: { observed: ObservedData; actions?: WorkflowsActions }) {
   const staleCaches = observed.rows.filter((row) =>
     (row.promotedWorkflowCachePolicy ?? "none") !== "none" && row.promotedWorkflowCacheState !== "fresh").length;
@@ -921,41 +897,43 @@ function ObservedToolbar({ observed, actions }: { observed: ObservedData; action
   return (
     <div className="flex flex-col gap-2">
     <div className="flex flex-wrap items-center gap-2.5">
-      <ObservedSearch value={observed.search} onSearch={actions?.setSearch} />
-      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70">
-        Category
-        <Select
-          aria-label="Filter by category"
-          value={observed.category ?? ""}
-          onChange={(event) => actions?.setCategory?.(event.target.value || null)}
-        >
-          <option value="">All categories</option>
-          {observed.categories.map((category) => <option key={category} value={category}>{category}</option>)}
-        </Select>
-      </label>
-      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70">
-        Status
-        <Select
-          aria-label="Filter by status"
-          value={observed.status ?? ""}
-          onChange={(event) => actions?.setStatusFilter?.(event.target.value || null)}
-        >
-          <option value="">All statuses</option>
-          {observed.statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-        </Select>
-      </label>
-      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70">
-        Outcome
-        <Select
-          aria-label="Filter by outcome"
-          value={observed.failures ?? ""}
-          onChange={(event) => actions?.setFailures?.(event.target.value || null)}
-        >
-          {FAILURE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </Select>
-      </label>
+      {/* The console's shared filter idiom (navigation/FilterTrigger) — this
+          bar is the reference the other pages match, so it renders through
+          the shared components rather than a private copy of them. */}
+      <FilterSearch
+        aria-label="Search observed workflows"
+        value={observed.search}
+        onSearch={actions?.setSearch}
+        placeholder="Search intents, prompts and categories"
+      />
+      <FilterSelect
+        label="Category"
+        aria-label="Filter by category"
+        value={observed.category ?? ""}
+        onChange={(event) => actions?.setCategory?.(event.target.value || null)}
+      >
+        <option value="">All categories</option>
+        {observed.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+      </FilterSelect>
+      <FilterSelect
+        label="Status"
+        aria-label="Filter by status"
+        value={observed.status ?? ""}
+        onChange={(event) => actions?.setStatusFilter?.(event.target.value || null)}
+      >
+        <option value="">All statuses</option>
+        {observed.statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+      </FilterSelect>
+      <FilterSelect
+        label="Outcome"
+        aria-label="Filter by outcome"
+        value={observed.failures ?? ""}
+        onChange={(event) => actions?.setFailures?.(event.target.value || null)}
+      >
+        {FAILURE_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </FilterSelect>
       <span className="ml-auto flex flex-wrap items-center gap-2">
         <WorkflowHarvestWizard actions={actions} />
         <Button compact disabled={reconciliation.busy}

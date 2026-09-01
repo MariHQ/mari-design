@@ -6,9 +6,9 @@ import { card } from "../tokens/card";
 import { focusRing } from "../tokens/focusRing";
 import { Button } from "../actions/Button";
 import { Menu, MenuItem, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "../navigation/Menu";
-/* The shared filter pill (navigation/FilterTrigger): this toolbar is where
-   the idiom grew up, and Facts wears the same one now, so the two pages read
-   as one filter language. */
+/* The console's shared filter control (navigation/FilterTrigger, the
+   Workflows bar's idiom): Facts and Workflows wear the same one, so every
+   page reads as one filter language. */
 import { FilterTrigger as ControlTrigger } from "../navigation/FilterTrigger";
 import { Badge } from "../data-display/Badge";
 import { Chip } from "../data-display/Chip";
@@ -19,7 +19,7 @@ import { Skeleton, SkeletonLine, SkeletonButton } from "../data-display/Skeleton
 import { Scrollable } from "../data-display/Scrollable";
 import { TruncateInline } from "../data-display/Truncate";
 import {
-  REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, CONTROL_ACCENT, NodeGlyph,
+  REL, REL_ORDER, SOURCE_LABELS, LENSES, STATUS_FILTERS, NodeGlyph,
   useLineageControls, nodeById, tracePath,
   type GraphView, type LEdge, type LineageControlState, type LNode, type Lens,
   type LayoutMode, type RelKey, type StatusFilter,
@@ -37,10 +37,11 @@ import {
 
    Rows 3 and 4 are expert controls and disclose together.
 
-   Every control reads "Label: Selection" and carries its own accent color, and
-   every one of them writes to the shared lineage control store — so the canvas
-   below actually filters, recolors, relayouts and zooms. Nothing here is
-   decorative.
+   Every control is a labelled dropdown in the console's shared filter idiom
+   (navigation/FilterTrigger, the Workflows bar; the accent stripes retired
+   with it), and every one of them writes to the shared lineage control store
+   — so the canvas below actually filters, recolors, relayouts and zooms.
+   Nothing here is decorative.
    ──────────────────────────────────────────────────────────────────────── */
 
 type SearchResult = { id: string; node: LNode };
@@ -144,7 +145,7 @@ export type LineageToolbarProps = {
   className?: string;
 };
 
-/** One filter/view control: accent bar, "Label:", then the live selection.
+/** One filter/view control: a text label, then the live selection.
 
     forwardRef is required, not stylistic: this is used as a Radix menu
     trigger, and Radix passes a ref to position the popup and to return focus
@@ -456,20 +457,21 @@ export function LineageToolbar({
      its own label) took their places. Labels render; the values are bars, at
      the ControlTrigger's own 32px height and the row's own gaps. */
   if (loading) {
-    const Pending = ({ accent, label }: { accent: string; label: string }) => (
-      <span className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2.5 text-[13px] text-ink/85">
-        <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: accent }} aria-hidden />
-        <span className="pl-0.5 shrink-0 text-ink/70">{label}:</span>
-        <SkeletonLine w={64} h={11} />
+    const Pending = ({ label }: { label: string }) => (
+      <span className="flex shrink-0 items-center gap-2 text-[12.5px] text-ink/70">
+        {label}
+        <span className="inline-flex h-9 items-center rounded-[4px] border border-ink/20 bg-paper px-3">
+          <SkeletonLine w={64} h={11} />
+        </span>
       </span>
     );
     return (
       <div className={`${card} flex ${compact ? "min-w-0" : "min-w-[720px]"} flex-col gap-2.5 p-3 font-display ${className}`.trim()} aria-busy="true">
         <Row label="Filter">
           <Skeleton width={168} height={32} rounded="rounded-[4px]" />
-          <Pending accent={CONTROL_ACCENT.sources} label="Sources" />
-          <Pending accent={CONTROL_ACCENT.relations} label="Relations" />
-          <Pending accent={CONTROL_ACCENT.status} label="Status" />
+          <Pending label="Sources" />
+          <Pending label="Relations" />
+          <Pending label="Status" />
         </Row>
         {/* The silhouette is the RESTING toolbar, not every row it can show:
             View and Actions live behind a disclosure, so drawing them here
@@ -512,8 +514,7 @@ export function LineageToolbar({
             Escape. */}
         <RPop.Root open={suggestOpen} onOpenChange={(o) => { if (!o) setSuggestOpen(false); }}>
           <RPop.Anchor asChild>
-            <div className="flex h-8 w-[168px] items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper pl-0 pr-2 focus-within:border-biscay-2/60 focus-within:ring-1 focus-within:ring-biscay-2/40">
-              <span className="h-full w-[4px] shrink-0 rounded-l-[3px]" style={{ backgroundColor: CONTROL_ACCENT.search }} aria-hidden />
+            <div className="flex h-9 w-[168px] items-center gap-1.5 rounded-[4px] border border-ink/20 bg-paper pl-2.5 pr-2 focus-within:border-biscay-2/60 focus-within:ring-1 focus-within:ring-biscay-2/40">
               <Search size={14} className="shrink-0 text-ink/65" />
               <input
                 ref={searchRef}
@@ -611,7 +612,7 @@ export function LineageToolbar({
           </RPop.Portal>
         </RPop.Root>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.sources} label="Sources" value={sourceValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Sources" value={sourceValue} />}>
           {/* A workspace with 30 connected sources must not run a menu off the
               bottom of the screen: the list is bounded and scrolls (§20). */}
           <Scrollable axis="y" className={sources.length > SOURCE_MENU_ROWS ? "max-h-[264px] w-[228px]" : ""}>
@@ -629,7 +630,7 @@ export function LineageToolbar({
           <MenuItem onSelect={() => applyView("All documents", { sources: null })}>All sources</MenuItem>
         </Menu>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.relations} label="Relations" value={relValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Relations" value={relValue} />}>
           {REL_ORDER.map((k) => (
             <MenuCheckboxItem key={k} checked={onRels.includes(k)} onCheckedChange={(c) => toggleRel(k, c)}>
               <span className="flex items-center gap-2">
@@ -645,7 +646,7 @@ export function LineageToolbar({
           <MenuItem onSelect={() => setControls({ rels: null })}>All relations</MenuItem>
         </Menu>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.status} label="Status" value={statusValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Status" value={statusValue} />}>
           <MenuRadioGroup value={controls.status} onValueChange={(v) => setControls({ status: v as StatusFilter })}>
             {STATUS_FILTERS.map((s) => <MenuRadioItem key={s.key} value={s.key}>{s.label}</MenuRadioItem>)}
           </MenuRadioGroup>
@@ -704,27 +705,27 @@ export function LineageToolbar({
         <div className="mt-2.5 flex flex-col gap-2.5">
       {/* ── row 3: view ────────────────────────────────────────────────── */}
       <Row label="View">
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.lens} label="Color by" value={lensValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Color by" value={lensValue} />}>
           <MenuRadioGroup value={controls.lens} onValueChange={(v) => setControls({ lens: v as Lens })}>
             {LENSES.map((l) => <MenuRadioItem key={l.key} value={l.key}>{l.label}</MenuRadioItem>)}
           </MenuRadioGroup>
         </Menu>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.layout} label="Layout" value={layoutValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Layout" value={layoutValue} />}>
           <MenuRadioGroup value={controls.layout} onValueChange={(v) => setControls({ layout: v as LayoutMode })}>
             <MenuRadioItem value="flow">Flow</MenuRadioItem>
             <MenuRadioItem value="timeline">Timeline</MenuRadioItem>
           </MenuRadioGroup>
         </Menu>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.flow} label="Flow" value={flowValue} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Flow" value={flowValue} />}>
           <MenuRadioGroup value={controls.scope} onValueChange={(v) => setControls({ scope: v as "focus" | "all" })}>
             <MenuRadioItem value="focus">Focal closure</MenuRadioItem>
             <MenuRadioItem value="all">Whole graph</MenuRadioItem>
           </MenuRadioGroup>
         </Menu>
 
-        <Menu align="start" trigger={<ControlTrigger accent={CONTROL_ACCENT.views} label="Views" value={view} />}>
+        <Menu align="start" trigger={<ControlTrigger label="Views" value={view} />}>
           <MenuItem icon={<Bookmark size={14} />} onSelect={() => applyView("All documents", { sources: null, rels: null, status: "all", scope: "all", query: "" })}>
             All documents
           </MenuItem>

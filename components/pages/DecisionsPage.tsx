@@ -14,6 +14,7 @@ import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Card } from "../layout/Card";
 import { Tabs } from "../navigation/Tabs";
+import { FilterField, FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
 import { EmptyState } from "../data-display/EmptyState";
 import { SkeletonPage } from "../data-display/Skeletons";
 import { Truncate } from "../data-display/Truncate";
@@ -174,7 +175,8 @@ function StressExtras({ extras }: { extras: DecisionExtras }) {
     roughly 600px of empty right column on the default state. The band keeps the
     1fr/320px plumb line the rail drew, and the timeline below it gets the whole
     container width (§11). */
-function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter, children }: {
+function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter, bar, children }: {
+  bar?: React.ReactNode;
   data: DecisionsData; mobile: boolean; actions?: DecisionsActions;
   composerOpen: boolean; onCloseComposer: () => void;
   filter: string; onFilter: (id: string) => void;
@@ -188,11 +190,17 @@ function Shell({ data, mobile, actions, composerOpen, onCloseComposer, filter, o
       {/* Counts describe the records this page holds, not a workspace-wide
           total the timeline cannot show: a tab used to promise a number the
           ledger below it never rendered (C2). */}
-      <LedgerFilter
-        filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
-        filter={filter}
-        onChange={onFilter}
-      />
+      {/* The ledger's filter bar, in the console's shared idiom (the
+          Workflows bar): status tabs, then search / owner / dates when the
+          page supplies them. */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <LedgerFilter
+          filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
+          filter={filter}
+          onChange={onFilter}
+        />
+        {bar}
+      </div>
       {data.extras && <StressExtras extras={data.extras} />}
       {children}
     </div>
@@ -431,7 +439,56 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   const [seenFilter, setSeenFilter] = useState(data.filter);
   if (seenFilter !== data.filter) { setSeenFilter(data.filter); setFilter(data.filter); }
 
-  const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter };
+  /* Search, owner and date range in the console's shared filter idiom, each
+     a view over the records already on screen — the same contract the status
+     tabs have. The date is the decision's own decidedOn; a dated range keeps
+     only dated records. */
+  const [query, setQuery] = useState("");
+  const [owner, setOwner] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const owners = Array.from(new Set(data.decisions.flatMap((d) => d.owners))).sort();
+  const narrow = (list: Decision[]) => {
+    const q = query.trim().toLowerCase();
+    let rows = q
+      ? list.filter((d) => `${d.statement} ${d.context ?? ""} ${d.source} ${d.owners.join(" ")}`
+          .toLowerCase().includes(q))
+      : list;
+    if (owner) rows = rows.filter((d) => d.owners.includes(owner));
+    const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
+    const toTime = dateTo ? new Date(dateTo).getTime() + 86_400_000 : null;
+    if (fromTime !== null || toTime !== null) {
+      rows = rows.filter((d) => {
+        if (!d.decidedOn) return false;
+        const t = new Date(d.decidedOn).getTime();
+        return !Number.isNaN(t)
+          && (fromTime === null || t >= fromTime) && (toTime === null || t < toTime);
+      });
+    }
+    return rows;
+  };
+  const bar = (
+    <>
+      <FilterSearch aria-label="Search decisions" value={query} onSearch={setQuery}
+        placeholder="Search statements, sources, owners" />
+      <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
+        onChange={(e) => setOwner(e.target.value)}>
+        <option value="">All owners</option>
+        {owners.map((name) => <option key={name} value={name}>{name}</option>)}
+      </FilterSelect>
+      <FilterField label="Dates">
+        <input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
+        <span className="text-[12px] text-ink/70">to</span>
+        <input type="date" aria-label="Date to" value={dateTo} min={dateFrom || undefined}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
+      </FilterField>
+    </>
+  );
+
+  const shell = { data, mobile, actions, composerOpen, onCloseComposer, filter, onFilter: setFilter, bar };
   /* An EmptyState is the "nothing here yet" surface: reporting a failed read
      through one told the reader the ledger was empty when the request simply
      did not come back (§8, XA-01). */
@@ -455,7 +512,7 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
   return (
     <Shell {...shell}>
       <DecisionCardFeature
-        decisions={inTab(data.decisions, data.filters.find((f) => f.id === filter))}
+        decisions={narrow(inTab(data.decisions, data.filters.find((f) => f.id === filter)))}
         actions={actions}
       />
     </Shell>

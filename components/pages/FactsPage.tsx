@@ -30,12 +30,7 @@ import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
 import { fmtDate, type DateInput } from "../tokens/format";
-import { Menu, MenuRadioGroup, MenuRadioItem } from "../navigation/Menu";
-import { FilterTrigger, FilterField } from "../navigation/FilterTrigger";
-
-/* Accents for this page's filter pills, from the lineage toolbar's family so
-   the two pages read as one filter language. */
-const FILTER_ACCENT = { owner: "#1E6FA8", dates: "#2C6E49" } as const;
+import { FilterField, FilterSearch, FilterSelect } from "../navigation/FilterTrigger";
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
@@ -919,18 +914,22 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
         <div className="flex flex-wrap items-center gap-3">
           <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
           {/* The rest of the filter bar in the console's shared filter idiom
-              (navigation/FilterTrigger, grown in the lineage toolbar): owner
-              and a date range beside the status tabs, all views over the rows
-              on screen. Cleared by picking All / blanking a date. */}
-          <Menu align="start" trigger={
-            <FilterTrigger accent={FILTER_ACCENT.owner} label="Owner" value={owner || "All"} />
-          }>
-            <MenuRadioGroup value={owner} onValueChange={setOwner}>
-              <MenuRadioItem value="">All</MenuRadioItem>
-              {owners.map((name) => <MenuRadioItem key={name} value={name}>{name}</MenuRadioItem>)}
-            </MenuRadioGroup>
-          </Menu>
-          <FilterField accent={FILTER_ACCENT.dates} label="Dates">
+              (navigation/FilterTrigger, the Workflows bar): search stretching,
+              then owner and a date range, beside the status tabs. Every one a
+              view over the rows on screen; cleared by picking All / blanking
+              a date. */}
+          <FilterSearch
+            aria-label="Search claims"
+            value={query}
+            onSearch={setQuery}
+            placeholder="Search claims, sources, owners"
+          />
+          <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
+            onChange={(e) => setOwner(e.target.value)}>
+            <option value="">All owners</option>
+            {owners.map((name) => <option key={name} value={name}>{name}</option>)}
+          </FilterSelect>
+          <FilterField label="Dates">
             <input type="date" aria-label="Date from" value={dateFrom} max={dateTo || undefined}
               onChange={(e) => setDateFrom(e.target.value)}
               className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
@@ -940,14 +939,6 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
               onChange={(e) => setDateTo(e.target.value)}
               className="h-7 w-[124px] border-0 bg-transparent text-[13px] text-ink outline-none" />
           </FilterField>
-          <Input
-            type="search"
-            aria-label="Search claims"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search claims, sources, owners"
-            className="ml-auto w-[280px] max-w-full"
-          />
         </div>
       )}
       {scan && <ScanRunCard run={scan} noun="claim" label="Scanning the corpus" onDismiss={onDismissScan} onRetry={onRetryScan} />}
