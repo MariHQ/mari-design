@@ -348,7 +348,7 @@ export function SettingsModelsConfig({
             {/* Re-indexing the corpus is not a first-click action (§2, P-SD-3).
                 An unchanged model has nothing to re-index, so it saves plain. */}
             {embChanged ? (
-              <ConfirmButton compact confirmVariant="primary" confirmLabel="Re-index everything?" disabled={write.busy} onConfirm={() => void saveEmbedding()}>Save</ConfirmButton>
+              <ConfirmButton compact variant="primary" confirmVariant="primary" confirmLabel="Re-index everything?" disabled={write.busy} onConfirm={() => void saveEmbedding()}>Save</ConfirmButton>
             ) : (
               <Button variant="primary" compact disabled={write.busy || !embDirty} onClick={() => void saveEmbedding()}>Save</Button>
             )}
@@ -367,7 +367,9 @@ export function SettingsModelsConfig({
               {llmOpts.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
             </Select>
           </Field>
-          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact disabled={write.busy} onClick={() => void saveLlm()}>Save</Button><SavedNote show={llmSaved || savedFlash} /></div>
+          {/* Disabled when clean, matching the embedding card: a Save with
+              nothing to save is a dead control wearing a live color. */}
+          <div className="mt-3 flex items-center gap-3"><Button variant="primary" compact disabled={write.busy || !llmDirty} onClick={() => void saveLlm()}>Save</Button><SavedNote show={llmSaved || savedFlash} /></div>
         </Card>
       </div>
 

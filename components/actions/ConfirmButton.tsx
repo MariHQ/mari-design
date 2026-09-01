@@ -5,6 +5,12 @@ import { Button, type ButtonProps } from "./Button";
 export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
   confirmLabel?: string;
   onConfirm: () => void;
+  /** How the UNARMED button renders. Default is the quiet weight every
+      destructive confirm wears; a confirm guarding a PRIMARY action (save
+      that re-indexes) passes "primary" so the button carries the same
+      weight as its unguarded siblings instead of turning white exactly
+      where the action matters most. */
+  variant?: "default" | "primary";
   /* Which confirm step to show once armed (CONVENTIONS.md §2):
        "danger"  — destructive yes (delete, revoke). The default.
        "success" — affirmative yes (approve, ratify, publish). Green, with a
@@ -27,7 +33,7 @@ export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
    of any secondary action (CONVENTIONS.md §2). */
 export function ConfirmButton({
   confirmLabel = "Confirm?", onConfirm, confirmVariant = "danger", defaultArmed = false,
-  children, onBlur, onKeyDown, ...rest
+  variant = "default", children, onBlur, onKeyDown, ...rest
 }: ConfirmButtonProps) {
   const [armed, setArmed] = useState(defaultArmed);
 
@@ -44,7 +50,7 @@ export function ConfirmButton({
     <>
       <Button
         {...rest}
-        variant={armed ? confirmVariant : "default"}
+        variant={armed ? confirmVariant : variant}
         onClick={click}
         /* WCAG 2.2.1: arming used to expire after 4s, an unadjustable time
            limit on the console's only destructive-action pattern — long enough
