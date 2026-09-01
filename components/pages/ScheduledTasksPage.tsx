@@ -4,6 +4,8 @@ import type { PageModule, PageProps } from "./types";
 import { PageFrame, navFor, PAGE_CONTAINER } from "./PageFrame";
 import { PageHeader } from "../layout/PageHeader";
 import { Card } from "../layout/Card";
+import { Dialog } from "../layout/Dialog";
+import { FormField } from "../forms/FormField";
 import { Button } from "../actions/Button";
 import { ConfirmButton } from "../actions/ConfirmButton";
 import { Chip } from "../data-display/Chip";
@@ -38,7 +40,20 @@ export type ScheduledTasksActions = {
   setSchedule?: (taskId: number, everyMinutes: number | null) => void | Promise<void>;
   runNow?: (taskId: number) => number | Promise<number>;
   remove?: (taskId: number) => void | Promise<void>;
+  /** Schedule one of the console's recurring jobs. Removal deletes the
+      workflow outright, so without this a removed job was gone until the
+      next server restart re-seeded it. Idempotent server-side: an existing
+      job of that kind is reused with the new cadence. */
+  createTask?: (kind: "facts" | "digest", everyMinutes: number) => void | Promise<void>;
 };
+
+/** The jobs New task can schedule. Connector syncs are created by connecting
+    a source, and decision scan is deliberately manual-only, so neither is
+    offered here. */
+const TASK_KINDS = [
+  { value: "facts", label: "Fact extraction" },
+  { value: "digest", label: "Weekly digest refresh" },
+] as const;
 
 const OPTIONS = [
   { value: "", label: "Manual only" },
@@ -161,8 +176,52 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
   );
 }
 
+function NewTaskDialog({ onCreate, onClose }: {
+  onCreate: (kind: "facts" | "digest", everyMinutes: number) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const write = useWrite();
+  const [kind, setKind] = useState<"facts" | "digest">("facts");
+  const [minutes, setMinutes] = useState("60");
+  const create = () => void write.run(
+    () => onCreate(kind, Number(minutes) || 0),
+    onClose,
+  );
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }} title="New scheduled task"
+      description="Put one of the recurring jobs on a cadence."
+      footer={
+        <>
+          <Button variant="primary" disabled={write.busy} onClick={create}>
+            {write.busy ? "Creating…" : "Create task"}
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </>
+      }>
+      <div className="flex flex-col gap-4">
+        <FormField label="Job">
+          <Select aria-label="Task kind" value={kind}
+            onChange={(e) => setKind(e.target.value as "facts" | "digest")}>
+            {TASK_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+          </Select>
+        </FormField>
+        <FormField label="Cadence" hint="Model-backed jobs run hourly at the tightest.">
+          <Select aria-label="Task cadence" value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}>
+            {OPTIONS.map((option) => (
+              <option key={option.value || "manual"} value={option.value}>{option.label}</option>
+            ))}
+          </Select>
+        </FormField>
+        <WriteError onDismiss={() => write.setFailed(null)}>{write.failed}</WriteError>
+      </div>
+    </Dialog>
+  );
+}
+
 function ScheduledTasksPage({ data, loading = false, error = null, actions, chrome, mobile = false }:
   PageProps<ScheduledTasksData, ScheduledTasksActions>) {
+  const [creating, setCreating] = useState(false);
   if (loading) return <PageFrame chrome={chrome} active={navFor("scheduled-tasks")} title="Scheduled tasks" mobile={mobile}>
     <SkeletonPage variant="list" eyebrow="Automation" title="Scheduled tasks"
       description="Control recurring background jobs and one-off runs." mobile={mobile} />
@@ -171,7 +230,13 @@ function ScheduledTasksPage({ data, loading = false, error = null, actions, chro
   return <PageFrame chrome={chrome} active={navFor("scheduled-tasks")} title="Scheduled tasks" mobile={mobile}>
     <div className={PAGE_CONTAINER}>
       <PageHeader eyebrow="Automation" title="Scheduled tasks"
-        description="Control recurring background jobs and one-off runs." />
+        description="Control recurring background jobs and one-off runs."
+        actions={actions?.createTask && (
+          <Button variant="primary" onClick={() => setCreating(true)}>New task</Button>
+        )} />
+      {creating && actions?.createTask && (
+        <NewTaskDialog onCreate={actions.createTask} onClose={() => setCreating(false)} />
+      )}
       <div className="mt-6 space-y-4">
         {error ? <Card><ReadError>{error}</ReadError></Card> : !data.tasks.length ? <Card>
           <EmptyState icon={<CalendarClock size={22} />} title="No scheduled tasks">
