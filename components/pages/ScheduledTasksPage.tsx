@@ -126,7 +126,7 @@ function TaskRow({ task, actions }: { task: ScheduledTask; actions?: ScheduledTa
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:col-span-3 lg:col-span-1">
             {actions?.remove && <ConfirmButton compact disabled={write.busy || task.lastRunStatus === "running"}
-              confirmLabel="Really remove?" onConfirm={remove}>
+              confirmLabel="Confirm remove" onConfirm={remove}>
               <Trash2 size={12} /> Remove
             </ConfirmButton>}
             {minutes !== null && <Button compact disabled={write.busy} onClick={toggle}>

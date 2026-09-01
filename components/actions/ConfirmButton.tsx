@@ -26,7 +26,7 @@ export type ConfirmButtonProps = Omit<ButtonProps, "onClick" | "variant"> & {
    Wherever this sits inline on a card or panel it belongs BOTTOM LEFT, ahead
    of any secondary action (CONVENTIONS.md §2). */
 export function ConfirmButton({
-  confirmLabel = "Really?", onConfirm, confirmVariant = "danger", defaultArmed = false,
+  confirmLabel = "Confirm?", onConfirm, confirmVariant = "danger", defaultArmed = false,
   children, onBlur, onKeyDown, ...rest
 }: ConfirmButtonProps) {
   const [armed, setArmed] = useState(defaultArmed);
