@@ -288,7 +288,9 @@ function LedgerFilter({ filters, filter, onChange }: {
   return (
     <FilterSelect label="Status" aria-label="Filter the ledger" value={filter}
       onChange={(e) => onChange(e.target.value)}>
-      {filters.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+      {/* Counts describe the records this page holds (C2), carried over from
+          the tab strip this select replaced. */}
+      {filters.map((f) => <option key={f.id} value={f.id}>{`${f.label} (${f.count})`}</option>)}
     </FilterSelect>
   );
 }
@@ -467,7 +469,9 @@ function Body({ data, error, actions, mobile, composerOpen, onCloseComposer }: {
       {/* The shared bar's order: search, Status, Owner, Dates. */}
       <FilterSearch aria-label="Search decisions" value={query} onSearch={setQuery}
         placeholder="Search statements, sources, owners" />
-      <LedgerFilter filters={data.filters} filter={filter} onChange={setFilter} />
+      <LedgerFilter
+        filters={data.filters.map((t) => ({ ...t, count: inTab(data.decisions, t).length }))}
+        filter={filter} onChange={setFilter} />
       <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
         onChange={(e) => setOwner(e.target.value)}>
         <option value="">All owners</option>

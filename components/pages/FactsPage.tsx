@@ -914,7 +914,15 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
           />
           <FilterSelect label="Status" aria-label="Filter by status"
             value={selected?.id ?? data.filter} onChange={(e) => setTab(e.target.value)}>
-            {data.filters.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            {/* Counts describe the rows this page holds, not a workspace-wide
+                total the table cannot show (C2) — carried over from the tab
+                strip this select replaced. */}
+            {data.filters.map((f) => {
+              const count = f.status
+                ? data.facts.filter((x) => factStatusKey(x.status) === factStatusKey(f.status!)).length
+                : data.facts.length;
+              return <option key={f.id} value={f.id}>{`${f.label} (${count})`}</option>;
+            })}
           </FilterSelect>
           <FilterSelect label="Owner" aria-label="Filter by owner" value={owner}
             onChange={(e) => setOwner(e.target.value)}>
