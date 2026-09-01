@@ -131,6 +131,9 @@ export type FactsActions = {
   /** Retire a claim the team no longer relies on. Destructive, so the row
       offers it through <ConfirmButton> and never on a first click (§2). */
   retireFact?: (id: number) => void | Promise<void>;
+  /** Reopen an invalidated claim as needs-review — the way back for a
+      changed mind. Verification is not restored; a person re-verifies. */
+  restoreFact?: (id: number) => void | Promise<void>;
   /** Read the embedding-space neighborhood used for invalidation impact. */
   inspectFactImpact?: (id: number) => FactSemanticImpactLink[] | Promise<FactSemanticImpactLink[]>;
   /** Start the corpus scan as a background run, and answer with the run so the
@@ -284,11 +287,14 @@ function factChip(status: string) {
   return <Chip label={status || "Unrecorded"} tone="neutral" dot />;
 }
 
-function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
+function FactsTable({ facts, onVerify, onEdit, onRetire, onRestore, onImpact }: {
   facts: Fact[];
   onVerify?: (id: number) => void | Promise<void>;
   onEdit?: (fact: Fact) => void;
   onRetire?: (id: number) => void | Promise<void>;
+  /** Reopen an invalidated claim as needs-review. Without it an invalidated
+      row is a one-way door with no answer to a changed mind. */
+  onRestore?: (id: number) => void | Promise<void>;
   onImpact?: (id: number) => FactSemanticImpactLink[] | Promise<FactSemanticImpactLink[]>;
 }) {
   /* Local overlay so the row visibly settles the moment it is verified, with
@@ -301,6 +307,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
      (P-FA-4, C1). */
   const [verified, setVerified] = useState<number[]>([]);
   const [retired, setRetired] = useState<number[]>([]);
+  const [restored, setRestored] = useState<number[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [failed, setFailed] = useState<Record<number, string>>({});
   const [seenFacts, setSeenFacts] = useState(facts);
@@ -309,6 +316,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
     setSeenFacts(facts);
     setVerified([]);
     setRetired([]);
+    setRestored([]);
     setFailed({});
   }
 
@@ -332,7 +340,15 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
   const verify = (f: Fact) =>
     write(f, () => onVerify?.(f.id), () => setVerified((v) => [...v, f.id]), "Could not verify that claim.");
   const retire = (f: Fact) =>
-    write(f, () => onRetire?.(f.id), () => setRetired((r) => [...r, f.id]), "Could not invalidate that claim.");
+    write(f, () => onRetire?.(f.id), () => {
+      setRetired((r) => [...r, f.id]);
+      setRestored((r) => r.filter((id) => id !== f.id));
+    }, "Could not invalidate that claim.");
+  const restore = (f: Fact) =>
+    write(f, () => onRestore?.(f.id), () => {
+      setRestored((r) => [...r, f.id]);
+      setRetired((r) => r.filter((id) => id !== f.id));
+    }, "Could not restore that claim.");
 
   return (
     /* <Table> draws its own card. It used to be wrapped in a second, flush
@@ -356,10 +372,13 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
         minW={760}
       >
         {facts.map((f) => {
-          const isRetired = retired.includes(f.id);
-          const isClosed = isRetired || ["invalidated", "retired"].includes(factStatusKey(f.status));
-          const isVerified = !isClosed && (verified.includes(f.id) || isVerifiedFact(f));
-          const status = isRetired ? "Invalidated" : isVerified ? "Verified" : f.status;
+          const isRestored = restored.includes(f.id);
+          const isRetired = !isRestored && retired.includes(f.id);
+          const isClosed = !isRestored
+            && (isRetired || ["invalidated", "retired"].includes(factStatusKey(f.status)));
+          const isVerified = !isClosed && !isRestored && (verified.includes(f.id) || isVerifiedFact(f));
+          const status = isRetired ? "Invalidated" : isVerified ? "Verified"
+            : isRestored ? "Needs review" : f.status;
           return (
             <tr key={f.id} className="border-b border-ink/[0.06] last:border-0">
               {/* §12: claim, source and owner are arbitrarily long user values,
@@ -399,7 +418,17 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
                     reaches the reader, in the cell the action fired from. */}
                 {failed[f.id] ? (
                   <FieldError>{failed[f.id]}</FieldError>
-                ) : isClosed ? null : (
+                ) : isClosed ? (
+                  /* An invalidated claim is closed, not gone: Restore reopens
+                     it as needs-review, so a changed mind has a way back that
+                     is not re-typing the claim (which the unique constraint
+                     refuses anyway). Retired stays closed. */
+                  onRestore && factStatusKey(status) === "invalidated" ? (
+                    <Button compact disabled={busy === f.id} onClick={() => void restore(f)}>
+                      {busy === f.id ? "Restoring…" : "Restore"}
+                    </Button>
+                  ) : null
+                ) : (
                   <span className="inline-flex items-center justify-end gap-2">
                     {!isVerified && (
                       <Button compact variant="primary" disabled={busy === f.id} onClick={() => void verify(f)}>
@@ -884,6 +913,7 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
             onVerify={actions?.verifyFact}
             onEdit={actions?.editFact ? onEditFact : undefined}
             onRetire={actions?.retireFact}
+            onRestore={actions?.restoreFact}
             onImpact={actions?.inspectFactImpact}
           />
         )
