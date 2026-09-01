@@ -414,7 +414,7 @@ function FactsTable({ facts, onVerify, onEdit, onRetire, onImpact }: {
                     )}
                     {onEdit && <Button compact disabled={busy === f.id} onClick={() => onEdit(f)}>Edit</Button>}
                     {onRetire && (
-                      <ConfirmButton compact confirmLabel="Invalidate this claim and preserve its impact history?" disabled={busy === f.id} onConfirm={() => void retire(f)}>
+                      <ConfirmButton compact confirmLabel="Invalidate and preserve impact" disabled={busy === f.id} onConfirm={() => void retire(f)}>
                         Invalidate
                       </ConfirmButton>
                     )}

@@ -63,6 +63,23 @@ export function ConfirmButton({
           ? <>{confirmVariant === "success" && <Check size={13} />}{confirmLabel}</>
           : children}
       </Button>
+      {/* A visible way out. Escape and blur both disarm, but neither is an
+          affordance anyone can see — an armed destructive button with no
+          stated alternative reads as a dare. Text, not a button: the pair
+          must not look like two live choices of equal weight. Muted to
+          ink/70, the floor that still clears 4.5:1 on a white card. */}
+      {armed && (
+        <button
+          type="button"
+          className="ml-2 text-[12px] text-ink/70 underline-offset-2 hover:underline"
+          /* Keep focus where it is: without this, mousedown blurs the armed
+             button, blur disarms it, and this link vanishes under the click. */
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setArmed(false)}
+        >
+          Cancel
+        </button>
+      )}
       {/* ACC-07: arming was silent. The label swapped to "Really delete?" with
           nothing announced, so a screen-reader user heard the ORIGINAL label,
           pressed again to retry what looked like a dead button, and destroyed
