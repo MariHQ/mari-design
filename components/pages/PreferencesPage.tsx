@@ -210,12 +210,17 @@ function ProfileCard({ data, actions }: { data: PreferencesData; actions?: Prefe
           {busy ? "Saving…" : "Save profile"}
         </Button>
         {dirty && !busy && (
-          <Button
-            variant="link"
+          /* The muted way-out idiom (ConfirmButton's Cancel): text, small,
+             ink/70 — the floor that clears 4.5:1. It rendered as a full-size
+             blue link, which gave the escape hatch the same visual weight as
+             the action beside it. */
+          <button
+            type="button"
+            className="text-[12px] text-ink/70 underline-offset-2 hover:underline"
             onClick={() => { setName(data.profile.name); setTimezone(zoneOf(data.profile)); setLanguage(data.profile.language ?? ""); setSaved(false); }}
           >
             Discard
-          </Button>
+          </button>
         )}
       </div>
     </Card>
