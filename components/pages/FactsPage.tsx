@@ -29,7 +29,8 @@ import type { ChipStatus } from "../data-display/Chip";
 import { ScanRunCard, type ScanRun } from "../features/ScanRunCard";
 import { AvatarGroup } from "../index";
 import { Breadcrumb } from "../index";
-import { fmtDate } from "../tokens/format";
+import { fmtDate, type DateInput } from "../tokens/format";
+import { Select } from "../forms/Select";
 
 /* Facts (pages/facts.md). Every claim the team relies on, verified and owned —
    a status-filtered table (claim / owner / status / verified) with per-row
@@ -821,15 +822,39 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
      past 25 rows, but a ledger of thousands still has to be searchable, and
      the "many" state used to just grow (P-FA-2). */
   const [query, setQuery] = useState("");
+  /* The filter bar (owner, date range) beside the status tabs — the same
+     view-over-rows-on-screen the tabs and search are; nothing round-trips. */
+  const [owner, setOwner] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const selected = data.filters.find((f) => f.id === tab) ?? data.filters.find((f) => f.id === data.filter);
   const inTab = selected?.status
     ? data.facts.filter((f) => factStatusKey(f.status) === factStatusKey(selected.status!))
     : data.facts;
   const q = query.trim().toLowerCase();
-  const rows = q
+  const searched = q
     ? inTab.filter((f) => `${f.claim} ${f.source} ${f.owner}`.toLowerCase().includes(q))
     : inTab;
+  const owners = Array.from(new Set(data.facts.map((f) => f.owner).filter(Boolean))).sort();
+  const byOwner = owner ? searched.filter((f) => f.owner === owner) : searched;
+  /* A fact's date for the range filter: when it entered the ledger, falling
+     back to its verification for rows that predate the captured column. A
+     dated range keeps only dated rows — a filter that waved undated rows
+     through would answer a date question with rows that have no date. */
+  const factTime = (f: Fact): number | null => {
+    const raw: DateInput | null | undefined = f.capturedAt || f.verified || f.validFrom;
+    if (!raw) return null;
+    const t = new Date(raw as Date | string | number).getTime();
+    return Number.isNaN(t) ? null : t;
+  };
+  const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
+  const toTime = dateTo ? new Date(dateTo).getTime() + 86_400_000 : null;
+  const rows = fromTime === null && toTime === null ? byOwner : byOwner.filter((f) => {
+    const t = factTime(f);
+    if (t === null) return false;
+    return (fromTime === null || t >= fromTime) && (toTime === null || t < toTime);
+  });
 
   /* Counts describe the rows this page holds, not a workspace-wide total the
      table cannot show: a tab used to promise 240 rows and render 40 (C2). */
@@ -878,6 +903,24 @@ function Body({ data, error, actions, auditOpen, onCloseAudit, scan, onDismissSc
       {!data.impact && (
         <div className="flex flex-wrap items-center gap-3">
           <Tabs ariaLabel="Filter facts" options={tabs} value={selected?.id ?? data.filter} onChange={setTab} />
+          {/* The rest of the filter bar, lineage-toolbar style: owner and a
+              date range beside the status tabs, all views over the rows on
+              screen. Cleared by picking "All owners" / blanking a date. */}
+          <Select aria-label="Filter by owner" value={owner}
+            onChange={(e) => setOwner(e.target.value)} className="w-[150px]">
+            <option value="">All owners</option>
+            {owners.map((name) => <option key={name} value={name}>{name}</option>)}
+          </Select>
+          <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
+            From
+            <Input type="date" aria-label="Captured from" value={dateFrom} max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)} className="w-[150px]" />
+          </label>
+          <label className="flex items-center gap-1.5 text-[12px] text-ink/70">
+            To
+            <Input type="date" aria-label="Captured to" value={dateTo} min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)} className="w-[150px]" />
+          </label>
           <Input
             type="search"
             aria-label="Search claims"
