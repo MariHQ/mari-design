@@ -140,6 +140,11 @@ export type FactsActions = {
       progress reading for a scan nobody had started (P-FA-5), and a control
       that cannot start anything must not be drawn (§2). */
   scanFacts?: () => FactScan | Promise<FactScan>;
+  /** Start the scan again with the configuration it already has. Retry after
+      a failure must not reopen the configuration dialog: the settings did not
+      cause the failure, and re-asking for them reads as blame. Absent, Retry
+      falls back to `scanFacts`. */
+  retryFactScan?: () => FactScan | Promise<FactScan>;
   /** Re-read a scan the page started. Polled until the run stops running;
       without it the page shows the run once and does not follow it. */
   scanProgress?: (id: string) => FactScan | Promise<FactScan>;
@@ -969,8 +974,8 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
 
   const scanFacts = actions?.scanFacts;
 
-  const startScan = async () => {
-    if (!scanFacts || scanWrite.busy || activeRunId) return;
+  const launchScan = async (start: () => FactScan | Promise<FactScan>) => {
+    if (scanWrite.busy || activeRunId) return;
     // The card appears the moment the click lands. Starting a scan writes
     // the workflow configuration before a run exists, and the page used to
     // show nothing for that whole round trip. The placeholder has no id, so
@@ -978,9 +983,11 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
     setScan({ id: "", label: "Fact scan · starting", status: "pending",
               progress: 0, steps: [], added: null, candidates: [] });
     // `runFor`: the run itself is the result the page then follows.
-    const started = await scanWrite.runFor(scanFacts);
+    const started = await scanWrite.runFor(start);
     setScan(started || null);
   };
+  const startScan = async () => { if (scanFacts) await launchScan(scanFacts); };
+  const retryScan = actions?.retryFactScan ?? scanFacts;
   const reviewCandidate = async (candidateId: number, accept: boolean, reason: string) => {
     if (!scan || !actions?.reviewFactCandidate) return;
     const next = await actions.reviewFactCandidate(scan.id, candidateId, accept, reason);
@@ -1045,7 +1052,7 @@ function FactsPage({ data, loading = false, error = null, actions, chrome, mobil
           onCloseAudit={() => setAuditOpen(false)}
           scan={scan}
           onDismissScan={() => void dismissScan()}
-          onRetryScan={scanFacts ? () => void startScan() : undefined}
+          onRetryScan={retryScan ? () => void launchScan(retryScan) : undefined}
           onEditFact={(fact) => setEditing({ fact })}
           onReviewCandidate={reviewCandidate}
           onContinueReview={continueReview}
