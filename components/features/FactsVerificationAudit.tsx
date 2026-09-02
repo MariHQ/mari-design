@@ -1,13 +1,9 @@
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ClipboardCheck, ShieldCheck, X } from "lucide-react";
 import { Button } from "../actions/Button";
-import { Card } from "../layout/Card";
-import { SortHeader, useSort, tdPad } from "../data-display/sortable";
+import { Table, type TableHead } from "../data-display/Table";
 import { Chip } from "../data-display/Chip";
 import { EmptyState } from "../data-display/EmptyState";
-import { SkeletonTable } from "../data-display/Skeleton";
-import { Scrollable } from "../data-display/Scrollable";
-import { PagerBar, ResultCount, usePaged } from "../data-display/Pagination";
 import { Truncate } from "../data-display/Truncate";
 import { FieldError } from "../feedback/ErrorMessage";
 import { CreateReviewTaskButton } from "../actions/RepeatedActions";
@@ -18,12 +14,20 @@ import { fmtDate, type DateInput } from "../tokens/format";
    already-loaded facts: it lists every Verified fact oldest-first and flags any
    verified more than 60 days ago as a stale candidate, offering a one-click
    Create review task. Ages are anchored to the newest verification on record so
-   mixed seed/live data never yields negative ages. Composes Card + Table + Chip
-   + Button. */
+   mixed seed/live data never yields negative ages. Composes the shared <Table>
+   primitive — the same one FactsPage's claims ledger renders through — so the
+   two tables on the Facts page share fonts, cell padding, sort chrome and
+   header band. This panel must stay visually identical to that ledger. */
 
 const STALE_AFTER_DAYS = 60;
 
-const td = `${tdPad} text-[13px] text-ink/75`;
+const HEAD: TableHead[] = [
+  { label: "Claim", key: "claim" },
+  { label: "Owner", key: "owner" },
+  { label: "Verified", key: "verified", align: "center" },
+  { label: "Status", key: "status" },
+  { label: "Review task", key: "reviewTask", sortable: false, align: "right" },
+];
 
 export type Fact = {
   id: number;
@@ -100,18 +104,7 @@ export function FactsVerificationAudit({
       .sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
   }, [facts]);
 
-  const { sort, onSort, sorted } = useSort(auditRows, {
-    claim: (r) => r.fact.claim,
-    owner: (r) => r.fact.owner,
-    verified: (r) => (r.fact.verified ? new Date(String(r.fact.verified)).getTime() || 0 : 0),
-    status: (r) => (r.age != null && r.age > STALE_AFTER_DAYS ? "stale" : "fresh"),
-  });
-
   const staleCount = auditRows.filter((r) => r.age != null && r.age > STALE_AFTER_DAYS).length;
-
-  /* A mature knowledge base verifies thousands of facts; the audit pages
-     instead of rendering every one into the panel (CONVENTIONS §13). */
-  const pager = usePaged(sorted, 10);
 
   const createReviewTask = async (f: Fact) => {
     setTaskState((s) => ({ ...s, [f.id]: "creating" }));
@@ -128,130 +121,105 @@ export function FactsVerificationAudit({
     }
   };
 
-  /* Prose, not a number: this used to restate `staleCount`, which the strip
-     below already carries as its note (§13 count rule). */
-  const hint = auditRows.length === 0
-    ? undefined
-    : "Anything verified more than 60 days ago is a stale candidate.";
+  const closeButton = onClose && (
+    <Button icon variant="link" aria-label="Close audit" onClick={onClose}><X size={16} /></Button>
+  );
 
   if (loading) {
     return (
-      <Card
-        className={className}
-        icon={<ShieldCheck size={17} className="text-moss" />}
-        title="Verification audit"
-        variant="flush"
-      >
-        <SkeletonTable rows={4} cols={4} />
-      </Card>
+      <div className={className}>
+        <Table title="Verification audit" head={HEAD} minW={760} pageSize={10} loading actions={closeButton}>
+          <tr />
+        </Table>
+      </div>
     );
   }
 
   return (
-    <Card
-      className={className}
-      icon={<ShieldCheck size={17} className="text-moss" />}
-      title="Verification audit"
-      hint={hint}
-      actions={onClose && (
-        <Button icon variant="link" aria-label="Close audit" onClick={onClose}><X size={16} /></Button>
-      )}
-      variant="flush"
-    >
-      {auditRows.length === 0 ? (
-        <EmptyState icon={<ShieldCheck size={24} />} title="Nothing to audit">No verified facts to audit yet.</EmptyState>
-      ) : (
-        <>
-        <ResultCount from={pager.from} to={pager.to} total={pager.total} noun="verified facts"
-          note={`${staleCount.toLocaleString("en-US")} stale`} />
-        <Scrollable>
-          {/* table-fixed + a floor wide enough that "Create review task"
-              never has to wrap: the widths are binding, so the claim column
-              gives up space rather than the action column collapsing. */}
-          <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: 820 }}>
-            <colgroup>
-              {/* Verified is 14%, not 13%: at the 820px floor that column is
-                  the only one holding two no-wrap lines ("May 30, 2026" over
-                  "148d ago"), and 13% left it 3px short, so the date spilled
-                  through the cell border. The width comes off Claim, which
-                  truncates anyway. */}
-              <col style={{ width: "30%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} />
-              <col style={{ width: "18%" }} /><col style={{ width: "26%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <SortHeader label="Claim" sortKey="claim" sort={sort} onSort={onSort} />
-                <SortHeader label="Owner" sortKey="owner" sort={sort} onSort={onSort} />
-                <SortHeader label="Verified" sortKey="verified" sort={sort} onSort={onSort} align="center" />
-                <SortHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
-                <SortHeader label="Review task" sortable={false} align="right" />
+    <div className={className}>
+      <Table
+        title="Verification audit"
+        head={HEAD}
+        minW={760}
+        pageSize={10}
+        noun="verified facts"
+        /* The stale count used to be a note on the card's hint line
+           ("Anything verified more than 60 days ago is a stale candidate.");
+           <Table> has no hint slot, so it rides in the actions slot next to
+           the close button instead — the chip's own word ("stale") carries
+           the meaning the hint used to spell out. */
+        actions={(staleCount > 0 || closeButton) && (
+          <>
+            {staleCount > 0 && <Chip label={`${staleCount.toLocaleString("en-US")} stale`} tone="attention" dot />}
+            {closeButton}
+          </>
+        )}
+      >
+        {auditRows.length === 0 ? (
+          <tr>
+            <td className="px-4 py-10" colSpan={HEAD.length}>
+              <EmptyState icon={<ShieldCheck size={24} />} title="Nothing to audit">No verified facts to audit yet.</EmptyState>
+            </td>
+          </tr>
+        ) : (
+          auditRows.flatMap(({ fact, age }) => {
+            const stale = age != null && age > STALE_AFTER_DAYS;
+            const state = taskState[fact.id] ?? "idle";
+            const mainRow = (
+              <tr key={fact.id} className="border-b border-ink/[0.06] last:border-0">
+                <td className="align-top">
+                  <Truncate lines={2} className="text-[13px] font-medium text-ink">{fact.claim}</Truncate>
+                  <Truncate className="mt-0.5 font-term text-[11px] text-ink/65">{fact.source}</Truncate>
+                </td>
+                <td className="align-top text-[12.5px] text-ink/70"><Truncate>{fact.owner}</Truncate></td>
+                <td className="align-top text-center text-[12.5px] text-ink/70 whitespace-nowrap">
+                  {fact.verified ? fmtDate(fact.verified) : "Not recorded"}
+                  {age != null && <span className="block text-ink/65">{age}d ago</span>}
+                </td>
+                <td className="align-top whitespace-nowrap">
+                  {/* "Stale", not "Stale candidate": the longer label did not
+                      fit the column and rendered as an ellipsised chip. The
+                      actions-slot chip above carries the full meaning. */}
+                  <Chip label={stale ? "Stale" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
+                </td>
+                <td className="align-top whitespace-nowrap text-right">
+                  {stale && (
+                    <div className="flex flex-col items-end gap-1">
+                      {/* XA-23: this was the table copy of "Create review
+                          task", drawn with no icon and a done word
+                          ("Task created") the drawers spelled differently.
+                          One component owns label, glyph and both states. */}
+                      <CreateReviewTaskButton
+                        compact
+                        state={state === "done" ? "done" : state === "creating" ? "busy" : "idle"}
+                        onClick={() => void createReviewTask(fact)}
+                      />
+                      {/* XA-02 keeps <FieldError> for exactly this case: a
+                          <WriteError> banner inside an action cell would
+                          blow the row height apart and shove every other
+                          column out of line (§3). The message still sits
+                          beside the control that failed, and the button
+                          stays clickable so the reader can retry. */}
+                      {state === "error" && <FieldError>{failed[fact.id] ?? "Couldn’t reach Mari."}</FieldError>}
+                    </div>
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {pager.pageRows.map(({ fact, age }) => {
-                const stale = age != null && age > STALE_AFTER_DAYS;
-                const state = taskState[fact.id] ?? "idle";
-                return (
-                  <Fragment key={fact.id}>
-                    <tr className="border-b border-ink/[0.06]">
-                      <td className={`${td} align-top`}>
-                        <Truncate lines={2} className="text-[13px] font-medium text-ink">{fact.claim}</Truncate>
-                        <Truncate className="mt-0.5 font-term text-[11px] text-ink/65">{fact.source}</Truncate>
-                      </td>
-                      <td className={`${td} align-top`}><Truncate>{fact.owner}</Truncate></td>
-                      <td className={`${td} whitespace-nowrap text-center align-top font-term text-[12px] text-ink/70`}>
-                        {fact.verified ? fmtDate(fact.verified) : "Not recorded"}
-                        {age != null && <span className="block text-ink/65">{age}d ago</span>}
-                      </td>
-                      <td className={`${td} whitespace-nowrap align-top`}>
-                        {/* "Stale", not "Stale candidate": the longer label
-                            did not fit the column and rendered as an
-                            ellipsised chip. The card hint carries the full
-                            meaning. */}
-                        <Chip label={stale ? "Stale" : "Fresh"} tone={stale ? "attention" : "ok"} dot />
-                      </td>
-                      <td className={`${td} whitespace-nowrap text-right align-top`}>
-                        {stale && (
-                          <div className="flex flex-col items-end gap-1">
-                            {/* XA-23: this was the table copy of "Create review
-                                task", drawn with no icon and a done word
-                                ("Task created") the drawers spelled differently.
-                                One component owns label, glyph and both states. */}
-                            <CreateReviewTaskButton
-                              compact
-                              state={state === "done" ? "done" : state === "creating" ? "busy" : "idle"}
-                              onClick={() => void createReviewTask(fact)}
-                            />
-                            {/* XA-02 keeps <FieldError> for exactly this case: a
-                                <WriteError> banner inside an action cell would
-                                blow the row height apart and shove every other
-                                column out of line (§3). The message still sits
-                                beside the control that failed, and the button
-                                stays clickable so the reader can retry. */}
-                            {state === "error" && <FieldError>{failed[fact.id] ?? "Couldn’t reach Mari."}</FieldError>}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                    {tasks[fact.id] && (
-                      <tr className="border-b border-ink/[0.06] bg-moss/[0.05]">
-                        <td className={`${td} font-term text-[11.5px] text-moss`} colSpan={5}>
-                          <span className="inline-flex items-center gap-1.5">
-                            <ClipboardCheck size={13} />
-                            {tasks[fact.id]} opened for {fact.owner}: re-verify “{fact.claim.slice(0, 48)}{fact.claim.length > 48 ? "…" : ""}”
-                          </span>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </Scrollable>
-        {pager.paged && <PagerBar page={pager.page} pageCount={pager.pageCount} onChange={pager.setPage} />}
-        </>
-      )}
-    </Card>
+            );
+            const taskRow = tasks[fact.id] ? (
+              <tr key={`${fact.id}-task`} className="border-b border-ink/[0.06] last:border-0 bg-moss/[0.05]">
+                <td className="font-term text-[11.5px] text-moss" colSpan={HEAD.length}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <ClipboardCheck size={13} />
+                    {tasks[fact.id]} opened for {fact.owner}: re-verify “{fact.claim.slice(0, 48)}{fact.claim.length > 48 ? "…" : ""}”
+                  </span>
+                </td>
+              </tr>
+            ) : null;
+            return [mainRow, taskRow];
+          })
+        )}
+      </Table>
+    </div>
   );
 }
