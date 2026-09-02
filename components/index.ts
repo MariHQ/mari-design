@@ -128,6 +128,7 @@ export { Logo, Brandmark, type LogoProps } from "./shell/Logo";
 export { Sidebar, SidebarSection, SidebarItem, type SidebarProps, type NavItem, type NavSection } from "./shell/Sidebar";
 export { HeaderBar, SearchTrigger, type HeaderBarProps, type HeaderUser } from "./shell/HeaderBar";
 export { AppShell, type AppShellProps, type ShellContext } from "./shell/AppShell";
+export { DockRail, DockLauncher, type DockRailProps, type DockLauncherProps } from "./shell/DockRail";
 
 // Connect & sync
 export { ConnectorWizard, type ConnectorWizardProps, type WizardProvider, type ConnectorField, type ConnectTestResult } from "./forms/ConnectorWizard";
