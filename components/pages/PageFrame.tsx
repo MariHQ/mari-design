@@ -97,6 +97,11 @@ export type ShellChrome = {
   projects?: ShellProject[];
   activeProjectId?: string | number;
   onSelectProject?: (project: ShellProject) => void;
+  /** A rail the app docks beside the page (the agent). The desktop frame lays
+      it out as a flex sibling of the content column, so the page narrows to
+      make room rather than being covered; the other frames mount it after the
+      content and leave its placement to the node itself. */
+  aside?: ReactNode;
 };
 
 /** The search overlay behind the topbar trigger and ⌘K.
@@ -285,6 +290,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} active={active} chrome={chrome} />
       {search.node}
       <main id="main-content" tabIndex={0} aria-label="Main content" className={`outline-none ${grow ? "flex-1" : "min-h-0 flex-1 overflow-y-auto"}`}>{children}</main>
+      {chrome?.aside}
     </div>
   );
 }
@@ -418,6 +424,7 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
         {search.node}
         <main id="main-content" tabIndex={0} aria-label="Main content" className="flex-1 bg-flysch/40 outline-none">{children}</main>
       </div>
+      {chrome?.aside}
     </div>
   );
 }
@@ -445,6 +452,7 @@ function DesktopFrame({ active, chrome, children }: { active: string; chrome?: S
          nothing was ever bounded. Asking for the viewport here makes the frame
          correct on its own rather than dependent on the host's stylesheet. */
       className="h-screen"
+      aside={chrome?.aside}
       defaultCollapsed={false}
       sidebar={({ collapsed }) => (
         <Sidebar

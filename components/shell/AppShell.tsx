@@ -26,12 +26,17 @@ export type AppShellProps = {
   className?: string;
   /** Extra classes for the scrolling content region. */
   contentClassName?: string;
+  /** A rail docked beside the content column (the agent, say). It is a flex
+      sibling of the column, so opening it narrows the page instead of
+      covering half of it, and the wheel over it never has to fight the page
+      for scroll. The node owns its own width, border and background. */
+  aside?: ReactNode;
 };
 
 export function AppShell({
   sidebar, header, children,
   collapsed: collapsedProp, defaultCollapsed = false, onCollapsedChange,
-  className = "", contentClassName = "",
+  className = "", contentClassName = "", aside,
 }: AppShellProps) {
   const [internal, setInternal] = useState(defaultCollapsed);
   const collapsed = collapsedProp ?? internal;
@@ -70,6 +75,7 @@ export function AppShell({
           {children}
         </main>
       </div>
+      {aside}
     </div>
   );
 }
