@@ -257,7 +257,7 @@ function MobileFrame({ active, title, children, grow = false, chrome }: { active
   const search = useGlobalSearch(chrome);
   const [navOpen, setNavOpen] = useState(false);
   return (
-    <div className={`relative flex w-full flex-col bg-paper text-ink ${grow ? "min-h-screen" : "h-screen min-h-0 overflow-hidden"}`}>
+    <div className={`relative flex w-full flex-col bg-paper text-ink ${grow ? "min-h-dvh" : "h-dvh min-h-0 overflow-hidden"}`}>
       <a href="#main-content" className={SKIP_LINK}>Skip to main content</a>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-ink/12 bg-paper px-4">
         <button
@@ -400,14 +400,14 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
   const user = chrome?.user ?? NO_USER;
   const search = useGlobalSearch(chrome);
   return (
-    <div className="relative flex min-h-screen w-full bg-paper text-ink">
+    <div className="relative flex min-h-dvh w-full bg-paper text-ink">
       <a href="#main-content" className={SKIP_LINK}>Skip to main content</a>
       <div className="shrink-0 self-stretch border-r border-ink/10">
         <Sidebar
           sections={NAV}
           activeId={active}
           onNavigate={chrome?.onNavigate}
-          className="min-h-screen"
+          className="min-h-dvh"
           brand={<span className="text-white"><Logo /></span>}
           footer={<HelpCard onNavigate={chrome?.onNavigate} />}
         />
@@ -450,8 +450,11 @@ function DesktopFrame({ active, chrome, children }: { active: string; chrome?: S
          704px of window: the sidebar ran off the bottom, its height changed
          with every page, and the internal scroll regions never engaged because
          nothing was ever bounded. Asking for the viewport here makes the frame
-         correct on its own rather than dependent on the host's stylesheet. */
-      className="h-screen"
+         correct on its own rather than dependent on the host's stylesheet.
+         dvh, not vh: on iOS Safari 100vh is the viewport with the toolbars
+         hidden, so the frame overflowed the visible screen while they showed
+         and any scroll took the header with it. */
+      className="h-dvh"
       aside={chrome?.aside}
       defaultCollapsed={false}
       sidebar={({ collapsed }) => (
