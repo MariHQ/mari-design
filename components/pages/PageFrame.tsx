@@ -102,7 +102,22 @@ export type ShellChrome = {
       make room rather than being covered; the other frames mount it after the
       content and leave its placement to the node itself. */
   aside?: ReactNode;
+  /** Nav ids the host leaves out of the sidebar. mari.guru/demo drops
+      "scheduled-tasks": a demo session has nothing to schedule, so the item
+      would open a screen with no data behind it. The console passes nothing
+      and shows the full NAV. */
+  hideNav?: string[];
 };
+
+/** NAV minus whatever the host hides. A section that empties out goes with
+    it, so a divider never rules off nothing. */
+function navSections(chrome?: ShellChrome): NavSection[] {
+  const hide = chrome?.hideNav;
+  if (!hide?.length) return NAV;
+  return NAV
+    .map((s) => ({ ...s, items: s.items.filter((i) => !hide.includes(i.id)) }))
+    .filter((s) => s.items.length > 0);
+}
 
 /** The search overlay behind the topbar trigger and ⌘K.
  *
@@ -364,7 +379,7 @@ function MobileNav({ open, onClose, active, chrome }: { open: boolean; onClose: 
         className="absolute left-0 top-0 h-full w-[264px] max-w-[85vw] overflow-y-auto outline-none"
       >
         <Sidebar
-          sections={NAV}
+          sections={navSections(chrome)}
           activeId={active}
           // Close on selection: leaving the sheet open over the page it just
           // navigated to looks like the tap did nothing.
@@ -404,7 +419,7 @@ function DesktopStatic({ active, children, chrome }: { active: string; children:
       <a href="#main-content" className={SKIP_LINK}>Skip to main content</a>
       <div className="shrink-0 self-stretch border-r border-ink/10">
         <Sidebar
-          sections={NAV}
+          sections={navSections(chrome)}
           activeId={active}
           onNavigate={chrome?.onNavigate}
           className="min-h-dvh"
@@ -459,7 +474,7 @@ function DesktopFrame({ active, chrome, children }: { active: string; chrome?: S
       defaultCollapsed={false}
       sidebar={({ collapsed }) => (
         <Sidebar
-          sections={NAV}
+          sections={navSections(chrome)}
           activeId={active}
           onNavigate={chrome?.onNavigate}
           collapsed={collapsed}
