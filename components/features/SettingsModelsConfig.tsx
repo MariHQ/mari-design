@@ -58,6 +58,14 @@ export type GatewaySettings = {
   baseUrl: string;
   token: string;
   generationModel: string;
+  /** The model the gateway embeds with, or "" to keep embeddings on the
+      provider chosen in the Embedding model card. The gateway then serves
+      generation alone, which is how an Ollama-indexed workspace stays local. */
+  embeddingModel: string;
+  /** The embeddings route under the base URL. "" means the OpenAI default,
+      /embeddings; an enterprise gateway that mounts it elsewhere names the
+      route here. Chat always goes to /chat/completions. */
+  embeddingsPath: string;
   compatibility: "openai" | "deepseek";
   headersJson: string;
   metadataJson: string;
@@ -66,8 +74,8 @@ export type GatewaySettings = {
 };
 
 export const EMPTY_GATEWAY: GatewaySettings = {
-  baseUrl: "", token: "", generationModel: "", compatibility: "openai",
-  headersJson: "{}", metadataJson: "{}", modelHeader: "", maxRetries: 2,
+  baseUrl: "", token: "", generationModel: "", embeddingModel: "", embeddingsPath: "",
+  compatibility: "openai", headersJson: "{}", metadataJson: "{}", modelHeader: "", maxRetries: 2,
 };
 
 function gatewayValidation(value: GatewaySettings): string {
@@ -75,6 +83,8 @@ function gatewayValidation(value: GatewaySettings): string {
   try { url = new URL(value.baseUrl); } catch { return "Gateway base URL must be a valid http(s) URL."; }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return "Gateway base URL must be a valid http(s) URL without embedded credentials.";
   if (!value.generationModel.trim()) return "Generation model is required.";
+  const path = value.embeddingsPath.trim();
+  if (path && (!path.startsWith("/") || /\s/.test(path) || path.includes("://"))) return "Embeddings path must be a route under the base URL, like /embeddings.";
   if (!Number.isInteger(value.maxRetries) || value.maxRetries < 0 || value.maxRetries > 5) return "Retry count must be a whole number from 0 to 5.";
   for (const [label, raw] of [["Routing headers", value.headersJson], ["Request metadata", value.metadataJson]] as const) {
     try {
@@ -373,9 +383,9 @@ export function SettingsModelsConfig({
         </Card>
       </div>
 
-      <Card icon={<Sparkles size={16} className="text-moss" />} title="Generation gateway" hint="OpenAI-compatible">
+      <Card icon={<Sparkles size={16} className="text-moss" />} title="Model gateway" hint="OpenAI-compatible">
         <p className="mb-4 text-[12.5px] leading-relaxed text-ink/70">
-          Route answer generation through an OpenAI-compatible provider such as an enterprise gateway or DeepSeek. Embeddings remain independently configured above, so Ollama can continue indexing locally.
+          Route answer generation through an OpenAI-compatible provider such as an enterprise gateway or DeepSeek. Name an embedding model to embed through the gateway as well. Leave it blank and the embedding model chosen above keeps indexing, so Ollama can continue locally.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Gateway base URL">
@@ -390,12 +400,21 @@ export function SettingsModelsConfig({
           <Field label="Generation model">
             <Input name="gateway-generation-model" value={gatewayDraft.generationModel} onChange={(e) => setGatewayField("generationModel", e.target.value)} placeholder={gatewayDraft.compatibility === "deepseek" ? "deepseek-v4-flash" : "enterprise-chat"} className="w-full font-term" />
           </Field>
+          <Field label="Embedding model (optional)">
+            <Input name="gateway-embedding-model" value={gatewayDraft.embeddingModel} onChange={(e) => setGatewayField("embeddingModel", e.target.value)} placeholder="enterprise-embed" className="w-full font-term" />
+            {/* The same warning the Embedding model card carries: pointing the
+                index at a different model re-embeds every document. */}
+            {gatewayDraft.embeddingModel.trim() && gatewayDraft.embeddingModel.trim() !== initialGateway.embeddingModel.trim() && <p className="mt-1 text-[11.5px] text-ink/70">Saving re-indexes every document. Search is degraded until the run finishes.</p>}
+          </Field>
+          <Field label="Embeddings path">
+            <Input name="gateway-embeddings-path" value={gatewayDraft.embeddingsPath} onChange={(e) => setGatewayField("embeddingsPath", e.target.value)} placeholder="/embeddings" className="w-full font-term" />
+          </Field>
           <Field label="API compatibility">
             <Select name="gateway-compatibility" value={gatewayDraft.compatibility} onChange={(e) => setGatewayField("compatibility", e.target.value as GatewaySettings["compatibility"])} className="w-full">
               <option value="openai">Standard OpenAI-compatible</option>
               <option value="deepseek">DeepSeek API</option>
             </Select>
-            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. Keep embeddings on OpenAI, Ollama, or another HTTP embedding provider.</p>}
+            {gatewayDraft.compatibility === "deepseek" && <p className="mt-1 text-[11.5px] text-ink/70">Uses DeepSeek&apos;s generation contract. DeepSeek serves no embeddings, so leave the embedding model blank and keep embeddings on OpenAI, Ollama, or another HTTP embedding provider.</p>}
           </Field>
           <Field label="Model routing header">
             <Input name="gateway-model-header" value={gatewayDraft.modelHeader} onChange={(e) => setGatewayField("modelHeader", e.target.value)} placeholder="X-Model-ID" className="w-full font-term" />
