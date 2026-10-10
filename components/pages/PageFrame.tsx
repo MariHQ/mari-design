@@ -268,7 +268,7 @@ export const setStaticFrame = (v: boolean) => { staticFrame = v; };
 
 function MobileFrame({ active, title, children, grow = false, chrome }: { active: string; title?: string; children: ReactNode; grow?: boolean; chrome?: ShellChrome }) {
   const user = chrome?.user ?? NO_USER;
-  const label = NAV.flatMap((s) => s.items).find((i) => i.id === active)?.label ?? title ?? "Mari";
+  const label = navSections(chrome).flatMap((s) => s.items).find((i) => i.id === active)?.label ?? title ?? "Mari";
   const search = useGlobalSearch(chrome);
   const [navOpen, setNavOpen] = useState(false);
   return (
